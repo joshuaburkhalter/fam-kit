@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI, SchemaType, FunctionDeclaration } from '@google/generative-ai';
+import { GoogleGenerativeAI, SchemaType, type FunctionDeclaration } from '@google/generative-ai';
 
 export const ASSISTANT_SYSTEM_PROMPT = `You are the friendly, organized, and helpful Family Assistant in the "fam-kit" app.
 You assist busy families with:
@@ -142,7 +142,7 @@ export function getGeminiModel(apiKey?: string) {
 
   const genAI = new GoogleGenerativeAI(key);
   return genAI.getGenerativeModel({
-    model: 'gemini-2.0-flash',
+    model: 'gemini-3.6-flash',
     systemInstruction: ASSISTANT_SYSTEM_PROMPT,
     tools: [{ functionDeclarations: ASSISTANT_TOOLS }],
   });

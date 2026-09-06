@@ -226,7 +226,7 @@ async function extractWithGeminiFallback(
   if (activeKey) {
     try {
       const genAI = new GoogleGenerativeAI(activeKey);
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+      const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' });
 
       const prompt = `Extract the structured recipe from this web page content:
 URL: ${url}
