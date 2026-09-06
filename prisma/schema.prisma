@@ -1,0 +1,151 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Household {
+  id              String            @id @default(cuid())
+  name            String            @default("Our Family")
+  inviteCode      String            @unique
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  members         User[]
+  aisles          AisleCategory[]
+  groceryItems    GroceryItem[]
+  lists           CustomList[]
+  recipes         Recipe[]
+  mealPlans       MealPlan[]
+  calendarEvents  CalendarEvent[]
+  subscriptions   PushSubscription[]
+}
+
+model User {
+  id           String            @id @default(cuid())
+  name         String
+  email        String?
+  avatar       String            @default("👤")
+  color        String            @default("#6366f1")
+  role         String            @default("Parent") // Parent, Kid, Member, Admin
+  householdId  String
+  household    Household         @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  events       CalendarEvent[]
+  itemsAdded   GroceryItem[]
+}
+
+model AisleCategory {
+  id          String        @id @default(cuid())
+  name        String
+  icon        String        @default("🛒")
+  orderIndex  Int           @default(0)
+  isDefault   Boolean       @default(false)
+  householdId String
+  household   Household     @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  items       GroceryItem[]
+
+  @@unique([householdId, name])
+}
+
+model GroceryItem {
+  id          String         @id @default(cuid())
+  name        String
+  category    String         @default("Other")
+  aisleId     String?
+  aisle       AisleCategory? @relation(fields: [aisleId], references: [id], onDelete: SetNull)
+  quantity    String?        @default("1")
+  unit        String?
+  note        String?
+  checked     Boolean        @default(false)
+  householdId String
+  household   Household      @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  listId      String?
+  list        CustomList?    @relation(fields: [listId], references: [id], onDelete: Cascade)
+  addedById   String?
+  addedBy     User?          @relation(fields: [addedById], references: [id], onDelete: SetNull)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}
+
+model CustomList {
+  id          String        @id @default(cuid())
+  name        String
+  type        String        @default("grocery") // grocery, packing, todo, checklist
+  icon        String        @default("📋")
+  color       String        @default("#10b981")
+  householdId String
+  household   Household     @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  items       GroceryItem[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model Recipe {
+  id           String      @id @default(cuid())
+  title        String
+  description  String?
+  imageUrl     String?
+  prepTime     String?
+  cookTime     String?
+  servings     String?
+  sourceUrl    String?
+  ingredients  String      // JSON array of strings or { item, amount, unit, category }
+  instructions String      // JSON array of instruction steps
+  tags         String?     // Comma-separated or JSON array of tags (e.g. Quick, Vegetarian, Dinner)
+  householdId  String
+  household    Household   @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  mealPlans    MealPlan[]
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+}
+
+model MealPlan {
+  id          String     @id @default(cuid())
+  date        String     // YYYY-MM-DD
+  mealType    String     // breakfast, lunch, dinner, snack
+  title       String
+  notes       String?
+  recipeId    String?
+  recipe      Recipe?    @relation(fields: [recipeId], references: [id], onDelete: SetNull)
+  householdId String
+  household   Household  @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@unique([householdId, date, mealType])
+}
+
+model CalendarEvent {
+  id               String     @id @default(cuid())
+  title            String
+  description      String?
+  date             String     // YYYY-MM-DD
+  startTime        String?    // HH:mm
+  endTime          String?    // HH:mm
+  allDay           Boolean    @default(false)
+  category         String     @default("Family") // School, Sports, Work, Appointment, Family, Celebration
+  color            String?    @default("#6366f1")
+  location         String?
+  assignedMemberId String?
+  assignedMember   User?      @relation(fields: [assignedMemberId], references: [id], onDelete: SetNull)
+  householdId      String
+  household        Household  @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+}
+
+model PushSubscription {
+  id          String     @id @default(cuid())
+  endpoint    String     @unique
+  keys        String     // JSON { p256dh, auth }
+  userId      String?
+  householdId String
+  household   Household  @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  createdAt   DateTime   @default(now())
+}

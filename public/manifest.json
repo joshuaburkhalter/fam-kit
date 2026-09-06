@@ -1,0 +1,66 @@
+{
+  "name": "fam-kit - Family Command Center",
+  "short_name": "fam-kit",
+  "description": "Gemini-powered family organizer: smart categorized grocery lists, weekly meal planner, shared calendar, and AI assistant.",
+  "start_url": "/",
+  "id": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0f172a",
+  "theme_color": "#16a34a",
+  "categories": ["lifestyle", "productivity", "food"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Assistant Voice & Chat",
+      "short_name": "Assistant",
+      "description": "Speak or chat with Gemini Family Assistant",
+      "url": "/?open=assistant",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Grocery List",
+      "short_name": "Grocery",
+      "description": "View and check off categorized grocery list",
+      "url": "/grocery",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Meal Planner",
+      "short_name": "Meals",
+      "description": "Weekly meal matrix and recipes",
+      "url": "/meal-planner",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Family Calendar",
+      "short_name": "Calendar",
+      "description": "Shared weekly family events",
+      "url": "/calendar",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ],
+  "share_target": {
+    "action": "/recipes?shared=true",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  }
+}
