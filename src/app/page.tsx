@@ -21,7 +21,8 @@ import {
   ListTodo,
   BookOpen,
   ArrowRight,
-  RefreshCw
+  RefreshCw,
+  Sparkle
 } from 'lucide-react';
 
 interface ChatMessage {
@@ -39,7 +40,7 @@ export default function AssistantPage() {
     {
       id: 'welcome',
       sender: 'assistant',
-      text: `Hello ${activeMember?.name || 'there'}! I'm your Gemini Family Assistant. You can speak to me, text, or upload pictures of recipes or grocery notes.\n\nTry asking: "Add whole milk and honeycrisp apples to the grocery list and schedule soccer practice for Leo on Thursday at 4:30 PM."`,
+      text: `Hey ${activeMember?.name || 'there'}! I'm your Gemini Family Assistant. Talk, text, or drop a photo of a recipe card, receipt, or fridge shelf.\n\nTry saying: "Add whole milk and honeycrisp apples to the grocery list and schedule Leo's soccer practice on Thursday at 4:30 PM."`,
       timestamp: new Date(),
     },
   ]);
@@ -78,7 +79,6 @@ export default function AssistantPage() {
               recognitionRef.current.stop();
               recognitionRef.current = null;
             }
-            // Automatically submit speech
             handleSubmit(transcript);
           }
         },
@@ -151,14 +151,13 @@ export default function AssistantPage() {
       const assistantMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
         sender: 'assistant',
-        text: data.message || 'I processed your request!',
+        text: data.message || 'Done! I have taken care of that for your family.',
         actions: data.actions || [],
         timestamp: new Date(),
       };
 
       setMessages((prev) => [...prev, assistantMsg]);
 
-      // Speak response aloud if TTS enabled or voice input
       if (data.message) {
         setIsSpeaking(true);
         speakText(data.message, () => setIsSpeaking(false));
@@ -169,7 +168,7 @@ export default function AssistantPage() {
         {
           id: (Date.now() + 1).toString(),
           sender: 'assistant',
-          text: `⚠️ ${err.message || 'Error processing request'}. If using a personal Gemini API Key, make sure it is configured in Settings.`,
+          text: `⚠️ ${err.message || 'Error processing request'}. If using a personal key, please check Settings.`,
           timestamp: new Date(),
         },
       ]);
@@ -179,34 +178,47 @@ export default function AssistantPage() {
   };
 
   const samplePrompts = [
-    { label: '🛒 Add milk, eggs, & bread', prompt: 'Add 1 gallon whole milk, 1 dozen eggs, and sourdough bread to the grocery list.' },
-    { label: '🍲 Dinner ideas with chicken', prompt: 'What delicious dinner recipe can I make with chicken breasts and spinach? Plan it for tomorrow dinner.' },
-    { label: '📅 Leo soccer on Thursday', prompt: 'Schedule Leo Soccer Practice on Thursday at 4:30 PM at Community Park.' },
-    { label: '⛺ Camping packing list', prompt: 'Create a camping packing checklist with tent, sleeping bags, flashlights, and bug spray.' },
+    { icon: '🛒', label: 'Add milk, bread & spinach', prompt: 'Add 1 gallon organic whole milk, sourdough bread, and baby spinach to the grocery list.' },
+    { icon: '🍲', label: 'Dinner with chicken & lemon', prompt: 'What easy recipe can I cook with chicken breasts, lemon, and asparagus? Schedule it for tomorrow dinner.' },
+    { icon: '📅', label: 'Leo soccer practice', prompt: 'Schedule Leo Soccer Practice for Thursday at 4:30 PM at Community Park.' },
+    { icon: '⛺', label: 'Camping gear checklist', prompt: 'Create a camping packing list with 4 sleeping bags, tent, flashlight, bug spray, and camp stove.' },
   ];
 
   return (
-    <div className="flex-1 max-w-4xl w-full mx-auto p-4 sm:p-6 flex flex-col min-h-[calc(100vh-4rem)]">
-      {/* Top Welcome Card */}
-      <div className="flex items-center justify-between p-4 rounded-2xl glass-card border border-emerald-500/20 mb-4 shadow-lg shadow-emerald-950/20">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-white text-2xl shadow-md shadow-emerald-500/30">
-            {activeMember?.avatar || '✨'}
+    <div className="flex-1 max-w-4xl w-full mx-auto p-4 sm:p-6 flex flex-col min-h-[calc(100vh-4.5rem)]">
+      {/* Hero Assistant Banner */}
+      <div className="anylist-card p-4 sm:p-5 rounded-3xl mb-4 flex items-center justify-between gap-4 border border-emerald-500/20 shadow-xl relative overflow-hidden">
+        {/* Glow backdrop */}
+        <div className="absolute -top-10 -left-10 w-40 h-40 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="flex items-center gap-4 z-10">
+          {/* Animated AI Orb */}
+          <div className="relative">
+            <div className={`w-12 h-12 rounded-2xl ai-orb flex items-center justify-center text-white text-2xl shadow-lg transition-transform duration-300 ${isRecording || isSpeaking ? 'scale-110' : ''}`}>
+              {activeMember?.avatar || '✨'}
+            </div>
+            {(isRecording || isSpeaking) && (
+              <div className="absolute inset-0 -m-1 ai-pulse-ring pointer-events-none" />
+            )}
           </div>
+
           <div>
-            <h1 className="text-lg font-bold text-white flex items-center gap-2">
-              Family Assistant
-              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                Online
+            <div className="flex items-center gap-2">
+              <h1 className="font-extrabold text-base sm:text-lg text-white tracking-tight">
+                Family Assistant
+              </h1>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                Live
               </span>
-            </h1>
-            <p className="text-xs text-slate-400">
-              Active Member: <strong className="text-slate-200">{activeMember?.name || 'Joshua'}</strong>
+            </div>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Synced with <strong className="text-slate-200">{activeMember?.name || 'Joshua'}</strong>'s family board
             </p>
           </div>
         </div>
 
-        {/* TTS Mute / Speak Toggle */}
+        {/* TTS Toggle */}
         <button
           onClick={() => {
             if (isSpeaking) {
@@ -220,19 +232,19 @@ export default function AssistantPage() {
               }
             }
           }}
-          className={`p-2.5 rounded-xl transition-colors ${
+          className={`p-2.5 rounded-2xl border transition-all z-10 ${
             isSpeaking
-              ? 'bg-emerald-500 text-white animate-pulse'
-              : 'bg-slate-800/80 text-slate-400 hover:text-slate-200 hover:bg-slate-700'
+              ? 'bg-emerald-500 border-emerald-400 text-white shadow-lg shadow-emerald-500/30 animate-pulse'
+              : 'bg-slate-900 border-slate-700/80 text-slate-400 hover:text-white hover:bg-slate-800'
           }`}
-          title={isSpeaking ? 'Mute speech' : 'Read aloud'}
+          title={isSpeaking ? 'Mute voice' : 'Read aloud'}
         >
-          {isSpeaking ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
+          {isSpeaking ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
         </button>
       </div>
 
-      {/* Chat Transcript Area */}
-      <div className="flex-1 overflow-y-auto space-y-4 pr-1 mb-4 min-h-[350px]">
+      {/* Chat Messages */}
+      <div className="flex-1 overflow-y-auto space-y-4 pr-1 mb-4 min-h-[320px]">
         {messages.map((msg) => {
           const isUser = msg.sender === 'user';
           return (
@@ -241,72 +253,79 @@ export default function AssistantPage() {
               className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} animate-in fade-in slide-in-from-bottom-2`}
             >
               <div
-                className={`max-w-[85%] sm:max-w-[75%] rounded-2xl p-4 shadow-md ${
+                className={`max-w-[88%] sm:max-w-[78%] rounded-3xl p-4 shadow-md ${
                   isUser
-                    ? 'bg-emerald-600 text-white rounded-br-xs'
-                    : 'glass-panel border border-slate-800 text-slate-200 rounded-bl-xs'
+                    ? 'bg-gradient-to-tr from-emerald-600 to-teal-600 text-white rounded-br-sm shadow-emerald-950/40'
+                    : 'anylist-card text-slate-200 rounded-bl-sm border border-slate-700/70'
                 }`}
               >
-                {/* Image attached */}
+                {/* Photo attached */}
                 {msg.image && (
-                  <div className="mb-3 overflow-hidden rounded-xl border border-white/10 max-h-60">
+                  <div className="mb-3 overflow-hidden rounded-2xl border border-white/10 max-h-64 shadow-inner">
                     <img src={msg.image} alt="Uploaded attachment" className="w-full h-full object-cover" />
                   </div>
                 )}
 
-                <div className="text-sm whitespace-pre-wrap leading-relaxed">{msg.text}</div>
+                <div className="text-sm whitespace-pre-wrap leading-relaxed font-normal">
+                  {msg.text}
+                </div>
 
-                {/* Assistant Action Cards */}
+                {/* Rich Action Result Cards */}
                 {msg.actions && msg.actions.length > 0 && (
-                  <div className="mt-3.5 space-y-2 border-t border-slate-700/60 pt-3">
+                  <div className="mt-3.5 space-y-2 border-t border-white/10 pt-3">
                     {msg.actions.map((act, idx) => (
                       <div
                         key={idx}
-                        className="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-slate-900/90 border border-slate-700/80 text-xs"
+                        className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-slate-950/80 border border-slate-800 text-xs shadow-inner"
                       >
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2.5">
                           <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                          <span className="font-medium text-slate-200">{act.summary}</span>
+                          <span className="font-semibold text-slate-200">{act.summary}</span>
                         </div>
 
                         {act.type === 'grocery_added' && (
                           <Link
                             href="/grocery"
-                            className="flex items-center gap-1 text-emerald-400 hover:text-emerald-300 font-semibold px-2 py-1 rounded-md bg-emerald-500/10 hover:bg-emerald-500/20 transition-colors"
+                            className="flex items-center gap-1.5 text-emerald-400 hover:text-emerald-300 font-bold px-3 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 transition-all shrink-0"
                           >
-                            <ShoppingCart className="w-3.5 h-3.5" /> View List
+                            <ShoppingCart className="w-3.5 h-3.5" />
+                            <span>View Grocery</span>
                           </Link>
                         )}
                         {act.type === 'calendar_event_added' && (
                           <Link
                             href="/calendar"
-                            className="flex items-center gap-1 text-indigo-400 hover:text-indigo-300 font-semibold px-2 py-1 rounded-md bg-indigo-500/10 hover:bg-indigo-500/20 transition-colors"
+                            className="flex items-center gap-1.5 text-indigo-400 hover:text-indigo-300 font-bold px-3 py-1.5 rounded-xl bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-500/30 transition-all shrink-0"
                           >
-                            <CalendarIcon className="w-3.5 h-3.5" /> Calendar
+                            <CalendarIcon className="w-3.5 h-3.5" />
+                            <span>Calendar</span>
                           </Link>
                         )}
                         {act.type === 'meal_planned' && (
                           <Link
                             href="/meal-planner"
-                            className="flex items-center gap-1 text-amber-400 hover:text-amber-300 font-semibold px-2 py-1 rounded-md bg-amber-500/10 hover:bg-amber-500/20 transition-colors"
+                            className="flex items-center gap-1.5 text-amber-400 hover:text-amber-300 font-bold px-3 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 transition-all shrink-0"
                           >
-                            <UtensilsCrossed className="w-3.5 h-3.5" /> Meals
+                            <UtensilsCrossed className="w-3.5 h-3.5" />
+                            <span>Meal Plan</span>
                           </Link>
                         )}
                         {act.type === 'recipe_imported' && (
                           <Link
                             href="/recipes"
-                            className="flex items-center gap-1 text-rose-400 hover:text-rose-300 font-semibold px-2 py-1 rounded-md bg-rose-500/10 hover:bg-rose-500/20 transition-colors"
+                            className="flex items-center gap-1.5 text-rose-400 hover:text-rose-300 font-bold px-3 py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 transition-all shrink-0"
                           >
-                            <BookOpen className="w-3.5 h-3.5" /> Recipe
+                            <BookOpen className="w-3.5 h-3.5" />
+                            <span>View Recipe</span>
                           </Link>
                         )}
                         {act.type === 'list_created' && (
                           <Link
                             href="/grocery"
-                            className="flex items-center gap-1 text-teal-400 hover:text-teal-300 font-semibold px-2 py-1 rounded-md bg-teal-500/10 hover:bg-teal-500/20 transition-colors"
+                            className="flex items-center gap-1.5 text-teal-400 hover:text-teal-300 font-bold px-3 py-1.5 rounded-xl bg-teal-500/15 hover:bg-teal-500/25 border border-teal-500/30 transition-all shrink-0"
                           >
-                            <ListTodo className="w-3.5 h-3.5" /> View List
+                            <ListTodo className="w-3.5 h-3.5" />
+                            <span>View List</span>
                           </Link>
                         )}
                       </div>
@@ -314,7 +333,7 @@ export default function AssistantPage() {
                   </div>
                 )}
               </div>
-              <span className="text-[10px] text-slate-500 mt-1 px-1">
+              <span className="text-[10px] text-slate-500 mt-1 px-2 font-mono">
                 {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </span>
             </div>
@@ -322,9 +341,9 @@ export default function AssistantPage() {
         })}
 
         {isProcessing && (
-          <div className="flex items-center gap-2 p-3 rounded-2xl glass-card text-xs text-emerald-400 w-fit animate-pulse border border-emerald-500/30">
+          <div className="flex items-center gap-3 p-3.5 rounded-2xl anylist-card text-xs text-emerald-400 w-fit animate-pulse border border-emerald-500/30 shadow-lg">
             <Sparkles className="w-4 h-4 animate-spin text-emerald-400" />
-            <span>Gemini is thinking and coordinating with your family board...</span>
+            <span className="font-medium">Gemini is parsing intent and coordinating with family boards...</span>
           </div>
         )}
         <div ref={chatBottomRef} />
@@ -336,9 +355,10 @@ export default function AssistantPage() {
           <button
             key={i}
             onClick={() => handleSubmit(p.prompt)}
-            className="shrink-0 px-3 py-1.5 rounded-full bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 hover:border-slate-600 text-xs text-slate-300 transition-all hover:scale-102 flex items-center gap-1.5"
+            className="shrink-0 px-3.5 py-2 rounded-2xl bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 hover:border-slate-600 text-xs font-medium text-slate-300 hover:text-white transition-all hover:scale-102 flex items-center gap-2 shadow-sm"
           >
-            {p.label}
+            <span>{p.icon}</span>
+            <span>{p.label}</span>
           </button>
         ))}
       </div>
@@ -346,25 +366,25 @@ export default function AssistantPage() {
       {/* Selected Image Preview (before sending) */}
       {selectedImage && (
         <div className="relative mb-3 inline-block">
-          <div className="relative rounded-xl overflow-hidden border-2 border-emerald-500 w-28 h-28 shadow-lg">
-            <img src={selectedImage.preview} alt="Selected" className="w-full h-full object-cover" />
+          <div className="relative rounded-2xl overflow-hidden border-2 border-emerald-500 w-28 h-28 shadow-xl">
+            <img src={selectedImage.preview} alt="Selected attachment" className="w-full h-full object-cover" />
             <button
               onClick={() => setSelectedImage(null)}
-              className="absolute top-1 right-1 p-1 rounded-full bg-slate-950/80 text-white hover:bg-rose-600 transition-colors"
+              className="absolute top-1.5 right-1.5 p-1 rounded-full bg-slate-950/90 text-white hover:bg-rose-600 transition-colors"
             >
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
-          <span className="text-[10px] text-slate-400 mt-1 block">Photo attached</span>
+          <span className="text-[10px] text-emerald-400 mt-1 block font-semibold">Photo ready to parse</span>
         </div>
       )}
 
       {/* Input Control Center */}
-      <div className="glass-panel p-2 sm:p-3 rounded-2xl border border-slate-800 shadow-2xl relative">
+      <div className="glass-dock p-2.5 sm:p-3 rounded-3xl border border-slate-700/80 shadow-2xl relative">
         {/* Voice Wave Animation when Recording */}
         {isRecording && (
-          <div className="absolute -top-12 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full bg-rose-600/90 text-white text-xs font-semibold flex items-center gap-2 shadow-lg animate-bounce">
-            <span className="w-2 h-2 rounded-full bg-white animate-ping"></span>
+          <div className="absolute -top-12 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full bg-rose-600 text-white text-xs font-bold flex items-center gap-2 shadow-xl animate-bounce">
+            <span className="w-2 h-2 rounded-full bg-white animate-ping" />
             Listening... Speak now
           </div>
         )}
@@ -381,7 +401,7 @@ export default function AssistantPage() {
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="p-3 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-slate-100 transition-colors shrink-0"
+            className="p-3 rounded-2xl bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-slate-100 transition-colors shrink-0"
             title="Upload photo of recipe, fridge, flyer, or handwritten note"
           >
             <ImageIcon className="w-5 h-5" />
@@ -391,12 +411,12 @@ export default function AssistantPage() {
           <button
             type="button"
             onClick={toggleRecording}
-            className={`p-3 rounded-xl transition-all shrink-0 ${
+            className={`p-3 rounded-2xl transition-all shrink-0 ${
               isRecording
                 ? 'bg-rose-600 text-white shadow-lg shadow-rose-600/40 animate-pulse scale-105'
                 : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-emerald-400'
             }`}
-            title={isRecording ? 'Stop recording' : 'Voice command (Speech-to-text)'}
+            title={isRecording ? 'Stop recording' : 'Voice command'}
           >
             {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
           </button>
@@ -413,7 +433,7 @@ export default function AssistantPage() {
             }}
             placeholder="Talk, text, or drop a recipe link..."
             rows={1}
-            className="flex-1 bg-slate-900/90 text-slate-100 placeholder-slate-500 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50 border border-slate-800 resize-none min-h-[44px] max-h-24"
+            className="flex-1 bg-slate-950/80 text-slate-100 placeholder-slate-500 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50 border border-slate-800 resize-none min-h-[46px] max-h-24"
           />
 
           {/* Send Button */}
@@ -421,7 +441,7 @@ export default function AssistantPage() {
             type="button"
             onClick={() => handleSubmit()}
             disabled={(!inputText.trim() && !selectedImage) || isProcessing}
-            className="p-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:hover:bg-emerald-600 text-white shadow-lg shadow-emerald-600/30 transition-all shrink-0"
+            className="p-3 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 disabled:opacity-40 text-white shadow-lg shadow-emerald-600/30 transition-all shrink-0 hover:scale-105"
             title="Send command"
           >
             <Send className="w-5 h-5" />

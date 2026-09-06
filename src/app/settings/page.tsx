@@ -8,10 +8,8 @@ import {
   Download,
   Bell,
   CheckCircle2,
-  AlertCircle,
   Smartphone,
   Sparkles,
-  ShieldCheck,
   Send
 } from 'lucide-react';
 
@@ -19,12 +17,10 @@ export default function SettingsPage() {
   const {
     isInstallable,
     installApp,
-    isPushSupported,
     isPushSubscribed,
     subscribeToPush,
     apiKey,
     setApiKey,
-    household
   } = usePWA();
 
   const [inputApiKey, setInputApiKey] = useState(apiKey);
@@ -33,7 +29,6 @@ export default function SettingsPage() {
   const [isTesting, setIsTesting] = useState(false);
   const [testPushStatus, setTestPushStatus] = useState<string | null>(null);
 
-  // Save API key
   const handleSaveApiKey = (e: React.FormEvent) => {
     e.preventDefault();
     setApiKey(inputApiKey.trim());
@@ -41,7 +36,6 @@ export default function SettingsPage() {
     setTimeout(() => setKeySaved(false), 2500);
   };
 
-  // Test Gemini API key
   const handleTestApiKey = async () => {
     setIsTesting(true);
     setTestResult(null);
@@ -58,7 +52,7 @@ export default function SettingsPage() {
 
       const data = await res.json();
       if (res.ok) {
-        setTestResult(`✓ Connected! Assistant replied: "${data.message}"`);
+        setTestResult(`✓ Connected to Gemini! Assistant replied: "${data.message}"`);
       } else {
         setTestResult(`✗ Error: ${data.error || data.message || 'Check your API key'}`);
       }
@@ -69,7 +63,6 @@ export default function SettingsPage() {
     }
   };
 
-  // Test Push Notification
   const handleSendTestPush = async () => {
     try {
       setTestPushStatus('Sending push notification...');
@@ -84,7 +77,7 @@ export default function SettingsPage() {
       });
 
       if (res.ok) {
-        setTestPushStatus('✓ Notification sent! Check your notification center.');
+        setTestPushStatus('✓ Notification sent! Check your device notification center.');
       } else {
         setTestPushStatus('✗ Failed to send push notification.');
       }
@@ -97,45 +90,51 @@ export default function SettingsPage() {
     <div className="max-w-4xl mx-auto p-4 sm:p-6 w-full space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-black text-white flex items-center gap-2.5">
-          <Settings className="w-7 h-7 text-emerald-400" />
-          Settings & App Configuration
-        </h1>
-        <p className="text-xs text-slate-400 mt-1">
-          Configure Gemini AI keys, PWA installation, and Web Push notifications.
-        </p>
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-slate-700 to-slate-800 flex items-center justify-center text-white shadow-md">
+            <Settings className="w-5 h-5" />
+          </div>
+          <div>
+            <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+              Settings & Configuration
+            </h1>
+            <p className="text-xs text-slate-400">
+              Configure Gemini API keys, PWA installation, and Web Push notifications.
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Gemini AI Key Section */}
-      <div className="glass-panel p-6 rounded-3xl border border-slate-800 space-y-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+      <div className="anylist-card p-6 sm:p-7 rounded-3xl border border-slate-800 space-y-4 shadow-xl">
+        <div className="flex items-center gap-3.5">
+          <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center border border-emerald-500/30">
             <Key className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-base font-bold text-white">Gemini API Key</h2>
+            <h2 className="text-base font-extrabold text-white">Gemini API Key</h2>
             <p className="text-xs text-slate-400">
-              Used for multimodal vision, voice commands, and smart grocery / calendar actions.
+              Powers voice interaction, recipe link extraction, and smart grocery / calendar actions.
             </p>
           </div>
         </div>
 
-        <form onSubmit={handleSaveApiKey} className="space-y-3">
+        <form onSubmit={handleSaveApiKey} className="space-y-3.5">
           <div>
             <input
               type="password"
               value={inputApiKey}
               onChange={(e) => setInputApiKey(e.target.value)}
-              placeholder="AIzaSy... (leave blank if set via server environment)"
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white font-mono focus:ring-2 focus:ring-emerald-500/50"
+              placeholder="AQ... or AIzaSy... (configured in .env)"
+              className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-4 py-3 text-sm text-white font-mono focus:ring-2 focus:ring-emerald-500/50"
             />
           </div>
 
-          <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center justify-between flex-wrap gap-2 pt-1">
             <div className="flex items-center gap-2">
               <button
                 type="submit"
-                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md shadow-emerald-600/30 transition-all"
+                className="px-4 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md shadow-emerald-600/30 transition-all"
               >
                 {keySaved ? '✓ Saved!' : 'Save Key'}
               </button>
@@ -144,7 +143,7 @@ export default function SettingsPage() {
                 type="button"
                 onClick={handleTestApiKey}
                 disabled={isTesting}
-                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-colors flex items-center gap-1.5"
+                className="px-4 py-2.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition-colors flex items-center gap-1.5"
               >
                 <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
                 {isTesting ? 'Testing...' : 'Test Connection'}
@@ -155,15 +154,15 @@ export default function SettingsPage() {
               href="https://aistudio.google.com/app/apikey"
               target="_blank"
               rel="noreferrer"
-              className="text-xs text-emerald-400 hover:underline"
+              className="text-xs text-emerald-400 hover:underline font-medium"
             >
-              Get a free Gemini API Key →
+              Get a Gemini API Key →
             </a>
           </div>
 
           {testResult && (
             <div
-              className={`p-3 rounded-xl text-xs ${
+              className={`p-3.5 rounded-2xl text-xs font-medium ${
                 testResult.startsWith('✓')
                   ? 'bg-emerald-950/40 border border-emerald-800 text-emerald-300'
                   : 'bg-rose-950/40 border border-rose-800 text-rose-300'
@@ -176,16 +175,16 @@ export default function SettingsPage() {
       </div>
 
       {/* PWA App Install Section */}
-      <div className="glass-panel p-6 rounded-3xl border border-slate-800 space-y-4">
+      <div className="anylist-card p-6 sm:p-7 rounded-3xl border border-slate-800 space-y-4 shadow-xl">
         <div className="flex items-center justify-between flex-wrap gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-teal-500/20 text-teal-400 flex items-center justify-center">
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-2xl bg-teal-500/15 text-teal-400 flex items-center justify-center border border-teal-500/30">
               <Smartphone className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-white">PWA App Installation</h2>
+              <h2 className="text-base font-extrabold text-white">PWA App Installation</h2>
               <p className="text-xs text-slate-400">
-                Install fam-kit on your phone or desktop for full-screen and offline grocery shopping.
+                Install fam-kit on iOS or Android for full-screen and offline shopping.
               </p>
             </div>
           </div>
@@ -193,49 +192,49 @@ export default function SettingsPage() {
           {isInstallable ? (
             <button
               onClick={installApp}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg shadow-emerald-600/30 transition-all hover:scale-105"
+              className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white text-xs font-extrabold shadow-lg shadow-emerald-600/30 transition-all hover:scale-105"
             >
               <Download className="w-4 h-4" />
               <span>Install to Home Screen</span>
             </button>
           ) : (
-            <span className="px-3 py-1.5 rounded-full bg-slate-900 border border-slate-800 text-xs text-slate-400 flex items-center gap-1.5">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Installed / Browser Ready
+            <span className="px-3.5 py-2 rounded-2xl bg-slate-950 border border-slate-800 text-xs text-slate-400 flex items-center gap-1.5 font-medium">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" /> Installed / Browser Ready
             </span>
           )}
         </div>
 
-        {/* Installation Instructions */}
+        {/* Instructions */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
           <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800/80 space-y-2">
             <h3 className="text-xs font-bold text-slate-200">📱 iPhone / iPad (iOS Safari)</h3>
             <ol className="text-xs text-slate-400 space-y-1 list-decimal list-inside leading-relaxed">
-              <li>Open this site in <strong>Safari</strong></li>
-              <li>Tap the <strong>Share</strong> button (box with upward arrow)</li>
-              <li>Scroll down and select <strong>"Add to Home Screen"</strong></li>
+              <li>Open in <strong>Safari</strong></li>
+              <li>Tap the <strong>Share</strong> button</li>
+              <li>Select <strong>"Add to Home Screen"</strong></li>
             </ol>
           </div>
 
           <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800/80 space-y-2">
-            <h3 className="text-xs font-bold text-slate-200">🤖 Android / Desktop (Chrome / Edge)</h3>
+            <h3 className="text-xs font-bold text-slate-200">🤖 Android / Desktop (Chrome)</h3>
             <ol className="text-xs text-slate-400 space-y-1 list-decimal list-inside leading-relaxed">
-              <li>Tap the <strong>"Install App"</strong> button above or browser menu (⋮)</li>
+              <li>Tap <strong>"Install App"</strong> above or browser menu (⋮)</li>
               <li>Select <strong>"Install fam-kit"</strong></li>
-              <li>Enjoy standalone app icon & fast offline access</li>
+              <li>Launch from your Home Screen anytime</li>
             </ol>
           </div>
         </div>
       </div>
 
       {/* Push Notifications Section */}
-      <div className="glass-panel p-6 rounded-3xl border border-slate-800 space-y-4">
+      <div className="anylist-card p-6 sm:p-7 rounded-3xl border border-slate-800 space-y-4 shadow-xl">
         <div className="flex items-center justify-between flex-wrap gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center">
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-2xl bg-amber-500/15 text-amber-400 flex items-center justify-center border border-amber-500/30">
               <Bell className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-white">Push Notifications</h2>
+              <h2 className="text-base font-extrabold text-white">Push Notifications</h2>
               <p className="text-xs text-slate-400">
                 Receive family grocery updates, daily meal alerts, and calendar reminders.
               </p>
@@ -244,20 +243,20 @@ export default function SettingsPage() {
 
           {isPushSubscribed ? (
             <div className="flex items-center gap-2">
-              <span className="px-3 py-1.5 rounded-full bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center gap-1.5">
-                <CheckCircle2 className="w-3.5 h-3.5" /> Notifications Active
+              <span className="px-3.5 py-2 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-xs font-bold flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4" /> Active
               </span>
               <button
                 onClick={handleSendTestPush}
-                className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                className="px-3.5 py-2 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold flex items-center gap-1.5 transition-colors"
               >
-                <Send className="w-3.5 h-3.5 text-emerald-400" /> Test Notification
+                <Send className="w-3.5 h-3.5 text-emerald-400" /> Test Alert
               </button>
             </div>
           ) : (
             <button
               onClick={subscribeToPush}
-              className="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold shadow-md shadow-amber-600/30 transition-all"
+              className="px-5 py-2.5 rounded-2xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-extrabold shadow-md shadow-amber-600/30 transition-all"
             >
               Enable Push Notifications
             </button>
@@ -266,7 +265,7 @@ export default function SettingsPage() {
 
         {testPushStatus && (
           <div
-            className={`p-3 rounded-xl text-xs ${
+            className={`p-3.5 rounded-2xl text-xs font-medium ${
               testPushStatus.startsWith('✓')
                 ? 'bg-emerald-950/40 border border-emerald-800 text-emerald-300'
                 : 'bg-slate-900 border border-slate-800 text-slate-300'

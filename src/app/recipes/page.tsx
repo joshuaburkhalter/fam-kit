@@ -70,7 +70,6 @@ function RecipesContent() {
     // Check if opened via PWA Web Share Target
     const sharedUrl = searchParams.get('url') || searchParams.get('text');
     if (sharedUrl) {
-      // Find URL inside text if needed
       const match = sharedUrl.match(/https?:\/\/[^\s]+/);
       const target = match ? match[0] : sharedUrl;
       setImportUrl(target);
@@ -183,7 +182,6 @@ function RecipesContent() {
     }
   };
 
-  // Filter recipes
   const filteredRecipes = recipes.filter((r) => {
     const q = searchQuery.toLowerCase();
     return (
@@ -198,20 +196,26 @@ function RecipesContent() {
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-white flex items-center gap-2.5">
-            <BookOpen className="w-7 h-7 text-emerald-400" />
-            Family Recipe Box
-          </h1>
-          <p className="text-xs text-slate-400 mt-1">
-            Import recipes from any web link or let Gemini suggest delicious family meals.
-          </p>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-rose-500 to-amber-500 flex items-center justify-center text-white shadow-md shadow-rose-500/25">
+              <BookOpen className="w-5 h-5" />
+            </div>
+            <div>
+              <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                Family Recipe Box
+              </h1>
+              <p className="text-xs text-slate-400">
+                Import recipes from any web link or ask Gemini for kitchen suggestions.
+              </p>
+            </div>
+          </div>
         </div>
 
-        {/* Actions: Import URL */}
+        {/* Action Button */}
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowImportModal(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md shadow-emerald-600/30 transition-all hover:scale-102"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white text-xs font-bold shadow-md shadow-emerald-600/30 transition-all hover:scale-105"
           >
             <LinkIcon className="w-4 h-4" />
             <span>Import from Web Link</span>
@@ -233,19 +237,19 @@ function RecipesContent() {
 
       {/* Recipe Cards Grid */}
       {isLoading ? (
-        <div className="p-12 text-center text-slate-500 text-sm animate-pulse">
-          Loading recipe collection...
+        <div className="p-16 text-center text-slate-500 text-sm animate-pulse">
+          Loading recipes...
         </div>
       ) : filteredRecipes.length === 0 ? (
-        <div className="glass-panel p-12 rounded-3xl border border-slate-800 text-center space-y-3">
+        <div className="anylist-card p-12 rounded-3xl border border-slate-800 text-center space-y-3">
           <ChefHat className="w-12 h-12 text-slate-600 mx-auto" />
           <h3 className="font-bold text-slate-200">No recipes found</h3>
           <p className="text-xs text-slate-400 max-w-sm mx-auto">
-            Import a recipe from your favorite food blog or ask the Gemini Assistant for meal inspiration!
+            Import a recipe from your favorite food blog or ask the Gemini Assistant!
           </p>
           <button
             onClick={() => setShowImportModal(true)}
-            className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold"
+            className="px-4 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md shadow-emerald-600/30"
           >
             Import First Recipe
           </button>
@@ -266,10 +270,10 @@ function RecipesContent() {
                   setCookMode(false);
                   setCheckedSteps({});
                 }}
-                className="glass-panel rounded-2xl border border-slate-800 overflow-hidden hover:border-slate-700 transition-all hover:scale-[1.01] cursor-pointer flex flex-col group"
+                className="anylist-card rounded-3xl border border-slate-800/90 overflow-hidden hover:border-slate-700 transition-all hover:scale-[1.015] cursor-pointer flex flex-col group shadow-xl"
               >
-                {/* Image */}
-                <div className="relative h-44 w-full bg-slate-900 overflow-hidden">
+                {/* Hero Image */}
+                <div className="relative h-48 w-full bg-slate-950 overflow-hidden">
                   {recipe.imageUrl ? (
                     <img
                       src={recipe.imageUrl}
@@ -277,15 +281,14 @@ function RecipesContent() {
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-tr from-emerald-950/40 to-slate-900 text-emerald-500/40">
+                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-tr from-rose-950/40 to-slate-900 text-rose-500/40">
                       <ChefHat className="w-16 h-16" />
                     </div>
                   )}
 
-                  {/* Badges on image */}
-                  <div className="absolute top-2 right-2 flex items-center gap-1.5">
+                  <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5">
                     {recipe.cookTime && (
-                      <span className="px-2 py-1 rounded-full bg-slate-950/80 backdrop-blur-md text-[11px] font-semibold text-emerald-300 flex items-center gap-1 border border-white/10">
+                      <span className="px-2.5 py-1 rounded-full bg-slate-950/80 backdrop-blur-md text-[11px] font-bold text-emerald-300 flex items-center gap-1 border border-white/10 shadow-sm">
                         <Clock className="w-3 h-3" />
                         {recipe.cookTime}
                       </span>
@@ -296,7 +299,7 @@ function RecipesContent() {
                 {/* Content */}
                 <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
                   <div>
-                    <h3 className="font-bold text-base text-slate-100 group-hover:text-emerald-300 transition-colors line-clamp-1">
+                    <h3 className="font-extrabold text-base text-slate-100 group-hover:text-emerald-300 transition-colors line-clamp-1">
                       {recipe.title}
                     </h3>
                     {recipe.description && (
@@ -307,7 +310,7 @@ function RecipesContent() {
                   </div>
 
                   {/* Metadata Row */}
-                  <div className="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800/80">
+                  <div className="flex items-center justify-between text-xs text-slate-400 pt-2.5 border-t border-white/5">
                     <div className="flex items-center gap-3">
                       {recipe.servings && (
                         <span className="flex items-center gap-1">
@@ -316,7 +319,7 @@ function RecipesContent() {
                         </span>
                       )}
                       {ingCount > 0 && (
-                        <span>{ingCount} ingr</span>
+                        <span className="font-mono text-[11px] text-slate-400">{ingCount} items</span>
                       )}
                     </div>
 
@@ -337,10 +340,10 @@ function RecipesContent() {
 
       {/* URL Recipe Importer Modal */}
       {showImportModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-lg w-full p-6 shadow-2xl animate-in fade-in zoom-in-95">
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700/80 rounded-3xl max-w-lg w-full p-6 shadow-2xl animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <h3 className="font-bold text-lg text-white flex items-center gap-2">
+              <h3 className="font-extrabold text-base sm:text-lg text-white flex items-center gap-2">
                 <LinkIcon className="w-5 h-5 text-emerald-400" />
                 Import Recipe from Web Link
               </h3>
@@ -354,24 +357,24 @@ function RecipesContent() {
 
             <form onSubmit={handleImportRecipe} className="mt-4 space-y-4">
               <div>
-                <label className="text-xs font-semibold text-slate-400 block mb-1.5">
-                  Recipe URL / Web Page
+                <label className="text-xs font-bold text-slate-400 block mb-1.5">
+                  Recipe URL
                 </label>
                 <input
                   type="url"
                   value={importUrl}
                   onChange={(e) => setImportUrl(e.target.value)}
-                  placeholder="https://www.allrecipes.com/recipe/... or any cooking blog"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:ring-2 focus:ring-emerald-500/50"
+                  placeholder="https://www.allrecipes.com/recipe/... or food blog"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-4 py-3 text-sm text-white focus:ring-2 focus:ring-emerald-500/50"
                   required
                 />
                 <p className="text-[11px] text-slate-500 mt-1.5 leading-relaxed">
-                  Supports JSON-LD structured recipe tags and Gemini web extraction fallback across popular food sites.
+                  Extracts structured ingredients and instructions via Schema.org / JSON-LD and Gemini.
                 </p>
               </div>
 
               {importError && (
-                <div className="p-3 rounded-xl bg-rose-950/40 border border-rose-800 text-rose-300 text-xs">
+                <div className="p-3 rounded-2xl bg-rose-950/40 border border-rose-800 text-rose-300 text-xs">
                   {importError}
                 </div>
               )}
@@ -381,14 +384,14 @@ function RecipesContent() {
                   type="button"
                   onClick={() => setShowImportModal(false)}
                   disabled={isImporting}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white"
+                  className="px-4 py-2.5 rounded-2xl text-xs font-bold text-slate-400 hover:text-white"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isImporting || !importUrl.trim()}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-xs font-bold shadow-md shadow-emerald-600/30"
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 disabled:opacity-40 text-white text-xs font-extrabold shadow-md shadow-emerald-600/30"
                 >
                   {isImporting ? (
                     <>
@@ -411,26 +414,26 @@ function RecipesContent() {
       {/* Recipe Detail / Cook Mode Modal */}
       {selectedRecipe && (
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-3xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95">
+          <div className="bg-slate-900 border border-slate-700/80 rounded-3xl max-w-3xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95">
             {/* Modal Header Bar */}
-            <div className="p-4 sm:px-6 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
+            <div className="p-4 sm:px-6 border-b border-slate-800 flex items-center justify-between bg-slate-950/70">
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setCookMode(!cookMode)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
+                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
                     cookMode
-                      ? 'bg-emerald-600 text-white'
+                      ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
                       : 'bg-slate-800 text-slate-300 hover:text-white'
                   }`}
                 >
-                  <ChefHat className="w-3.5 h-3.5" />
+                  <ChefHat className="w-4 h-4" />
                   {cookMode ? 'Exit Cook Mode' : 'Cook Mode'}
                 </button>
               </div>
 
               <button
                 onClick={() => setSelectedRecipe(null)}
-                className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800"
+                className="p-1.5 rounded-2xl text-slate-400 hover:text-white hover:bg-slate-800"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -441,7 +444,7 @@ function RecipesContent() {
               {/* Recipe Hero */}
               <div className="flex flex-col sm:flex-row gap-5">
                 {selectedRecipe.imageUrl && (
-                  <div className="w-full sm:w-48 h-44 rounded-2xl overflow-hidden shrink-0 border border-slate-800">
+                  <div className="w-full sm:w-52 h-44 rounded-2xl overflow-hidden shrink-0 border border-slate-800 shadow-inner">
                     <img
                       src={selectedRecipe.imageUrl}
                       alt={selectedRecipe.title}
@@ -460,17 +463,17 @@ function RecipesContent() {
                   {/* Metadata Chips */}
                   <div className="flex items-center gap-2 flex-wrap pt-1 text-xs">
                     {selectedRecipe.prepTime && (
-                      <span className="px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300">
+                      <span className="px-2.5 py-1 rounded-xl bg-slate-950 border border-white/5 text-slate-300 font-mono">
                         Prep: {selectedRecipe.prepTime}
                       </span>
                     )}
                     {selectedRecipe.cookTime && (
-                      <span className="px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300">
+                      <span className="px-2.5 py-1 rounded-xl bg-slate-950 border border-white/5 text-slate-300 font-mono">
                         Cook: {selectedRecipe.cookTime}
                       </span>
                     )}
                     {selectedRecipe.servings && (
-                      <span className="px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300">
+                      <span className="px-2.5 py-1 rounded-xl bg-slate-950 border border-white/5 text-slate-300 font-mono">
                         Servings: {selectedRecipe.servings}
                       </span>
                     )}
@@ -479,7 +482,7 @@ function RecipesContent() {
                         href={selectedRecipe.sourceUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="flex items-center gap-1 text-emerald-400 hover:underline"
+                        className="flex items-center gap-1 text-emerald-400 hover:underline font-medium"
                       >
                         <ExternalLink className="w-3.5 h-3.5" /> Source Link
                       </a>
@@ -489,7 +492,7 @@ function RecipesContent() {
               </div>
 
               {/* Action Buttons */}
-              <div className="flex items-center gap-3 flex-wrap p-3 rounded-2xl bg-slate-950/80 border border-slate-800">
+              <div className="flex items-center gap-3 flex-wrap p-3 rounded-2xl bg-slate-950/80 border border-slate-800 shadow-inner">
                 <button
                   onClick={() => handleExportToGrocery(selectedRecipe)}
                   disabled={isExportingGrocery}
@@ -517,7 +520,7 @@ function RecipesContent() {
               {/* Ingredients & Instructions */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Ingredients Column */}
-                <div className="glass-panel p-4 rounded-2xl border border-slate-800 space-y-3">
+                <div className="anylist-card p-4 rounded-2xl border border-slate-800 space-y-3">
                   <h3 className="font-bold text-sm text-slate-200 flex items-center gap-2">
                     <ShoppingCart className="w-4 h-4 text-emerald-400" />
                     Ingredients
@@ -531,8 +534,8 @@ function RecipesContent() {
                         items = [{ item: selectedRecipe.ingredients }];
                       }
                       return items.map((ing, i) => (
-                        <li key={i} className="flex items-start gap-2 p-1.5 rounded-lg hover:bg-slate-800/40">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1.5 shrink-0" />
+                        <li key={i} className="flex items-start gap-2.5 p-2 rounded-xl bg-slate-950/40 border border-white/5">
+                          <span className="w-2 h-2 rounded-full bg-emerald-400 mt-1 shrink-0" />
                           <span>{typeof ing === 'string' ? ing : ing.item}</span>
                         </li>
                       ));
@@ -541,7 +544,7 @@ function RecipesContent() {
                 </div>
 
                 {/* Instructions Column */}
-                <div className="glass-panel p-4 rounded-2xl border border-slate-800 space-y-3">
+                <div className="anylist-card p-4 rounded-2xl border border-slate-800 space-y-3">
                   <h3 className="font-bold text-sm text-slate-200 flex items-center gap-2">
                     <ChefHat className="w-4 h-4 text-amber-400" />
                     Instructions
@@ -563,18 +566,18 @@ function RecipesContent() {
                               cookMode &&
                               setCheckedSteps((prev) => ({ ...prev, [idx]: !prev[idx] }))
                             }
-                            className={`flex items-start gap-3 p-2 rounded-xl transition-colors ${
-                              cookMode ? 'cursor-pointer hover:bg-slate-800/60' : ''
-                            } ${isDone ? 'opacity-50 line-through' : ''}`}
+                            className={`flex items-start gap-3 p-2.5 rounded-xl transition-colors ${
+                              cookMode ? 'cursor-pointer hover:bg-slate-800/60 bg-slate-950/40' : ''
+                            } ${isDone ? 'opacity-40 line-through' : ''}`}
                           >
                             <span
-                              className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[11px] shrink-0 ${
+                              className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[11px] shrink-0 font-mono ${
                                 isDone
                                   ? 'bg-emerald-600 text-white'
                                   : 'bg-slate-800 text-slate-400'
                               }`}
                             >
-                              {isDone ? <Check className="w-3.5 h-3.5" /> : idx + 1}
+                              {isDone ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : idx + 1}
                             </span>
                             <span className="leading-relaxed flex-1">{step}</span>
                           </li>
@@ -589,10 +592,10 @@ function RecipesContent() {
         </div>
       )}
 
-      {/* Schedule to Meal Plan Modal */}
+      {/* Schedule Modal */}
       {showScheduleModal && selectedRecipe && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-sm w-full p-5 shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700/80 rounded-3xl max-w-sm w-full p-5 shadow-2xl">
             <h3 className="font-bold text-base text-white mb-3 flex items-center gap-2">
               <Calendar className="w-4 h-4 text-amber-400" />
               Schedule Meal
@@ -600,7 +603,7 @@ function RecipesContent() {
 
             <div className="space-y-3">
               <div>
-                <label className="text-xs font-semibold text-slate-400 block mb-1">Date</label>
+                <label className="text-xs font-bold text-slate-400 block mb-1">Date</label>
                 <input
                   type="date"
                   value={scheduleDate}
@@ -610,7 +613,7 @@ function RecipesContent() {
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-slate-400 block mb-1">Meal Slot</label>
+                <label className="text-xs font-bold text-slate-400 block mb-1">Meal Slot</label>
                 <select
                   value={scheduleMealType}
                   onChange={(e) => setScheduleMealType(e.target.value as any)}

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { usePWA } from '@/components/pwa/PWAProvider';
-import { CalendarEventData, FamilyMember } from '@/types';
+import { CalendarEventData } from '@/types';
 import {
   Calendar as CalendarIcon,
   Plus,
@@ -10,17 +10,14 @@ import {
   ChevronRight,
   Clock,
   MapPin,
-  Users,
   Trash2,
-  X,
-  Sparkles
+  X
 } from 'lucide-react';
 
 export default function CalendarPage() {
   const { activeMember, household } = usePWA();
   const [events, setEvents] = useState<CalendarEventData[]>([]);
   const [selectedMemberFilter, setSelectedMemberFilter] = useState<string>('all');
-  const [viewMode, setViewMode] = useState<'month' | 'week'>('month');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isLoading, setIsLoading] = useState(true);
 
@@ -35,7 +32,6 @@ export default function CalendarPage() {
   const [eventDescription, setEventDescription] = useState('');
   const [eventAssignedMemberId, setEventAssignedMemberId] = useState<string>('');
 
-  // Fetch events
   const fetchEvents = async () => {
     try {
       setIsLoading(true);
@@ -59,7 +55,6 @@ export default function CalendarPage() {
     fetchEvents();
   }, [selectedMemberFilter]);
 
-  // Create Event
   const handleSaveEvent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!eventTitle.trim() || !eventDate) return;
@@ -93,7 +88,6 @@ export default function CalendarPage() {
     }
   };
 
-  // Delete Event
   const handleDeleteEvent = async (id: string) => {
     if (!confirm('Delete this event?')) return;
     setEvents((prev) => prev.filter((e) => e.id !== id));
@@ -104,18 +98,15 @@ export default function CalendarPage() {
     }
   };
 
-  // Month navigation calculation
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
   const firstDayOfMonth = new Date(year, month, 1);
   const lastDayOfMonth = new Date(year, month + 1, 0);
 
-  // Get days to render in 35/42 grid
   const daysInMonth = lastDayOfMonth.getDate();
-  const startDayOfWeek = firstDayOfMonth.getDay(); // 0 = Sun
+  const startDayOfWeek = firstDayOfMonth.getDay();
 
   const calendarDays = [];
-  // Prev month padding
   for (let i = 0; i < startDayOfWeek; i++) {
     const prevDate = new Date(year, month, 0 - (startDayOfWeek - 1 - i));
     calendarDays.push({
@@ -124,7 +115,6 @@ export default function CalendarPage() {
       isCurrentMonth: false,
     });
   }
-  // Current month
   for (let i = 1; i <= daysInMonth; i++) {
     const d = new Date(year, month, i);
     calendarDays.push({
@@ -134,7 +124,6 @@ export default function CalendarPage() {
       isToday: d.toDateString() === new Date().toDateString(),
     });
   }
-  // Next month padding to fill 35 or 42
   const remaining = 35 - calendarDays.length;
   if (remaining > 0) {
     for (let i = 1; i <= remaining; i++) {
@@ -161,23 +150,29 @@ export default function CalendarPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-white flex items-center gap-2.5">
-            <CalendarIcon className="w-7 h-7 text-emerald-400" />
-            Family Shared Calendar
-          </h1>
-          <p className="text-xs text-slate-400 mt-1">
-            Keep track of everyone's schedules, school activities, sports, and family events.
-          </p>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white shadow-md shadow-indigo-500/25">
+              <CalendarIcon className="w-5 h-5" />
+            </div>
+            <div>
+              <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                Shared Family Calendar
+              </h1>
+              <p className="text-xs text-slate-400">
+                Track appointments, soccer practices, school events, and birthdays.
+              </p>
+            </div>
+          </div>
         </div>
 
-        {/* Actions */}
+        {/* Action Button */}
         <div className="flex items-center gap-2">
           <button
             onClick={() => {
               setEventDate(new Date().toISOString().split('T')[0]);
               setShowEventModal(true);
             }}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md shadow-emerald-600/30 transition-all hover:scale-102"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white text-xs font-bold shadow-md shadow-emerald-600/30 transition-all hover:scale-105"
           >
             <Plus className="w-4 h-4" />
             <span>Add Event</span>
@@ -187,13 +182,13 @@ export default function CalendarPage() {
 
       {/* Member Filter Bar */}
       {household?.members && household.members.length > 0 && (
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar border-b border-white/5 pb-3">
           <button
             onClick={() => setSelectedMemberFilter('all')}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all shrink-0 ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-bold transition-all shrink-0 ${
               selectedMemberFilter === 'all'
-                ? 'bg-emerald-600 text-white shadow-md'
-                : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'
+                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30 scale-102'
+                : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 border border-slate-800'
             }`}
           >
             <span>👨‍👩‍👧‍👦</span>
@@ -204,10 +199,10 @@ export default function CalendarPage() {
             <button
               key={member.id}
               onClick={() => setSelectedMemberFilter(member.id)}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all shrink-0 ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-bold transition-all shrink-0 ${
                 selectedMemberFilter === member.id
-                  ? 'bg-emerald-600 text-white shadow-md'
-                  : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'
+                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30 scale-102'
+                  : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 border border-slate-800'
               }`}
             >
               <span>{member.avatar}</span>
@@ -218,30 +213,29 @@ export default function CalendarPage() {
       )}
 
       {/* Month Navigator */}
-      <div className="flex items-center justify-between p-3 rounded-2xl glass-panel border border-slate-800">
+      <div className="flex items-center justify-between p-3.5 rounded-3xl anylist-card border border-slate-800 shadow-md">
         <button
           onClick={() => setCurrentDate(new Date(year, month - 1, 1))}
-          className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white"
+          className="p-2 rounded-2xl bg-slate-900 border border-slate-700/80 text-slate-300 hover:text-white"
         >
           <ChevronLeft className="w-4 h-4" />
         </button>
 
-        <div className="text-base font-bold text-slate-100">
+        <div className="text-base font-extrabold text-slate-100">
           {currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
         </div>
 
         <button
           onClick={() => setCurrentDate(new Date(year, month + 1, 1))}
-          className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white"
+          className="p-2 rounded-2xl bg-slate-900 border border-slate-700/80 text-slate-300 hover:text-white"
         >
           <ChevronRight className="w-4 h-4" />
         </button>
       </div>
 
       {/* Calendar Grid */}
-      <div className="glass-panel rounded-3xl border border-slate-800 overflow-hidden shadow-xl">
-        {/* Day of Week Headers */}
-        <div className="grid grid-cols-7 border-b border-slate-800 bg-slate-950/70 text-center py-2.5 text-xs font-bold text-slate-400">
+      <div className="anylist-card rounded-3xl border border-slate-800 overflow-hidden shadow-2xl">
+        <div className="grid grid-cols-7 border-b border-slate-800 bg-slate-950/80 text-center py-3 text-xs font-extrabold text-slate-400">
           <span>Sun</span>
           <span>Mon</span>
           <span>Tue</span>
@@ -251,7 +245,6 @@ export default function CalendarPage() {
           <span>Sat</span>
         </div>
 
-        {/* Days Matrix */}
         <div className="grid grid-cols-7 divide-x divide-y divide-slate-800/60 bg-slate-950/40">
           {calendarDays.map((day, idx) => {
             const dayEvents = events.filter((e) => e.date === day.dateStr);
@@ -263,15 +256,15 @@ export default function CalendarPage() {
                   setEventDate(day.dateStr);
                   setShowEventModal(true);
                 }}
-                className={`min-h-[100px] sm:min-h-[120px] p-1.5 sm:p-2 transition-colors cursor-pointer hover:bg-slate-800/30 flex flex-col justify-between ${
-                  !day.isCurrentMonth ? 'opacity-30 bg-slate-950/80' : ''
-                } ${day.isToday ? 'bg-emerald-500/5' : ''}`}
+                className={`min-h-[105px] sm:min-h-[125px] p-2 transition-colors cursor-pointer hover:bg-slate-800/40 flex flex-col justify-between ${
+                  !day.isCurrentMonth ? 'opacity-30 bg-slate-950/90' : ''
+                } ${day.isToday ? 'bg-emerald-500/10' : ''}`}
               >
                 <div className="flex items-center justify-between">
                   <span
-                    className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                    className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-extrabold font-mono ${
                       day.isToday
-                        ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/40'
+                        ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/50'
                         : 'text-slate-300'
                     }`}
                   >
@@ -279,22 +272,20 @@ export default function CalendarPage() {
                   </span>
                 </div>
 
-                {/* Events list in cell */}
-                <div className="space-y-1 my-1 flex-1 overflow-y-auto max-h-20 no-scrollbar">
+                <div className="space-y-1.5 my-1 flex-1 overflow-y-auto max-h-24 no-scrollbar">
                   {dayEvents.map((ev) => (
                     <div
                       key={ev.id}
                       onClick={(e) => {
                         e.stopPropagation();
-                        // Open event info / deletion
                         handleDeleteEvent(ev.id);
                       }}
-                      className={`px-1.5 py-0.5 rounded-md text-[10px] font-semibold border truncate transition-all ${
+                      className={`px-2 py-1 rounded-xl text-[10px] font-bold border truncate transition-all shadow-sm ${
                         categoryColors[ev.category] || categoryColors.Family
                       }`}
                       title={`${ev.title} ${ev.startTime ? `@ ${ev.startTime}` : ''}`}
                     >
-                      <span className="font-bold mr-1">{ev.startTime || ''}</span>
+                      <span className="font-mono mr-1">{ev.startTime || ''}</span>
                       <span>{ev.title}</span>
                     </div>
                   ))}
@@ -307,10 +298,10 @@ export default function CalendarPage() {
 
       {/* Add Event Modal */}
       {showEventModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl animate-in fade-in zoom-in-95">
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700/80 rounded-3xl max-w-md w-full p-6 shadow-2xl animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <h3 className="font-bold text-base text-white flex items-center gap-2">
+              <h3 className="font-extrabold text-base sm:text-lg text-white flex items-center gap-2">
                 <CalendarIcon className="w-5 h-5 text-emerald-400" />
                 Add Calendar Event
               </h3>
@@ -322,36 +313,36 @@ export default function CalendarPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSaveEvent} className="mt-4 space-y-3.5">
+            <form onSubmit={handleSaveEvent} className="mt-4 space-y-4">
               <div>
-                <label className="text-xs font-semibold text-slate-400 block mb-1">Event Title</label>
+                <label className="text-xs font-bold text-slate-400 block mb-1">Event Title</label>
                 <input
                   type="text"
                   value={eventTitle}
                   onChange={(e) => setEventTitle(e.target.value)}
                   placeholder="e.g. Leo Soccer Match, Dentist, Emma Ballet"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:ring-2 focus:ring-emerald-500/50"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-4 py-3 text-sm text-white focus:ring-2 focus:ring-emerald-500/50"
                   required
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-semibold text-slate-400 block mb-1">Date</label>
+                  <label className="text-xs font-bold text-slate-400 block mb-1">Date</label>
                   <input
                     type="date"
                     value={eventDate}
                     onChange={(e) => setEventDate(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-3.5 py-2.5 text-xs text-white"
                     required
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-slate-400 block mb-1">Category</label>
+                  <label className="text-xs font-bold text-slate-400 block mb-1">Category</label>
                   <select
                     value={eventCategory}
                     onChange={(e) => setEventCategory(e.target.value as any)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-3.5 py-2.5 text-xs text-white"
                   >
                     <option value="Sports">Sports</option>
                     <option value="School">School</option>
@@ -365,34 +356,34 @@ export default function CalendarPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-semibold text-slate-400 block mb-1">Start Time</label>
+                  <label className="text-xs font-bold text-slate-400 block mb-1">Start Time</label>
                   <input
                     type="time"
                     value={eventStartTime}
                     onChange={(e) => setEventStartTime(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-3.5 py-2.5 text-xs text-white"
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-slate-400 block mb-1">End Time</label>
+                  <label className="text-xs font-bold text-slate-400 block mb-1">End Time</label>
                   <input
                     type="time"
                     value={eventEndTime}
                     onChange={(e) => setEventEndTime(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-3.5 py-2.5 text-xs text-white"
                   />
                 </div>
               </div>
 
               {household?.members && household.members.length > 0 && (
                 <div>
-                  <label className="text-xs font-semibold text-slate-400 block mb-1">
-                    Assigned Family Member
+                  <label className="text-xs font-bold text-slate-400 block mb-1">
+                    Assigned Member
                   </label>
                   <select
                     value={eventAssignedMemberId}
                     onChange={(e) => setEventAssignedMemberId(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-3.5 py-2.5 text-xs text-white"
                   >
                     <option value="">-- Entire Family --</option>
                     {household.members.map((m) => (
@@ -405,13 +396,13 @@ export default function CalendarPage() {
               )}
 
               <div>
-                <label className="text-xs font-semibold text-slate-400 block mb-1">Location</label>
+                <label className="text-xs font-bold text-slate-400 block mb-1">Location</label>
                 <input
                   type="text"
                   value={eventLocation}
                   onChange={(e) => setEventLocation(e.target.value)}
                   placeholder="e.g. Community Park Field #2"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-4 py-2.5 text-xs text-white"
                 />
               </div>
 
@@ -419,14 +410,14 @@ export default function CalendarPage() {
                 <button
                   type="button"
                   onClick={() => setShowEventModal(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white"
+                  className="px-4 py-2.5 rounded-2xl text-xs font-bold text-slate-400 hover:text-white"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={!eventTitle.trim()}
-                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-xs font-bold shadow-md shadow-emerald-600/30"
+                  className="px-5 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-xs font-extrabold shadow-md shadow-emerald-600/30"
                 >
                   Save Event
                 </button>
