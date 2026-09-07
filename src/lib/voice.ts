@@ -1,105 +1,143 @@
-// Browser Web Speech API helper for STT and TTS
+// Voice utilities for Speech-to-Text (STT) and Text-to-Speech (TTS)
 
-export interface VoiceRecognitionOptions {
-  onResult: (transcript: string, isFinal: boolean) => void;
-  onError?: (error: string) => void;
-  onEnd?: () => void;
+declare global {
+  interface Window {
+    SpeechRecognition: any;
+    webkitSpeechRecognition: any;
+  }
 }
 
-export function startSpeechRecognition(options: VoiceRecognitionOptions): { stop: () => void } | null {
-  if (typeof window === 'undefined') return null;
+export class VoiceService {
+  private recognition: any = null;
+  private isListening: boolean = false;
+  private synth: SpeechSynthesis | null = null;
 
-  const SpeechRecognition =
-    (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-
-  if (!SpeechRecognition) {
-    if (options.onError) {
-      options.onError('Speech recognition is not supported in this browser. Please type or use Chrome/Safari/Edge.');
-    }
-    return null;
-  }
-
-  const recognition = new SpeechRecognition();
-  recognition.continuous = true;
-  recognition.interimResults = true;
-  recognition.lang = 'en-US';
-
-  recognition.onresult = (event: any) => {
-    let interimTranscript = '';
-    let finalTranscript = '';
-
-    for (let i = event.resultIndex; i < event.results.length; ++i) {
-      if (event.results[i].isFinal) {
-        finalTranscript += event.results[i][0].transcript;
-      } else {
-        interimTranscript += event.results[i][0].transcript;
+  constructor() {
+    if (typeof window !== 'undefined') {
+      const SpeechRecognitionClass =
+        window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (SpeechRecognitionClass) {
+        this.recognition = new SpeechRecognitionClass();
+        this.recognition.continuous = false;
+        this.recognition.interimResults = true;
+        this.recognition.lang = 'en-US';
+      }
+      if ('speechSynthesis' in window) {
+        this.synth = window.speechSynthesis;
       }
     }
+  }
 
-    if (finalTranscript) {
-      options.onResult(finalTranscript, true);
-    } else if (interimTranscript) {
-      options.onResult(interimTranscript, false);
+  isSTTSupported(): boolean {
+    return !!this.recognition;
+  }
+
+  isTTSSupported(): boolean {
+    return !!this.synth;
+  }
+
+  startListening(
+    onResult: (transcript: string, isFinal: boolean) => void,
+    onError: (err: any) => void,
+    onEnd: () => void
+  ) {
+    if (!this.recognition) {
+      onError('Speech recognition not supported on this device/browser');
+      return;
     }
-  };
 
-  recognition.onerror = (event: any) => {
-    console.warn('Speech recognition error:', event.error);
-    if (options.onError) options.onError(event.error);
-  };
+    if (this.isListening) {
+      this.stopListening();
+    }
 
-  recognition.onend = () => {
-    if (options.onEnd) options.onEnd();
-  };
+    this.recognition.onresult = (event: any) => {
+      let interimTranscript = '';
+      let finalTranscript = '';
 
-  try {
-    recognition.start();
-    return {
-      stop: () => {
-        try {
-          recognition.stop();
-        } catch {}
-      },
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript;
+        } else {
+          interimTranscript += event.results[i][0].transcript;
+        }
+      }
+
+      if (finalTranscript) {
+        onResult(finalTranscript, true);
+      } else if (interimTranscript) {
+        onResult(interimTranscript, false);
+      }
     };
-  } catch (err: any) {
-    if (options.onError) options.onError(err.message);
-    return null;
+
+    this.recognition.onerror = (event: any) => {
+      this.isListening = false;
+      onError(event.error);
+    };
+
+    this.recognition.onend = () => {
+      this.isListening = false;
+      onEnd();
+    };
+
+    try {
+      this.isListening = true;
+      this.recognition.start();
+    } catch (e) {
+      this.isListening = false;
+      onError(e);
+    }
+  }
+
+  stopListening() {
+    if (this.recognition && this.isListening) {
+      this.recognition.stop();
+      this.isListening = false;
+    }
+  }
+
+  speak(text: string, onEnd?: () => void) {
+    if (!this.synth) return;
+
+    // Cancel any ongoing speech
+    this.synth.cancel();
+
+    // Clean markdown symbols from text before speaking
+    const cleanText = text
+      .replace(/[*_#`~[\]]/g, '')
+      .replace(/\((http[s]?:\/\/[^\)]+)\)/g, '')
+      .replace(/\n+/g, '. ');
+
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.rate = 1.05;
+    utterance.pitch = 1.0;
+
+    // Pick a natural sounding English voice if available
+    const voices = this.synth.getVoices();
+    const naturalVoice = voices.find(
+      (v) =>
+        (v.name.includes('Google') ||
+          v.name.includes('Natural') ||
+          v.name.includes('Samantha') ||
+          v.name.includes('Karen')) &&
+        v.lang.startsWith('en')
+    );
+    if (naturalVoice) {
+      utterance.voice = naturalVoice;
+    }
+
+    if (onEnd) {
+      utterance.onend = onEnd;
+      utterance.onerror = onEnd;
+    }
+
+    this.synth.speak(utterance);
+  }
+
+  stopSpeaking() {
+    if (this.synth) {
+      this.synth.cancel();
+    }
   }
 }
 
-export function speakText(text: string, onEnd?: () => void) {
-  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
-
-  // Clean markdown / emoji for speech
-  const clean = text
-    .replace(/[*_#`~]/g, '')
-    .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '')
-    .trim();
-
-  window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(clean);
-  utterance.rate = 1.05;
-  utterance.pitch = 1.0;
-
-  // Prefer a natural English voice if available
-  const voices = window.speechSynthesis.getVoices();
-  const preferredVoice =
-    voices.find((v) => v.lang.startsWith('en') && (v.name.includes('Natural') || v.name.includes('Samantha') || v.name.includes('Google') || v.name.includes('Ava'))) ||
-    voices.find((v) => v.lang.startsWith('en'));
-
-  if (preferredVoice) {
-    utterance.voice = preferredVoice;
-  }
-
-  if (onEnd) {
-    utterance.onend = onEnd;
-  }
-
-  window.speechSynthesis.speak(utterance);
-}
-
-export function stopSpeaking() {
-  if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-    window.speechSynthesis.cancel();
-  }
-}
+export const voiceService = new VoiceService();

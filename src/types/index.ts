@@ -1,113 +1,107 @@
+export interface Household {
+  id: string;
+  name: string;
+  invite_code: string;
+  created_at: string;
+}
+
+export interface User {
+  id: string;
+  household_id: string;
+  name: string;
+  avatar_color: string;
+  role: 'parent' | 'child' | 'member';
+  created_at: string;
+}
+
 export interface Aisle {
   id: string;
+  household_id: string;
   name: string;
-  icon: string;
-  orderIndex: number;
-  isDefault: boolean;
-  itemCount?: number;
-}
-
-export interface GroceryItemData {
-  id: string;
-  name: string;
-  category: string;
-  aisleId?: string | null;
-  aisle?: Aisle | null;
-  quantity?: string | null;
-  unit?: string | null;
-  note?: string | null;
-  checked: boolean;
-  householdId: string;
-  listId?: string | null;
-  addedById?: string | null;
-  addedBy?: FamilyMember | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface CustomListData {
-  id: string;
-  name: string;
-  type: string; // grocery, packing, todo, checklist
-  icon: string;
+  display_order: number;
   color: string;
-  householdId: string;
-  items?: GroceryItemData[];
-  itemCount?: number;
-  createdAt: string;
-  updatedAt: string;
 }
 
-export interface FamilyMember {
+export interface GroceryItem {
   id: string;
+  household_id: string;
+  aisle_id: string;
   name: string;
-  email?: string | null;
-  avatar: string;
-  color: string;
-  role: string;
-  householdId: string;
-}
-
-export interface HouseholdData {
-  id: string;
-  name: string;
-  inviteCode: string;
-  members: FamilyMember[];
-}
-
-export interface RecipeIngredient {
-  item: string;
-  amount?: string;
+  quantity?: string;
   unit?: string;
-  category?: string;
+  notes?: string;
+  is_completed: boolean;
+  added_by_user_id?: string;
+  added_by_user_name?: string;
+  list_type: string; // 'grocery' | custom list id
+  created_at: string;
+  updated_at: string;
 }
 
-export interface RecipeData {
+export interface CustomList {
   id: string;
+  household_id: string;
   title: string;
-  description?: string | null;
-  imageUrl?: string | null;
-  prepTime?: string | null;
-  cookTime?: string | null;
-  servings?: string | null;
-  sourceUrl?: string | null;
-  ingredients: string; // JSON parsed into RecipeIngredient[]
-  instructions: string; // JSON parsed into string[]
-  tags?: string | null;
-  householdId: string;
-  createdAt: string;
-  updatedAt: string;
+  icon: string;
+  color: string;
+  created_at: string;
 }
 
-export interface MealPlanData {
+export interface Recipe {
   id: string;
+  household_id: string;
+  title: string;
+  description?: string;
+  prep_time_minutes?: number;
+  cook_time_minutes?: number;
+  servings?: number;
+  source_url?: string;
+  image_url?: string;
+  tags: string[];
+  ingredients: {
+    item: string;
+    amount?: string;
+    unit?: string;
+    category?: string;
+  }[];
+  instructions: string[];
+  created_at: string;
+}
+
+export interface MealPlan {
+  id: string;
+  household_id: string;
   date: string; // YYYY-MM-DD
-  mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack';
+  meal_type: 'breakfast' | 'lunch' | 'dinner' | 'snack';
   title: string;
-  notes?: string | null;
-  recipeId?: string | null;
-  recipe?: RecipeData | null;
-  householdId: string;
+  recipe_id?: string;
+  notes?: string;
+  created_at: string;
 }
 
-export interface CalendarEventData {
+export interface CalendarEvent {
   id: string;
+  household_id: string;
   title: string;
-  description?: string | null;
-  date: string; // YYYY-MM-DD
-  startTime?: string | null; // HH:mm
-  endTime?: string | null;
-  allDay: boolean;
-  category: 'Family' | 'School' | 'Sports' | 'Work' | 'Appointment' | 'Celebration';
-  color?: string | null;
-  location?: string | null;
-  assignedMemberId?: string | null;
-  assignedMember?: FamilyMember | null;
-  householdId: string;
+  description?: string;
+  start_time: string; // ISO string
+  end_time: string; // ISO string
+  is_all_day: boolean;
+  location?: string;
+  assigned_user_id?: string;
+  assigned_user_name?: string;
+  created_at: string;
 }
 
-export interface AssistantAction {
-  type: 'grocery_added' | 'calendar_event_added' | 'meal_planned' | 'list_created' | 'recipe_imported' | 'info';
-  summary: string;
-  data?: any;
+export interface AssistantMessage {
+  id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  timestamp: string;
+  imageUrl?: string;
+  actionsExecuted?: {
+    tool: string;
+    summary: string;
+    data?: any;
+  }[];
 }
