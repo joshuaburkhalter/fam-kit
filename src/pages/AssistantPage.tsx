@@ -4,7 +4,6 @@ import {
   MicOff,
   Send,
   Image as ImageIcon,
-  Volume2,
   VolumeX,
   Sparkles,
   Bot,
@@ -12,7 +11,6 @@ import {
   Loader2,
   CheckCircle,
   X,
-  Wand2,
 } from 'lucide-react';
 import type { AssistantMessage } from '../types';
 import { usePWA } from '../context/PWAContext';
@@ -26,7 +24,7 @@ export const AssistantPage: React.FC = () => {
       id: 'welcome',
       role: 'assistant',
       content:
-        "👋 Hi! I'm your Gemini 3.6 Flash Family Assistant. You can speak to me, snap a picture of your fridge, receipt, or handwritten recipe, or ask me to add groceries, plan meals, or schedule family events.",
+        "👋 Hi! I'm your AI Family Assistant. You can speak to me, snap a picture of your fridge, receipt, or handwritten recipe, or ask me to add groceries, plan meals, or schedule family events.",
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     },
   ]);
@@ -143,50 +141,23 @@ export const AssistantPage: React.FC = () => {
     }
   };
 
-  const samplePrompts = [
-    "Add 2 gallons of milk, sourdough bread, and avocados to the grocery list",
-    "Plan 3 quick kid-friendly dinners for this week and add ingredients to my cart",
-    "Schedule Maya's Soccer practice on Saturday from 9am to 10:30am",
-    "Create a packing list for our weekend camping trip",
-  ];
-
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem-4.5rem)] md:h-[calc(100vh-4rem)] max-w-4xl mx-auto p-2 sm:p-4">
-      {/* Top Banner / Pulse Assistant Header */}
-      <div className="flex items-center justify-between p-3 rounded-2xl glass-panel mb-3 border border-white/10">
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 font-bold shadow-lg shadow-emerald-500/25">
-              <Bot className="w-6 h-6" />
-            </div>
-            <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-400 border-2 border-slate-900 rounded-full" />
-          </div>
-          <div>
-            <h1 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
-              Gemini 3.6 Flash Assistant
-              <span className="bg-emerald-500/15 text-emerald-400 text-[10px] font-mono px-2 py-0.5 rounded-full border border-emerald-500/30">
-                Multimodal & Voice
-              </span>
-            </h1>
-            <p className="text-[11px] text-slate-400">
-              Autonomous family organizer with direct database actions
-            </p>
-          </div>
-        </div>
-
-        {isSpeaking && (
+    <div className="flex flex-col h-[calc(100vh-4rem-5.5rem)] md:h-[calc(100vh-4.5rem)] max-w-4xl mx-auto p-2 sm:p-4 pb-0">
+      {/* Floating Stop Speaking Audio pill if active */}
+      {isSpeaking && (
+        <div className="flex justify-end mb-2">
           <button
             onClick={() => {
               voiceService.stopSpeaking();
               setIsSpeaking(false);
             }}
-            className="flex items-center gap-1 bg-pink-500/20 text-pink-400 border border-pink-500/30 px-2.5 py-1 rounded-xl text-xs font-semibold animate-pulse"
+            className="flex items-center gap-1.5 bg-pink-500/20 text-pink-400 border border-pink-500/30 px-3 py-1.5 rounded-full text-xs font-semibold animate-pulse shadow-lg shadow-pink-500/10"
           >
             <VolumeX className="w-3.5 h-3.5" />
-            Stop Speaking
+            Stop Audio
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Chat Messages */}
       <div className="flex-1 overflow-y-auto space-y-4 px-1 py-2">
@@ -283,22 +254,6 @@ export const AssistantPage: React.FC = () => {
         <div ref={chatBottomRef} />
       </div>
 
-      {/* Suggested Quick Prompts */}
-      {messages.length < 3 && (
-        <div className="py-2 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-          <Wand2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 ml-1" />
-          {samplePrompts.map((p, i) => (
-            <button
-              key={i}
-              onClick={() => handleSendMessage(p)}
-              className="text-xs shrink-0 bg-slate-900/60 hover:bg-slate-850 border border-white/5 hover:border-emerald-500/30 text-slate-300 px-3 py-1.5 rounded-full transition-all"
-            >
-              {p}
-            </button>
-          ))}
-        </div>
-      )}
-
       {/* Image Preview Banner */}
       {selectedImage && (
         <div className="p-2 rounded-2xl glass-panel mb-2 flex items-center justify-between border border-white/10">
@@ -321,8 +276,8 @@ export const AssistantPage: React.FC = () => {
         </div>
       )}
 
-      {/* Input Bar */}
-      <div className="pt-2">
+      {/* Input Bar with safe bottom spacing away from mobile nav */}
+      <div className="pt-2 pb-6 md:pb-4">
         <form
           onSubmit={(e) => {
             e.preventDefault();
