@@ -614,6 +614,7 @@ export const GroceryPage: React.FC = () => {
           isOpen={isAisleModalOpen}
           onClose={() => setIsAisleModalOpen(false)}
           householdId={household.id}
+          initialAisles={sortedAisles}
           onAislesUpdated={() => {
             refreshAisles();
             loadData();

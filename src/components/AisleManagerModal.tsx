@@ -5,7 +5,6 @@ import {
   ArrowDown,
   Plus,
   Trash2,
-  Check,
   MoveVertical,
   Palette,
 } from 'lucide-react';
@@ -16,6 +15,7 @@ interface AisleManagerModalProps {
   isOpen: boolean;
   onClose: () => void;
   householdId: string;
+  initialAisles?: Aisle[];
   onAislesUpdated: () => void;
 }
 
@@ -35,32 +35,32 @@ export const AisleManagerModal: React.FC<AisleManagerModalProps> = ({
   isOpen,
   onClose,
   householdId,
+  initialAisles = [],
   onAislesUpdated,
 }) => {
-  const [aisles, setAisles] = useState<Aisle[]>([]);
+  const [aisles, setAisles] = useState<Aisle[]>(initialAisles);
   const [newAisleName, setNewAisleName] = useState('');
   const [newAisleColor, setNewAisleColor] = useState(PRESET_COLORS[0]);
-  const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   const loadAisles = async () => {
     if (!householdId) return;
-    setIsLoading(true);
     try {
       const data = await api.getAisles(householdId);
       setAisles(data);
     } catch (err) {
       console.error('Failed to load aisles:', err);
-    } finally {
-      setIsLoading(false);
     }
   };
 
   useEffect(() => {
     if (isOpen) {
+      if (initialAisles && initialAisles.length > 0) {
+        setAisles(initialAisles);
+      }
       loadAisles();
     }
-  }, [isOpen, householdId]);
+  }, [isOpen, householdId, initialAisles]);
 
   if (!isOpen) return null;
 
@@ -122,8 +122,16 @@ export const AisleManagerModal: React.FC<AisleManagerModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150">
-      <div className="glass-panel w-full max-w-lg rounded-3xl p-6 shadow-2xl border border-white/10 flex flex-col max-h-[90vh]">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-100"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="glass-panel w-full max-w-lg rounded-3xl p-6 shadow-2xl border border-white/10 flex flex-col max-h-[90vh]"
+      >
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-white/10">
           <div className="flex items-center gap-2.5">
@@ -185,10 +193,8 @@ export const AisleManagerModal: React.FC<AisleManagerModalProps> = ({
 
         {/* Aisles List with Move Up/Down Controls */}
         <div className="flex-1 overflow-y-auto py-3 space-y-2 pr-1">
-          {isLoading ? (
-            <div className="py-8 text-center text-xs text-slate-400">Loading aisles...</div>
-          ) : aisles.length === 0 ? (
-            <div className="py-8 text-center text-xs text-slate-400">No custom aisles yet.</div>
+          {aisles.length === 0 ? (
+            <div className="py-8 text-center text-xs text-slate-400">No store aisles configured yet.</div>
           ) : (
             aisles.map((aisle, index) => (
               <div
