@@ -107,7 +107,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
             }`}
           >
             <ShoppingCart className="w-3.5 h-3.5" />
-            Grocery
+            Lists
           </button>
           <button
             onClick={() => setActiveTab('meals')}

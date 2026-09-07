@@ -15,7 +15,7 @@ interface MobileNavProps {
 export const MobileNav: React.FC<MobileNavProps> = ({ activeTab, setActiveTab }) => {
   const tabs = [
     { id: 'assistant', label: 'Assistant', icon: Sparkles, color: 'from-emerald-400 to-teal-300' },
-    { id: 'grocery', label: 'Grocery', icon: ShoppingCart, color: 'from-amber-400 to-orange-400' },
+    { id: 'grocery', label: 'Lists', icon: ShoppingCart, color: 'from-amber-400 to-orange-400' },
     { id: 'meals', label: 'Meals', icon: ChefHat, color: 'from-cyan-400 to-blue-400' },
     { id: 'recipes', label: 'Recipes', icon: BookOpen, color: 'from-pink-400 to-rose-400' },
     { id: 'calendar', label: 'Calendar', icon: Calendar, color: 'from-indigo-400 to-purple-400' },
