@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: fam-kit
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm install && npx prisma db push && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        value: file:./dev.db
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: NEXT_PUBLIC_VAPID_PUBLIC_KEY
+        value: BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U
+      - key: VAPID_PRIVATE_KEY
+        value: UUxI2O4-Fb_s_bvyYl3TfQ14sJtH0k6sBw8-kLgqDQE
+      - key: VAPID_SUBJECT
+        value: mailto:hello@famkit.app
