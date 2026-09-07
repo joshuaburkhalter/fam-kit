@@ -190,13 +190,13 @@ export const GroceryPage: React.FC = () => {
   return (
     <div className="max-w-4xl mx-auto p-2 sm:p-4 pb-24 md:pb-12 space-y-4">
       {/* Header with List Dropdown Selector & Action Buttons */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-3xl glass-panel border border-white/10">
+      <div className="relative z-30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-3xl glass-panel border border-white/10">
         
         {/* List Dropdown Selector */}
         <div className="relative w-full sm:w-auto" ref={dropdownRef}>
           <button
             onClick={() => setIsListDropdownOpen(!isListDropdownOpen)}
-            className="flex items-center justify-between sm:justify-start gap-3 bg-slate-900/80 hover:bg-slate-850 border border-white/10 hover:border-emerald-500/40 px-4 py-2.5 rounded-2xl transition-all w-full sm:w-auto group shadow-md"
+            className="flex items-center justify-between sm:justify-start gap-3 bg-slate-900/90 hover:bg-slate-850 border border-white/10 hover:border-emerald-500/40 px-4 py-2.5 rounded-2xl transition-all w-full sm:w-auto group shadow-md"
           >
             <div className="flex items-center gap-2.5">
               <span className="text-xl">{currentListIcon}</span>
@@ -224,7 +224,7 @@ export const GroceryPage: React.FC = () => {
 
           {/* Dropdown Menu */}
           {isListDropdownOpen && (
-            <div className="absolute left-0 top-full mt-2 w-full sm:w-72 glass-panel rounded-2xl p-2 shadow-2xl z-50 border border-white/10 animate-in fade-in zoom-in-95 duration-100">
+            <div className="absolute left-0 top-full mt-2 w-full sm:w-72 bg-slate-900/95 backdrop-blur-xl rounded-2xl p-2 shadow-2xl z-50 border border-white/15 animate-in fade-in zoom-in-95 duration-100">
               <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-white/5">
                 Switch Household List
               </div>
@@ -335,15 +335,18 @@ export const GroceryPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Quick Add Input Form */}
-      <form onSubmit={handleAddItem} className="glass-panel p-2.5 rounded-3xl border border-white/10 shadow-lg">
-        <div className="flex items-center gap-2">
+      {/* Spacious Integrated Quick Add Input Bar */}
+      <form
+        onSubmit={handleAddItem}
+        className="glass-panel p-2 rounded-3xl border border-white/10 shadow-lg focus-within:border-emerald-500/50 focus-within:ring-1 focus-within:ring-emerald-500/20 transition-all"
+      >
+        <div className="flex items-center gap-2 pl-2 pr-1">
           <input
             type="text"
             placeholder={`Add item to ${currentListName}...`}
             value={newItemName}
             onChange={(e) => setNewItemName(e.target.value)}
-            className="flex-1 bg-transparent border-none text-sm text-white placeholder-slate-500 focus:outline-none px-3 py-2"
+            className="flex-1 bg-transparent border-none text-sm sm:text-base text-white placeholder-slate-500 focus:outline-none py-2 px-1"
           />
 
           {/* Optional Aisle selector dropdown for Grocery list */}
@@ -351,7 +354,7 @@ export const GroceryPage: React.FC = () => {
             <select
               value={selectedAisleId}
               onChange={(e) => setSelectedAisleId(e.target.value)}
-              className="bg-slate-900 border border-white/10 text-xs text-slate-300 rounded-xl px-2.5 py-2 focus:outline-none focus:border-emerald-500 max-w-[130px]"
+              className="bg-slate-900/90 border border-white/10 text-xs text-slate-300 rounded-xl px-2.5 py-2 focus:outline-none focus:border-emerald-500 shrink-0"
             >
               <option value="">Auto Aisle</option>
               {sortedAisles.map((a) => (
@@ -362,13 +365,14 @@ export const GroceryPage: React.FC = () => {
             </select>
           )}
 
+          {/* Integrated Add Button nestled inside the right edge */}
           <button
             type="submit"
             disabled={!newItemName.trim()}
-            className="bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 text-slate-950 font-bold px-4 py-2 rounded-2xl text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20 shrink-0"
+            className="bg-emerald-500 hover:bg-emerald-400 disabled:opacity-30 text-slate-950 font-bold px-4 py-2.5 rounded-2xl text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20 shrink-0"
           >
             <Plus className="w-4 h-4" />
-            Add
+            <span>Add</span>
           </button>
         </div>
       </form>
