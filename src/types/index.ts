@@ -9,6 +9,7 @@ export interface User {
   id: string;
   household_id: string;
   name: string;
+  email?: string;
   avatar_color: string;
   role: 'parent' | 'child' | 'member';
   created_at: string;
@@ -76,6 +77,29 @@ export interface MealPlan {
   title: string;
   recipe_id?: string;
   notes?: string;
+  created_at: string;
+}
+
+export interface WeeklyMeal {
+  id: string;
+  household_id: string;
+  title: string;
+  recipe_id?: string;
+  notes?: string;
+  is_made: boolean;
+  made_date?: string;
+  week_start_date: string;
+  created_at: string;
+}
+
+export interface MealLog {
+  id: string;
+  household_id: string;
+  title: string;
+  recipe_id?: string;
+  date: string; // YYYY-MM-DD
+  notes?: string;
+  cooked_by_user_id?: string;
   created_at: string;
 }
 

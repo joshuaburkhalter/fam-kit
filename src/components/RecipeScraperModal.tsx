@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import type { Recipe } from '../types';
 import { api } from '../lib/api';
+import { usePWA } from '../context/PWAContext';
 
 interface RecipeScraperModalProps {
   isOpen: boolean;
@@ -28,6 +29,7 @@ export const RecipeScraperModal: React.FC<RecipeScraperModalProps> = ({
   onRecipeImported,
   initialUrl = '',
 }) => {
+  const { apiKey } = usePWA();
   const [url, setUrl] = useState(initialUrl);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,7 +46,7 @@ export const RecipeScraperModal: React.FC<RecipeScraperModalProps> = ({
     setImportedRecipe(null);
 
     try {
-      const recipe = await api.importRecipeFromUrl(householdId, url.trim());
+      const recipe = await api.importRecipeFromUrl(householdId, url.trim(), apiKey || undefined);
       setImportedRecipe(recipe);
       onRecipeImported(recipe);
     } catch (err: any) {
@@ -59,8 +61,8 @@ export const RecipeScraperModal: React.FC<RecipeScraperModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
-      <div className="glass-panel w-full max-w-xl rounded-3xl p-6 shadow-2xl border border-white/10 flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
+      <div className="glass-panel w-full max-w-xl rounded-3xl p-5 sm:p-6 shadow-2xl border border-white/10 flex flex-col max-h-[85vh] sm:max-h-[90vh] my-auto">
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-white/10">
           <div className="flex items-center gap-2.5">
@@ -177,24 +179,24 @@ export const RecipeScraperModal: React.FC<RecipeScraperModalProps> = ({
 
               {/* Meta pills */}
               <div className="flex flex-wrap gap-2 text-xs">
-                {importedRecipe.prep_time_minutes && (
+                {Boolean(importedRecipe.prep_time_minutes && importedRecipe.prep_time_minutes > 0) ? (
                   <span className="bg-slate-800/80 px-2.5 py-1 rounded-lg text-slate-300 flex items-center gap-1.5 border border-white/5">
                     <Clock className="w-3.5 h-3.5 text-pink-400" />
                     Prep: {importedRecipe.prep_time_minutes}m
                   </span>
-                )}
-                {importedRecipe.cook_time_minutes && (
+                ) : null}
+                {Boolean(importedRecipe.cook_time_minutes && importedRecipe.cook_time_minutes > 0) ? (
                   <span className="bg-slate-800/80 px-2.5 py-1 rounded-lg text-slate-300 flex items-center gap-1.5 border border-white/5">
                     <Clock className="w-3.5 h-3.5 text-amber-400" />
                     Cook: {importedRecipe.cook_time_minutes}m
                   </span>
-                )}
-                {importedRecipe.servings && (
+                ) : null}
+                {Boolean(importedRecipe.servings && importedRecipe.servings > 0) ? (
                   <span className="bg-slate-800/80 px-2.5 py-1 rounded-lg text-slate-300 flex items-center gap-1.5 border border-white/5">
                     <Users className="w-3.5 h-3.5 text-blue-400" />
                     Serves: {importedRecipe.servings}
                   </span>
-                )}
+                ) : null}
               </div>
 
               {/* Ingredients Preview */}

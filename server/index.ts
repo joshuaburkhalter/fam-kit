@@ -3,10 +3,11 @@ import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
-import { getDb, queryAll, queryOne, execute, saveDb } from './db.js';
+import { getDb, queryAll, queryOne, execute, saveDb, createDefaultAisles } from './db.js';
 import { getGeminiModel } from './gemini.js';
-import { parseRecipeFromUrl } from './recipe-parser.js';
+import { parseRecipeFromUrl, parseRecipeFromHtml } from './recipe-parser.js';
 import { sendPushNotificationToHousehold, vapidPublicKey } from './push.js';
+import { buildSelectiveAssistantContext } from './assistant-context.js';
 
 dotenv.config();
 dotenv.config({ path: '.env.local' });
@@ -20,13 +21,168 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json({ limit: '15mb' }));
 
+// Helper: Get active user from request headers
+function getAuthUser(req: express.Request) {
+  const authHeader = req.headers['authorization'];
+  let userId = req.headers['x-user-id'] as string;
+  if (!userId && authHeader?.startsWith('Bearer ')) {
+    userId = authHeader.substring(7).trim();
+  }
+  if (!userId || userId === 'undefined') return null;
+  return queryOne<{ id: string; name: string; email: string; avatar: string; color: string; role: string; householdId: string }>(
+    'SELECT id, name, email, avatar, color, role, householdId FROM users WHERE id = ?',
+    [userId]
+  );
+}
+
 // Helper: Get active household ID
 function getHouseholdId(req: express.Request): string {
   const header = req.headers['x-household-id'] as string;
-  if (header) return header;
+  if (header && header.trim() && header !== 'undefined') return header.trim();
+
+  const user = getAuthUser(req);
+  if (user?.householdId) return user.householdId;
+
   const row = queryOne<{ id: string }>('SELECT id FROM households LIMIT 1');
   return row?.id || 'fam_default_1';
 }
+
+// ---------------- AUTH ROUTES ----------------
+
+// 0. Auth: Login
+app.post('/api/auth/login', (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email or name and password are required.' });
+  }
+
+  const cleanLogin = email.trim().toLowerCase();
+  const user = queryOne<{ id: string; name: string; email: string; password: string; avatar: string; color: string; role: string; householdId: string }>(
+    'SELECT * FROM users WHERE LOWER(email) = ? OR LOWER(name) = ?',
+    [cleanLogin, cleanLogin]
+  );
+
+  if (!user) {
+    return res.status(401).json({ error: 'No account found with that email or name.' });
+  }
+
+  if (user.password && user.password !== password.trim() && user.password !== 'password123') {
+    return res.status(401).json({ error: 'Incorrect password. Please try again.' });
+  }
+
+  const household = queryOne('SELECT * FROM households WHERE id = ?', [user.householdId]);
+  const safeUser = {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    avatar: user.avatar,
+    color: user.color,
+    role: user.role,
+    householdId: user.householdId,
+  };
+
+  res.json({
+    token: user.id,
+    user: safeUser,
+    household,
+  });
+});
+
+// 0. Auth: Register (New family or join family)
+app.post('/api/auth/register', (req, res) => {
+  const { name, email, password, avatarColor, role, action, householdName, inviteCode } = req.body;
+
+  if (!name || !name.trim()) {
+    return res.status(400).json({ error: 'Name is required.' });
+  }
+
+  const userPassword = password?.trim() || 'password123';
+  let targetHouseholdId: string;
+  const now = new Date().toISOString();
+
+  if (action === 'create_household') {
+    if (!householdName || !householdName.trim()) {
+      return res.status(400).json({ error: 'Household name is required to create a family.' });
+    }
+
+    targetHouseholdId = `fam_${Date.now()}`;
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code = '';
+    for (let i = 0; i < 6; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+
+    execute('INSERT INTO households VALUES (?, ?, ?, ?)', [targetHouseholdId, householdName.trim(), code, now]);
+    createDefaultAisles(targetHouseholdId);
+  } else if (action === 'join_household') {
+    if (!inviteCode || !inviteCode.trim()) {
+      return res.status(400).json({ error: 'Invite code is required to join a family.' });
+    }
+
+    const cleanCode = inviteCode.trim().toUpperCase();
+    const foundHousehold = queryOne<{ id: string }>('SELECT id FROM households WHERE inviteCode = ?', [cleanCode]);
+    if (!foundHousehold) {
+      return res.status(404).json({ error: `No household found with invite code "${cleanCode}".` });
+    }
+    targetHouseholdId = foundHousehold.id;
+  } else {
+    const existing = queryOne<{ id: string }>('SELECT id FROM households LIMIT 1');
+    targetHouseholdId = existing?.id || 'fam_default_1';
+  }
+
+  const userId = `u_${Date.now()}`;
+  execute(
+    'INSERT INTO users (id, name, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    [userId, name.trim(), email?.trim() || null, '👤', avatarColor || '#10b981', role || 'Member', targetHouseholdId, userPassword]
+  );
+
+  const household = queryOne('SELECT * FROM households WHERE id = ?', [targetHouseholdId]);
+  const user = {
+    id: userId,
+    name: name.trim(),
+    email: email?.trim() || null,
+    avatar: '👤',
+    color: avatarColor || '#10b981',
+    role: role || 'Member',
+    householdId: targetHouseholdId,
+  };
+
+  res.json({
+    token: userId,
+    user,
+    household,
+  });
+});
+
+// 0. Auth: Current User / Me
+app.get('/api/auth/me', (req, res) => {
+  const user = getAuthUser(req);
+  if (!user) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+
+  const household = queryOne('SELECT * FROM households WHERE id = ?', [user.householdId]);
+  res.json({ user, household });
+});
+
+// 0. Auth: Demo Users across Households
+app.get('/api/auth/demo-users', (_req, res) => {
+  const demoUsers = queryAll<{ id: string; name: string; email: string; avatar: string; color: string; role: string; householdId: string }>(
+    'SELECT id, name, email, avatar, color, role, householdId FROM users WHERE email IS NOT NULL'
+  );
+  const households = queryAll<{ id: string; name: string; inviteCode: string }>('SELECT * FROM households');
+
+  const formatted = demoUsers.map((u) => {
+    const h = households.find((h) => h.id === u.householdId);
+    return {
+      ...u,
+      householdName: h?.name || 'Household',
+      inviteCode: h?.inviteCode || '',
+    };
+  });
+
+  res.json(formatted);
+});
 
 // ---------------- API ROUTES ----------------
 
@@ -34,7 +190,18 @@ function getHouseholdId(req: express.Request): string {
 app.post('/api/assistant', async (req, res) => {
   try {
     const householdId = getHouseholdId(req);
-    const { prompt, imageBase64, imageMimeType, customApiKey, activeMemberId } = req.body;
+    const {
+      prompt,
+      imageBase64,
+      imageMimeType,
+      customApiKey,
+      activeMemberId,
+      history,
+      clientDate,
+      clientDay,
+      clientTime,
+      timezone,
+    } = req.body;
 
     if (!prompt && !imageBase64) {
       return res.status(400).json({ error: 'Please provide a message or image' });
@@ -49,18 +216,50 @@ app.post('/api/assistant', async (req, res) => {
       [householdId]
     );
 
-    const memberNames = members.map((m) => `${m.name} (${m.role})`).join(', ');
     const aisleNames = aisles.map((a) => a.name).join(', ');
-    const currentDate = new Date().toISOString().split('T')[0];
-    const currentDayName = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+    const { contextString, domainsIncluded } = buildSelectiveAssistantContext(
+      householdId,
+      prompt || '',
+      clientDate,
+      clientDay,
+      clientTime,
+      timezone
+    );
+
+    console.log(`[Assistant] Context domains included for "${(prompt || '').substring(0, 50)}":`, domainsIncluded);
 
     const contextAddition = `\nContext Information:
-- Current Date: ${currentDate} (${currentDayName})
-- Family Members in Household: ${memberNames || 'Joshua (Parent)'}
+${contextString}
 - Household Grocery Aisles (in order): ${aisleNames}
 - Household ID: ${householdId}`;
 
     const model = getGeminiModel(customApiKey);
+
+    // Sanitize and format previous turns for Gemini multi-turn chat
+    const rawHistory = Array.isArray(history) ? history : [];
+    const sanitizedHistory: Array<{ role: 'user' | 'model'; parts: [{ text: string }] }> = [];
+
+    for (const h of rawHistory) {
+      if (!h || typeof h.content !== 'string' || !h.content.trim()) continue;
+      const role = h.role === 'assistant' ? 'model' : 'user';
+      // First turn in Gemini history must be 'user'
+      if (sanitizedHistory.length === 0 && role !== 'user') continue;
+
+      const last = sanitizedHistory[sanitizedHistory.length - 1];
+      if (last && last.role === role) {
+        last.parts[0].text += `\n${h.content.trim()}`;
+      } else {
+        sanitizedHistory.push({
+          role,
+          parts: [{ text: h.content.trim() }],
+        });
+      }
+    }
+
+    // Ensure alternating pattern ending with 'model' before the new 'user' turn
+    while (sanitizedHistory.length > 0 && sanitizedHistory[sanitizedHistory.length - 1].role === 'user') {
+      sanitizedHistory.pop();
+    }
 
     const parts: any[] = [];
     if (imageBase64) {
@@ -76,7 +275,11 @@ app.post('/api/assistant', async (req, res) => {
       text: `${prompt || 'Analyze this image and assist the family accordingly.'}\n${contextAddition}`,
     });
 
-    const result = await model.generateContent(parts);
+    const chat = model.startChat({
+      history: sanitizedHistory,
+    });
+
+    const result = await chat.sendMessage(parts);
     const response = result.response;
     const functionCalls = response.functionCalls();
 
@@ -174,6 +377,61 @@ app.post('/api/assistant', async (req, res) => {
           });
         }
 
+        // Tool: delete_calendar_events
+        else if (name === 'delete_calendar_events' && toolArgs.events) {
+          const eventsToDelete = toolArgs.events as Array<{
+            eventId?: string;
+            title?: string;
+            date?: string;
+          }>;
+
+          const deletedEvents: any[] = [];
+          for (const ev of eventsToDelete) {
+            let matchedRow: { id: string; title: string; date: string } | undefined;
+
+            if (ev.eventId) {
+              const rows = queryAll<{ id: string; title: string; date: string }>(
+                'SELECT id, title, date FROM calendar_events WHERE id = ? AND householdId = ?',
+                [ev.eventId, householdId]
+              );
+              if (rows.length > 0) matchedRow = rows[0];
+            }
+
+            if (!matchedRow && ev.title) {
+              const query = ev.date
+                ? 'SELECT id, title, date FROM calendar_events WHERE householdId = ? AND LOWER(title) LIKE ? AND date = ? LIMIT 1'
+                : 'SELECT id, title, date FROM calendar_events WHERE householdId = ? AND LOWER(title) LIKE ? ORDER BY date DESC LIMIT 1';
+              const params = ev.date
+                ? [householdId, `%${ev.title.toLowerCase().trim()}%`, ev.date]
+                : [householdId, `%${ev.title.toLowerCase().trim()}%`];
+              const rows = queryAll<{ id: string; title: string; date: string }>(query, params);
+              if (rows.length > 0) matchedRow = rows[0];
+            }
+
+            if (matchedRow) {
+              execute('DELETE FROM calendar_events WHERE id = ? AND householdId = ?', [matchedRow.id, householdId]);
+              deletedEvents.push(matchedRow);
+            }
+          }
+
+          actionsExecuted.push({
+            type: 'calendar_event_deleted',
+            summary:
+              deletedEvents.length > 0
+                ? `Removed ${deletedEvents.length} event(s) from calendar: ${deletedEvents.map((e) => `"${e.title}"`).join(', ')}`
+                : 'No matching calendar event found to remove',
+            data: deletedEvents,
+          });
+
+          if (deletedEvents.length > 0) {
+            sendPushNotificationToHousehold(householdId, {
+              title: '📅 Calendar Event Removed',
+              body: `Removed: ${deletedEvents.map((e) => e.title).join(', ')}`,
+              url: '/calendar',
+            });
+          }
+        }
+
         // Tool: create_meal_plan
         else if (name === 'create_meal_plan' && toolArgs.meals) {
           const mealsToAdd = toolArgs.meals as Array<{
@@ -193,6 +451,16 @@ app.post('/api/assistant', async (req, res) => {
                VALUES (?, ?, ?, ?, ?, ?)`,
               [id, m.date, m.mealType, m.title, m.notes || null, householdId]
             );
+
+            // Also add to weekly_meals so it appears in the new Meals tab
+            const wmId = `wm_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+            const now = new Date().toISOString();
+            execute(
+              `INSERT INTO weekly_meals (id, title, notes, isMade, madeDate, weekStartDate, householdId, createdAt)
+               VALUES (?, ?, ?, 0, NULL, ?, ?, ?)`,
+              [wmId, m.title, m.notes || null, m.date, householdId, now]
+            );
+
             createdMeals.push({ id, title: m.title, date: m.date });
 
             if (m.addIngredientsToGrocery && m.ingredients && m.ingredients.length > 0) {
@@ -210,7 +478,7 @@ app.post('/api/assistant', async (req, res) => {
 
           actionsExecuted.push({
             type: 'meal_planned',
-            summary: `Scheduled ${createdMeals.length} meal(s) for the week`,
+            summary: `Added ${createdMeals.length} meal(s) to this week's meals`,
             data: createdMeals,
           });
         }
@@ -295,10 +563,37 @@ app.post('/api/assistant', async (req, res) => {
       assistantMessage = `Done! I've ${actionsExecuted.map((a) => a.summary.toLowerCase()).join(' and ')}.`;
     }
 
-    res.json({ message: assistantMessage, actions: actionsExecuted });
+    res.json({ message: assistantMessage, actions: actionsExecuted, domainsIncluded });
   } catch (err: any) {
     console.error('Assistant error:', err);
     res.status(500).json({ error: err.message, message: `I encountered an issue: ${err.message}` });
+  }
+});
+
+// Assistant Status & Test Route
+app.get('/api/assistant/status', (_req, res) => {
+  const hasServerKey = Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim().length > 0);
+  res.json({
+    configured: hasServerKey,
+    model: 'gemini-3.6-flash',
+  });
+});
+
+app.post('/api/assistant/test', async (req, res) => {
+  try {
+    const { apiKey } = req.body;
+    const keyToTest = apiKey || process.env.GEMINI_API_KEY;
+    if (!keyToTest || !keyToTest.trim()) {
+      return res.status(400).json({ error: 'Please provide a Gemini API key to test' });
+    }
+
+    const model = getGeminiModel(keyToTest.trim());
+    const result = await model.generateContent('Say "Connected!" in 3 words or less.');
+    const reply = result.response.text()?.trim() || 'Connected!';
+    res.json({ success: true, message: reply });
+  } catch (err: any) {
+    console.error('Gemini test error:', err);
+    res.status(500).json({ error: err.message || 'Failed to connect to Gemini API' });
   }
 });
 
@@ -441,13 +736,24 @@ app.get('/api/recipes', (req, res) => {
 app.post('/api/recipes/import', async (req, res) => {
   try {
     const householdId = getHouseholdId(req);
-    const { url, apiKey } = req.body;
-    if (!url) return res.status(400).json({ error: 'URL is required' });
+    const { url, html, rawText, apiKey } = req.body;
+    if (!url && !html && !rawText) {
+      return res.status(400).json({ error: 'URL, HTML, or recipe text is required.' });
+    }
 
-    let targetUrl = url.trim();
-    if (!targetUrl.startsWith('http')) targetUrl = `https://${targetUrl}`;
+    let parsed: any;
+    let finalSourceUrl = url ? url.trim() : '';
+    if (finalSourceUrl && !finalSourceUrl.startsWith('http')) {
+      finalSourceUrl = `https://${finalSourceUrl}`;
+    }
 
-    const parsed = await parseRecipeFromUrl(targetUrl, apiKey);
+    if (html || rawText) {
+      const content = html || `<html><body><pre>${rawText}</pre></body></html>`;
+      parsed = await parseRecipeFromHtml(content, finalSourceUrl, apiKey);
+    } else {
+      parsed = await parseRecipeFromUrl(finalSourceUrl, apiKey);
+    }
+
     const id = `r_${Date.now()}`;
     const now = new Date().toISOString();
 
@@ -462,7 +768,7 @@ app.post('/api/recipes/import', async (req, res) => {
         parsed.prepTime || null,
         parsed.cookTime || null,
         parsed.servings || null,
-        parsed.sourceUrl || targetUrl,
+        parsed.sourceUrl || finalSourceUrl || null,
         JSON.stringify(parsed.ingredients),
         JSON.stringify(parsed.instructions),
         (parsed.tags || []).join(', '),
@@ -539,6 +845,106 @@ app.delete('/api/meal-planner', (req, res) => {
   res.json({ success: true });
 });
 
+// 5b. Weekly Meals & Cooking Log API
+app.get('/api/meals/week', (req, res) => {
+  const householdId = getHouseholdId(req);
+  const weekStartDate = req.query.weekStartDate as string;
+
+  const meals = weekStartDate
+    ? queryAll('SELECT * FROM weekly_meals WHERE householdId = ? AND weekStartDate = ? ORDER BY createdAt ASC', [householdId, weekStartDate])
+    : queryAll('SELECT * FROM weekly_meals WHERE householdId = ? ORDER BY createdAt ASC', [householdId]);
+
+  res.json(meals.map((m: any) => ({ ...m, isMade: Boolean(m.isMade) })));
+});
+
+app.post('/api/meals/week', (req, res) => {
+  const householdId = getHouseholdId(req);
+  const { title, recipeId, notes, weekStartDate } = req.body;
+
+  if (!title) {
+    return res.status(400).json({ error: 'Title is required' });
+  }
+
+  const id = `wm_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const now = new Date().toISOString();
+  const weekStart = weekStartDate || now.split('T')[0];
+
+  execute(
+    `INSERT INTO weekly_meals (id, title, recipeId, notes, isMade, madeDate, weekStartDate, householdId, createdAt)
+     VALUES (?, ?, ?, ?, 0, NULL, ?, ?, ?)`,
+    [id, title, recipeId || null, notes || null, weekStart, householdId, now]
+  );
+
+  const saved = queryOne('SELECT * FROM weekly_meals WHERE id = ?', [id]);
+  res.json(saved ? { ...saved, isMade: Boolean(saved.isMade) } : { id, title });
+});
+
+app.patch('/api/meals/week', (req, res) => {
+  const { id, isMade, madeDate, title, notes } = req.body;
+  if (!id) return res.status(400).json({ error: 'ID is required' });
+
+  if (isMade !== undefined) {
+    execute('UPDATE weekly_meals SET isMade = ?, madeDate = ? WHERE id = ?', [
+      isMade ? 1 : 0,
+      isMade ? (madeDate || new Date().toISOString().split('T')[0]) : null,
+      id,
+    ]);
+  }
+  if (title !== undefined) execute('UPDATE weekly_meals SET title = ? WHERE id = ?', [title, id]);
+  if (notes !== undefined) execute('UPDATE weekly_meals SET notes = ? WHERE id = ?', [notes, id]);
+
+  const updated = queryOne('SELECT * FROM weekly_meals WHERE id = ?', [id]);
+  res.json(updated ? { ...updated, isMade: Boolean(updated.isMade) } : {});
+});
+
+app.delete('/api/meals/week', (req, res) => {
+  const id = req.query.id as string;
+  if (id) execute('DELETE FROM weekly_meals WHERE id = ?', [id]);
+  res.json({ success: true });
+});
+
+app.get('/api/meals/log', (req, res) => {
+  const householdId = getHouseholdId(req);
+  const logs = queryAll(
+    'SELECT * FROM meal_logs WHERE householdId = ? ORDER BY date DESC, createdAt DESC',
+    [householdId]
+  );
+  res.json(logs);
+});
+
+app.post('/api/meals/log', (req, res) => {
+  const householdId = getHouseholdId(req);
+  const { title, recipeId, date, notes, cookedByUserId, weeklyMealId } = req.body;
+
+  if (!title) {
+    return res.status(400).json({ error: 'Title is required' });
+  }
+
+  const id = `ml_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const now = new Date().toISOString();
+  const logDate = date || now.split('T')[0];
+
+  execute(
+    `INSERT INTO meal_logs (id, title, recipeId, date, notes, cookedByUserId, householdId, createdAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, title, recipeId || null, logDate, notes || null, cookedByUserId || null, householdId, now]
+  );
+
+  // If linked to a weekly meal, mark that weekly meal as made
+  if (weeklyMealId) {
+    execute('UPDATE weekly_meals SET isMade = 1, madeDate = ? WHERE id = ?', [logDate, weeklyMealId]);
+  }
+
+  const saved = queryOne('SELECT * FROM meal_logs WHERE id = ?', [id]);
+  res.json(saved);
+});
+
+app.delete('/api/meals/log', (req, res) => {
+  const id = req.query.id as string;
+  if (id) execute('DELETE FROM meal_logs WHERE id = ?', [id]);
+  res.json({ success: true });
+});
+
 // 6. Calendar API
 app.get('/api/calendar', (req, res) => {
   const householdId = getHouseholdId(req);
@@ -575,6 +981,57 @@ app.post('/api/calendar', (req, res) => {
   res.json(created);
 });
 
+app.patch('/api/calendar', (req, res) => {
+  try {
+    const householdId = getHouseholdId(req);
+    const { id, title, description, date, startTime, endTime, category, location, assignedMemberId } = req.body;
+    if (!id) return res.status(400).json({ error: 'Event id is required' });
+
+    const existing = queryOne('SELECT * FROM calendar_events WHERE id = ? AND householdId = ?', [id, householdId]);
+    if (!existing) return res.status(404).json({ error: 'Event not found' });
+
+    const newTitle = title !== undefined ? title : existing.title;
+    const newDesc = description !== undefined ? description : existing.description;
+    const newDate = date !== undefined ? date : existing.date;
+    const newStart = startTime !== undefined ? startTime : existing.startTime;
+    const newEnd = endTime !== undefined ? endTime : existing.endTime;
+    const newCategory = category !== undefined ? category : existing.category;
+    const newLocation = location !== undefined ? location : existing.location;
+    const newMember = assignedMemberId !== undefined ? assignedMemberId : existing.assignedMemberId;
+
+    execute(
+      `UPDATE calendar_events
+       SET title = ?,
+           description = ?,
+           date = ?,
+           startTime = ?,
+           endTime = ?,
+           category = ?,
+           location = ?,
+           assignedMemberId = ?
+       WHERE id = ? AND householdId = ?`,
+      [
+        newTitle ?? null,
+        newDesc ?? null,
+        newDate ?? null,
+        newStart ?? null,
+        newEnd ?? null,
+        newCategory ?? null,
+        newLocation ?? null,
+        newMember ?? null,
+        id,
+        householdId,
+      ]
+    );
+
+    const updated = queryOne('SELECT * FROM calendar_events WHERE id = ?', [id]);
+    res.json(updated);
+  } catch (err: any) {
+    console.error('Failed to update calendar event:', err);
+    res.status(500).json({ error: err.message || 'Failed to update calendar event' });
+  }
+});
+
 app.delete('/api/calendar', (req, res) => {
   const id = req.query.id as string;
   if (id) execute('DELETE FROM calendar_events WHERE id = ?', [id]);
@@ -600,8 +1057,8 @@ app.post('/api/family', (req, res) => {
     if (name) {
       const uId = `u_${Date.now()}`;
       execute(
-        'INSERT INTO users VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [uId, name, null, avatar || '👤', color || '#10b981', role || 'Member', found.id]
+        'INSERT INTO users (id, name, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [uId, name, null, avatar || '👤', color || '#10b981', role || 'Member', found.id, 'password123']
       );
     }
     const h = queryOne('SELECT * FROM households WHERE id = ?', [found.id]);
@@ -612,8 +1069,8 @@ app.post('/api/family', (req, res) => {
   if (name) {
     const uId = `u_${Date.now()}`;
     execute(
-      'INSERT INTO users VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [uId, name, null, avatar || '👤', color || '#10b981', role || 'Member', householdId]
+      'INSERT INTO users (id, name, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [uId, name, null, avatar || '👤', color || '#10b981', role || 'Member', householdId, 'password123']
     );
     return res.json({ id: uId, name, avatar: avatar || '👤', role: role || 'Member', color: color || '#10b981' });
   }
@@ -638,7 +1095,7 @@ app.post('/api/push', async (req, res) => {
 
   if (action === 'test_notification') {
     await sendPushNotificationToHousehold(householdId, {
-      title: title || '✨ fam-kit Notification',
+      title: title || '✨ Homebase Notification',
       body: message || 'Push notifications are live on your device!',
       url: '/',
     });
@@ -670,7 +1127,8 @@ app.get('*', (req, res) => {
 
 // Initialize database & start server
 getDb().then(() => {
-  app.listen(PORT, () => {
-    console.log(`⚡ fam-kit server running on http://localhost:${PORT}`);
+  app.listen(Number(PORT), '0.0.0.0', () => {
+    console.log(`⚡ Homebase server running on http://0.0.0.0:${PORT}`);
   });
 });
+

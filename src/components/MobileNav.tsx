@@ -16,14 +16,14 @@ export const MobileNav: React.FC<MobileNavProps> = ({ activeTab, setActiveTab })
   const tabs = [
     { id: 'assistant', label: 'Assistant', icon: Sparkles, color: 'from-emerald-400 to-teal-300' },
     { id: 'grocery', label: 'Lists', icon: ShoppingCart, color: 'from-amber-400 to-orange-400' },
-    { id: 'meals', label: 'Meals', icon: ChefHat, color: 'from-cyan-400 to-blue-400' },
+    { id: 'meals', label: 'Meals', icon: ChefHat, color: 'from-emerald-400 to-teal-400' },
     { id: 'recipes', label: 'Recipes', icon: BookOpen, color: 'from-pink-400 to-rose-400' },
     { id: 'calendar', label: 'Calendar', icon: Calendar, color: 'from-indigo-400 to-purple-400' },
   ];
 
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 glass-panel border-t border-white/10 px-2 py-1.5 pb-safe">
-      <div className="flex items-center justify-around">
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 glass-panel border-t border-white/10 px-2 h-[76px] flex items-center pb-safe">
+      <div className="w-full flex items-center justify-around">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -31,7 +31,7 @@ export const MobileNav: React.FC<MobileNavProps> = ({ activeTab, setActiveTab })
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex flex-col items-center justify-center py-1 px-3 rounded-2xl transition-all duration-200 relative ${
+              className={`flex flex-col items-center justify-center py-1 px-2 sm:px-3 rounded-2xl transition-all duration-200 relative ${
                 isActive ? 'scale-105' : 'text-slate-400 hover:text-slate-200 opacity-70'
               }`}
             >

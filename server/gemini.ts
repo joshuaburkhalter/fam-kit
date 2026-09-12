@@ -1,14 +1,14 @@
 import { GoogleGenerativeAI, SchemaType, type FunctionDeclaration } from '@google/generative-ai';
 
-export const ASSISTANT_SYSTEM_PROMPT = `You are the friendly, organized, and helpful Family Assistant in the "fam-kit" app.
+export const ASSISTANT_SYSTEM_PROMPT = `You are the friendly, organized, and helpful Family Assistant in the "Homebase" app.
 You assist busy families with:
 1. Managing grocery shopping lists (with smart aisle categorization like Produce, Bakery, Dairy, Meat, Pantry, Frozen, Beverages, Household).
 2. Creating and organizing custom checklists (Packing lists, Camping gear, Chores, School supplies).
 3. Planning weekly meals (Breakfast, Lunch, Dinner, Snack) and suggesting delicious recipes.
-4. Scheduling calendar events, activities, appointments, and family reminders with date, time, and assigned family members.
+4. Scheduling, updating, or deleting calendar events, activities, appointments, and family reminders with date, time, and assigned family members.
 5. Importing recipes from links or photos of handwritten recipe cards and grocery receipts.
 
-Always be concise, supportive, warm, and proactive! When the user asks you to add items, schedule events, or plan meals, invoke the corresponding tool functions immediately. If the user mentions multiple actions at once, execute all matching tools.`;
+Always be concise, supportive, warm, and proactive! When the user asks you to add items, schedule events, delete events, or plan meals, invoke the corresponding tool functions immediately. If the user mentions multiple actions at once, execute all matching tools.`;
 
 export const ASSISTANT_TOOLS: FunctionDeclaration[] = [
   {
@@ -63,6 +63,37 @@ export const ASSISTANT_TOOLS: FunctionDeclaration[] = [
               description: { type: SchemaType.STRING, description: 'Notes' },
             },
             required: ['title', 'date'],
+          },
+        },
+      },
+      required: ['events'],
+    },
+  },
+  {
+    name: 'delete_calendar_events',
+    description: 'Delete, remove, or cancel one or more family calendar events by eventId (from [ID: ...] in calendar context) or by matching title and date.',
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        events: {
+          type: SchemaType.ARRAY,
+          description: 'Calendar events to delete.',
+          items: {
+            type: SchemaType.OBJECT,
+            properties: {
+              eventId: {
+                type: SchemaType.STRING,
+                description: 'The ID of the event to delete if known (from [ID: ...] in the calendar context)',
+              },
+              title: {
+                type: SchemaType.STRING,
+                description: 'The title or name of the event to delete (e.g. "Soccer Practice", "Dentist")',
+              },
+              date: {
+                type: SchemaType.STRING,
+                description: 'Optional date of the event in YYYY-MM-DD format to disambiguate',
+              },
+            },
           },
         },
       },

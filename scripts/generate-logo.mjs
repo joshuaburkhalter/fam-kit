@@ -1,4 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+import fs from 'fs';
+import path from 'path';
+import { Resvg } from '@resvg/resvg-js';
+
+// Clean, Simple Residential House Logo for Homebase:
+// A friendly, modern house silhouette with a chimney and an arched doorway.
+// Clean, unmistakable residential home, zero church/religious resemblance.
+const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
     <!-- Background Dark Gradient -->
     <linearGradient id="hbBg" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -60,4 +67,17 @@
     <!-- Optional subtle warm doorknob dot -->
     <circle cx="280" cy="346" r="4.5" fill="#14b8a6" />
   </g>
-</svg>
+</svg>`;
+
+const outputSvgPath = path.resolve('public/icons/icon.svg');
+fs.writeFileSync(outputSvgPath, svgContent);
+console.log('Saved simple house SVG to:', outputSvgPath);
+
+// Render to PNG 512 & 192
+const resvg512 = new Resvg(svgContent, { fitTo: { mode: 'width', value: 512 } });
+fs.writeFileSync(path.resolve('public/icons/icon-512.png'), resvg512.render().asPng());
+console.log('Saved 512x512 PNG');
+
+const resvg192 = new Resvg(svgContent, { fitTo: { mode: 'width', value: 192 } });
+fs.writeFileSync(path.resolve('public/icons/icon-192.png'), resvg192.render().asPng());
+console.log('Saved 192x192 PNG');

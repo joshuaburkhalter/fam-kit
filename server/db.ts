@@ -6,7 +6,9 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const dbPath = process.env.DATABASE_PATH || path.join(__dirname, '../famkit.db');
+const dbPath =
+  process.env.DATABASE_PATH ||
+  (fs.existsSync('/var/data') ? '/var/data/famkit.db' : path.join(__dirname, '../famkit.db'));
 
 let dbInstance: Database | null = null;
 
@@ -32,6 +34,10 @@ export function saveDb() {
   if (!dbInstance) return;
   const data = dbInstance.export();
   const buffer = Buffer.from(data);
+  const dir = path.dirname(dbPath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
   fs.writeFileSync(dbPath, buffer);
 }
 
@@ -51,7 +57,8 @@ function initSchema(db: Database) {
       avatar TEXT NOT NULL DEFAULT '👤',
       color TEXT NOT NULL DEFAULT '#10b981',
       role TEXT NOT NULL DEFAULT 'Parent',
-      householdId TEXT NOT NULL
+      householdId TEXT NOT NULL,
+      password TEXT NOT NULL DEFAULT 'password123'
     );
 
     CREATE TABLE IF NOT EXISTS aisles (
@@ -127,6 +134,29 @@ function initSchema(db: Database) {
       createdAt TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS weekly_meals (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      recipeId TEXT,
+      notes TEXT,
+      isMade INTEGER NOT NULL DEFAULT 0,
+      madeDate TEXT,
+      weekStartDate TEXT NOT NULL,
+      householdId TEXT NOT NULL,
+      createdAt TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS meal_logs (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      recipeId TEXT,
+      date TEXT NOT NULL,
+      notes TEXT,
+      cookedByUserId TEXT,
+      householdId TEXT NOT NULL,
+      createdAt TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS push_subscriptions (
       id TEXT PRIMARY KEY,
       endpoint TEXT UNIQUE NOT NULL,
@@ -137,15 +167,84 @@ function initSchema(db: Database) {
     );
   `);
 
+  // Auto-migration for existing DBs: ensure tables and columns exist
+  try {
+    db.run(`
+      CREATE TABLE IF NOT EXISTS weekly_meals (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        recipeId TEXT,
+        notes TEXT,
+        isMade INTEGER NOT NULL DEFAULT 0,
+        madeDate TEXT,
+        weekStartDate TEXT NOT NULL,
+        householdId TEXT NOT NULL,
+        createdAt TEXT NOT NULL
+      );
+    `);
+  } catch {}
+  try {
+    db.run(`
+      CREATE TABLE IF NOT EXISTS meal_logs (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        recipeId TEXT,
+        date TEXT NOT NULL,
+        notes TEXT,
+        cookedByUserId TEXT,
+        householdId TEXT NOT NULL,
+        createdAt TEXT NOT NULL
+      );
+    `);
+  } catch {}
+  try {
+    db.run(`ALTER TABLE users ADD COLUMN password TEXT DEFAULT 'password123'`);
+  } catch {}
+  try {
+    db.run(`UPDATE users SET password = 'password123' WHERE password IS NULL OR password = ''`);
+  } catch {}
+
   // Check if seeded
   const check = db.exec('SELECT COUNT(*) as count FROM households');
-  const count = check[0]?.values[0]?.[0] as number || 0;
+  const count = (check[0]?.values[0]?.[0] as number) || 0;
 
   if (count === 0) {
     seedDemoData(db);
+  } else {
+    // Check if Miller family exists
+    const checkMiller = db.exec("SELECT COUNT(*) FROM households WHERE id = 'fam_default_2'");
+    const millerCount = (checkMiller[0]?.values[0]?.[0] as number) || 0;
+    if (millerCount === 0) {
+      seedMillerFamily(db);
+    }
   }
 
   saveDb();
+}
+
+export const DEFAULT_AISLE_TEMPLATES = [
+  { name: 'Produce', icon: '🥦' },
+  { name: 'Bakery & Bread', icon: '🍞' },
+  { name: 'Deli & Prepared', icon: '🥪' },
+  { name: 'Meat & Seafood', icon: '🥩' },
+  { name: 'Dairy & Eggs', icon: '🥛' },
+  { name: 'Pantry & Dry Goods', icon: '🥫' },
+  { name: 'Snacks & Sweets', icon: '🍿' },
+  { name: 'Frozen', icon: '🧊' },
+  { name: 'Beverages', icon: '🧃' },
+  { name: 'Household & Cleaning', icon: '🧻' },
+  { name: 'Personal Care & Pharmacy', icon: '🧴' },
+  { name: 'Pet Care', icon: '🐾' },
+  { name: 'Other', icon: '📦' },
+];
+
+export function createDefaultAisles(householdId: string, db?: Database) {
+  const targetDb = db || dbInstance;
+  if (!targetDb) return;
+  DEFAULT_AISLE_TEMPLATES.forEach((a, idx) => {
+    const id = `a_${householdId}_${idx + 1}`;
+    targetDb.run(`INSERT OR IGNORE INTO aisles VALUES (?, ?, ?, ?, ?)`, [id, a.name, a.icon, idx, householdId]);
+  });
 }
 
 function seedDemoData(db: Database) {
@@ -154,30 +253,13 @@ function seedDemoData(db: Database) {
 
   db.run(`INSERT INTO households VALUES (?, ?, ?, ?)`, [householdId, 'The Burkhalter Family', 'FAMKIT', now]);
 
-  db.run(`INSERT INTO users VALUES (?, ?, ?, ?, ?, ?, ?)`, ['u1', 'Joshua', 'joshua@redpointaudio.com', '👨‍💻', '#10b981', 'Parent', householdId]);
-  db.run(`INSERT INTO users VALUES (?, ?, ?, ?, ?, ?, ?)`, ['u2', 'Sarah', 'sarah@famkit.app', '👩‍🏫', '#ec4899', 'Parent', householdId]);
-  db.run(`INSERT INTO users VALUES (?, ?, ?, ?, ?, ?, ?)`, ['u3', 'Leo', null, '👦', '#f59e0b', 'Kid', householdId]);
-  db.run(`INSERT INTO users VALUES (?, ?, ?, ?, ?, ?, ?)`, ['u4', 'Emma', null, '👧', '#06b6d4', 'Kid', householdId]);
+  db.run(`INSERT INTO users (id, name, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, ['u1', 'Joshua', 'joshua@redpointaudio.com', '👨‍💻', '#10b981', 'Parent', householdId, 'password123']);
+  db.run(`INSERT INTO users (id, name, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, ['u2', 'Sarah', 'sarah@famkit.app', '👩‍🏫', '#ec4899', 'Parent', householdId, 'password123']);
+  db.run(`INSERT INTO users (id, name, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, ['u3', 'Leo', 'leo@famkit.app', '👦', '#f59e0b', 'Kid', householdId, 'password123']);
+  db.run(`INSERT INTO users (id, name, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, ['u4', 'Emma', 'emma@famkit.app', '👧', '#06b6d4', 'Kid', householdId, 'password123']);
 
-  const defaultAisles = [
-    { id: 'a1', name: 'Produce', icon: '🥦', orderIndex: 0 },
-    { id: 'a2', name: 'Bakery & Bread', icon: '🍞', orderIndex: 1 },
-    { id: 'a3', name: 'Deli & Prepared', icon: '🥪', orderIndex: 2 },
-    { id: 'a4', name: 'Meat & Seafood', icon: '🥩', orderIndex: 3 },
-    { id: 'a5', name: 'Dairy & Eggs', icon: '🥛', orderIndex: 4 },
-    { id: 'a6', name: 'Pantry & Dry Goods', icon: '🥫', orderIndex: 5 },
-    { id: 'a7', name: 'Snacks & Sweets', icon: '🍿', orderIndex: 6 },
-    { id: 'a8', name: 'Frozen', icon: '🧊', orderIndex: 7 },
-    { id: 'a9', name: 'Beverages', icon: '🧃', orderIndex: 8 },
-    { id: 'a10', name: 'Household & Cleaning', icon: '🧻', orderIndex: 9 },
-    { id: 'a11', name: 'Personal Care & Pharmacy', icon: '🧴', orderIndex: 10 },
-    { id: 'a12', name: 'Pet Care', icon: '🐾', orderIndex: 11 },
-    { id: 'a13', name: 'Other', icon: '📦', orderIndex: 12 },
-  ];
-
-  for (const a of defaultAisles) {
-    db.run(`INSERT INTO aisles VALUES (?, ?, ?, ?, ?)`, [a.id, a.name, a.icon, a.orderIndex, householdId]);
-  }
+  createDefaultAisles(householdId, db);
+  seedMillerFamily(db);
 
   const sampleItems = [
     { id: 'g1', name: 'Organic Bananas', category: 'Produce', aisleId: 'a1', quantity: '1', unit: 'bunch', checked: 0 },
@@ -299,11 +381,52 @@ function seedDemoData(db: Database) {
   db.run(`INSERT INTO calendar_events VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, ['ev3', 'Family Pizza & Movie Night 🍕', '', fridayStr, '18:30', '21:00', 'Family', 'Living Room', 'u1', householdId, now]);
 }
 
+function seedMillerFamily(db: Database) {
+  const now = new Date().toISOString();
+  const householdId = 'fam_default_2';
+
+  db.run(`INSERT OR IGNORE INTO households VALUES (?, ?, ?, ?)`, [householdId, 'The Miller Family', 'MILLER', now]);
+
+  db.run(`INSERT OR IGNORE INTO users (id, name, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, ['u5', 'Alex Miller', 'alex@miller.com', '👨‍💼', '#3b82f6', 'Parent', householdId, 'password123']);
+  db.run(`INSERT OR IGNORE INTO users (id, name, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, ['u6', 'Jamie Miller', 'jamie@miller.com', '👩‍🔬', '#8b5cf6', 'Parent', householdId, 'password123']);
+
+  createDefaultAisles(householdId, db);
+
+  const millerGrocery = [
+    { id: 'gm1', name: 'Organic Almond Milk', category: 'Dairy & Eggs', quantity: '2', unit: 'cartons' },
+    { id: 'gm2', name: 'Ripe Hass Avocados', category: 'Produce', quantity: '4', unit: '' },
+    { id: 'gm3', name: 'Organic Strawberries', category: 'Produce', quantity: '1', unit: 'clamshell' },
+    { id: 'gm4', name: 'Artisan Chia Seed Bread', category: 'Bakery & Bread', quantity: '1', unit: 'loaf' },
+    { id: 'gm5', name: 'Cold Brew Coffee', category: 'Beverages', quantity: '1', unit: 'bottle' },
+  ];
+
+  for (const g of millerGrocery) {
+    db.run(`INSERT OR IGNORE INTO grocery_items VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+      g.id, g.name, g.category, null, g.quantity, g.unit, '', 0, null, 'u5', householdId, now
+    ]);
+  }
+
+  const tomorrowStr = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+  const weekendStr = new Date(Date.now() + 86400000 * 3).toISOString().split('T')[0];
+
+  db.run(`INSERT OR IGNORE INTO calendar_events VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+    'ev_m1', 'Jamie Dentist Checkup', 'Annual cleaning', tomorrowStr, '10:00', '11:00', 'Appointment', 'Smile Dental', 'u6', householdId, now
+  ]);
+  db.run(`INSERT OR IGNORE INTO calendar_events VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+    'ev_m2', 'Weekend Farmers Market', 'Pick up fresh produce', weekendStr, '09:00', '11:30', 'Family', 'Town Square', 'u5', householdId, now
+  ]);
+
+  db.run(`INSERT OR IGNORE INTO meal_plans VALUES (?, ?, ?, ?, ?, ?, ?)`, [
+    `m_miller_today`, tomorrowStr, 'dinner', 'Avocado & Herb Grain Bowl', 'Fresh greens and quinoa', null, householdId
+  ]);
+}
+
 // Query helpers for JSON rows
 export function queryAll<T = any>(sql: string, params: any[] = []): T[] {
   if (!dbInstance) return [];
+  const safeParams = params.map((p) => (p === undefined ? null : p));
   const stmt = dbInstance.prepare(sql);
-  stmt.bind(params);
+  stmt.bind(safeParams);
   const rows: T[] = [];
   while (stmt.step()) {
     rows.push(stmt.getAsObject() as T);
@@ -319,6 +442,7 @@ export function queryOne<T = any>(sql: string, params: any[] = []): T | null {
 
 export function execute(sql: string, params: any[] = []) {
   if (!dbInstance) return;
-  dbInstance.run(sql, params);
+  const safeParams = params.map((p) => (p === undefined ? null : p));
+  dbInstance.run(sql, safeParams);
   saveDb();
 }

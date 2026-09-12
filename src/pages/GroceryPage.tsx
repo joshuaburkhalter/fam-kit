@@ -3,36 +3,79 @@ import {
   Plus,
   Check,
   Trash2,
-  MoveVertical,
-  ShoppingBag,
   ListPlus,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
   ShoppingCart,
   ListChecks,
+  X,
 } from 'lucide-react';
 import type { GroceryItem, Aisle, CustomList } from '../types';
 import { usePWA } from '../context/PWAContext';
 import { api } from '../lib/api';
-import { AisleManagerModal } from '../components/AisleManagerModal';
+import { useFabAutoClose } from '../hooks/useFabAutoClose';
+
+interface GroceryDataCache {
+  householdId: string;
+  itemsByList: Record<string, GroceryItem[]>;
+  lists: CustomList[];
+  aisles: Aisle[];
+}
+
+let groceryDataCache: GroceryDataCache | null = null;
 
 export const GroceryPage: React.FC = () => {
-  const { household, currentUser, aisles, refreshAisles } = usePWA();
-  const [items, setItems] = useState<GroceryItem[]>([]);
-  const [customLists, setCustomLists] = useState<CustomList[]>([]);
+  const { household, currentUser, aisles } = usePWA();
+  const householdId = household?.id;
+  const isMountedRef = useRef(true);
+
   const [activeListType, setActiveListType] = useState<string>('grocery');
+  const activeListTypeRef = useRef(activeListType);
+  useEffect(() => {
+    activeListTypeRef.current = activeListType;
+  }, [activeListType]);
+
+  const [items, setItems] = useState<GroceryItem[]>(() => {
+    return groceryDataCache?.itemsByList['grocery'] || [];
+  });
+  const [customLists, setCustomLists] = useState<CustomList[]>(() => {
+    return groceryDataCache ? groceryDataCache.lists : [];
+  });
+  const [localAisles, setLocalAisles] = useState<Aisle[]>(() => {
+    return groceryDataCache && groceryDataCache.aisles.length > 0 ? groceryDataCache.aisles : aisles;
+  });
   const [newItemName, setNewItemName] = useState('');
   const [selectedAisleId, setSelectedAisleId] = useState<string>('');
-  const [isShoppingMode, setIsShoppingMode] = useState(false);
-  const [isAisleModalOpen, setIsAisleModalOpen] = useState(false);
+  const [isInputExpanded, setIsInputExpanded] = useState(false);
   const [isNewListModalOpen, setIsNewListModalOpen] = useState(false);
   const [newListTitle, setNewListTitle] = useState('');
   const [isListDropdownOpen, setIsListDropdownOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState<boolean>(() => {
+    return !(groceryDataCache && groceryDataCache.itemsByList['grocery'] !== undefined);
+  });
   const [collapsedAisles, setCollapsedAisles] = useState<Record<string, boolean>>({});
 
+  const dockRef = useFabAutoClose<HTMLDivElement>({
+    isOpen: isInputExpanded,
+    onClose: () => setIsInputExpanded(false),
+    ignore: isNewListModalOpen,
+  });
+
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (aisles.length > 0) {
+      setLocalAisles(aisles);
+    }
+  }, [aisles]);
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -45,26 +88,76 @@ export const GroceryPage: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const loadData = async () => {
-    if (!household) return;
-    setIsLoading(true);
+  const handleSelectList = (targetListId: string) => {
+    setIsListDropdownOpen(false);
+    if (targetListId === activeListType) return;
+
+    setActiveListType(targetListId);
+    activeListTypeRef.current = targetListId;
+
+    const cachedItems =
+      groceryDataCache && groceryDataCache.householdId === householdId
+        ? groceryDataCache.itemsByList[targetListId]
+        : undefined;
+
+    if (cachedItems !== undefined) {
+      setItems(cachedItems);
+      setIsLoading(false);
+    } else {
+      // Clear stale items immediately so the previous list never flashes while loading the new one
+      setItems([]);
+      setIsLoading(true);
+    }
+  };
+
+  const loadData = async (targetListId: string, showLoading = false) => {
+    if (!householdId) return;
+    if (showLoading) {
+      setIsLoading(true);
+    }
+
     try {
-      const [itemsData, listsData] = await Promise.all([
-        api.getGroceryItems(household.id, activeListType),
-        api.getCustomLists(household.id),
-      ]);
-      setItems(itemsData);
-      setCustomLists(listsData);
+      const data = await api.getGroceryData(householdId, targetListId);
+      if (!isMountedRef.current) return;
+
+      if (!groceryDataCache || groceryDataCache.householdId !== householdId) {
+        groceryDataCache = {
+          householdId,
+          itemsByList: {},
+          lists: data.lists,
+          aisles: data.aisles,
+        };
+      }
+      groceryDataCache.itemsByList[targetListId] = data.items;
+      groceryDataCache.lists = data.lists;
+      if (data.aisles.length > 0) {
+        groceryDataCache.aisles = data.aisles;
+      }
+
+      if (activeListTypeRef.current === targetListId) {
+        setItems(data.items);
+      }
+      setCustomLists(data.lists);
+      if (data.aisles.length > 0) {
+        setLocalAisles(data.aisles);
+      }
     } catch (err) {
       console.error('Failed to load items:', err);
     } finally {
-      setIsLoading(false);
+      if (isMountedRef.current && activeListTypeRef.current === targetListId) {
+        setIsLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    loadData();
-  }, [household, activeListType]);
+    if (!householdId) return;
+    const hasCache =
+      groceryDataCache &&
+      groceryDataCache.householdId === householdId &&
+      groceryDataCache.itemsByList[activeListType] !== undefined;
+    loadData(activeListType, !hasCache);
+  }, [householdId, activeListType]);
 
   const handleAddItem = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -78,7 +171,13 @@ export const GroceryPage: React.FC = () => {
         added_by_user_id: currentUser?.id,
         added_by_user_name: currentUser?.name,
       });
-      setItems((prev) => [...prev, item]);
+      setItems((prev) => {
+        const next = [...prev, item];
+        if (groceryDataCache && groceryDataCache.householdId === household.id) {
+          groceryDataCache.itemsByList[activeListType] = next;
+        }
+        return next;
+      });
       setNewItemName('');
     } catch (err) {
       console.error('Failed to add item:', err);
@@ -87,34 +186,50 @@ export const GroceryPage: React.FC = () => {
 
   const handleToggleItem = async (id: string) => {
     try {
-      setItems((prev) =>
-        prev.map((it) => (it.id === id ? { ...it, is_completed: !it.is_completed } : it))
-      );
+      setItems((prev) => {
+        const next = prev.map((it) => (it.id === id ? { ...it, is_completed: !it.is_completed } : it));
+        if (groceryDataCache && householdId && groceryDataCache.householdId === householdId) {
+          groceryDataCache.itemsByList[activeListType] = next;
+        }
+        return next;
+      });
       await api.toggleGroceryItem(id);
     } catch (err) {
       console.error('Failed to toggle item:', err);
-      loadData();
+      loadData(activeListType, false);
     }
   };
 
   const handleDeleteItem = async (id: string) => {
     try {
-      setItems((prev) => prev.filter((it) => it.id !== id));
+      setItems((prev) => {
+        const next = prev.filter((it) => it.id !== id);
+        if (groceryDataCache && householdId && groceryDataCache.householdId === householdId) {
+          groceryDataCache.itemsByList[activeListType] = next;
+        }
+        return next;
+      });
       await api.deleteGroceryItem(id);
     } catch (err) {
       console.error('Failed to delete item:', err);
-      loadData();
+      loadData(activeListType, false);
     }
   };
 
   const handleClearCompleted = async () => {
     if (!household) return;
     try {
-      setItems((prev) => prev.filter((it) => !it.is_completed));
+      setItems((prev) => {
+        const next = prev.filter((it) => !it.is_completed);
+        if (groceryDataCache && groceryDataCache.householdId === household.id) {
+          groceryDataCache.itemsByList[activeListType] = next;
+        }
+        return next;
+      });
       await api.clearCompletedGroceryItems(household.id, activeListType);
     } catch (err) {
       console.error('Failed to clear completed:', err);
-      loadData();
+      loadData(activeListType, false);
     }
   };
 
@@ -124,8 +239,20 @@ export const GroceryPage: React.FC = () => {
 
     try {
       const created = await api.createCustomList(household.id, newListTitle.trim());
-      setCustomLists((prev) => [...prev, created]);
+      setCustomLists((prev) => {
+        const next = [...prev, created];
+        if (groceryDataCache && groceryDataCache.householdId === household.id) {
+          groceryDataCache.lists = next;
+        }
+        return next;
+      });
+      if (groceryDataCache && groceryDataCache.householdId === household.id) {
+        groceryDataCache.itemsByList[created.id] = [];
+      }
+      setItems([]);
+      setIsLoading(false);
       setActiveListType(created.id);
+      activeListTypeRef.current = created.id;
       setNewListTitle('');
       setIsNewListModalOpen(false);
       setIsListDropdownOpen(false);
@@ -138,9 +265,13 @@ export const GroceryPage: React.FC = () => {
     if (confirm(`Are you sure you want to delete the list "${listTitle}"?`)) {
       try {
         await api.deleteCustomList(listId);
+        if (groceryDataCache) {
+          delete groceryDataCache.itemsByList[listId];
+          groceryDataCache.lists = groceryDataCache.lists.filter((l) => l.id !== listId);
+        }
         setCustomLists((prev) => prev.filter((l) => l.id !== listId));
         if (activeListType === listId) {
-          setActiveListType('grocery');
+          handleSelectList('grocery');
         }
       } catch (err) {
         console.error('Failed to delete list:', err);
@@ -160,7 +291,8 @@ export const GroceryPage: React.FC = () => {
   const completedItems = items.filter((it) => it.is_completed);
 
   // Sort aisles by display_order
-  const sortedAisles = [...aisles].sort((a, b) => a.display_order - b.display_order);
+  const effectiveAisles = localAisles.length > 0 ? localAisles : aisles;
+  const sortedAisles = [...effectiveAisles].sort((a, b) => a.display_order - b.display_order);
 
   const itemsByAisle: { aisle: Aisle; items: GroceryItem[] }[] = [];
   const uncategorizedItems: GroceryItem[] = [];
@@ -176,7 +308,7 @@ export const GroceryPage: React.FC = () => {
     });
 
     activeItems.forEach((it) => {
-      const hasAisle = aisles.some((a) => a.id === it.aisle_id);
+      const hasAisle = effectiveAisles.some((a) => a.id === it.aisle_id);
       if (!hasAisle) {
         uncategorizedItems.push(it);
       }
@@ -188,32 +320,31 @@ export const GroceryPage: React.FC = () => {
   const currentListIcon = isGroceryList ? '🛒' : currentList?.icon || '📋';
 
   return (
-    <div className="max-w-4xl mx-auto p-2 sm:p-4 pb-24 md:pb-12 space-y-4">
-      {/* Header with List Dropdown Selector & Action Buttons */}
-      <div className="relative z-30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-3xl glass-panel border border-white/10">
-        
-        {/* List Dropdown Selector */}
-        <div className="relative w-full sm:w-auto" ref={dropdownRef}>
+    <div className="max-w-6xl mx-auto p-2 sm:p-4 pb-36 md:pb-28 space-y-4">
+      {/* Sleek, Full-Width List Header */}
+      <div className="relative z-30 w-full" ref={dropdownRef}>
+        <div className="relative w-full">
           <button
+            type="button"
             onClick={() => setIsListDropdownOpen(!isListDropdownOpen)}
-            className="flex items-center justify-between sm:justify-start gap-3 bg-slate-900/90 hover:bg-slate-850 border border-white/10 hover:border-emerald-500/40 px-4 py-2.5 rounded-2xl transition-all w-full sm:w-auto group shadow-md"
+            className="w-full flex items-center justify-between bg-slate-900/90 hover:bg-slate-850 border border-white/15 hover:border-emerald-500/40 px-4 py-2.5 sm:py-3 rounded-2xl transition-all group shadow-md"
           >
-            <div className="flex items-center gap-2.5">
-              <span className="text-xl">{currentListIcon}</span>
-              <div className="text-left">
-                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  Active List
-                </div>
-                <div className="text-base font-black text-white group-hover:text-emerald-400 transition-colors">
-                  {currentListName}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <span className="text-xs bg-emerald-500/15 text-emerald-400 font-mono px-2 py-0.5 rounded-full border border-emerald-500/30 font-semibold">
-                {activeItems.length}
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="text-xl shrink-0">{currentListIcon}</span>
+              <span className="text-sm sm:text-base font-bold text-white group-hover:text-emerald-400 transition-colors truncate">
+                {currentListName}
               </span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {isLoading && items.length === 0 ? (
+                <span className="text-xs bg-slate-800/80 text-slate-400 font-mono px-2.5 py-0.5 rounded-full border border-white/10 font-semibold animate-pulse">
+                  loading...
+                </span>
+              ) : (
+                <span className="text-xs bg-emerald-500/15 text-emerald-400 font-mono px-2.5 py-0.5 rounded-full border border-emerald-500/30 font-semibold">
+                  {activeItems.length} {activeItems.length === 1 ? 'item' : 'items'}
+                </span>
+              )}
               <ChevronDown
                 className={`w-4 h-4 text-slate-400 group-hover:text-white transition-transform duration-200 ${
                   isListDropdownOpen ? 'rotate-180 text-emerald-400' : ''
@@ -224,7 +355,7 @@ export const GroceryPage: React.FC = () => {
 
           {/* Dropdown Menu */}
           {isListDropdownOpen && (
-            <div className="absolute left-0 top-full mt-2 w-full sm:w-72 bg-slate-900/95 backdrop-blur-xl rounded-2xl p-2 shadow-2xl z-50 border border-white/15 animate-in fade-in zoom-in-95 duration-100">
+            <div className="absolute left-0 right-0 top-full mt-2 w-full max-w-md bg-slate-900/95 backdrop-blur-xl rounded-2xl p-2 shadow-2xl z-50 border border-white/15 animate-in fade-in zoom-in-95 duration-100">
               <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-white/5">
                 Switch Household List
               </div>
@@ -232,10 +363,7 @@ export const GroceryPage: React.FC = () => {
               <div className="py-1.5 space-y-1 max-h-60 overflow-y-auto">
                 {/* Default Grocery List Option */}
                 <button
-                  onClick={() => {
-                    setActiveListType('grocery');
-                    setIsListDropdownOpen(false);
-                  }}
+                  onClick={() => handleSelectList('grocery')}
                   className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-colors ${
                     activeListType === 'grocery'
                       ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
@@ -262,10 +390,7 @@ export const GroceryPage: React.FC = () => {
                       }`}
                     >
                       <button
-                        onClick={() => {
-                          setActiveListType(cl.id);
-                          setIsListDropdownOpen(false);
-                        }}
+                        onClick={() => handleSelectList(cl.id)}
                         className="flex items-center gap-2.5 flex-1 text-left"
                       >
                         <span className="text-base">{cl.icon || '📋'}</span>
@@ -273,7 +398,7 @@ export const GroceryPage: React.FC = () => {
                       </button>
 
                       <div className="flex items-center gap-1">
-                        {isSelected && <Check className="w-3.5 h-3.5 mr-1" />}
+                        {isSelected && <Check className="w-3.5 h-3.5 text-emerald-400 mr-1" />}
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -306,85 +431,17 @@ export const GroceryPage: React.FC = () => {
             </div>
           )}
         </div>
-
-        {/* Action Buttons (Shopping Mode & Rearrange Aisles for Grocery List) */}
-        <div className="flex items-center flex-wrap gap-2 w-full sm:w-auto justify-end">
-          {/* Shopping Mode Button */}
-          <button
-            onClick={() => setIsShoppingMode(!isShoppingMode)}
-            className={`px-3.5 py-2 rounded-2xl text-xs font-bold flex items-center gap-1.5 transition-all ${
-              isShoppingMode
-                ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/25 ring-2 ring-amber-400'
-                : 'bg-slate-800/90 hover:bg-slate-750 text-slate-300 border border-white/10'
-            }`}
-          >
-            <ShoppingBag className="w-3.5 h-3.5" />
-            {isShoppingMode ? 'Shopping Mode (ON)' : 'Shop Mode'}
-          </button>
-
-          {/* Rearrange Aisles Button (only shown for Grocery list) */}
-          {isGroceryList && (
-            <button
-              onClick={() => setIsAisleModalOpen(true)}
-              className="px-3.5 py-2 rounded-2xl text-xs font-semibold bg-slate-800/90 hover:bg-slate-750 text-slate-300 border border-white/10 flex items-center gap-1.5 transition-colors"
-            >
-              <MoveVertical className="w-3.5 h-3.5 text-amber-400" />
-              Aisles
-            </button>
-          )}
-        </div>
       </div>
-
-      {/* Spacious Integrated Quick Add Input Bar */}
-      <form
-        onSubmit={handleAddItem}
-        className="glass-panel p-2 rounded-3xl border border-white/10 shadow-lg focus-within:border-emerald-500/50 focus-within:ring-1 focus-within:ring-emerald-500/20 transition-all"
-      >
-        <div className="flex items-center gap-2 pl-2 pr-1">
-          <input
-            type="text"
-            placeholder={`Add item to ${currentListName}...`}
-            value={newItemName}
-            onChange={(e) => setNewItemName(e.target.value)}
-            className="flex-1 bg-transparent border-none text-sm sm:text-base text-white placeholder-slate-500 focus:outline-none py-2 px-1"
-          />
-
-          {/* Optional Aisle selector dropdown for Grocery list */}
-          {isGroceryList && (
-            <select
-              value={selectedAisleId}
-              onChange={(e) => setSelectedAisleId(e.target.value)}
-              className="bg-slate-900/90 border border-white/10 text-xs text-slate-300 rounded-xl px-2.5 py-2 focus:outline-none focus:border-emerald-500 shrink-0"
-            >
-              <option value="">Auto Aisle</option>
-              {sortedAisles.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
-          )}
-
-          {/* Integrated Add Button nestled inside the right edge */}
-          <button
-            type="submit"
-            disabled={!newItemName.trim()}
-            className="bg-emerald-500 hover:bg-emerald-400 disabled:opacity-30 text-slate-950 font-bold px-4 py-2.5 rounded-2xl text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20 shrink-0"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Add</span>
-          </button>
-        </div>
-      </form>
 
       {/* Items Section */}
       <div className="space-y-4">
-        {isLoading && (
-          <div className="py-12 text-center text-xs text-slate-400">Loading {currentListName}...</div>
-        )}
-
-        {!isLoading && items.length === 0 && (
-          <div className="py-16 text-center glass-panel rounded-3xl p-8 border border-white/5 space-y-3">
+        {isLoading && items.length === 0 ? (
+          <div className="py-16 text-center glass-panel rounded-3xl p-8 border border-white/5 space-y-3 animate-in fade-in duration-150">
+            <div className="w-8 h-8 rounded-full border-2 border-emerald-500/20 border-t-emerald-400 animate-spin mx-auto" />
+            <div className="text-xs text-slate-400 font-medium">Loading {currentListName}...</div>
+          </div>
+        ) : !isLoading && items.length === 0 ? (
+          <div className="py-16 text-center glass-panel rounded-3xl p-8 border border-white/5 space-y-3 animate-in fade-in duration-150">
             <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center mx-auto">
               <ListChecks className="w-6 h-6" />
             </div>
@@ -393,7 +450,7 @@ export const GroceryPage: React.FC = () => {
               Add items using the bar above or speak to your Gemini voice assistant!
             </p>
           </div>
-        )}
+        ) : null}
 
         {/* If Grocery List: Display Grouped by Store Aisles */}
         {isGroceryList &&
@@ -435,30 +492,16 @@ export const GroceryPage: React.FC = () => {
                       <div
                         key={item.id}
                         onClick={() => handleToggleItem(item.id)}
-                        className={`flex items-center justify-between p-3.5 transition-colors cursor-pointer group ${
-                          isShoppingMode
-                            ? 'hover:bg-amber-500/10 active:bg-amber-500/20 py-4'
-                            : 'hover:bg-white/5'
-                        }`}
+                        className="flex items-center justify-between p-3.5 transition-colors cursor-pointer group hover:bg-white/5"
                       >
                         <div className="flex items-center gap-3.5">
-                          <div
-                            className={`w-6 h-6 rounded-lg border flex items-center justify-center transition-all ${
-                              isShoppingMode
-                                ? 'w-7 h-7 border-amber-500/40 bg-slate-900'
-                                : 'border-white/20 bg-slate-900/80 group-hover:border-emerald-500'
-                            }`}
-                          >
+                          <div className="w-6 h-6 rounded-lg border border-white/20 bg-slate-900/80 flex items-center justify-center transition-all group-hover:border-emerald-500">
                             {item.is_completed && (
                               <Check className="w-4 h-4 text-emerald-400 font-bold" />
                             )}
                           </div>
                           <div>
-                            <span
-                              className={`text-sm font-semibold text-slate-100 ${
-                                isShoppingMode ? 'text-base' : ''
-                              }`}
-                            >
+                            <span className="text-sm font-semibold text-slate-100">
                               {item.name}
                             </span>
                             {item.quantity && (
@@ -612,23 +655,10 @@ export const GroceryPage: React.FC = () => {
         )}
       </div>
 
-      {/* Aisle Reordering Modal */}
-      {household && (
-        <AisleManagerModal
-          isOpen={isAisleModalOpen}
-          onClose={() => setIsAisleModalOpen(false)}
-          householdId={household.id}
-          initialAisles={sortedAisles}
-          onAislesUpdated={() => {
-            refreshAisles();
-            loadData();
-          }}
-        />
-      )}
 
       {/* New Custom List Modal */}
       {isNewListModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
           <div className="glass-panel w-full max-w-sm rounded-3xl p-6 shadow-2xl border border-white/10 space-y-4">
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
               <ListPlus className="w-5 h-5 text-emerald-400" />
@@ -663,6 +693,79 @@ export const GroceryPage: React.FC = () => {
           </div>
         </div>
       )}
+      {/* Animated Expanding Quick Add Dock & FAB */}
+      <div className="fixed bottom-[calc(76px+1rem+env(safe-area-inset-bottom,0px))] md:bottom-8 left-0 right-0 z-40 px-4 pointer-events-none">
+        <div className="max-w-3xl mx-auto pointer-events-none flex justify-end">
+          <div
+            ref={dockRef}
+            className={`fab-dock-transition pointer-events-auto h-[52px] border shadow-2xl flex items-center overflow-hidden ${
+              isInputExpanded
+                ? 'w-full rounded-3xl border-white/25 bg-slate-900/95 backdrop-blur-xl shadow-emerald-500/10 px-2'
+                : 'w-[52px] rounded-full border-emerald-400/40 bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 cursor-pointer shadow-xl shadow-emerald-500/30 hover:scale-105 active:scale-95 justify-center'
+            }`}
+          >
+            {!isInputExpanded ? (
+              <button
+                type="button"
+                onClick={() => setIsInputExpanded(true)}
+                className="w-full h-full flex items-center justify-center text-slate-950"
+                title={`Add item to ${currentListName}`}
+              >
+                <Plus className="w-6 h-6 stroke-[2.5]" />
+              </button>
+            ) : (
+              <form onSubmit={handleAddItem} className="w-full flex items-center gap-2">
+                {/* Far left: Close button */}
+                <button
+                  type="button"
+                  onClick={() => setIsInputExpanded(false)}
+                  className="p-2 rounded-2xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white shrink-0"
+                  title="Close"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+
+                {/* Secondary action: Optional Aisle selector dropdown (to the right of close button, left of text box) */}
+                {isGroceryList && (
+                  <select
+                    value={selectedAisleId}
+                    onChange={(e) => setSelectedAisleId(e.target.value)}
+                    className="bg-white/5 border border-white/10 text-xs text-slate-300 rounded-2xl px-2.5 py-2.5 focus:outline-none focus:border-emerald-500 shrink-0 max-w-[100px] sm:max-w-[140px] truncate"
+                  >
+                    <option value="" className="bg-slate-900 text-white">Auto Aisle</option>
+                    {sortedAisles.map((a) => (
+                      <option key={a.id} value={a.id} className="bg-slate-900 text-white">
+                        {a.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+
+                {/* Middle: Input */}
+                <input
+                  autoFocus
+                  type="text"
+                  placeholder={`Add item to ${currentListName}...`}
+                  value={newItemName}
+                  onChange={(e) => setNewItemName(e.target.value)}
+                  className="flex-1 min-w-0 bg-transparent border-none text-sm text-white placeholder-slate-500 focus:outline-none py-2 px-1"
+                />
+
+                {/* Far right: Main action button (Add) */}
+                <button
+                  type="submit"
+                  disabled={!newItemName.trim()}
+                  className="p-2 sm:px-3.5 sm:py-2 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 disabled:opacity-40 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20 shrink-0"
+                  title="Add item"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span className="hidden sm:inline">Add</span>
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

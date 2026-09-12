@@ -66,8 +66,28 @@ Open [http://localhost:5173](http://localhost:5173) in your browser.
 
 ## 🚢 Deployment (Render.com)
 
-1. Connect your GitHub repository (`joshuaburkhalter/fam-kit`) to Render.com.
-2. Select **Web Service** or use the included `render.yaml`.
-3. Set Build Command: `npm install && npm run build`
-4. Set Start Command: `npm start`
-5. Add `GEMINI_API_KEY` to your Render environment variables.
+You can deploy `fam-kit` to Render in just a few clicks using either the included `render.yaml` Blueprint or as a manual Web Service:
+
+### Method A: Using Render Blueprint (Recommended)
+1. Push your latest code to GitHub (`origin main`).
+2. In the [Render Dashboard](https://dashboard.render.com/), click **New +** and select **Blueprint**.
+3. Connect your repository (`joshuaburkhalter/fam-kit`). Render will automatically read [`render.yaml`](file:///c:/dev/fam-kit/render.yaml).
+4. Enter your `GEMINI_API_KEY` when prompted.
+5. Click **Apply** to build and deploy.
+
+### Method B: Manual Web Service Setup
+1. In the [Render Dashboard](https://dashboard.render.com/), click **New +** > **Web Service**.
+2. Connect your GitHub repository.
+3. Configure the settings:
+   - **Environment / Runtime**: `Node`
+   - **Region**: Any (e.g. Oregon)
+   - **Branch**: `main`
+   - **Build Command**: `npm install --include=dev && npm run build`
+   - **Start Command**: `npm start`
+   - **Plan**: `Free`
+4. In **Environment Variables**, add:
+   - `NODE_ENV`: `production`
+   - `GEMINI_API_KEY`: your Google Gemini API key
+   - *(Optional)* `NEXT_PUBLIC_VAPID_PUBLIC_KEY` & `VAPID_PRIVATE_KEY` for Web Push notifications.
+5. Click **Deploy Web Service**.
+

@@ -6,15 +6,27 @@ import type {
   CustomList,
   Recipe,
   MealPlan,
+  WeeklyMeal,
+  MealLog,
   CalendarEvent,
 } from '../types';
 
 const BASE_URL = '/api';
 
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
+  const token = localStorage.getItem('famkit_auth_token') || '';
+  const userId = localStorage.getItem('famkit_user_id') || '';
+  const householdId = localStorage.getItem('famkit_household_id') || '';
+
+  const authHeaders: Record<string, string> = {};
+  if (token) authHeaders['Authorization'] = `Bearer ${token}`;
+  if (userId) authHeaders['x-user-id'] = userId;
+  if (householdId) authHeaders['x-household-id'] = householdId;
+
   const res = await fetch(`${BASE_URL}${url}`, {
     headers: {
       'Content-Type': 'application/json',
+      ...authHeaders,
       ...options?.headers,
     },
     ...options,
@@ -28,7 +40,57 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
+const parsePositiveInt = (val: any): number | undefined => {
+  if (!val) return undefined;
+  const num = parseInt(String(val), 10);
+  return !isNaN(num) && num > 0 ? num : undefined;
+};
+
 export const api = {
+  // Authentication API
+  login: async (email: string, password: string) => {
+    return fetchJson<{ token: string; user: any; household: any }>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+  },
+
+  register: async (data: {
+    name: string;
+    email?: string;
+    password?: string;
+    avatarColor?: string;
+    role?: string;
+    action: 'create_household' | 'join_household';
+    householdName?: string;
+    inviteCode?: string;
+  }) => {
+    return fetchJson<{ token: string; user: any; household: any }>('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  getMe: async () => {
+    return fetchJson<{ user: any; household: any }>('/auth/me');
+  },
+
+  getDemoUsers: async () => {
+    return fetchJson<
+      Array<{
+        id: string;
+        name: string;
+        email: string;
+        avatar: string;
+        color: string;
+        role: string;
+        householdId: string;
+        householdName: string;
+        inviteCode: string;
+      }>
+    >('/auth/demo-users');
+  },
+
   // Households & Users (Family API)
   getHouseholds: async (): Promise<Household[]> => {
     try {
@@ -112,6 +174,12 @@ export const api = {
     };
   },
 
+  deleteUser: async (memberId: string): Promise<{ success: boolean }> => {
+    return fetchJson<{ success: boolean }>(`/family?memberId=${memberId}`, {
+      method: 'DELETE',
+    });
+  },
+
   // Aisles
   getAisles: async (householdId: string): Promise<Aisle[]> => {
     const aisles = await fetchJson<any[]>('/grocery/aisles');
@@ -156,6 +224,46 @@ export const api = {
     fetchJson<{ success: boolean }>(`/grocery/aisles?id=${id}`, { method: 'DELETE' }),
 
   // Grocery Items & Custom Lists
+  getGroceryData: async (
+    householdId: string,
+    listType: string = 'grocery'
+  ): Promise<{ items: GroceryItem[]; lists: CustomList[]; aisles: Aisle[] }> => {
+    const url = listType === 'grocery' ? '/grocery' : `/grocery?listId=${listType}`;
+    const data = await fetchJson<{ items: any[]; lists?: any[]; aisles?: any[] }>(url);
+    return {
+      items: (data.items || []).map((i) => ({
+        id: i.id,
+        household_id: i.householdId,
+        aisle_id: i.aisleId || '',
+        name: i.name,
+        quantity: i.quantity,
+        unit: i.unit,
+        notes: i.note,
+        is_completed: Boolean(i.checked),
+        added_by_user_id: i.addedById,
+        list_type: i.listId || 'grocery',
+        created_at: i.createdAt,
+        updated_at: i.createdAt,
+      })),
+      lists: (data.lists || []).map((l) => ({
+        id: l.id,
+        household_id: l.householdId,
+        title: l.name,
+        icon: l.icon || '📋',
+        color: l.color || '#10b981',
+        created_at: l.createdAt,
+      })),
+      aisles: (data.aisles || []).map((a) => ({
+        id: a.id,
+        household_id: a.householdId,
+        name: a.name,
+        color: a.color || '#10b981',
+        display_order: a.orderIndex || 0,
+        icon: a.icon,
+      })),
+    };
+  },
+
   getGroceryItems: async (householdId: string, listType: string = 'grocery'): Promise<GroceryItem[]> => {
     const url = listType === 'grocery' ? '/grocery' : `/grocery?listId=${listType}`;
     const data = await fetchJson<{ items: any[] }>(url);
@@ -276,9 +384,9 @@ export const api = {
       household_id: r.householdId,
       title: r.title,
       description: r.description,
-      prep_time_minutes: r.prepTime ? parseInt(r.prepTime) : undefined,
-      cook_time_minutes: r.cookTime ? parseInt(r.cookTime) : undefined,
-      servings: r.servings ? parseInt(r.servings) : undefined,
+      prep_time_minutes: parsePositiveInt(r.prepTime),
+      cook_time_minutes: parsePositiveInt(r.cookTime),
+      servings: parsePositiveInt(r.servings),
       source_url: r.sourceUrl,
       image_url: r.imageUrl,
       tags: typeof r.tags === 'string' ? r.tags.split(',').map((t: string) => t.trim()).filter(Boolean) : (r.tags || []),
@@ -304,10 +412,10 @@ export const api = {
   deleteRecipe: (id: string) =>
     fetchJson<{ success: boolean }>(`/recipes?id=${id}`, { method: 'DELETE' }),
 
-  importRecipeFromUrl: async (householdId: string, url: string): Promise<Recipe> => {
+  importRecipeFromUrl: async (householdId: string, url: string, apiKey?: string): Promise<Recipe> => {
     const res = await fetchJson<{ success: boolean; recipe: any }>('/recipes/import', {
       method: 'POST',
-      body: JSON.stringify({ url }),
+      body: JSON.stringify({ url, apiKey }),
     });
     const r = res.recipe;
     return {
@@ -315,9 +423,40 @@ export const api = {
       household_id: r.householdId,
       title: r.title,
       description: r.description,
-      prep_time_minutes: r.prepTime ? parseInt(r.prepTime) : undefined,
-      cook_time_minutes: r.cookTime ? parseInt(r.cookTime) : undefined,
-      servings: r.servings ? parseInt(r.servings) : undefined,
+      prep_time_minutes: parsePositiveInt(r.prepTime),
+      cook_time_minutes: parsePositiveInt(r.cookTime),
+      servings: parsePositiveInt(r.servings),
+      source_url: r.sourceUrl,
+      image_url: r.imageUrl,
+      tags: typeof r.tags === 'string' ? r.tags.split(',').map((t: string) => t.trim()).filter(Boolean) : (r.tags || []),
+      ingredients: typeof r.ingredients === 'string' ? JSON.parse(r.ingredients) : (r.ingredients || []),
+      instructions: typeof r.instructions === 'string' ? JSON.parse(r.instructions) : (r.instructions || []),
+      created_at: r.createdAt,
+    };
+  },
+
+  importRecipeFromTextOrHtml: async (
+    householdId: string,
+    data: { html?: string; rawText?: string; sourceUrl?: string; apiKey?: string }
+  ): Promise<Recipe> => {
+    const res = await fetchJson<{ success: boolean; recipe: any }>('/recipes/import', {
+      method: 'POST',
+      body: JSON.stringify({
+        html: data.html,
+        rawText: data.rawText,
+        url: data.sourceUrl,
+        apiKey: data.apiKey,
+      }),
+    });
+    const r = res.recipe;
+    return {
+      id: r.id,
+      household_id: r.householdId,
+      title: r.title,
+      description: r.description,
+      prep_time_minutes: parsePositiveInt(r.prepTime),
+      cook_time_minutes: parsePositiveInt(r.cookTime),
+      servings: parsePositiveInt(r.servings),
       source_url: r.sourceUrl,
       image_url: r.imageUrl,
       tags: typeof r.tags === 'string' ? r.tags.split(',').map((t: string) => t.trim()).filter(Boolean) : (r.tags || []),
@@ -339,6 +478,23 @@ export const api = {
       count++;
     }
     return { success: true, addedCount: count };
+  },
+
+  exportRecipeToGrocery: async (householdId: string, recipe: Recipe): Promise<{ addedCount: number }> => {
+    let count = 0;
+    if (recipe.ingredients && Array.isArray(recipe.ingredients)) {
+      for (const ing of recipe.ingredients) {
+        if (!ing.item?.trim()) continue;
+        await api.addGroceryItem(householdId, {
+          name: ing.item.trim(),
+          quantity: ing.amount,
+          unit: ing.unit,
+          notes: `From recipe: ${recipe.title}`,
+        });
+        count++;
+      }
+    }
+    return { addedCount: count };
   },
 
   // Meal Plans
@@ -390,6 +546,140 @@ export const api = {
 
   deleteMealPlan: (id: string) =>
     fetchJson<{ success: boolean }>(`/meal-planner?id=${id}`, { method: 'DELETE' }),
+
+  // Weekly Meals & Cooking Log
+  getWeeklyMeals: async (householdId: string, weekStartDate?: string): Promise<WeeklyMeal[]> => {
+    const query = weekStartDate ? `?weekStartDate=${weekStartDate}` : '';
+    const list = await fetchJson<any[]>(`/meals/week${query}`);
+    return list.map((m) => ({
+      id: m.id,
+      household_id: m.householdId,
+      title: m.title,
+      recipe_id: m.recipeId,
+      notes: m.notes,
+      is_made: Boolean(m.isMade),
+      made_date: m.madeDate,
+      week_start_date: m.weekStartDate,
+      created_at: m.createdAt || '',
+    }));
+  },
+
+  addWeeklyMeal: async (
+    householdId: string,
+    data: {
+      title: string;
+      recipe_id?: string;
+      notes?: string;
+      week_start_date?: string;
+    }
+  ): Promise<WeeklyMeal> => {
+    const res = await fetchJson<any>('/meals/week', {
+      method: 'POST',
+      body: JSON.stringify({
+        title: data.title,
+        recipeId: data.recipe_id,
+        notes: data.notes,
+        weekStartDate: data.week_start_date,
+      }),
+    });
+    return {
+      id: res.id,
+      household_id: householdId,
+      title: res.title,
+      recipe_id: res.recipeId,
+      notes: res.notes,
+      is_made: Boolean(res.isMade),
+      made_date: res.madeDate,
+      week_start_date: res.weekStartDate,
+      created_at: res.createdAt || '',
+    };
+  },
+
+  updateWeeklyMeal: async (
+    id: string,
+    data: {
+      is_made?: boolean;
+      made_date?: string;
+      title?: string;
+      notes?: string;
+    }
+  ): Promise<WeeklyMeal> => {
+    const res = await fetchJson<any>('/meals/week', {
+      method: 'PATCH',
+      body: JSON.stringify({
+        id,
+        isMade: data.is_made,
+        madeDate: data.made_date,
+        title: data.title,
+        notes: data.notes,
+      }),
+    });
+    return {
+      id: res.id,
+      household_id: res.householdId,
+      title: res.title,
+      recipe_id: res.recipeId,
+      notes: res.notes,
+      is_made: Boolean(res.isMade),
+      made_date: res.madeDate,
+      week_start_date: res.weekStartDate,
+      created_at: res.createdAt || '',
+    };
+  },
+
+  deleteWeeklyMeal: (id: string) =>
+    fetchJson<{ success: boolean }>(`/meals/week?id=${id}`, { method: 'DELETE' }),
+
+  getMealLogs: async (householdId: string): Promise<MealLog[]> => {
+    const list = await fetchJson<any[]>('/meals/log');
+    return list.map((m) => ({
+      id: m.id,
+      household_id: m.householdId,
+      title: m.title,
+      recipe_id: m.recipeId,
+      date: m.date,
+      notes: m.notes,
+      cooked_by_user_id: m.cookedByUserId,
+      created_at: m.createdAt || '',
+    }));
+  },
+
+  logMealMade: async (
+    householdId: string,
+    data: {
+      title: string;
+      date?: string;
+      recipe_id?: string;
+      notes?: string;
+      cooked_by_user_id?: string;
+      weekly_meal_id?: string;
+    }
+  ): Promise<MealLog> => {
+    const res = await fetchJson<any>('/meals/log', {
+      method: 'POST',
+      body: JSON.stringify({
+        title: data.title,
+        recipeId: data.recipe_id,
+        date: data.date,
+        notes: data.notes,
+        cookedByUserId: data.cooked_by_user_id,
+        weeklyMealId: data.weekly_meal_id,
+      }),
+    });
+    return {
+      id: res.id,
+      household_id: householdId,
+      title: res.title,
+      recipe_id: res.recipeId,
+      date: res.date,
+      notes: res.notes,
+      cooked_by_user_id: res.cookedByUserId,
+      created_at: res.createdAt || '',
+    };
+  },
+
+  deleteMealLog: (id: string) =>
+    fetchJson<{ success: boolean }>(`/meals/log?id=${id}`, { method: 'DELETE' }),
 
   exportMealPlanToGrocery: async (householdId: string, startDate: string, endDate: string) => {
     const meals = await api.getMealPlans(householdId, startDate, endDate);
@@ -472,6 +762,51 @@ export const api = {
     };
   },
 
+  updateCalendarEvent: async (
+    householdId: string,
+    id: string,
+    data: {
+      title?: string;
+      description?: string;
+      start_time?: string;
+      end_time?: string;
+      is_all_day?: boolean;
+      location?: string;
+      assigned_user_id?: string;
+    }
+  ): Promise<CalendarEvent> => {
+    const date = data.start_time ? data.start_time.split('T')[0] : undefined;
+    const startTime = data.start_time ? data.start_time.split('T')[1]?.substring(0, 5) : undefined;
+    const endTime = data.end_time ? data.end_time.split('T')[1]?.substring(0, 5) : undefined;
+
+    const res = await fetchJson<any>('/calendar', {
+      method: 'PATCH',
+      body: JSON.stringify({
+        id,
+        title: data.title,
+        description: data.description,
+        date,
+        startTime,
+        endTime,
+        location: data.location,
+        assignedMemberId: data.assigned_user_id,
+      }),
+    });
+
+    return {
+      id: res.id,
+      household_id: householdId,
+      title: res.title,
+      description: res.description,
+      start_time: data.start_time || `${res.date}T${res.startTime || '09:00'}:00`,
+      end_time: data.end_time || `${res.date}T${res.endTime || '10:00'}:00`,
+      is_all_day: Boolean(data.is_all_day),
+      location: res.location,
+      assigned_user_id: res.assignedMemberId,
+      created_at: res.createdAt,
+    };
+  },
+
   deleteCalendarEvent: (id: string) =>
     fetchJson<{ success: boolean }>(`/calendar?id=${id}`, { method: 'DELETE' }),
 
@@ -482,6 +817,12 @@ export const api = {
     userId?: string;
     imageBase64?: string;
     imageMimeType?: string;
+    apiKey?: string;
+    history?: Array<{ role: string; content: string }>;
+    clientDate?: string;
+    clientDay?: string;
+    clientTime?: string;
+    timezone?: string;
   }) => {
     const res = await fetchJson<{ message: string; actions: any[] }>('/assistant', {
       method: 'POST',
@@ -490,6 +831,12 @@ export const api = {
         imageBase64: data.imageBase64,
         imageMimeType: data.imageMimeType,
         activeMemberId: data.userId,
+        customApiKey: data.apiKey,
+        history: data.history,
+        clientDate: data.clientDate,
+        clientDay: data.clientDay,
+        clientTime: data.clientTime,
+        timezone: data.timezone,
       }),
     });
     return {
@@ -501,6 +848,14 @@ export const api = {
       })),
     };
   },
+
+  getAssistantStatus: () => fetchJson<{ configured: boolean; model: string }>('/assistant/status'),
+
+  testGeminiKey: (apiKey?: string) =>
+    fetchJson<{ success: boolean; message: string }>('/assistant/test', {
+      method: 'POST',
+      body: JSON.stringify({ apiKey }),
+    }),
 
   // Push Notifications
   getVapidPublicKey: () => fetchJson<{ publicKey: string }>('/push'),

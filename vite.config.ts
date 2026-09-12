@@ -10,8 +10,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'icons/*.png', 'icons/*.svg'],
       manifest: {
-        name: 'fam-kit - Family Organizer',
-        short_name: 'fam-kit',
+        name: 'Homebase - Family Organizer & Hub',
+        short_name: 'Homebase',
         description: 'Gemini-powered family organizer: smart categorized grocery lists, weekly meal planner, shared calendar, and AI assistant.',
         theme_color: '#10b981',
         background_color: '#080b12',

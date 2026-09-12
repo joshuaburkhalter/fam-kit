@@ -12,12 +12,28 @@ interface PWAContextType {
   isPWAInstalled: boolean;
   isPushSupported: boolean;
   isPushSubscribed: boolean;
+  apiKey: string;
+  setApiKey: (key: string) => void;
+  isLoadingAuth: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  register: (data: {
+    name: string;
+    email?: string;
+    password?: string;
+    avatarColor?: string;
+    role?: string;
+    action: 'create_household' | 'join_household';
+    householdName?: string;
+    inviteCode?: string;
+  }) => Promise<void>;
+  logout: () => void;
   installPWA: () => Promise<void>;
   subscribeToPush: () => Promise<boolean>;
-  setCurrentUser: (user: User) => void;
   setHousehold: (household: Household) => void;
   refreshHouseholdsAndUsers: () => Promise<void>;
   refreshAisles: () => Promise<void>;
+  autoAudioResponses: boolean;
+  setAutoAudioResponses: (enabled: boolean) => void;
 }
 
 const PWAContext = createContext<PWAContextType | undefined>(undefined);
@@ -27,40 +43,50 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [users, setUsers] = useState<User[]>([]);
   const [currentUser, setCurrentUserState] = useState<User | null>(null);
   const [aisles, setAisles] = useState<Aisle[]>([]);
+  const [isLoadingAuth, setIsLoadingAuth] = useState<boolean>(true);
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [canInstallPWA, setCanInstallPWA] = useState<boolean>(false);
   const [isPWAInstalled, setIsPWAInstalled] = useState<boolean>(false);
   const [isPushSupported, setIsPushSupported] = useState<boolean>(false);
   const [isPushSubscribed, setIsPushSubscribed] = useState<boolean>(false);
+  const [apiKey, setApiKeyState] = useState<string>(() => {
+    return localStorage.getItem('famkit_gemini_api_key') || '';
+  });
 
-  // Load initial household & users
+  const setApiKey = (key: string) => {
+    const trimmed = key.trim();
+    setApiKeyState(trimmed);
+    if (trimmed) {
+      localStorage.setItem('famkit_gemini_api_key', trimmed);
+    } else {
+      localStorage.removeItem('famkit_gemini_api_key');
+    }
+  };
+
+  const [autoAudioResponses, setAutoAudioResponsesState] = useState<boolean>(() => {
+    const saved = localStorage.getItem('homebase_auto_audio');
+    return saved !== null ? saved === 'true' : false;
+  });
+
+  const setAutoAudioResponses = (enabled: boolean) => {
+    setAutoAudioResponsesState(enabled);
+    localStorage.setItem('homebase_auto_audio', String(enabled));
+  };
+
+  // Load household members & aisles for active household
   const refreshHouseholdsAndUsers = async () => {
+    const activeHouseholdId = localStorage.getItem('famkit_household_id');
+    if (!activeHouseholdId) return;
+
     try {
-      const households = await api.getHouseholds();
-      if (households.length > 0) {
-        const savedHouseholdId = localStorage.getItem('famkit_household_id');
-        const activeHousehold =
-          households.find((h) => h.id === savedHouseholdId) || households[0];
-        setHouseholdState(activeHousehold);
-        localStorage.setItem('famkit_household_id', activeHousehold.id);
+      const householdUsers = await api.getUsers(activeHouseholdId);
+      setUsers(householdUsers);
 
-        const householdUsers = await api.getUsers(activeHousehold.id);
-        setUsers(householdUsers);
-
-        const savedUserId = localStorage.getItem('famkit_user_id');
-        const activeUser =
-          householdUsers.find((u) => u.id === savedUserId) || householdUsers[0] || null;
-        setCurrentUserState(activeUser);
-        if (activeUser) {
-          localStorage.setItem('famkit_user_id', activeUser.id);
-        }
-
-        const householdAisles = await api.getAisles(activeHousehold.id);
-        setAisles(householdAisles);
-      }
+      const householdAisles = await api.getAisles(activeHouseholdId);
+      setAisles(householdAisles);
     } catch (err) {
-      console.error('Failed to load initial data:', err);
+      console.error('Failed to load household data:', err);
     }
   };
 
@@ -81,13 +107,97 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     refreshHouseholdsAndUsers();
   };
 
-  const setCurrentUser = (u: User) => {
-    setCurrentUserState(u);
-    localStorage.setItem('famkit_user_id', u.id);
+  const login = async (email: string, password: string) => {
+    const res = await api.login(email, password);
+    localStorage.setItem('famkit_auth_token', res.token);
+    localStorage.setItem('famkit_user_id', res.user.id);
+    localStorage.setItem('famkit_household_id', res.household.id);
+
+    setCurrentUserState(res.user);
+    setHouseholdState(res.household);
+
+    try {
+      const [householdUsers, householdAisles] = await Promise.all([
+        api.getUsers(res.household.id),
+        api.getAisles(res.household.id),
+      ]);
+      setUsers(householdUsers);
+      setAisles(householdAisles);
+    } catch (e) {
+      console.error('Error fetching household data on login:', e);
+    }
   };
 
+  const register = async (data: {
+    name: string;
+    email?: string;
+    password?: string;
+    avatarColor?: string;
+    role?: string;
+    action: 'create_household' | 'join_household';
+    householdName?: string;
+    inviteCode?: string;
+  }) => {
+    const res = await api.register(data);
+    localStorage.setItem('famkit_auth_token', res.token);
+    localStorage.setItem('famkit_user_id', res.user.id);
+    localStorage.setItem('famkit_household_id', res.household.id);
+
+    setCurrentUserState(res.user);
+    setHouseholdState(res.household);
+
+    try {
+      const [householdUsers, householdAisles] = await Promise.all([
+        api.getUsers(res.household.id),
+        api.getAisles(res.household.id),
+      ]);
+      setUsers(householdUsers);
+      setAisles(householdAisles);
+    } catch (e) {
+      console.error('Error fetching household data on register:', e);
+    }
+  };
+
+  const logout = () => {
+    localStorage.removeItem('famkit_auth_token');
+    localStorage.removeItem('famkit_user_id');
+    localStorage.removeItem('famkit_household_id');
+    setCurrentUserState(null);
+    setHouseholdState(null);
+    setUsers([]);
+    setAisles([]);
+  };
+
+  // Auth Rehydration on mount
   useEffect(() => {
-    refreshHouseholdsAndUsers();
+    const initAuth = async () => {
+      const savedToken = localStorage.getItem('famkit_auth_token');
+      if (savedToken) {
+        try {
+          const { user, household: h } = await api.getMe();
+          if (user && h) {
+            setCurrentUserState(user);
+            setHouseholdState(h);
+            localStorage.setItem('famkit_user_id', user.id);
+            localStorage.setItem('famkit_household_id', h.id);
+
+            const [householdUsers, householdAisles] = await Promise.all([
+              api.getUsers(h.id),
+              api.getAisles(h.id),
+            ]);
+            setUsers(householdUsers);
+            setAisles(householdAisles);
+          } else {
+            logout();
+          }
+        } catch {
+          logout();
+        }
+      }
+      setIsLoadingAuth(false);
+    };
+
+    initAuth();
 
     // Online / Offline tracking
     const handleOnline = () => setIsOnline(true);
@@ -188,12 +298,19 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isPWAInstalled,
         isPushSupported,
         isPushSubscribed,
+        apiKey,
+        setApiKey,
+        isLoadingAuth,
+        login,
+        register,
+        logout,
         installPWA,
         subscribeToPush,
-        setCurrentUser,
         setHousehold,
         refreshHouseholdsAndUsers,
         refreshAisles,
+        autoAudioResponses,
+        setAutoAudioResponses,
       }}
     >
       {children}
