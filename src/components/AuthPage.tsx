@@ -32,12 +32,13 @@ export const AuthPage: React.FC = () => {
   const [tab, setTab] = useState<'login' | 'register'>('login');
 
   // Sign in state
-  const [loginEmail, setLoginEmail] = useState('');
+  const [loginIdentifier, setLoginIdentifier] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [showLoginPassword, setShowLoginPassword] = useState(false);
 
   // Register state
-  const [registerName, setRegisterName] = useState('');
+  const [registerUsername, setRegisterUsername] = useState('');
+  const [registerDisplayName, setRegisterDisplayName] = useState('');
   const [registerEmail, setRegisterEmail] = useState('');
   const [registerPassword, setRegisterPassword] = useState('');
   const [showRegisterPassword, setShowRegisterPassword] = useState(false);
@@ -53,12 +54,12 @@ export const AuthPage: React.FC = () => {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!loginEmail.trim() || !loginPassword) return;
+    if (!loginIdentifier.trim() || !loginPassword) return;
 
     setIsLoading(true);
     setErrorMessage(null);
     try {
-      await login(loginEmail.trim(), loginPassword);
+      await login(loginIdentifier.trim(), loginPassword);
     } catch (err: any) {
       setErrorMessage(err.message || 'Login failed. Please check your credentials.');
     } finally {
@@ -68,7 +69,21 @@ export const AuthPage: React.FC = () => {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!registerName.trim()) return;
+    const cleanUser = registerUsername.trim().toLowerCase().replace(/\s+/g, '');
+    if (!cleanUser) {
+      setErrorMessage('Please choose a username.');
+      return;
+    }
+
+    if (cleanUser.length < 3) {
+      setErrorMessage('Username must be at least 3 characters long.');
+      return;
+    }
+
+    if (!/^[a-z0-9_-]+$/.test(cleanUser)) {
+      setErrorMessage('Username can only contain letters, numbers, underscores, and hyphens (no spaces).');
+      return;
+    }
 
     if (householdAction === 'create_household' && !newHouseholdName.trim()) {
       setErrorMessage('Please enter a name for your new household.');
@@ -84,7 +99,8 @@ export const AuthPage: React.FC = () => {
     setErrorMessage(null);
     try {
       await register({
-        name: registerName.trim(),
+        username: cleanUser,
+        name: registerDisplayName.trim() || cleanUser,
         email: registerEmail.trim() || undefined,
         password: registerPassword || 'password123',
         avatarColor: registerColor,
@@ -171,16 +187,16 @@ export const AuthPage: React.FC = () => {
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
                 <label className="text-xs font-semibold text-slate-300 block mb-1.5">
-                  Email or Name
+                  Username or Email
                 </label>
                 <div className="relative">
-                  <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <User className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
                     required
-                    value={loginEmail}
-                    onChange={(e) => setLoginEmail(e.target.value)}
-                    placeholder="e.g. alex@family.com or Alex"
+                    value={loginIdentifier}
+                    onChange={(e) => setLoginIdentifier(e.target.value)}
+                    placeholder="e.g. joshuaburkhalter or alex@family.com"
                     className="w-full bg-slate-900/90 border border-white/10 rounded-2xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
                   />
                 </div>
@@ -230,18 +246,23 @@ export const AuthPage: React.FC = () => {
             /* CREATE ACCOUNT FORM */
             <form onSubmit={handleRegister} className="space-y-4">
               <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-1">
-                  Your Full Name
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-semibold text-slate-300 block">
+                    Username
+                  </label>
+                  <span className="text-[10px] text-slate-500">Used to sign in (no spaces)</span>
+                </div>
                 <div className="relative">
-                  <User className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <span className="text-sm font-bold text-emerald-400 absolute left-3.5 top-1/2 -translate-y-1/2 select-none">
+                    @
+                  </span>
                   <input
                     type="text"
                     required
-                    value={registerName}
-                    onChange={(e) => setRegisterName(e.target.value)}
-                    placeholder="e.g. Maya Miller"
-                    className="w-full bg-slate-900/90 border border-white/10 rounded-2xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                    value={registerUsername}
+                    onChange={(e) => setRegisterUsername(e.target.value.toLowerCase().replace(/\s+/g, ''))}
+                    placeholder="e.g. joshuaburkhalter"
+                    className="w-full bg-slate-900/90 border border-white/10 rounded-2xl pl-8 pr-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono"
                   />
                 </div>
               </div>
@@ -249,31 +270,50 @@ export const AuthPage: React.FC = () => {
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-xs font-semibold text-slate-300 block mb-1">
-                    Email or Username
+                    Display Name
                   </label>
-                  <input
-                    type="text"
-                    value={registerEmail}
-                    onChange={(e) => setRegisterEmail(e.target.value)}
-                    placeholder="maya@miller.com"
-                    className="w-full bg-slate-900/90 border border-white/10 rounded-2xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-                  />
+                  <div className="relative">
+                    <User className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={registerDisplayName}
+                      onChange={(e) => setRegisterDisplayName(e.target.value)}
+                      placeholder="e.g. Maya or Dad"
+                      className="w-full bg-slate-900/90 border border-white/10 rounded-2xl pl-8 pr-3 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                    />
+                  </div>
                 </div>
 
                 <div>
                   <label className="text-xs font-semibold text-slate-300 block mb-1">
-                    Role in Family
+                    Email <span className="text-[10px] text-slate-500">(Optional)</span>
                   </label>
-                  <select
-                    value={registerRole}
-                    onChange={(e) => setRegisterRole(e.target.value)}
-                    className="w-full bg-slate-900/90 border border-white/10 rounded-2xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-                  >
-                    <option value="Parent">Parent</option>
-                    <option value="Child">Child</option>
-                    <option value="Member">Member</option>
-                  </select>
+                  <div className="relative">
+                    <Mail className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="email"
+                      value={registerEmail}
+                      onChange={(e) => setRegisterEmail(e.target.value)}
+                      placeholder="maya@miller.com"
+                      className="w-full bg-slate-900/90 border border-white/10 rounded-2xl pl-8 pr-3 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                    />
+                  </div>
                 </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1">
+                  Role in Family
+                </label>
+                <select
+                  value={registerRole}
+                  onChange={(e) => setRegisterRole(e.target.value)}
+                  className="w-full bg-slate-900/90 border border-white/10 rounded-2xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                >
+                  <option value="Parent">Parent</option>
+                  <option value="Child">Child</option>
+                  <option value="Member">Member</option>
+                </select>
               </div>
 
               <div>

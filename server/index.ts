@@ -29,8 +29,8 @@ function getAuthUser(req: express.Request) {
     userId = authHeader.substring(7).trim();
   }
   if (!userId || userId === 'undefined') return null;
-  return queryOne<{ id: string; name: string; email: string; avatar: string; color: string; role: string; householdId: string }>(
-    'SELECT id, name, email, avatar, color, role, householdId FROM users WHERE id = ?',
+  return queryOne<{ id: string; name: string; username: string; email: string; avatar: string; color: string; role: string; householdId: string }>(
+    'SELECT id, name, username, email, avatar, color, role, householdId FROM users WHERE id = ?',
     [userId]
   );
 }
@@ -51,25 +51,25 @@ function getHouseholdId(req: express.Request): string {
 
 // 0. Auth: Login
 app.post('/api/auth/login', (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Email or name and password are required.' });
+  const { identifier, username, email, password } = req.body;
+  const loginInput = (identifier || username || email || '').trim();
+
+  if (!loginInput || !password) {
+    return res.status(400).json({ error: 'Username or email and password are required.' });
   }
 
-  const cleanLogin = email.trim().toLowerCase();
-  const cleanNoSpace = cleanLogin.replace(/\s+/g, '');
-  const user = queryOne<{ id: string; name: string; email: string; password: string; avatar: string; color: string; role: string; householdId: string }>(
+  const cleanLogin = loginInput.toLowerCase();
+  // Strictly match username OR email. No full name guessing!
+  const user = queryOne<{ id: string; name: string; username: string; email: string; password: string; avatar: string; color: string; role: string; householdId: string }>(
     `SELECT * FROM users 
-     WHERE LOWER(email) = ? 
-        OR LOWER(name) = ? 
-        OR REPLACE(LOWER(name), ' ', '') = ?
-        OR (INSTR(email, '@') > 0 AND LOWER(SUBSTR(email, 1, INSTR(email, '@') - 1)) = ?)
+     WHERE LOWER(username) = ? 
+        OR LOWER(email) = ?
      ORDER BY CASE WHEN id LIKE 'u_%' THEN 1 ELSE 2 END, id DESC`,
-    [cleanLogin, cleanLogin, cleanNoSpace, cleanNoSpace]
+    [cleanLogin, cleanLogin]
   );
 
   if (!user) {
-    return res.status(401).json({ error: 'No account found with that email or name.' });
+    return res.status(401).json({ error: 'No account found with that username or email.' });
   }
 
   if (user.password && user.password !== password.trim() && user.password !== 'password123') {
@@ -80,6 +80,7 @@ app.post('/api/auth/login', (req, res) => {
   const safeUser = {
     id: user.id,
     name: user.name,
+    username: user.username,
     email: user.email,
     avatar: user.avatar,
     color: user.color,
@@ -96,12 +97,38 @@ app.post('/api/auth/login', (req, res) => {
 
 // 0. Auth: Register (New family or join family)
 app.post('/api/auth/register', (req, res) => {
-  const { name, email, password, avatarColor, role, action, householdName, inviteCode } = req.body;
+  const { username, name, email, password, avatarColor, role, action, householdName, inviteCode } = req.body;
 
-  if (!name || !name.trim()) {
-    return res.status(400).json({ error: 'Name is required.' });
+  const rawUsername = (username || '').trim().toLowerCase();
+  if (!rawUsername) {
+    return res.status(400).json({ error: 'Username is required.' });
   }
 
+  const cleanUsername = rawUsername.replace(/\s+/g, '');
+  if (cleanUsername.length < 3) {
+    return res.status(400).json({ error: 'Username must be at least 3 characters long.' });
+  }
+
+  if (!/^[a-z0-9_-]+$/.test(cleanUsername)) {
+    return res.status(400).json({ error: 'Username can only contain letters, numbers, underscores, and hyphens.' });
+  }
+
+  // Check if username already exists
+  const existingUsername = queryOne<{ id: string }>('SELECT id FROM users WHERE LOWER(username) = ?', [cleanUsername]);
+  if (existingUsername) {
+    return res.status(400).json({ error: 'Username is already taken. Please choose another.' });
+  }
+
+  // Check email uniqueness if email provided
+  const cleanEmail = email?.trim().toLowerCase() || null;
+  if (cleanEmail) {
+    const existingEmail = queryOne<{ id: string }>('SELECT id FROM users WHERE LOWER(email) = ?', [cleanEmail]);
+    if (existingEmail) {
+      return res.status(400).json({ error: 'An account with that email already exists.' });
+    }
+  }
+
+  const displayName = (name && name.trim()) || cleanUsername;
   const userPassword = password?.trim() || 'password123';
   let targetHouseholdId: string;
   const now = new Date().toISOString();
@@ -138,15 +165,16 @@ app.post('/api/auth/register', (req, res) => {
 
   const userId = `u_${Date.now()}`;
   execute(
-    'INSERT INTO users (id, name, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-    [userId, name.trim(), email?.trim() || null, '👤', avatarColor || '#10b981', role || 'Member', targetHouseholdId, userPassword]
+    'INSERT INTO users (id, name, username, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [userId, displayName, cleanUsername, cleanEmail, '👤', avatarColor || '#10b981', role || 'Member', targetHouseholdId, userPassword]
   );
 
   const household = queryOne('SELECT * FROM households WHERE id = ?', [targetHouseholdId]);
   const user = {
     id: userId,
-    name: name.trim(),
-    email: email?.trim() || null,
+    name: displayName,
+    username: cleanUsername,
+    email: cleanEmail,
     avatar: '👤',
     color: avatarColor || '#10b981',
     role: role || 'Member',
@@ -173,8 +201,8 @@ app.get('/api/auth/me', (req, res) => {
 
 // 0. Auth: Demo Users across Households
 app.get('/api/auth/demo-users', (_req, res) => {
-  const demoUsers = queryAll<{ id: string; name: string; email: string; avatar: string; color: string; role: string; householdId: string }>(
-    'SELECT id, name, email, avatar, color, role, householdId FROM users WHERE email IS NOT NULL'
+  const demoUsers = queryAll<{ id: string; name: string; username: string; email: string; avatar: string; color: string; role: string; householdId: string }>(
+    'SELECT id, name, username, email, avatar, color, role, householdId FROM users WHERE email IS NOT NULL'
   );
   const households = queryAll<{ id: string; name: string; inviteCode: string }>('SELECT * FROM households');
 
@@ -1222,7 +1250,21 @@ app.get('/api/family', (req, res) => {
 
 app.post('/api/family', (req, res) => {
   const householdId = getHouseholdId(req);
-  const { action, inviteCode, name, avatar, color, role } = req.body;
+  const { action, inviteCode, name, username, avatar, color, role } = req.body;
+
+  const sanitizeHandle = (raw: string) => {
+    let handle = (raw || '').toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9_-]/g, '');
+    if (!handle) handle = `member_${Date.now().toString().slice(-4)}`;
+    let candidate = handle;
+    let counter = 1;
+    while (true) {
+      const check = queryOne<{ id: string }>('SELECT id FROM users WHERE LOWER(username) = ?', [candidate]);
+      if (!check) break;
+      counter++;
+      candidate = `${handle}${counter}`;
+    }
+    return candidate;
+  };
 
   if (action === 'join_with_code' && inviteCode) {
     const found = queryOne<{ id: string }>('SELECT id FROM households WHERE inviteCode = ?', [inviteCode.trim().toUpperCase()]);
@@ -1230,9 +1272,10 @@ app.post('/api/family', (req, res) => {
 
     if (name) {
       const uId = `u_${Date.now()}`;
+      const cleanUsername = sanitizeHandle(username || name);
       execute(
-        'INSERT INTO users (id, name, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        [uId, name, null, avatar || '👤', color || '#10b981', role || 'Member', found.id, 'password123']
+        'INSERT INTO users (id, name, username, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [uId, name.trim(), cleanUsername, null, avatar || '👤', color || '#10b981', role || 'Member', found.id, 'password123']
       );
     }
     const h = queryOne('SELECT * FROM households WHERE id = ?', [found.id]);
@@ -1242,11 +1285,12 @@ app.post('/api/family', (req, res) => {
 
   if (name) {
     const uId = `u_${Date.now()}`;
+    const cleanUsername = sanitizeHandle(username || name);
     execute(
-      'INSERT INTO users (id, name, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [uId, name, null, avatar || '👤', color || '#10b981', role || 'Member', householdId, 'password123']
+      'INSERT INTO users (id, name, username, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [uId, name.trim(), cleanUsername, null, avatar || '👤', color || '#10b981', role || 'Member', householdId, 'password123']
     );
-    return res.json({ id: uId, name, avatar: avatar || '👤', role: role || 'Member', color: color || '#10b981' });
+    return res.json({ id: uId, name: name.trim(), username: cleanUsername, avatar: avatar || '👤', role: role || 'Member', color: color || '#10b981' });
   }
 
   res.status(400).json({ error: 'Invalid request' });

@@ -213,7 +213,12 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
                     <p className="text-xs font-bold text-white truncate">
                       {currentUser?.name}
                     </p>
-                    <p className="text-[11px] text-slate-400 truncate">
+                    {currentUser?.username && (
+                      <p className="text-[11px] font-mono text-emerald-400 truncate">
+                        @{currentUser.username}
+                      </p>
+                    )}
+                    <p className="text-[10px] text-slate-400 truncate">
                       {currentUser?.email || (household?.name ? `${household.name}` : 'Family Member')}
                     </p>
                     <span className="inline-block mt-0.5 text-[9px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300">

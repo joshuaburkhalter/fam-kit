@@ -48,15 +48,16 @@ const parsePositiveInt = (val: any): number | undefined => {
 
 export const api = {
   // Authentication API
-  login: async (email: string, password: string) => {
+  login: async (identifier: string, password: string) => {
     return fetchJson<{ token: string; user: any; household: any }>('/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ identifier, username: identifier, email: identifier, password }),
     });
   },
 
   register: async (data: {
-    name: string;
+    username: string;
+    name?: string;
     email?: string;
     password?: string;
     avatarColor?: string;
@@ -80,6 +81,7 @@ export const api = {
       Array<{
         id: string;
         name: string;
+        username: string;
         email: string;
         avatar: string;
         color: string;
@@ -151,6 +153,8 @@ export const api = {
         id: m.id,
         household_id: m.householdId,
         name: m.name,
+        username: m.username,
+        email: m.email || undefined,
         avatar_color: m.color || '#10b981',
         role: (m.role?.toLowerCase() as any) || 'member',
         created_at: '',
@@ -159,15 +163,17 @@ export const api = {
     return [];
   },
 
-  createUser: async (householdId: string, name: string, avatarColor?: string, role?: string): Promise<User> => {
+  createUser: async (householdId: string, name: string, avatarColor?: string, role?: string, username?: string): Promise<User> => {
     const res = await fetchJson<any>('/family', {
       method: 'POST',
-      body: JSON.stringify({ name, color: avatarColor, role }),
+      body: JSON.stringify({ name, username, color: avatarColor, role }),
     });
     return {
       id: res.id,
       household_id: householdId,
       name: res.name,
+      username: res.username,
+      email: res.email || undefined,
       avatar_color: res.color,
       role: (res.role?.toLowerCase() as any) || 'member',
       created_at: '',

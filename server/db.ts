@@ -53,6 +53,7 @@ function initSchema(db: Database) {
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
+      username TEXT UNIQUE,
       email TEXT,
       avatar TEXT NOT NULL DEFAULT '👤',
       color TEXT NOT NULL DEFAULT '#10b981',
@@ -204,6 +205,52 @@ function initSchema(db: Database) {
     db.run(`UPDATE users SET password = 'password123' WHERE password IS NULL OR password = ''`);
   } catch {}
 
+  // Username column migration & backfill
+  try {
+    db.run(`ALTER TABLE users ADD COLUMN username TEXT`);
+  } catch {}
+  try {
+    db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users (username)`);
+  } catch {}
+
+  try {
+    // Backfill known primary users
+    db.run(`UPDATE users SET username = 'joshuaburkhalter' WHERE id = 'u_1788884573046' AND (username IS NULL OR username = '')`);
+    db.run(`UPDATE users SET username = 'joshua' WHERE id = 'u1' AND (username IS NULL OR username = '')`);
+    db.run(`UPDATE users SET username = 'sarah' WHERE id = 'u2' AND (username IS NULL OR username = '')`);
+    db.run(`UPDATE users SET username = 'leo' WHERE id = 'u3' AND (username IS NULL OR username = '')`);
+    db.run(`UPDATE users SET username = 'emma' WHERE id = 'u4' AND (username IS NULL OR username = '')`);
+    db.run(`UPDATE users SET username = 'alex' WHERE id = 'u5' AND (username IS NULL OR username = '')`);
+    db.run(`UPDATE users SET username = 'jamie' WHERE id = 'u6' AND (username IS NULL OR username = '')`);
+
+    // Generic backfill for any other users
+    const usersWithoutUsername = db.exec("SELECT id, name, email FROM users WHERE username IS NULL OR username = ''");
+    if (usersWithoutUsername.length > 0 && usersWithoutUsername[0].values) {
+      for (const row of usersWithoutUsername[0].values) {
+        const id = String(row[0]);
+        const name = String(row[1] || 'user');
+        const email = row[2] ? String(row[2]) : '';
+        let base = email && email.includes('@')
+          ? email.split('@')[0].toLowerCase().replace(/[^a-z0-9_]/g, '')
+          : name.toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9_]/g, '');
+        if (!base) base = `user_${id.slice(-4)}`;
+
+        let candidate = base;
+        let counter = 1;
+        while (true) {
+          const check = db.exec(`SELECT COUNT(*) FROM users WHERE username = '${candidate}' AND id != '${id}'`);
+          const existingCount = (check[0]?.values[0]?.[0] as number) || 0;
+          if (existingCount === 0) break;
+          counter++;
+          candidate = `${base}${counter}`;
+        }
+        db.run(`UPDATE users SET username = ? WHERE id = ?`, [candidate, id]);
+      }
+    }
+  } catch (err) {
+    console.error('Error backfilling usernames:', err);
+  }
+
   // Check if seeded
   const check = db.exec('SELECT COUNT(*) as count FROM households');
   const count = (check[0]?.values[0]?.[0] as number) || 0;
@@ -253,10 +300,10 @@ function seedDemoData(db: Database) {
 
   db.run(`INSERT INTO households VALUES (?, ?, ?, ?)`, [householdId, 'The Burkhalter Family', 'FAMKIT', now]);
 
-  db.run(`INSERT INTO users (id, name, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, ['u1', 'Joshua', 'joshua@redpointaudio.com', '👨‍💻', '#10b981', 'Parent', householdId, 'password123']);
-  db.run(`INSERT INTO users (id, name, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, ['u2', 'Sarah', 'sarah@famkit.app', '👩‍🏫', '#ec4899', 'Parent', householdId, 'password123']);
-  db.run(`INSERT INTO users (id, name, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, ['u3', 'Leo', 'leo@famkit.app', '👦', '#f59e0b', 'Kid', householdId, 'password123']);
-  db.run(`INSERT INTO users (id, name, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, ['u4', 'Emma', 'emma@famkit.app', '👧', '#06b6d4', 'Kid', householdId, 'password123']);
+  db.run(`INSERT INTO users (id, name, username, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, ['u1', 'Joshua', 'joshua', 'joshua@redpointaudio.com', '👨‍💻', '#10b981', 'Parent', householdId, 'password123']);
+  db.run(`INSERT INTO users (id, name, username, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, ['u2', 'Sarah', 'sarah', 'sarah@famkit.app', '👩‍🏫', '#ec4899', 'Parent', householdId, 'password123']);
+  db.run(`INSERT INTO users (id, name, username, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, ['u3', 'Leo', 'leo', 'leo@famkit.app', '👦', '#f59e0b', 'Kid', householdId, 'password123']);
+  db.run(`INSERT INTO users (id, name, username, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, ['u4', 'Emma', 'emma', 'emma@famkit.app', '👧', '#06b6d4', 'Kid', householdId, 'password123']);
 
   createDefaultAisles(householdId, db);
   seedMillerFamily(db);
@@ -387,8 +434,8 @@ function seedMillerFamily(db: Database) {
 
   db.run(`INSERT OR IGNORE INTO households VALUES (?, ?, ?, ?)`, [householdId, 'The Miller Family', 'MILLER', now]);
 
-  db.run(`INSERT OR IGNORE INTO users (id, name, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, ['u5', 'Alex Miller', 'alex@miller.com', '👨‍💼', '#3b82f6', 'Parent', householdId, 'password123']);
-  db.run(`INSERT OR IGNORE INTO users (id, name, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, ['u6', 'Jamie Miller', 'jamie@miller.com', '👩‍🔬', '#8b5cf6', 'Parent', householdId, 'password123']);
+  db.run(`INSERT OR IGNORE INTO users (id, name, username, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, ['u5', 'Alex Miller', 'alex', 'alex@miller.com', '👨‍💼', '#3b82f6', 'Parent', householdId, 'password123']);
+  db.run(`INSERT OR IGNORE INTO users (id, name, username, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, ['u6', 'Jamie Miller', 'jamie', 'jamie@miller.com', '👩‍🔬', '#8b5cf6', 'Parent', householdId, 'password123']);
 
   createDefaultAisles(householdId, db);
 

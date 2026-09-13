@@ -25,6 +25,7 @@ export const FamilyPage: React.FC = () => {
   const { household, users, currentUser, refreshHouseholdsAndUsers } =
     usePWA();
   const [newMemberName, setNewMemberName] = useState('');
+  const [newMemberUsername, setNewMemberUsername] = useState('');
   const [newMemberRole, setNewMemberRole] = useState<'parent' | 'child' | 'member'>('member');
   const [newMemberColor, setNewMemberColor] = useState(AVATAR_COLORS[0]);
   const [joinInviteCode, setJoinInviteCode] = useState('');
@@ -70,9 +71,11 @@ export const FamilyPage: React.FC = () => {
         household.id,
         newMemberName.trim(),
         newMemberColor,
-        newMemberRole
+        newMemberRole,
+        newMemberUsername.trim() || undefined
       );
       setNewMemberName('');
+      setNewMemberUsername('');
       await refreshHouseholdsAndUsers();
       setFeedback('Family member added successfully!');
       setTimeout(() => setFeedback(null), 3000);
@@ -208,9 +211,17 @@ export const FamilyPage: React.FC = () => {
                         </span>
                       )}
                     </h4>
-                    <span className="text-[11px] text-slate-400 capitalize">
-                      {u.role || 'Member'}
-                    </span>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      {u.username && (
+                        <span className="text-[11px] font-mono font-semibold text-emerald-400">
+                          @{u.username}
+                        </span>
+                      )}
+                      {u.username && <span className="text-slate-600 text-xs">•</span>}
+                      <span className="text-[11px] text-slate-400 capitalize">
+                        {u.role || 'Member'}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
@@ -250,16 +261,36 @@ export const FamilyPage: React.FC = () => {
           </h3>
 
           <form onSubmit={handleAddMember} className="space-y-3">
-            <div>
-              <label className="text-xs font-semibold text-slate-300 block mb-1">Name</label>
-              <input
-                type="text"
-                required
-                placeholder="e.g. Maya, Leo, Grandpa Joe..."
-                value={newMemberName}
-                onChange={(e) => setNewMemberName(e.target.value)}
-                className="w-full bg-slate-900 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
-              />
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1">Name</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Maya, Grandpa Joe"
+                  value={newMemberName}
+                  onChange={(e) => setNewMemberName(e.target.value)}
+                  className="w-full bg-slate-900 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1">
+                  Username <span className="text-[10px] text-slate-500">(Optional)</span>
+                </label>
+                <div className="relative">
+                  <span className="text-xs font-bold text-emerald-400 absolute left-2.5 top-1/2 -translate-y-1/2 select-none">
+                    @
+                  </span>
+                  <input
+                    type="text"
+                    placeholder={newMemberName ? newMemberName.toLowerCase().replace(/\s+/g, '') : "e.g. maya"}
+                    value={newMemberUsername}
+                    onChange={(e) => setNewMemberUsername(e.target.value.toLowerCase().replace(/\s+/g, ''))}
+                    className="w-full bg-slate-900 border border-white/10 rounded-xl pl-6 pr-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
+                  />
+                </div>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-2">

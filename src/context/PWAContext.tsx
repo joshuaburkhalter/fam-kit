@@ -15,9 +15,10 @@ interface PWAContextType {
   apiKey: string;
   setApiKey: (key: string) => void;
   isLoadingAuth: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (identifier: string, password: string) => Promise<void>;
   register: (data: {
-    name: string;
+    username: string;
+    name?: string;
     email?: string;
     password?: string;
     avatarColor?: string;
@@ -107,8 +108,8 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     refreshHouseholdsAndUsers();
   };
 
-  const login = async (email: string, password: string) => {
-    const res = await api.login(email, password);
+  const login = async (identifier: string, password: string) => {
+    const res = await api.login(identifier, password);
     localStorage.setItem('famkit_auth_token', res.token);
     localStorage.setItem('famkit_user_id', res.user.id);
     localStorage.setItem('famkit_household_id', res.household.id);
@@ -129,7 +130,8 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const register = async (data: {
-    name: string;
+    username: string;
+    name?: string;
     email?: string;
     password?: string;
     avatarColor?: string;

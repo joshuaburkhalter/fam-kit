@@ -9,6 +9,7 @@ export interface User {
   id: string;
   household_id: string;
   name: string;
+  username?: string;
   email?: string;
   avatar_color: string;
   role: 'parent' | 'child' | 'member';

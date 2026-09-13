@@ -51,7 +51,7 @@ export const AppContent: React.FC = () => {
         {activeTab === 'recipes' && <RecipesPage />}
         {activeTab === 'calendar' && <CalendarPage />}
         {activeTab === 'family' && <FamilyPage />}
-        {activeTab === 'settings' && <SettingsPage />}
+        {activeTab === 'settings' && <SettingsPage onNavigateToFamily={() => setActiveTab('family')} />}
       </main>
 
       <MobileNav activeTab={activeTab} setActiveTab={setActiveTab} />
