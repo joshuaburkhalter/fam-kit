@@ -11,17 +11,31 @@ import {
   VolumeX,
   MoveVertical,
   Users,
-  ArrowRight,
+  KeyRound,
+  Copy,
+  Plus,
+  Trash2,
+  LogIn,
+  UserCheck,
+  Edit3,
 } from 'lucide-react';
 import { usePWA } from '../context/PWAContext';
 import { api } from '../lib/api';
 import { AisleManagerModal } from '../components/AisleManagerModal';
+import { EditProfileModal } from '../components/EditProfileModal';
+import type { User } from '../types';
 
-interface SettingsPageProps {
-  onNavigateToFamily?: () => void;
-}
+const AVATAR_COLORS = [
+  '#10b981', // Emerald
+  '#3b82f6', // Blue
+  '#ec4899', // Pink
+  '#f59e0b', // Amber
+  '#8b5cf6', // Purple
+  '#06b6d4', // Cyan
+  '#ef4444', // Red
+];
 
-export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigateToFamily }) => {
+export const SettingsPage: React.FC = () => {
   const {
     household,
     users,
@@ -36,25 +50,56 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigateToFamily }
     setAutoAudioResponses,
     aisles,
     refreshAisles,
+    refreshHouseholdsAndUsers,
   } = usePWA();
 
+  // Modals & Panels
   const [isAisleModalOpen, setIsAisleModalOpen] = useState(false);
+  const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
+  const [showAddMemberModal, setShowAddMemberModal] = useState(false);
+  const [showJoinModal, setShowJoinModal] = useState(false);
+  const [memberToDelete, setMemberToDelete] = useState<User | null>(null);
+
+  // Status & Actions
+  const [copiedInvite, setCopiedInvite] = useState(false);
   const [isSubscribingPush, setIsSubscribingPush] = useState(false);
   const [isSendingTestPush, setIsSendingTestPush] = useState(false);
-  const [pushStatusMessage, setPushStatusMessage] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [isDeletingMember, setIsDeletingMember] = useState(false);
 
-  const handlePushToggle = async () => {
+  // Form states for Add Member
+  const [newMemberName, setNewMemberName] = useState('');
+  const [newMemberUsername, setNewMemberUsername] = useState('');
+  const [newMemberRole, setNewMemberRole] = useState<'parent' | 'child' | 'member'>('member');
+  const [newMemberColor, setNewMemberColor] = useState(AVATAR_COLORS[0]);
+  const [isAddingMember, setIsAddingMember] = useState(false);
+
+  // Form states for Join Household
+  const [joinCode, setJoinCode] = useState('');
+  const [joinName, setJoinName] = useState('');
+  const [isJoining, setIsJoining] = useState(false);
+
+  const inviteCode = household?.invite_code || (household as any)?.inviteCode || '';
+
+  const handleCopyInvite = () => {
+    if (inviteCode) {
+      navigator.clipboard.writeText(inviteCode);
+      setCopiedInvite(true);
+      setTimeout(() => setCopiedInvite(false), 2000);
+    }
+  };
+
+  const handlePushToggle = async (enable: boolean) => {
+    if (!enable) return;
     setIsSubscribingPush(true);
-    setPushStatusMessage(null);
     try {
       const success = await subscribeToPush();
       if (success) {
-        setPushStatusMessage('Push notifications successfully enabled!');
-      } else {
-        setPushStatusMessage('Failed to subscribe or permission denied.');
+        setStatusMessage('Push notifications enabled for this device!');
+        setTimeout(() => setStatusMessage(null), 3500);
       }
     } catch (err: any) {
-      setPushStatusMessage(`Error: ${err.message || 'Push subscription failed'}`);
+      console.error('Push error:', err);
     } finally {
       setIsSubscribingPush(false);
     }
@@ -66,291 +111,669 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigateToFamily }
     try {
       await api.sendTestPush(
         household.id,
-        'Homebase Grocery Alert 🛒',
-        'Someone just added organic strawberries to the grocery list!'
+        'Homebase Alert 🛒',
+        'Push notifications are working smoothly on your device!'
       );
-      setPushStatusMessage('Test push notification sent to all household devices!');
-      setTimeout(() => setPushStatusMessage(null), 4000);
+      setStatusMessage('Test notification sent!');
+      setTimeout(() => setStatusMessage(null), 3000);
     } catch (err: any) {
       console.error('Test push error:', err);
-      setPushStatusMessage(`Failed to send test push: ${err.message}`);
     } finally {
       setIsSendingTestPush(false);
     }
   };
 
+  const handleAddMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!household || !newMemberName.trim()) return;
+
+    try {
+      setIsAddingMember(true);
+      await api.createUser(
+        household.id,
+        newMemberName.trim(),
+        newMemberColor,
+        newMemberRole,
+        newMemberUsername.trim() || undefined
+      );
+      setNewMemberName('');
+      setNewMemberUsername('');
+      setShowAddMemberModal(false);
+      await refreshHouseholdsAndUsers();
+      setStatusMessage('New family member added!');
+      setTimeout(() => setStatusMessage(null), 3000);
+    } catch (err: any) {
+      console.error('Failed to add member:', err);
+      alert(err.message || 'Failed to add member');
+    } finally {
+      setIsAddingMember(false);
+    }
+  };
+
+  const handleJoinHousehold = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!joinCode.trim() || !joinName.trim()) return;
+
+    try {
+      setIsJoining(true);
+      const res = await api.joinHouseholdByCode(joinCode.trim().toUpperCase(), joinName.trim());
+      setShowJoinModal(false);
+      setJoinCode('');
+      setJoinName('');
+      await refreshHouseholdsAndUsers();
+      setStatusMessage(`Joined household: ${res.household.name}!`);
+      setTimeout(() => setStatusMessage(null), 3500);
+    } catch (err: any) {
+      console.error('Failed to join:', err);
+      alert(err.message || 'Invalid invite code or join failed');
+    } finally {
+      setIsJoining(false);
+    }
+  };
+
+  const handleConfirmDeleteMember = async () => {
+    if (!memberToDelete) return;
+    try {
+      setIsDeletingMember(true);
+      await api.deleteUser(memberToDelete.id);
+      await refreshHouseholdsAndUsers();
+      setStatusMessage(`Removed ${memberToDelete.name} from household.`);
+      setMemberToDelete(null);
+      setTimeout(() => setStatusMessage(null), 3000);
+    } catch (err: any) {
+      console.error('Delete error:', err);
+      alert(err.message || 'Failed to remove member');
+    } finally {
+      setIsDeletingMember(false);
+    }
+  };
+
   return (
-    <div className="max-w-4xl mx-auto p-2 sm:p-4 pb-24 md:pb-12 space-y-6">
+    <div className="max-w-3xl mx-auto p-3 sm:p-5 pb-28 md:pb-16 space-y-5">
       {/* Header */}
-      <div className="p-6 rounded-3xl glass-panel border border-white/10">
-        <h1 className="text-2xl font-black text-white flex items-center gap-2.5">
-          <SettingsIcon className="w-6 h-6 text-emerald-400" />
-          Settings & Preferences
-        </h1>
-        <p className="text-xs text-slate-400 mt-1">
-          Configure PWA installation and Web Push notifications
-        </p>
+      <div className="p-5 rounded-3xl glass-panel border border-white/10 flex items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-black text-white flex items-center gap-2">
+            <SettingsIcon className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-400" />
+            Settings & Household
+          </h1>
+          <p className="text-xs text-slate-400 mt-0.5">
+            Manage your family household, voice preferences, and aisles
+          </p>
+        </div>
+
+        <div className="text-right shrink-0">
+          <span className="text-xs font-bold text-white block">{household?.name || 'Household'}</span>
+          <span className="text-[11px] text-emerald-400 font-mono">
+            {users.length} {users.length === 1 ? 'member' : 'members'}
+          </span>
+        </div>
       </div>
 
-      {pushStatusMessage && (
-        <div className="p-3.5 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center gap-2 text-emerald-400 text-xs font-semibold animate-in fade-in">
+      {statusMessage && (
+        <div className="p-3 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center gap-2 text-emerald-400 text-xs font-semibold animate-in fade-in">
           <Check className="w-4 h-4" />
-          {pushStatusMessage}
+          {statusMessage}
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* PWA & Mobile Installation */}
-        <div className="glass-panel rounded-3xl p-6 border border-white/10 space-y-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-2xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              <Smartphone className="w-5 h-5" />
+      {/* 1. Household Invite Code */}
+      <div className="glass-panel rounded-3xl p-5 border border-white/10 space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              <KeyRound className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-white">Install as Mobile App</h3>
-              <p className="text-xs text-slate-400">
-                Works offline, provides instant grocery sync and home screen launch
+              <h3 className="text-sm font-bold text-white">Household Invite Code</h3>
+              <p className="text-[11px] text-slate-400">
+                Share this 6-character code with family members to connect their devices
               </p>
             </div>
           </div>
 
-          <div className="pt-2">
-            {isPWAInstalled ? (
-              <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-2.5 text-xs text-emerald-400 font-semibold">
-                <Check className="w-4 h-4" />
-                Homebase is running as an installed PWA!
-              </div>
-            ) : canInstallPWA ? (
-              <button
-                onClick={installPWA}
-                className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold py-3 rounded-2xl text-xs flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-500/20"
-              >
-                <Download className="w-4 h-4" />
-                Install Homebase on this Device
-              </button>
+          <button
+            onClick={handleCopyInvite}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 cursor-pointer shrink-0"
+          >
+            {copiedInvite ? (
+              <>
+                <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                <span>Copied!</span>
+              </>
             ) : (
-              <p className="text-xs text-slate-400 leading-relaxed bg-slate-900/60 p-3 rounded-2xl border border-white/5">
-                💡 To install on iOS/Android: Tap <span className="text-white font-semibold">Share</span> (iOS Safari) or the <span className="text-white font-semibold">Three Dots</span> (Android Chrome) and tap <span className="text-emerald-400 font-semibold">Add to Home Screen</span>.
-              </p>
+              <>
+                <Copy className="w-3.5 h-3.5" />
+                <span className="font-mono tracking-wider">{inviteCode || '••••••'}</span>
+              </>
             )}
-          </div>
-        </div>
-
-        {/* Web Push Notifications */}
-        <div className="glass-panel rounded-3xl p-6 border border-white/10 space-y-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-2xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
-              <Bell className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-white">Family Push Alerts</h3>
-              <p className="text-xs text-slate-400">
-                Get notified when someone adds groceries or assigns calendar events
-              </p>
-            </div>
-          </div>
-
-          <div className="space-y-2 pt-2">
-            {!isPushSupported ? (
-              <p className="text-xs text-amber-400 bg-amber-500/10 p-3 rounded-2xl border border-amber-500/20">
-                Push notifications are not supported in this browser environment.
-              </p>
-            ) : isPushSubscribed ? (
-              <div className="space-y-2">
-                <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-2 text-xs text-emerald-400 font-semibold">
-                  <Check className="w-4 h-4" />
-                  Push alerts enabled on this device
-                </div>
-                <button
-                  onClick={handleSendTestPush}
-                  disabled={isSendingTestPush}
-                  className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 py-2.5 rounded-2xl text-xs font-semibold flex items-center justify-center gap-2 transition-colors"
-                >
-                  {isSendingTestPush ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <Send className="w-3.5 h-3.5 text-amber-400" />
-                  )}
-                  Send Test Notification
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={handlePushToggle}
-                disabled={isSubscribingPush}
-                className="w-full bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-bold py-3 rounded-2xl text-xs flex items-center justify-center gap-2 transition-all shadow-lg shadow-amber-500/20"
-              >
-                {isSubscribingPush ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Bell className="w-4 h-4" />
-                )}
-                Enable Web Push Alerts
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Gemini Voice & Audio Responses */}
-        <div className="glass-panel rounded-3xl p-6 border border-white/10 space-y-4 md:col-span-2">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-2xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
-                <Volume2 className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-white">Gemini Voice & Audio</h3>
-                <p className="text-xs text-slate-400">
-                  Control spoken speech synthesis for Gemini assistant responses
-                </p>
-              </div>
-            </div>
-
-            {/* iOS-style Toggle Switch */}
-            <button
-              type="button"
-              role="switch"
-              aria-checked={autoAudioResponses}
-              onClick={() => setAutoAudioResponses(!autoAudioResponses)}
-              className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                autoAudioResponses ? 'bg-emerald-500' : 'bg-slate-800'
-              }`}
-            >
-              <span
-                className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
-                  autoAudioResponses ? 'translate-x-5' : 'translate-x-0'
-                }`}
-              />
-            </button>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-slate-900/60 border border-white/5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <div className="space-y-0.5">
-              <span className="text-xs font-semibold text-slate-200 block">
-                Automatic Speech Playback
-              </span>
-              <span className="text-xs text-slate-400">
-                {autoAudioResponses
-                  ? 'Gemini will automatically read answers aloud using device speech synthesis.'
-                  : 'Gemini will respond silently with text. You can still tap the speaker icon on any message to listen on demand.'}
-              </span>
-            </div>
-            <span
-              className={`px-3 py-1 rounded-full text-[11px] font-bold shrink-0 ${
-                autoAudioResponses
-                  ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                  : 'bg-slate-800 text-slate-400 border border-white/5'
-              }`}
-            >
-              {autoAudioResponses ? 'Auto-Audio Enabled' : 'Muted'}
-            </span>
-          </div>
-        </div>
-
-        {/* Grocery Store Aisles Configuration */}
-        <div className="glass-panel rounded-3xl p-6 border border-white/10 space-y-4 md:col-span-2">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-2xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                <MoveVertical className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-white">Grocery Store Aisles</h3>
-                <p className="text-xs text-slate-400">
-                  Organize, rename, and rearrange grocery aisles to match your local supermarket layout
-                </p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setIsAisleModalOpen(true)}
-              className="px-4 py-2.5 rounded-2xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 flex items-center justify-center gap-2 transition-all shadow-md shadow-amber-500/20 shrink-0 cursor-pointer"
-            >
-              <MoveVertical className="w-4 h-4" />
-              <span>Configure Aisles</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Family Members & Usernames */}
-        <div className="glass-panel rounded-3xl p-6 border border-white/10 space-y-4 md:col-span-2">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-white/10">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-2xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                <Users className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  Family Members & Usernames
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold font-mono">
-                    {users.length} {users.length === 1 ? 'member' : 'members'}
-                  </span>
-                </h3>
-                <p className="text-xs text-slate-400">
-                  Usernames and member accounts connected to {household?.name || 'your household'}
-                </p>
-              </div>
-            </div>
-
-            {onNavigateToFamily && (
-              <button
-                type="button"
-                onClick={onNavigateToFamily}
-                className="px-4 py-2 rounded-xl text-xs font-semibold bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 flex items-center justify-center gap-1.5 transition-all self-start sm:self-auto cursor-pointer"
-              >
-                <span>Manage in Family</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
-            {users.map((u) => {
-              const isCurrent = currentUser?.id === u.id;
-              const handle = u.username || u.name.toLowerCase().replace(/\s+/g, '');
-              return (
-                <div
-                  key={u.id}
-                  className={`p-3.5 rounded-2xl border flex items-center justify-between gap-3 ${
-                    isCurrent
-                      ? 'bg-emerald-500/10 border-emerald-500/30 ring-1 ring-emerald-500/20'
-                      : 'bg-slate-900/60 border-white/5'
-                  }`}
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div
-                      className="w-9 h-9 rounded-xl flex items-center justify-center text-xs font-bold text-white shadow shrink-0"
-                      style={{ backgroundColor: u.avatar_color }}
-                    >
-                      {u.name.charAt(0)}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5 truncate">
-                        <span className="text-xs font-bold text-white truncate">{u.name}</span>
-                        {isCurrent && (
-                          <span className="text-[9px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.2 rounded-full font-semibold shrink-0">
-                            You
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1 text-[11px] truncate">
-                        <span className="font-mono text-emerald-400 font-semibold truncate">
-                          @{handle}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <span className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded-md bg-white/5 text-slate-400 shrink-0">
-                    {u.role || 'Member'}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
+          </button>
         </div>
       </div>
+
+      {/* 2. Family Members */}
+      <div className="glass-panel rounded-3xl p-5 border border-white/10 space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              <Users className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
+                Family Members
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 font-mono">
+                  {users.length}
+                </span>
+              </h3>
+              <p className="text-[11px] text-slate-400">Profiles connected to this household</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setShowJoinModal(true)}
+              className="px-2.5 py-1.5 rounded-xl text-xs font-medium text-slate-300 hover:text-white hover:bg-white/5 border border-white/10 transition-colors flex items-center gap-1 cursor-pointer"
+            >
+              <LogIn className="w-3.5 h-3.5 text-indigo-400" />
+              <span className="hidden sm:inline">Join Household</span>
+            </button>
+            <button
+              onClick={() => setShowAddMemberModal(true)}
+              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition-all shadow-md shadow-emerald-500/20 flex items-center gap-1 cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>Add Member</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Member Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+          {users.map((u) => {
+            const isCurrent = currentUser?.id === u.id;
+            const handle = u.username || u.name.toLowerCase().replace(/\s+/g, '');
+            return (
+              <div
+                key={u.id}
+                className={`p-3 rounded-2xl border flex items-center justify-between gap-2.5 transition-all ${
+                  isCurrent
+                    ? 'bg-emerald-500/10 border-emerald-500/35 ring-1 ring-emerald-500/20'
+                    : 'bg-slate-900/60 border-white/5'
+                }`}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div
+                    className="w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold text-white shadow shrink-0"
+                    style={{ backgroundColor: u.avatar_color }}
+                  >
+                    {u.name.charAt(0)}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 truncate">
+                      <span className="text-xs font-bold text-white truncate">{u.name}</span>
+                      {isCurrent && (
+                        <span className="text-[9px] bg-emerald-500/25 text-emerald-300 px-1.5 py-0.2 rounded-full font-semibold shrink-0">
+                          You
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 text-[11px] truncate">
+                      <span className="font-mono text-emerald-400 font-medium truncate">@{handle}</span>
+                      <span className="text-slate-600 text-[10px]">•</span>
+                      <span className="text-slate-400 text-[10px] capitalize">{u.role || 'Member'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1 shrink-0">
+                  {isCurrent ? (
+                    <button
+                      onClick={() => setIsEditProfileOpen(true)}
+                      title="Edit Your Profile"
+                      className="p-1.5 rounded-lg text-emerald-400 hover:bg-emerald-500/20 transition-colors cursor-pointer"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                    </button>
+                  ) : users.length > 1 ? (
+                    <button
+                      onClick={() => setMemberToDelete(u)}
+                      title={`Remove ${u.name}`}
+                      className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 3. Assistant Voice Responses (Radio Buttons) */}
+      <div className="glass-panel rounded-3xl p-5 border border-white/10 space-y-3">
+        <div className="flex items-center gap-2.5">
+          <div className="p-2 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+            <Volume2 className="w-4 h-4" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-white">Gemini Voice Playback</h3>
+            <p className="text-[11px] text-slate-400">
+              Choose how the AI assistant responds to your messages
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+          {/* Radio 1: Silent */}
+          <label
+            onClick={() => setAutoAudioResponses(false)}
+            className={`p-3.5 rounded-2xl border cursor-pointer flex items-start gap-3 transition-all ${
+              !autoAudioResponses
+                ? 'bg-emerald-500/10 border-emerald-500/40 ring-1 ring-emerald-500/25'
+                : 'bg-slate-900/60 border-white/5 hover:border-white/10'
+            }`}
+          >
+            <input
+              type="radio"
+              name="autoAudioOption"
+              checked={!autoAudioResponses}
+              onChange={() => setAutoAudioResponses(false)}
+              className="mt-0.5 h-4 w-4 text-emerald-500 accent-emerald-500 cursor-pointer"
+            />
+            <div>
+              <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                <VolumeX className="w-3.5 h-3.5 text-slate-400" />
+                Text Only (Silent)
+              </div>
+              <div className="text-[11px] text-slate-400 mt-0.5">
+                Responds silently in chat. Tap speaker on any message to listen.
+              </div>
+            </div>
+          </label>
+
+          {/* Radio 2: Auto-Read */}
+          <label
+            onClick={() => setAutoAudioResponses(true)}
+            className={`p-3.5 rounded-2xl border cursor-pointer flex items-start gap-3 transition-all ${
+              autoAudioResponses
+                ? 'bg-emerald-500/10 border-emerald-500/40 ring-1 ring-emerald-500/25'
+                : 'bg-slate-900/60 border-white/5 hover:border-white/10'
+            }`}
+          >
+            <input
+              type="radio"
+              name="autoAudioOption"
+              checked={autoAudioResponses}
+              onChange={() => setAutoAudioResponses(true)}
+              className="mt-0.5 h-4 w-4 text-emerald-500 accent-emerald-500 cursor-pointer"
+            />
+            <div>
+              <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
+                Auto-Read Aloud
+              </div>
+              <div className="text-[11px] text-slate-400 mt-0.5">
+                Automatically speaks Gemini answers using voice speech synthesis.
+              </div>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      {/* 4. Family Push Alerts (Radio Buttons) */}
+      <div className="glass-panel rounded-3xl p-5 border border-white/10 space-y-3">
+        <div className="flex items-center gap-2.5">
+          <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
+            <Bell className="w-4 h-4" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-white">Family Push Notifications</h3>
+            <p className="text-[11px] text-slate-400">
+              Receive alerts on this device when family updates groceries or events
+            </p>
+          </div>
+        </div>
+
+        {!isPushSupported ? (
+          <p className="text-xs text-amber-400 bg-amber-500/10 p-3 rounded-2xl border border-amber-500/20">
+            Push notifications are not supported by this browser environment.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+            {/* Radio 1: Enabled */}
+            <label
+              onClick={() => handlePushToggle(true)}
+              className={`p-3.5 rounded-2xl border cursor-pointer flex items-start gap-3 transition-all ${
+                isPushSubscribed
+                  ? 'bg-emerald-500/10 border-emerald-500/40 ring-1 ring-emerald-500/25'
+                  : 'bg-slate-900/60 border-white/5 hover:border-white/10'
+              }`}
+            >
+              <input
+                type="radio"
+                name="pushAlertsOption"
+                checked={isPushSubscribed}
+                onChange={() => handlePushToggle(true)}
+                className="mt-0.5 h-4 w-4 text-emerald-500 accent-emerald-500 cursor-pointer"
+              />
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-bold text-white flex items-center justify-between gap-1">
+                  <span>Enabled</span>
+                  {isPushSubscribed && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSendTestPush();
+                      }}
+                      disabled={isSendingTestPush}
+                      className="text-[10px] bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer"
+                    >
+                      {isSendingTestPush ? 'Sending...' : 'Test Alert'}
+                    </button>
+                  )}
+                </div>
+                <div className="text-[11px] text-slate-400 mt-0.5">
+                  {isSubscribingPush
+                    ? 'Subscribing device...'
+                    : 'Active on this device for instant list and calendar changes.'}
+                </div>
+              </div>
+            </label>
+
+            {/* Radio 2: Disabled */}
+            <label
+              className={`p-3.5 rounded-2xl border cursor-pointer flex items-start gap-3 transition-all ${
+                !isPushSubscribed
+                  ? 'bg-emerald-500/10 border-emerald-500/40 ring-1 ring-emerald-500/25'
+                  : 'bg-slate-900/60 border-white/5 hover:border-white/10'
+              }`}
+            >
+              <input
+                type="radio"
+                name="pushAlertsOption"
+                checked={!isPushSubscribed}
+                onChange={() => {}}
+                className="mt-0.5 h-4 w-4 text-emerald-500 accent-emerald-500 cursor-pointer"
+              />
+              <div>
+                <div className="text-xs font-bold text-white">Disabled</div>
+                <div className="text-[11px] text-slate-400 mt-0.5">
+                  Push notifications are muted on this device.
+                </div>
+              </div>
+            </label>
+          </div>
+        )}
+      </div>
+
+      {/* 5. Grocery Store Aisles */}
+      <div className="glass-panel rounded-3xl p-5 border border-white/10">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              <MoveVertical className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-white">Grocery Store Aisles</h3>
+              <p className="text-[11px] text-slate-400">
+                Arrange aisle ordering and names to match your local supermarket
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setIsAisleModalOpen(true)}
+            className="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10 flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
+          >
+            <MoveVertical className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Configure Aisles</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 6. App Installation & PWA */}
+      <div className="glass-panel rounded-3xl p-5 border border-white/10">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-xl bg-teal-500/10 text-teal-400 border border-teal-500/20">
+              <Smartphone className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-white">Mobile App & Offline Mode</h3>
+              <p className="text-[11px] text-slate-400">
+                {isPWAInstalled
+                  ? 'Homebase is installed and ready for offline use'
+                  : 'Install on your home screen for quick launch and offline access'}
+              </p>
+            </div>
+          </div>
+
+          {isPWAInstalled ? (
+            <span className="flex items-center gap-1 text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 rounded-xl shrink-0">
+              <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+              Installed
+            </span>
+          ) : canInstallPWA ? (
+            <button
+              onClick={installPWA}
+              className="px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition-all shadow-md shadow-emerald-500/20 flex items-center gap-1.5 cursor-pointer shrink-0"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Install App
+            </button>
+          ) : (
+            <span className="text-[11px] text-slate-400 bg-slate-900/80 px-2.5 py-1.5 rounded-xl border border-white/5 shrink-0">
+              Web Mode
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Add Member Modal */}
+      {showAddMemberModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="glass-panel w-full max-w-md rounded-3xl p-5 sm:p-6 shadow-2xl border border-white/10 space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-white/10">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Users className="w-4 h-4 text-emerald-400" />
+                Add Family Member
+              </h3>
+              <button
+                onClick={() => setShowAddMemberModal(false)}
+                className="text-slate-400 hover:text-white p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleAddMember} className="space-y-3">
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1">Name</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Maya"
+                  value={newMemberName}
+                  onChange={(e) => setNewMemberName(e.target.value)}
+                  className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1">
+                  Username <span className="text-[10px] text-slate-500">(Optional)</span>
+                </label>
+                <div className="relative">
+                  <span className="text-xs font-bold text-emerald-400 absolute left-2.5 top-1/2 -translate-y-1/2 select-none">
+                    @
+                  </span>
+                  <input
+                    type="text"
+                    placeholder={newMemberName ? newMemberName.toLowerCase().replace(/\s+/g, '') : 'username'}
+                    value={newMemberUsername}
+                    onChange={(e) => setNewMemberUsername(e.target.value.toLowerCase().replace(/\s+/g, ''))}
+                    className="w-full bg-slate-900 border border-white/10 rounded-xl pl-6 pr-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Role</label>
+                  <select
+                    value={newMemberRole}
+                    onChange={(e) => setNewMemberRole(e.target.value as any)}
+                    className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+                  >
+                    <option value="parent">Parent</option>
+                    <option value="child">Child</option>
+                    <option value="member">Member</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Color</label>
+                  <div className="flex items-center gap-1.5 pt-1.5">
+                    {AVATAR_COLORS.map((c) => (
+                      <button
+                        type="button"
+                        key={c}
+                        onClick={() => setNewMemberColor(c)}
+                        style={{ backgroundColor: c }}
+                        className={`w-5 h-5 rounded-full transition-transform cursor-pointer ${
+                          newMemberColor === c ? 'scale-125 ring-2 ring-white' : 'opacity-70'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setShowAddMemberModal(false)}
+                  className="px-4 py-2 rounded-xl text-xs text-slate-300 hover:bg-white/5"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!newMemberName.trim() || isAddingMember}
+                  className="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold disabled:opacity-50"
+                >
+                  {isAddingMember ? 'Adding...' : 'Add Member'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Join Household Modal */}
+      {showJoinModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="glass-panel w-full max-w-md rounded-3xl p-5 sm:p-6 shadow-2xl border border-white/10 space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-white/10">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <LogIn className="w-4 h-4 text-indigo-400" />
+                Join Existing Household
+              </h3>
+              <button
+                onClick={() => setShowJoinModal(false)}
+                className="text-slate-400 hover:text-white p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleJoinHousehold} className="space-y-3">
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1">
+                  6-Character Invite Code
+                </label>
+                <input
+                  type="text"
+                  required
+                  maxLength={8}
+                  placeholder="e.g. H5XWAE"
+                  value={joinCode}
+                  onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                  className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm font-mono tracking-widest uppercase text-white focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1">Your Name</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Your first name"
+                  value={joinName}
+                  onChange={(e) => setJoinName(e.target.value)}
+                  className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setShowJoinModal(false)}
+                  className="px-4 py-2 rounded-xl text-xs text-slate-300 hover:bg-white/5"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!joinCode.trim() || !joinName.trim() || isJoining}
+                  className="px-5 py-2 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white text-xs font-bold disabled:opacity-50"
+                >
+                  {isJoining ? 'Joining...' : 'Join Household'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Member Confirmation Modal */}
+      {memberToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="glass-panel w-full max-w-md rounded-3xl p-5 sm:p-6 shadow-2xl border border-white/10 space-y-4">
+            <h3 className="text-base font-bold text-white flex items-center gap-2">
+              <Trash2 className="w-4 h-4 text-red-400" />
+              Remove Family Member
+            </h3>
+
+            <p className="text-xs text-slate-300 leading-relaxed bg-slate-900/80 p-3 rounded-2xl border border-white/5">
+              Are you sure you want to remove <span className="text-white font-bold">{memberToDelete.name}</span> from {household?.name || 'this household'}?
+            </p>
+
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setMemberToDelete(null)}
+                disabled={isDeletingMember}
+                className="px-4 py-2 rounded-xl text-xs text-slate-300 hover:bg-white/5"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteMember}
+                disabled={isDeletingMember}
+                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {isDeletingMember ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                <span>Remove</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Aisle Reordering Modal */}
       {household && (
@@ -362,6 +785,12 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigateToFamily }
           onAislesUpdated={refreshAisles}
         />
       )}
+
+      {/* User's Edit Profile Modal */}
+      <EditProfileModal
+        isOpen={isEditProfileOpen}
+        onClose={() => setIsEditProfileOpen(false)}
+      />
     </div>
   );
 };

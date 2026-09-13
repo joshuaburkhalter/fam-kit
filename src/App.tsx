@@ -7,7 +7,6 @@ import { GroceryPage } from './pages/GroceryPage';
 import { MealsPage } from './pages/MealsPage';
 import { RecipesPage } from './pages/RecipesPage';
 import { CalendarPage } from './pages/CalendarPage';
-import { FamilyPage } from './pages/FamilyPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { AuthPage } from './components/AuthPage';
 import { usePWA } from './context/PWAContext';
@@ -50,8 +49,7 @@ export const AppContent: React.FC = () => {
         {activeTab === 'meals' && <MealsPage />}
         {activeTab === 'recipes' && <RecipesPage />}
         {activeTab === 'calendar' && <CalendarPage />}
-        {activeTab === 'family' && <FamilyPage />}
-        {activeTab === 'settings' && <SettingsPage onNavigateToFamily={() => setActiveTab('family')} />}
+        {(activeTab === 'settings' || activeTab === 'family') && <SettingsPage />}
       </main>
 
       <MobileNav activeTab={activeTab} setActiveTab={setActiveTab} />

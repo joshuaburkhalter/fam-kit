@@ -1329,6 +1329,69 @@ app.delete('/api/family', (req, res) => {
   res.json({ success: true });
 });
 
+// Update User Profile
+app.put('/api/users/profile', (req, res) => {
+  const authUser = getAuthUser(req);
+  const targetUserId = req.body.userId || authUser?.id;
+  if (!targetUserId) {
+    return res.status(401).json({ error: 'Unauthorized: missing user identifier' });
+  }
+
+  const existing = queryOne<{ id: string; name: string; username: string; email: string; avatar: string; color: string; role: string; password: string }>(
+    'SELECT * FROM users WHERE id = ?',
+    [targetUserId]
+  );
+  if (!existing) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+
+  const { name, username, email, color, role, password } = req.body;
+
+  let newUsername = existing.username;
+  if (username !== undefined) {
+    const cleanUsername = (username || '').toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9_-]/g, '');
+    if (cleanUsername && cleanUsername !== (existing.username || '').toLowerCase()) {
+      const conflict = queryOne<{ id: string }>(
+        'SELECT id FROM users WHERE LOWER(username) = ? AND id != ?',
+        [cleanUsername, targetUserId]
+      );
+      if (conflict) {
+        return res.status(400).json({ error: 'Username is already taken. Please choose another.' });
+      }
+      newUsername = cleanUsername;
+    }
+  }
+
+  const newName = name && typeof name === 'string' && name.trim() ? name.trim() : existing.name;
+  const newEmail = email !== undefined ? (typeof email === 'string' && email.trim() ? email.trim().toLowerCase() : null) : existing.email;
+  const newColor = color && typeof color === 'string' ? color : existing.color;
+  const newRole = role && typeof role === 'string' ? role : existing.role;
+  const newPassword = password && typeof password === 'string' && password.trim() ? password.trim() : existing.password;
+
+  execute(
+    'UPDATE users SET name = ?, username = ?, email = ?, color = ?, role = ?, password = ? WHERE id = ?',
+    [newName, newUsername, newEmail, newColor, newRole, newPassword, targetUserId]
+  );
+
+  const updated = queryOne<{ id: string; name: string; username: string; email: string; avatar: string; color: string; role: string; householdId: string }>(
+    'SELECT id, name, username, email, avatar, color, role, householdId FROM users WHERE id = ?',
+    [targetUserId]
+  );
+
+  res.json({
+    user: {
+      id: updated!.id,
+      household_id: updated!.householdId,
+      name: updated!.name,
+      username: updated!.username || undefined,
+      email: updated!.email || undefined,
+      avatar_color: updated!.color,
+      role: (updated!.role.toLowerCase() as any) || 'member',
+      created_at: '',
+    },
+  });
+});
+
 // 8. Push API
 app.get('/api/push', (req, res) => {
   res.json({ publicKey: vapidPublicKey });

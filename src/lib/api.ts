@@ -186,6 +186,30 @@ export const api = {
     });
   },
 
+  updateUserProfile: async (data: {
+    userId?: string;
+    name?: string;
+    username?: string;
+    email?: string;
+    avatarColor?: string;
+    role?: string;
+    password?: string;
+  }): Promise<User> => {
+    const res = await fetchJson<{ user: User }>('/users/profile', {
+      method: 'PUT',
+      body: JSON.stringify({
+        userId: data.userId,
+        name: data.name,
+        username: data.username,
+        email: data.email,
+        color: data.avatarColor,
+        role: data.role,
+        password: data.password,
+      }),
+    });
+    return res.user;
+  },
+
   // Aisles
   getAisles: async (householdId: string): Promise<Aisle[]> => {
     const aisles = await fetchJson<any[]>('/grocery/aisles');

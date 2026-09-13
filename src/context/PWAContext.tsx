@@ -35,6 +35,15 @@ interface PWAContextType {
   refreshAisles: () => Promise<void>;
   autoAudioResponses: boolean;
   setAutoAudioResponses: (enabled: boolean) => void;
+  updateProfile: (data: {
+    name?: string;
+    username?: string;
+    email?: string;
+    avatarColor?: string;
+    role?: string;
+    password?: string;
+  }) => Promise<User>;
+  switchUser: (user: User) => void;
 }
 
 const PWAContext = createContext<PWAContextType | undefined>(undefined);
@@ -301,6 +310,30 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const updateProfile = async (data: {
+    name?: string;
+    username?: string;
+    email?: string;
+    avatarColor?: string;
+    role?: string;
+    password?: string;
+  }): Promise<User> => {
+    if (!currentUser) throw new Error('Not logged in');
+    const updated = await api.updateUserProfile({
+      userId: currentUser.id,
+      ...data,
+    });
+    setCurrentUserState(updated);
+    setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
+    return updated;
+  };
+
+  const switchUser = (user: User) => {
+    setCurrentUserState(user);
+    localStorage.setItem('famkit_user_id', user.id);
+    localStorage.setItem('famkit_auth_token', user.id);
+  };
+
   return (
     <PWAContext.Provider
       value={{
@@ -326,6 +359,8 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         refreshAisles,
         autoAudioResponses,
         setAutoAudioResponses,
+        updateProfile,
+        switchUser,
       }}
     >
       {children}

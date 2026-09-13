@@ -14,9 +14,11 @@ import {
   Calendar,
   LogOut,
   ChevronDown,
+  User,
 } from 'lucide-react';
 import { usePWA } from '../context/PWAContext';
 import { HomebaseLogo } from './HomebaseLogo';
+import { EditProfileModal } from './EditProfileModal';
 
 interface NavbarProps {
   activeTab: string;
@@ -35,6 +37,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
 
   const [copiedInvite, setCopiedInvite] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const [showEditProfileModal, setShowEditProfileModal] = useState(false);
 
   const handleCopyInvite = () => {
     const code = household?.invite_code || (household as any)?.inviteCode;
@@ -231,18 +234,24 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
                 {/* Quick Nav Links */}
                 <div className="py-1.5 border-b border-white/10 flex flex-col gap-0.5">
                   <button
-                    onClick={() => setActiveTab('family')}
-                    className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-medium text-slate-200 hover:text-white hover:bg-white/10 transition-colors"
+                    onClick={() => {
+                      setShowUserDropdown(false);
+                      setShowEditProfileModal(true);
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-slate-200 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
                   >
-                    <Users className="w-4 h-4 text-emerald-400" />
-                    Family & Household
+                    <User className="w-4 h-4 text-emerald-400" />
+                    Edit Profile
                   </button>
                   <button
-                    onClick={() => setActiveTab('settings')}
-                    className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-medium text-slate-200 hover:text-white hover:bg-white/10 transition-colors"
+                    onClick={() => {
+                      setShowUserDropdown(false);
+                      setActiveTab('settings');
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-slate-200 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
                   >
                     <Settings className="w-4 h-4 text-cyan-400" />
-                    Settings & Audio
+                    Settings
                   </button>
                 </div>
 
@@ -250,7 +259,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
                 <div className="pt-1.5">
                   <button
                     onClick={() => logout()}
-                    className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-rose-400 hover:bg-rose-500/10 transition-colors"
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
                   >
                     <LogOut className="w-3.5 h-3.5" />
                     Sign Out
@@ -262,6 +271,12 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
           </div>
         </div>
       </div>
+
+      {/* Edit Profile Modal */}
+      <EditProfileModal
+        isOpen={showEditProfileModal}
+        onClose={() => setShowEditProfileModal(false)}
+      />
     </header>
   );
 };
