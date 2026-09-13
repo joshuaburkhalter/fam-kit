@@ -1345,7 +1345,7 @@ app.put('/api/users/profile', (req, res) => {
     return res.status(404).json({ error: 'User not found' });
   }
 
-  const { name, username, email, color, role, password } = req.body;
+  const { name, username, email, color, role, password, avatar } = req.body;
 
   let newUsername = existing.username;
   if (username !== undefined) {
@@ -1367,10 +1367,11 @@ app.put('/api/users/profile', (req, res) => {
   const newColor = color && typeof color === 'string' ? color : existing.color;
   const newRole = role && typeof role === 'string' ? role : existing.role;
   const newPassword = password && typeof password === 'string' && password.trim() ? password.trim() : existing.password;
+  const newAvatar = avatar !== undefined ? avatar : existing.avatar;
 
   execute(
-    'UPDATE users SET name = ?, username = ?, email = ?, color = ?, role = ?, password = ? WHERE id = ?',
-    [newName, newUsername, newEmail, newColor, newRole, newPassword, targetUserId]
+    'UPDATE users SET name = ?, username = ?, email = ?, color = ?, role = ?, password = ?, avatar = ? WHERE id = ?',
+    [newName, newUsername, newEmail, newColor, newRole, newPassword, newAvatar, targetUserId]
   );
 
   const updated = queryOne<{ id: string; name: string; username: string; email: string; avatar: string; color: string; role: string; householdId: string }>(
@@ -1385,6 +1386,7 @@ app.put('/api/users/profile', (req, res) => {
       name: updated!.name,
       username: updated!.username || undefined,
       email: updated!.email || undefined,
+      avatar: updated!.avatar || undefined,
       avatar_color: updated!.color,
       role: (updated!.role.toLowerCase() as any) || 'member',
       created_at: '',

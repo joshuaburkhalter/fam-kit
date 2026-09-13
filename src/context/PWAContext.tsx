@@ -39,6 +39,7 @@ interface PWAContextType {
     name?: string;
     username?: string;
     email?: string;
+    avatar?: string;
     avatarColor?: string;
     role?: string;
     password?: string;
@@ -314,6 +315,7 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     name?: string;
     username?: string;
     email?: string;
+    avatar?: string;
     avatarColor?: string;
     role?: string;
     password?: string;

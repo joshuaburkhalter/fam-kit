@@ -155,6 +155,7 @@ export const api = {
         name: m.name,
         username: m.username,
         email: m.email || undefined,
+        avatar: m.avatar || undefined,
         avatar_color: m.color || '#10b981',
         role: (m.role?.toLowerCase() as any) || 'member',
         created_at: '',
@@ -174,6 +175,7 @@ export const api = {
       name: res.name,
       username: res.username,
       email: res.email || undefined,
+      avatar: res.avatar || undefined,
       avatar_color: res.color,
       role: (res.role?.toLowerCase() as any) || 'member',
       created_at: '',
@@ -191,6 +193,7 @@ export const api = {
     name?: string;
     username?: string;
     email?: string;
+    avatar?: string;
     avatarColor?: string;
     role?: string;
     password?: string;
@@ -202,6 +205,7 @@ export const api = {
         name: data.name,
         username: data.username,
         email: data.email,
+        avatar: data.avatar,
         color: data.avatarColor,
         role: data.role,
         password: data.password,

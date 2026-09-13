@@ -302,12 +302,20 @@ export const SettingsPage: React.FC = () => {
                 }`}
               >
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <div
-                    className="w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold text-white shadow shrink-0"
-                    style={{ backgroundColor: u.avatar_color }}
-                  >
-                    {u.name.charAt(0)}
-                  </div>
+                  {u.avatar && (u.avatar.startsWith('data:image') || u.avatar.startsWith('http')) ? (
+                    <img
+                      src={u.avatar}
+                      alt={u.name}
+                      className="w-8 h-8 rounded-xl object-cover shadow shrink-0 ring-1 ring-white/10"
+                    />
+                  ) : (
+                    <div
+                      className="w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold text-white shadow shrink-0"
+                      style={{ backgroundColor: u.avatar_color }}
+                    >
+                      {u.name.charAt(0)}
+                    </div>
+                  )}
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5 truncate">
                       <span className="text-xs font-bold text-white truncate">{u.name}</span>

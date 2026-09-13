@@ -481,14 +481,22 @@ export const AssistantPage: React.FC = () => {
               </div>
 
               {!isAi && (
-                <div
-                  className="w-8 h-8 rounded-xl flex items-center justify-center text-white shrink-0 mt-1 shadow"
-                  style={{
-                    backgroundColor: currentUser?.avatar_color || '#10b981',
-                  }}
-                >
-                  <UserIcon className="w-4 h-4" />
-                </div>
+                currentUser?.avatar && (currentUser.avatar.startsWith('data:image') || currentUser.avatar.startsWith('http')) ? (
+                  <img
+                    src={currentUser.avatar}
+                    alt={currentUser.name}
+                    className="w-8 h-8 rounded-xl object-cover shrink-0 mt-1 shadow ring-1 ring-white/10"
+                  />
+                ) : (
+                  <div
+                    className="w-8 h-8 rounded-xl flex items-center justify-center text-white shrink-0 mt-1 shadow"
+                    style={{
+                      backgroundColor: currentUser?.avatar_color || '#10b981',
+                    }}
+                  >
+                    <UserIcon className="w-4 h-4" />
+                  </div>
+                )
               )}
             </div>
           );

@@ -180,14 +180,22 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
           <div className="relative">
             <button
               onClick={() => setShowUserDropdown(!showUserDropdown)}
-              className="flex items-center gap-2 bg-slate-800/80 hover:bg-slate-700/80 border border-white/10 rounded-xl px-2.5 py-1.5 transition-colors"
+              className="flex items-center gap-2 bg-slate-800/80 hover:bg-slate-700/80 border border-white/10 rounded-xl px-2.5 py-1.5 transition-colors cursor-pointer"
             >
-              <div
-                className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white shadow"
-                style={{ backgroundColor: currentUser?.avatar_color || '#10b981' }}
-              >
-                {currentUser?.name ? currentUser.name.charAt(0) : 'U'}
-              </div>
+              {currentUser?.avatar && (currentUser.avatar.startsWith('data:image') || currentUser.avatar.startsWith('http')) ? (
+                <img
+                  src={currentUser.avatar}
+                  alt={currentUser.name}
+                  className="w-6 h-6 rounded-full object-cover shadow ring-1 ring-white/20"
+                />
+              ) : (
+                <div
+                  className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white shadow"
+                  style={{ backgroundColor: currentUser?.avatar_color || '#10b981' }}
+                >
+                  {currentUser?.name ? currentUser.name.charAt(0) : 'U'}
+                </div>
+              )}
               <span className="text-xs font-medium text-slate-200 hidden sm:inline max-w-[90px] truncate">
                 {currentUser?.name || 'Account'}
               </span>
@@ -207,12 +215,20 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
                 >
                 {/* User Info Header */}
                 <div className="px-3 py-2.5 border-b border-white/10 flex items-center gap-3">
-                  <div
-                    className="w-9 h-9 rounded-xl flex items-center justify-center text-sm font-bold text-white shadow-md flex-shrink-0"
-                    style={{ backgroundColor: currentUser?.avatar_color || '#10b981' }}
-                  >
-                    {currentUser?.name ? currentUser.name.charAt(0) : 'U'}
-                  </div>
+                  {currentUser?.avatar && (currentUser.avatar.startsWith('data:image') || currentUser.avatar.startsWith('http')) ? (
+                    <img
+                      src={currentUser.avatar}
+                      alt={currentUser.name}
+                      className="w-9 h-9 rounded-xl object-cover shadow-md shrink-0 ring-1 ring-white/20"
+                    />
+                  ) : (
+                    <div
+                      className="w-9 h-9 rounded-xl flex items-center justify-center text-sm font-bold text-white shadow-md flex-shrink-0"
+                      style={{ backgroundColor: currentUser?.avatar_color || '#10b981' }}
+                    >
+                      {currentUser?.name ? currentUser.name.charAt(0) : 'U'}
+                    </div>
+                  )}
                   <div className="min-w-0">
                     <p className="text-xs font-bold text-white truncate">
                       {currentUser?.name}

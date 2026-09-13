@@ -12,6 +12,7 @@ export interface User {
   name: string;
   username?: string;
   email?: string;
+  avatar?: string;
   avatar_color: string;
   role: 'parent' | 'child' | 'member';
   created_at: string;
