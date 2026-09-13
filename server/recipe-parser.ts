@@ -284,13 +284,13 @@ export async function findAccurateRecipePhoto(
     }
   }
 
-  // 2. Try Wikipedia Dish Photo Search (STRICT matching only)
+  // 2. Try Wikimedia Commons High-Res Food Photo Search
   const cleanTitle = title
     .replace(/^(how to make|easy|best|crispy|creamy|homemade|quick|simple|ultimate|classic|baked|pan-seared|slow cooker|instant pot)\s+/gi, '')
     .replace(/\s+(recipe|dish|style)$/gi, '')
     .trim();
 
-  // Culinary stop words that should NEVER be used as the sole basis for matching a Wikipedia article
+  // Culinary stop words that should NEVER be used as the sole basis for matching a photo
   const CULINARY_STOP_WORDS = new Set([
     'soup', 'soups', 'salad', 'salads', 'noodle', 'noodles', 'rice', 'dish', 'dishes', 'food', 'recipe',
     'style', 'creamy', 'crispy', 'easy', 'best', 'homemade', 'quick', 'simple', 'ultimate', 'classic',
@@ -304,6 +304,47 @@ export async function findAccurateRecipePhoto(
     .filter((w) => w.length >= 3 && !CULINARY_STOP_WORDS.has(w));
 
   if (cleanTitle && distinctKeywords.length > 0) {
+    // 2A. Search Wikimedia Commons File Library (actual user & chef photography)
+    try {
+      const commonsUrl = `https://commons.wikimedia.org/w/api.php?action=query&format=json&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(
+        cleanTitle
+      )}&gsrlimit=8&prop=imageinfo&iiprop=url&iiurlwidth=1200`;
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2500);
+
+      const res = await fetch(commonsUrl, {
+        headers: { 'User-Agent': 'FamKitApp/1.0 (contact@famkit.app)' },
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      if (res.ok) {
+        const data = (await res.json()) as any;
+        const pages = Object.values(data.query?.pages || {}) as Array<{
+          title: string;
+          imageinfo?: Array<{ url?: string; thumburl?: string }>;
+        }>;
+
+        const match = pages.find((p) => {
+          const imgUrl = p.imageinfo?.[0]?.thumburl || p.imageinfo?.[0]?.url;
+          if (!imgUrl || usedImages.has(imgUrl)) return false;
+          if (imgUrl.toLowerCase().endsWith('.svg') || p.title.toLowerCase().endsWith('.svg')) return false;
+          const lowerTitle = p.title.toLowerCase();
+          return distinctKeywords.every((w) => lowerTitle.includes(w));
+        });
+
+        const selectedUrl = match?.imageinfo?.[0]?.thumburl || match?.imageinfo?.[0]?.url;
+        if (selectedUrl) {
+          usedImages.add(selectedUrl);
+          return selectedUrl;
+        }
+      }
+    } catch {
+      // Fall through to Wikipedia article search
+    }
+
+    // 2B. Search Wikipedia article photos (strictly matching distinct keywords)
     try {
       const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&format=json&generator=search&gsrsearch=${encodeURIComponent(
         cleanTitle
@@ -313,7 +354,7 @@ export async function findAccurateRecipePhoto(
       const timeoutId = setTimeout(() => controller.abort(), 2500);
 
       const res = await fetch(searchUrl, {
-        headers: { 'User-Agent': 'FamKitApp/1.0 (https://famkit.app; contact@famkit.app)' },
+        headers: { 'User-Agent': 'FamKitApp/1.0 (contact@famkit.app)' },
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
@@ -325,8 +366,6 @@ export async function findAccurateRecipePhoto(
           thumbnail?: { source: string };
         }>;
 
-        // ONLY accept a Wikipedia page if ALL distinct culinary keywords match the article title!
-        // This prevents "Wild Rice & Mushroom Soup" from ever matching "Chicken soup" just because both are "soup".
         const match = pages.find(
           (p) =>
             p.thumbnail?.source &&
@@ -340,41 +379,81 @@ export async function findAccurateRecipePhoto(
         }
       }
     } catch {
-      // Fall through to AI generator
+      // Fall through to curated photography
     }
   }
 
-  // 3. Dynamic dish-specific AI food photography via Pollinations
-  // We craft a prompt with key ingredients and full culinary details so the picture accurately depicts the dish
-  const keyIngredients = (ingredients || [])
+  // 3. Check curated categories (high-resolution Unsplash photography)
+  const allCuratedKeys = Object.keys(CURATED_FOOD_IMAGES)
+    .filter((k) => k !== 'default')
+    .sort((a, b) => b.length - a.length);
+
+  for (const key of allCuratedKeys) {
+    if (queryText.includes(key)) {
+      const url = CURATED_FOOD_IMAGES[key];
+      if (!usedImages.has(url)) {
+        usedImages.add(url);
+        return url;
+      }
+    }
+  }
+
+  // 4. Default high-resolution Unsplash food photography
+  return CURATED_FOOD_IMAGES.default;
+}
+
+/**
+ * Generate a custom, pristine food photograph for a recipe using Google Imagen 3.
+ * Uses the user's Gemini API key from Google AI Studio.
+ */
+export async function generateRecipeImageWithImagen(
+  recipe: { title: string; description?: string; ingredients?: Array<any> },
+  apiKey: string
+): Promise<string> {
+  const ingredientsList = (recipe.ingredients || [])
     .slice(0, 5)
     .map((ing) => (typeof ing === 'string' ? ing : ing.item || ing.name))
     .filter(Boolean)
-    .map((name: string) => name.replace(/^[0-9/\s\.\-]+(lbs?|cups?|tbsp|tsp|cloves?|cans?|oz|pkg)?\s*(of\s+)?/i, '').trim())
-    .filter((name: string) => name.length >= 3 && !/^(salt|pepper|black pepper|water|olive oil|vegetable oil|butter)$/i.test(name))
-    .slice(0, 4)
     .join(', ');
 
-  const visualSubject = imageQuery || title;
-  const promptParts = [
-    visualSubject,
-    keyIngredients ? `with ${keyIngredients}` : '',
-    description ? description.slice(0, 100) : '',
-    'plated gourmet restaurant food photography, delicious, appetizing, crisp focus, shallow depth of field, authentic culinary presentation'
-  ].filter(Boolean);
+  const prompt = `Delicious, appetizing, professionally plated gourmet dish of ${recipe.title}${
+    ingredientsList ? ` made with ${ingredientsList}` : ''
+  }. ${recipe.description || ''}. Beautiful restaurant food photography, crisp focus, studio lighting, shallow depth of field, vibrant colors, authentic culinary presentation.`.slice(0, 480);
 
-  const photoPrompt = promptParts
-    .join(', ')
-    .replace(/[\n\r]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 240);
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        instances: [{ prompt }],
+        parameters: {
+          sampleCount: 1,
+          aspectRatio: '4:3',
+          outputMimeType: 'image/jpeg',
+          compressionQuality: 80,
+        },
+      }),
+      signal: AbortSignal.timeout(25000),
+    }
+  );
 
-  // Use a unique random seed to guarantee distinct images even for similar recipes
-  const seed = Math.floor(Math.random() * 900000) + 100000;
-  const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(photoPrompt)}?width=800&height=500&nologo=true&seed=${seed}`;
-  usedImages.add(pollinationsUrl);
-  return pollinationsUrl;
+  if (!res.ok) {
+    const errJson = await res.json().catch(() => ({}));
+    const message =
+      errJson.error?.message ||
+      `Google Imagen 3 API failed (${res.status}: ${res.statusText}). Make sure billing is enabled in Google AI Studio.`;
+    throw new Error(message);
+  }
+
+  const data = (await res.json()) as any;
+  const base64Bytes = data.predictions?.[0]?.bytesBase64Encoded;
+  const mimeType = data.predictions?.[0]?.mimeType || 'image/jpeg';
+  if (!base64Bytes) {
+    throw new Error('No image was returned from Google Imagen 3.');
+  }
+
+  return `data:${mimeType};base64,${base64Bytes}`;
 }
 
 export async function synthesizeRecipeFromUrlWithAi(url: string, apiKey: string): Promise<ParsedRecipe> {

@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { getDb, queryAll, queryOne, execute, saveDb, createDefaultAisles } from './db.js';
 import { getGeminiModel } from './gemini.js';
-import { parseRecipeFromUrl, parseRecipeFromHtml, getCuratedFoodImage, findAccurateRecipePhoto } from './recipe-parser.js';
+import { parseRecipeFromUrl, parseRecipeFromHtml, getCuratedFoodImage, findAccurateRecipePhoto, generateRecipeImageWithImagen } from './recipe-parser.js';
 import { sendPushNotificationToHousehold, vapidPublicKey } from './push.js';
 import { buildSelectiveAssistantContext } from './assistant-context.js';
 
@@ -884,6 +884,74 @@ app.delete('/api/recipes', (req, res) => {
   res.json({ success: true });
 });
 
+// Endpoint: Regenerate recipe photo using Google Imagen 3 or free high-res photo search
+app.post('/api/recipes/:id/regenerate-image', async (req, res) => {
+  try {
+    const householdId = getHouseholdId(req);
+    const { id } = req.params;
+    const { mode, customApiKey } = req.body; // mode: 'imagen' | 'search'
+    const apiKey = customApiKey || process.env.GEMINI_API_KEY;
+
+    const recipe = queryOne<{
+      id: string;
+      title: string;
+      description: string | null;
+      ingredients: string | null;
+      tags: string | null;
+    }>('SELECT id, title, description, ingredients, tags FROM recipes WHERE id = ? AND householdId = ?', [
+      id,
+      householdId,
+    ]);
+
+    if (!recipe) {
+      return res.status(404).json({ error: 'Recipe not found' });
+    }
+
+    let parsedIngredients = [];
+    try {
+      if (recipe.ingredients) parsedIngredients = JSON.parse(recipe.ingredients);
+    } catch {}
+
+    let newImageUrl: string;
+
+    if (mode === 'imagen') {
+      if (!apiKey) {
+        return res.status(400).json({ error: 'Gemini API key is required for Imagen 3 image generation.' });
+      }
+      newImageUrl = await generateRecipeImageWithImagen(
+        {
+          title: recipe.title,
+          description: recipe.description || '',
+          ingredients: parsedIngredients,
+        },
+        apiKey
+      );
+    } else {
+      const tagList = (recipe.tags || '').split(',').map((t) => t.trim()).filter(Boolean);
+      newImageUrl = await findAccurateRecipePhoto(
+        recipe.title,
+        recipe.description || '',
+        tagList,
+        undefined,
+        new Set<string>(),
+        parsedIngredients
+      );
+    }
+
+    execute('UPDATE recipes SET imageUrl = ? WHERE id = ? AND householdId = ?', [
+      newImageUrl,
+      id,
+      householdId,
+    ]);
+    saveDb();
+
+    return res.json({ success: true, imageUrl: newImageUrl });
+  } catch (err: any) {
+    console.error('Regenerate image error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to regenerate image' });
+  }
+});
+
 // 5. Meal Planner API
 app.get('/api/meal-planner', (req, res) => {
   const householdId = getHouseholdId(req);
@@ -1228,12 +1296,12 @@ getDb().then(() => {
        WHERE (LOWER(title) LIKE '%parm%' OR LOWER(title) LIKE '%parmigiana%')
          AND (imageUrl LIKE '%1604908176997%' OR imageUrl LIKE '%546069901%')`
     );
-    // Self-heal: update any Wild Rice / Mushroom Soup recipes that got the Wikipedia chicken noodle soup image
+    // Self-heal: update any Wild Rice / Mushroom Soup recipes that got the blurry or wrong chicken noodle soup image
     execute(
       `UPDATE recipes
-       SET imageUrl = 'https://image.pollinations.ai/prompt/creamy%20wild%20rice%20and%20mushroom%20soup%20with%20sauteed%20cremini%20mushrooms%20in%20a%20rustic%20bowl%2C%20gourmet%20food%20photography%2C%20appetizing?width=800&height=500&nologo=true&seed=73921'
+       SET imageUrl = 'https://upload.wikimedia.org/wikipedia/commons/7/78/Porcini_Wild_Rice_Soup_%28140491721%29.jpeg'
        WHERE (LOWER(title) LIKE '%wild rice%' OR LOWER(title) LIKE '%mushroom soup%')
-         AND (imageUrl LIKE '%Chicken_Noodle_Soup%' OR imageUrl LIKE '%547592166%')`
+         AND (imageUrl LIKE '%Chicken_Noodle_Soup%' OR imageUrl LIKE '%547592166%' OR imageUrl LIKE '%pollinations%')`
     );
     saveDb();
   } catch {}

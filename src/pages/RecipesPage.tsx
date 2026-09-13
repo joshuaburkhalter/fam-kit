@@ -15,6 +15,8 @@ import {
   RotateCcw,
   X,
   Sparkles,
+  Loader2,
+  ImageIcon,
 } from 'lucide-react';
 import type { Recipe } from '../types';
 import { usePWA } from '../context/PWAContext';
@@ -23,7 +25,7 @@ import { RecipeScraperModal } from '../components/RecipeScraperModal';
 import { useFabAutoClose } from '../hooks/useFabAutoClose';
 
 export const RecipesPage: React.FC = () => {
-  const { household } = usePWA();
+  const { household, apiKey } = usePWA();
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [isScraperOpen, setIsScraperOpen] = useState(false);
@@ -40,6 +42,32 @@ export const RecipesPage: React.FC = () => {
   const [completedSteps, setCompletedSteps] = useState<Record<number, boolean>>({});
   const [addedGroceryFeedback, setAddedGroceryFeedback] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
+  const [regenerateMode, setRegenerateMode] = useState<'imagen' | 'search' | null>(null);
+  const [imageFeedback, setImageFeedback] = useState<string | null>(null);
+
+  const handleRegenerateImage = async (recipeId: string, mode: 'imagen' | 'search') => {
+    setRegeneratingId(recipeId);
+    setRegenerateMode(mode);
+    setImageFeedback(null);
+    try {
+      const res = await api.regenerateRecipeImage(recipeId, mode, apiKey || undefined);
+      if (res.success && res.imageUrl) {
+        setSelectedRecipe((prev) => (prev && prev.id === recipeId ? { ...prev, image_url: res.imageUrl } : prev));
+        setRecipes((prev) =>
+          prev.map((r) => (r.id === recipeId ? { ...r, image_url: res.imageUrl } : r))
+        );
+        setImageFeedback(mode === 'imagen' ? 'Generated new image with Google Imagen!' : 'Found new photo!');
+        setTimeout(() => setImageFeedback(null), 3500);
+      }
+    } catch (err: any) {
+      console.error('Failed to regenerate image:', err);
+      alert(err.message || 'Failed to regenerate image.');
+    } finally {
+      setRegeneratingId(null);
+      setRegenerateMode(null);
+    }
+  };
 
   const loadRecipes = async () => {
     if (!household) return;
@@ -257,6 +285,50 @@ export const RecipesPage: React.FC = () => {
                       title="Created by AI Assistant (#ai)"
                     >
                       <Sparkles className="w-4.5 h-4.5 stroke-[2.2]" />
+                    </div>
+                  )}
+                </div>
+
+                {/* Photo regeneration controls */}
+                <div className="space-y-1.5 pt-0.5">
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => handleRegenerateImage(selectedRecipe.id, 'imagen')}
+                      disabled={regeneratingId === selectedRecipe.id}
+                      className="flex-1 py-1.5 px-2.5 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-300 text-[11px] font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                      title="Generate a custom photo with Google Imagen (~3¢)"
+                    >
+                      {regeneratingId === selectedRecipe.id && regenerateMode === 'imagen' ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-400" />
+                          <span>Generating with Imagen...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                          <span>Regenerate (Imagen AI)</span>
+                        </>
+                      )}
+                    </button>
+
+                    <button
+                      onClick={() => handleRegenerateImage(selectedRecipe.id, 'search')}
+                      disabled={regeneratingId === selectedRecipe.id}
+                      className="py-1.5 px-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 text-[11px] font-medium flex items-center justify-center gap-1 transition-colors cursor-pointer disabled:opacity-50"
+                      title="Find another real high-res photograph for free"
+                    >
+                      {regeneratingId === selectedRecipe.id && regenerateMode === 'search' ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" />
+                      ) : (
+                        <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
+                      )}
+                      <span className="hidden sm:inline">New Photo</span>
+                    </button>
+                  </div>
+
+                  {imageFeedback && (
+                    <div className="text-[11px] text-emerald-400 text-center font-medium py-0.5 animate-fade-in">
+                      ✓ {imageFeedback}
                     </div>
                   )}
                 </div>

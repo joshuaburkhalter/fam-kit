@@ -412,6 +412,17 @@ export const api = {
   deleteRecipe: (id: string) =>
     fetchJson<{ success: boolean }>(`/recipes?id=${id}`, { method: 'DELETE' }),
 
+  regenerateRecipeImage: async (
+    recipeId: string,
+    mode: 'imagen' | 'search',
+    apiKey?: string
+  ): Promise<{ success: boolean; imageUrl: string }> => {
+    return fetchJson<{ success: boolean; imageUrl: string }>(`/recipes/${recipeId}/regenerate-image`, {
+      method: 'POST',
+      body: JSON.stringify({ mode, customApiKey: apiKey }),
+    });
+  },
+
   importRecipeFromUrl: async (householdId: string, url: string, apiKey?: string): Promise<Recipe> => {
     const res = await fetchJson<{ success: boolean; recipe: any }>('/recipes/import', {
       method: 'POST',
