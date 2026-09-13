@@ -28,22 +28,26 @@ const GEMINI_SUGGESTIONS = [
   {
     icon: '🛒',
     title: 'Update Groceries',
-    prompt: 'Add milk, eggs, and bread to the grocery list',
+    prompt: "I'd like to update our groceries",
+    subtitle: 'What groceries would you like to add?',
   },
   {
     icon: '📅',
     title: 'Check Schedule',
     prompt: "What's on our family calendar this week?",
+    subtitle: 'Review upcoming family activities',
   },
   {
     icon: '✨',
-    title: 'Create a Recipe',
-    prompt: 'Create a delicious 20-minute garlic butter chicken recipe and save it to our recipe box',
+    title: 'Recipe Ideas',
+    prompt: 'Suggest a quick and delicious dinner recipe for tonight',
+    subtitle: 'Get ideas before deciding to save',
   },
   {
     icon: '🍽️',
     title: 'Plan Dinners',
-    prompt: 'Help me plan quick dinners for the family this week',
+    prompt: 'Help me plan dinner ideas for the family this week',
+    subtitle: 'Brainstorm meals without auto-saving',
   },
 ];
 
@@ -362,7 +366,7 @@ export const AssistantPage: React.FC = () => {
                       {item.title}
                     </div>
                     <div className="text-[11px] text-slate-400 truncate mt-0.5">
-                      {item.prompt}
+                      {item.subtitle || item.prompt}
                     </div>
                   </div>
                 </button>

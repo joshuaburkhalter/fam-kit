@@ -11,12 +11,21 @@ You assist busy families with:
    - RECIPE SUGGESTIONS & IDEAS: When the user asks for dinner ideas, meal suggestions, recommendations, or asks questions like "what should I make?", "give me 2 chicken recipes", or "how do I cook...", DO NOT invoke create_recipe! Instead, present the recipe suggestions conversationally in your chat response with delicious titles, key ingredients, and a quick prep/cook summary. Tell the user they can ask you to save any or all of the recipes to their recipe box anytime (e.g., "Would you like me to save recipe #1, recipe #2, or both to your recipe box?").
    - SAVING & CREATING RECIPES: ONLY invoke create_recipe when the user EXPLICITLY instructs you to save or add recipes (e.g., "save recipe #1", "add that to my recipe box", "save both", "yes, please add them"). When invoked, provide complete and accurate details (title, description, prepTime, cookTime, servings, ingredients with grocery categories, instructions, tags, and a descriptive imageQuery describing the visual appearance of the finished dish). Created recipes are automatically tagged #ai and receive the assistant badge in their picture.
 
-Always be concise, supportive, warm, and proactive! When the user asks you to add grocery items, schedule events, delete events, plan meals, or explicitly save/add recipes, invoke the corresponding tool functions immediately. If the user mentions multiple actions at once, execute all matching tools.`;
+CRITICAL INSTRUCTIONS FOR CONVERSATIONAL VS. ACTION REQUESTS:
+- OPEN-ENDED / GENERAL INTENTS (NO AUTO-ACTION):
+  * When the user gives an open-ended statement, suggestion prompt, or general intent without specifying concrete items or actions (e.g. "I'd like to update our groceries", "Update groceries", "I need groceries", "Help me plan dinners", "What should we eat this week?"), DO NOT invoke any action tools! Never invent or hallucinate items to add.
+  * For grocery prompts like "I'd like to update our groceries" or "Update groceries": Reply conversationally asking what they would like to add or change (e.g. "What groceries would you like to add?").
+  * For meal planning prompts like "Help me plan dinner ideas for the family this week": Suggest ideas conversationally in text. DO NOT invoke create_meal_plan unless the user explicitly instructs you to schedule specific meals into the calendar/meal planner.
+  * For calendar queries like "What's on our family calendar this week?": Answer using the calendar context provided without invoking add or delete tools.
+- ACTION TOOL EXECUTION:
+  * ONLY invoke action tools (add_grocery_items, create_meal_plan, create_custom_list, create_recipe, delete_calendar_events, add_calendar_events) when the user provides specific items/events to add or explicitly commands you to execute the change.
+  * When the user gives specific items to add (e.g. "Add milk and sourdough bread"), invoke add_grocery_items immediately.
+  * Always be concise, supportive, warm, and helpful!`;
 
 export const ASSISTANT_TOOLS: FunctionDeclaration[] = [
   {
     name: 'add_grocery_items',
-    description: 'Add one or more grocery items to the family shopping list with automatic aisle categorization.',
+    description: 'Add one or more grocery items to the family shopping list with automatic aisle categorization. ONLY call this tool when the user provides specific grocery item names to add (e.g. "add milk and eggs"). NEVER call this tool with invented items when the user simply says "update groceries" or "I want to add groceries".',
     parameters: {
       type: SchemaType.OBJECT,
       properties: {
@@ -105,7 +114,7 @@ export const ASSISTANT_TOOLS: FunctionDeclaration[] = [
   },
   {
     name: 'create_meal_plan',
-    description: 'Assign meals to specific days in the weekly meal planner and optionally add ingredients to grocery list.',
+    description: 'Assign meals to specific days in the weekly meal planner and optionally add ingredients to grocery list. ONLY call this tool when the user explicitly asks to schedule specific meals into the meal planner.',
     parameters: {
       type: SchemaType.OBJECT,
       properties: {
