@@ -57,9 +57,15 @@ app.post('/api/auth/login', (req, res) => {
   }
 
   const cleanLogin = email.trim().toLowerCase();
+  const cleanNoSpace = cleanLogin.replace(/\s+/g, '');
   const user = queryOne<{ id: string; name: string; email: string; password: string; avatar: string; color: string; role: string; householdId: string }>(
-    'SELECT * FROM users WHERE LOWER(email) = ? OR LOWER(name) = ?',
-    [cleanLogin, cleanLogin]
+    `SELECT * FROM users 
+     WHERE LOWER(email) = ? 
+        OR LOWER(name) = ? 
+        OR REPLACE(LOWER(name), ' ', '') = ?
+        OR (INSTR(email, '@') > 0 AND LOWER(SUBSTR(email, 1, INSTR(email, '@') - 1)) = ?)
+     ORDER BY CASE WHEN id LIKE 'u_%' THEN 1 ELSE 2 END, id DESC`,
+    [cleanLogin, cleanLogin, cleanNoSpace, cleanNoSpace]
   );
 
   if (!user) {
