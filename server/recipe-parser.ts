@@ -292,7 +292,7 @@ export async function findAccurateRecipePhoto(
 
   // Culinary stop words that should NEVER be used as the sole basis for matching a photo
   const CULINARY_STOP_WORDS = new Set([
-    'soup', 'soups', 'salad', 'salads', 'noodle', 'noodles', 'rice', 'dish', 'dishes', 'food', 'recipe',
+    'soup', 'soups', 'salad', 'salads', 'dish', 'dishes', 'food', 'recipe',
     'style', 'creamy', 'crispy', 'easy', 'best', 'homemade', 'quick', 'simple', 'ultimate', 'classic',
     'baked', 'pan', 'instant', 'pot', 'slow', 'cooker', 'casserole', 'skillet', 'sauce', 'stew', 'bowl',
     'dip', 'pie', 'pasta', 'dinner', 'lunch', 'breakfast'
@@ -331,7 +331,8 @@ export async function findAccurateRecipePhoto(
           if (!imgUrl || usedImages.has(imgUrl)) return false;
           if (imgUrl.toLowerCase().endsWith('.svg') || p.title.toLowerCase().endsWith('.svg')) return false;
           const lowerTitle = p.title.toLowerCase();
-          return distinctKeywords.every((w) => lowerTitle.includes(w));
+          const matchCount = distinctKeywords.filter((w) => lowerTitle.includes(w)).length;
+          return matchCount >= Math.min(2, distinctKeywords.length);
         });
 
         const selectedUrl = match?.imageinfo?.[0]?.thumburl || match?.imageinfo?.[0]?.url;

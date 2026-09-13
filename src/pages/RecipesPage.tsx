@@ -46,23 +46,35 @@ export const RecipesPage: React.FC = () => {
   const [regenerateMode, setRegenerateMode] = useState<'imagen' | 'search' | null>(null);
   const [imageFeedback, setImageFeedback] = useState<string | null>(null);
 
-  const handleRegenerateImage = async (recipeId: string, mode: 'imagen' | 'search') => {
+  const handleRegenerateImage = async (recipeId: string, options: { mode?: 'imagen' | 'search'; customUrl?: string }) => {
     setRegeneratingId(recipeId);
-    setRegenerateMode(mode);
+    setRegenerateMode(options.mode || 'search');
     setImageFeedback(null);
     try {
-      const res = await api.regenerateRecipeImage(recipeId, mode, apiKey || undefined);
+      const res = await api.regenerateRecipeImage(recipeId, {
+        mode: options.mode || 'search',
+        customUrl: options.customUrl,
+        currentImageUrl: selectedRecipe?.image_url,
+        apiKey: apiKey || undefined,
+      });
       if (res.success && res.imageUrl) {
         setSelectedRecipe((prev) => (prev && prev.id === recipeId ? { ...prev, image_url: res.imageUrl } : prev));
         setRecipes((prev) =>
           prev.map((r) => (r.id === recipeId ? { ...r, image_url: res.imageUrl } : r))
         );
-        setImageFeedback(mode === 'imagen' ? 'Generated new image with Google Imagen!' : 'Found new photo!');
+        setImageFeedback(options.customUrl ? 'Photo URL updated!' : options.mode === 'imagen' ? 'Generated with Imagen!' : 'Found new photo!');
         setTimeout(() => setImageFeedback(null), 3500);
       }
     } catch (err: any) {
       console.error('Failed to regenerate image:', err);
-      alert(err.message || 'Failed to regenerate image.');
+      const isVertexError = err.message?.includes('not found') || err.message?.includes('predict') || err.message?.includes('Imagen');
+      if (isVertexError) {
+        alert('Google AI Studio standard API keys do not currently support Imagen image generation. Finding a real high-res photograph instead...');
+        // Automatically fallback to finding a real high-res photo!
+        handleRegenerateImage(recipeId, { mode: 'search' });
+      } else {
+        alert(err.message || 'Failed to update image.');
+      }
     } finally {
       setRegeneratingId(null);
       setRegenerateMode(null);
@@ -289,40 +301,41 @@ export const RecipesPage: React.FC = () => {
                   )}
                 </div>
 
-                {/* Photo regeneration controls */}
+                {/* Photo controls */}
                 <div className="space-y-1.5 pt-0.5">
                   <div className="flex items-center gap-1.5">
                     <button
-                      onClick={() => handleRegenerateImage(selectedRecipe.id, 'imagen')}
+                      onClick={() => handleRegenerateImage(selectedRecipe.id, { mode: 'search' })}
                       disabled={regeneratingId === selectedRecipe.id}
-                      className="flex-1 py-1.5 px-2.5 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-300 text-[11px] font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
-                      title="Generate a custom photo with Google Imagen (~3¢)"
+                      className="flex-1 py-1.5 px-3 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-[11px] font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                      title="Find another high-resolution photograph of this dish"
                     >
-                      {regeneratingId === selectedRecipe.id && regenerateMode === 'imagen' ? (
+                      {regeneratingId === selectedRecipe.id && regenerateMode === 'search' ? (
                         <>
-                          <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-400" />
-                          <span>Generating with Imagen...</span>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" />
+                          <span>Finding photo...</span>
                         </>
                       ) : (
                         <>
-                          <Sparkles className="w-3.5 h-3.5 text-purple-400" />
-                          <span>Regenerate (Imagen AI)</span>
+                          <RotateCcw className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Find Another Photo</span>
                         </>
                       )}
                     </button>
 
                     <button
-                      onClick={() => handleRegenerateImage(selectedRecipe.id, 'search')}
+                      onClick={() => {
+                        const newUrl = prompt('Paste new image URL:', selectedRecipe.image_url || '');
+                        if (newUrl && newUrl.trim() && newUrl.trim() !== selectedRecipe.image_url) {
+                          handleRegenerateImage(selectedRecipe.id, { customUrl: newUrl.trim() });
+                        }
+                      }}
                       disabled={regeneratingId === selectedRecipe.id}
                       className="py-1.5 px-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 text-[11px] font-medium flex items-center justify-center gap-1 transition-colors cursor-pointer disabled:opacity-50"
-                      title="Find another real high-res photograph for free"
+                      title="Paste image link"
                     >
-                      {regeneratingId === selectedRecipe.id && regenerateMode === 'search' ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" />
-                      ) : (
-                        <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
-                      )}
-                      <span className="hidden sm:inline">New Photo</span>
+                      <Link2 className="w-3.5 h-3.5" />
+                      <span>URL</span>
                     </button>
                   </div>
 

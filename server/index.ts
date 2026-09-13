@@ -912,9 +912,14 @@ app.post('/api/recipes/:id/regenerate-image', async (req, res) => {
       if (recipe.ingredients) parsedIngredients = JSON.parse(recipe.ingredients);
     } catch {}
 
+    const { mode, customApiKey, customUrl, currentImageUrl } = req.body;
+    const apiKey = customApiKey || process.env.GEMINI_API_KEY;
+
     let newImageUrl: string;
 
-    if (mode === 'imagen') {
+    if (customUrl && typeof customUrl === 'string' && customUrl.startsWith('http')) {
+      newImageUrl = customUrl.trim();
+    } else if (mode === 'imagen') {
       if (!apiKey) {
         return res.status(400).json({ error: 'Gemini API key is required for Imagen 3 image generation.' });
       }
@@ -928,12 +933,16 @@ app.post('/api/recipes/:id/regenerate-image', async (req, res) => {
       );
     } else {
       const tagList = (recipe.tags || '').split(',').map((t) => t.trim()).filter(Boolean);
+      const used = new Set<string>();
+      if (currentImageUrl) used.add(currentImageUrl);
+      if (recipe.imageUrl) used.add(recipe.imageUrl);
+
       newImageUrl = await findAccurateRecipePhoto(
         recipe.title,
         recipe.description || '',
         tagList,
         undefined,
-        new Set<string>(),
+        used,
         parsedIngredients
       );
     }
