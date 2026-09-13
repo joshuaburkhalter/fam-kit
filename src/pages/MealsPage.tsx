@@ -16,6 +16,7 @@ import {
   History,
   RotateCcw,
   Loader2,
+  Sparkles,
 } from 'lucide-react';
 import {
   format,
@@ -843,17 +844,27 @@ export const MealsPage: React.FC = () => {
                       }`}
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        {rec.image_url ? (
-                          <img
-                            src={rec.image_url}
-                            alt={rec.title}
-                            className="w-10 h-10 rounded-xl object-cover shrink-0"
-                          />
-                        ) : (
-                          <div className="w-10 h-10 rounded-xl bg-pink-500/10 text-pink-400 flex items-center justify-center shrink-0">
-                            <ChefHat className="w-5 h-5" />
-                          </div>
-                        )}
+                        <div className="relative w-10 h-10 shrink-0">
+                          {rec.image_url ? (
+                            <img
+                              src={rec.image_url}
+                              alt={rec.title}
+                              className="w-10 h-10 rounded-xl object-cover"
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded-xl bg-pink-500/10 text-pink-400 flex items-center justify-center">
+                              <ChefHat className="w-5 h-5" />
+                            </div>
+                          )}
+                          {rec.tags?.some((t) => t.toLowerCase().replace(/^#/, '') === 'ai') && (
+                            <div
+                              className="absolute -bottom-1 -right-1 w-4 h-4 rounded-md bg-gradient-to-tr from-emerald-400 to-teal-300 flex items-center justify-center text-zinc-950 shadow-sm border border-slate-900"
+                              title="Created by AI Assistant"
+                            >
+                              <Sparkles className="w-2.5 h-2.5 stroke-[2.5]" />
+                            </div>
+                          )}
+                        </div>
                         <div className="min-w-0">
                           <div className="text-xs font-bold text-white truncate">{rec.title}</div>
                           <div className="flex items-center gap-2 text-[10px] text-slate-400 mt-0.5">

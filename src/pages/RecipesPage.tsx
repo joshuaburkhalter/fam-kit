@@ -14,6 +14,7 @@ import {
   ArrowLeft,
   RotateCcw,
   X,
+  Sparkles,
 } from 'lucide-react';
 import type { Recipe } from '../types';
 import { usePWA } from '../context/PWAContext';
@@ -125,10 +126,38 @@ export const RecipesPage: React.FC = () => {
     setCompletedSteps({});
   };
 
-  const filteredRecipes = recipes.filter((r) =>
-    r.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    r.tags?.some((t) => t.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+
+  const isAiRecipe = (recipe?: { tags?: string[] } | null): boolean => {
+    if (!recipe || !recipe.tags) return false;
+    return recipe.tags.some((t) => {
+      const clean = t.toLowerCase().trim().replace(/^#/, '');
+      return clean === 'ai';
+    });
+  };
+
+  const filteredRecipes = recipes.filter((r) => {
+    const matchesSearch =
+      !searchQuery.trim() ||
+      r.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      r.tags?.some((t) => t.toLowerCase().includes(searchQuery.toLowerCase()));
+
+    const matchesTag =
+      !selectedTag ||
+      (selectedTag === 'ai'
+        ? isAiRecipe(r)
+        : r.tags?.some((t) => t.toLowerCase().trim().replace(/^#/, '') === selectedTag.toLowerCase().trim().replace(/^#/, '')));
+
+    return matchesSearch && matchesTag;
+  });
+
+  // Collect unique clean tags
+  const allUniqueTags = Array.from(
+    new Set(
+      recipes.flatMap((r) => r.tags || []).map((t) => t.trim().replace(/^#/, ''))
+    )
+  ).filter(Boolean);
+  const hasAiRecipes = recipes.some((r) => isAiRecipe(r));
 
   return (
     <div className="max-w-6xl mx-auto p-2 sm:p-4 pb-36 md:pb-28 space-y-4">
@@ -208,17 +237,29 @@ export const RecipesPage: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {/* Image & Overview */}
               <div className="md:col-span-1 space-y-3">
-                {selectedRecipe.image_url ? (
-                  <img
-                    src={selectedRecipe.image_url}
-                    alt={selectedRecipe.title}
-                    className="w-full h-56 object-cover rounded-3xl border border-white/10 shadow-lg"
-                  />
-                ) : (
-                  <div className="w-full h-44 rounded-3xl bg-slate-900 border border-white/10 flex items-center justify-center text-slate-600">
-                    <ChefHat className="w-12 h-12" />
-                  </div>
-                )}
+                <div className="relative w-full overflow-hidden rounded-3xl border border-white/10 shadow-lg">
+                  {selectedRecipe.image_url ? (
+                    <img
+                      src={selectedRecipe.image_url}
+                      alt={selectedRecipe.title}
+                      className="w-full h-56 object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-44 bg-slate-900 flex items-center justify-center text-slate-600">
+                      <ChefHat className="w-12 h-12" />
+                    </div>
+                  )}
+
+                  {/* Assistant AI icon in bottom right-hand corner of the picture */}
+                  {isAiRecipe(selectedRecipe) && (
+                    <div
+                      className="absolute bottom-3 right-3 z-10 w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-400 to-teal-300 flex items-center justify-center text-zinc-950 shadow-lg shadow-emerald-950/50 border border-white/30"
+                      title="Created by AI Assistant (#ai)"
+                    >
+                      <Sparkles className="w-4.5 h-4.5 stroke-[2.2]" />
+                    </div>
+                  )}
+                </div>
 
                 <div className="flex flex-wrap gap-2 text-xs">
                   {Boolean(selectedRecipe.prep_time_minutes && selectedRecipe.prep_time_minutes > 0) ? (
@@ -270,14 +311,23 @@ export const RecipesPage: React.FC = () => {
                 {/* Tags */}
                 {selectedRecipe.tags && selectedRecipe.tags.length > 0 && (
                   <div className="flex flex-wrap gap-1.5">
-                    {selectedRecipe.tags.map((t, idx) => (
-                      <span
-                        key={idx}
-                        className="text-[11px] bg-white/5 text-slate-400 px-2.5 py-1 rounded-lg border border-white/5"
-                      >
-                        #{t}
-                      </span>
-                    ))}
+                    {selectedRecipe.tags.map((t, idx) => {
+                      const cleanTag = t.trim().replace(/^#/, '');
+                      const isAi = cleanTag.toLowerCase() === 'ai';
+                      return (
+                        <span
+                          key={idx}
+                          className={`text-[11px] px-2.5 py-1 rounded-lg border flex items-center gap-1 ${
+                            isAi
+                              ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30 font-semibold shadow-sm shadow-emerald-500/10'
+                              : 'bg-white/5 text-slate-400 border-white/5'
+                          }`}
+                        >
+                          {isAi && <Sparkles className="w-3 h-3 text-emerald-400" />}
+                          #{cleanTag}
+                        </span>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -405,6 +455,56 @@ export const RecipesPage: React.FC = () => {
       ) : (
         /* Recipe Box Grid List View */
         <div className="space-y-4">
+          {/* Category / Tag Filter Pills */}
+          {(hasAiRecipes || allUniqueTags.length > 0) && (
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none no-scrollbar">
+              <button
+                onClick={() => setSelectedTag(null)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+                  selectedTag === null
+                    ? 'bg-pink-500 text-white shadow-md shadow-pink-500/20'
+                    : 'bg-slate-900/80 hover:bg-slate-800 text-slate-300 border border-white/5'
+                }`}
+              >
+                All Recipes ({recipes.length})
+              </button>
+
+              {hasAiRecipes && (
+                <button
+                  onClick={() => setSelectedTag(selectedTag === 'ai' ? null : 'ai')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap flex items-center gap-1.5 transition-all ${
+                    selectedTag === 'ai'
+                      ? 'bg-gradient-to-r from-emerald-400 to-teal-300 text-zinc-950 font-bold shadow-md shadow-emerald-500/20 ring-1 ring-white/40'
+                      : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/25'
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5 stroke-[2.2]" />
+                  <span>#ai</span>
+                  <span className="text-[10px] opacity-80">
+                    ({recipes.filter((r) => isAiRecipe(r)).length})
+                  </span>
+                </button>
+              )}
+
+              {allUniqueTags
+                .filter((t) => t.toLowerCase() !== 'ai')
+                .slice(0, 10)
+                .map((tag) => (
+                  <button
+                    key={tag}
+                    onClick={() => setSelectedTag(selectedTag === tag ? null : tag)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+                      selectedTag === tag
+                        ? 'bg-pink-500 text-white shadow-md shadow-pink-500/20'
+                        : 'bg-slate-900/80 hover:bg-slate-800 text-slate-300 border border-white/5'
+                    }`}
+                  >
+                    #{tag}
+                  </button>
+                ))}
+            </div>
+          )}
+
           {/* Recipe Grid Cards */}
           {isLoading ? (
             <div className="py-12 text-center text-xs text-slate-400">Loading recipes...</div>
@@ -415,11 +515,16 @@ export const RecipesPage: React.FC = () => {
               </div>
               <h3 className="text-base font-bold text-white">No recipes found</h3>
               <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                Import your first recipe by pasting a link from any cooking site or asking the Gemini AI!
+                {selectedTag === 'ai'
+                  ? 'No AI-created recipes yet. Ask your Family Assistant to create a recipe!'
+                  : 'Import your first recipe by pasting a link from any cooking site or asking the Gemini AI!'}
               </p>
               <div className="pt-2">
                 <button
-                  onClick={() => setIsScraperOpen(true)}
+                  onClick={() => {
+                    setSelectedTag(null);
+                    setIsScraperOpen(true);
+                  }}
                   className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-400 hover:to-rose-400 text-white px-4 py-2 rounded-2xl text-xs font-bold inline-flex items-center gap-2 transition-all shadow-lg shadow-pink-500/20"
                 >
                   <Link2 className="w-4 h-4" />
@@ -435,17 +540,30 @@ export const RecipesPage: React.FC = () => {
                   onClick={() => setSelectedRecipe(recipe)}
                   className="glass-panel rounded-3xl border border-white/10 hover:border-pink-500/40 overflow-hidden cursor-pointer transition-all hover:scale-[1.01] shadow-lg flex flex-col group"
                 >
-                  {recipe.image_url ? (
-                    <img
-                      src={recipe.image_url}
-                      alt={recipe.title}
-                      className="w-full h-44 object-cover border-b border-white/10 group-hover:scale-105 transition-transform duration-300"
-                    />
-                  ) : (
-                    <div className="w-full h-40 bg-slate-900 flex items-center justify-center text-slate-600 border-b border-white/5">
-                      <ChefHat className="w-10 h-10" />
-                    </div>
-                  )}
+                  {/* Picture container with Assistant AI icon in bottom right-hand corner */}
+                  <div className="relative w-full h-44 overflow-hidden border-b border-white/10">
+                    {recipe.image_url ? (
+                      <img
+                        src={recipe.image_url}
+                        alt={recipe.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-slate-900 flex items-center justify-center text-slate-600">
+                        <ChefHat className="w-10 h-10" />
+                      </div>
+                    )}
+
+                    {/* Assistant AI icon badge in bottom right-hand corner */}
+                    {isAiRecipe(recipe) && (
+                      <div
+                        className="absolute bottom-2.5 right-2.5 z-10 w-7 h-7 rounded-xl bg-gradient-to-tr from-emerald-400 to-teal-300 flex items-center justify-center text-zinc-950 shadow-lg shadow-emerald-950/50 border border-white/30 transition-transform group-hover:scale-110"
+                        title="Created by AI Assistant (#ai)"
+                      >
+                        <Sparkles className="w-4 h-4 stroke-[2.2]" />
+                      </div>
+                    )}
+                  </div>
 
                   <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
                     <div>
@@ -456,6 +574,29 @@ export const RecipesPage: React.FC = () => {
                         <p className="text-xs text-slate-400 mt-1 line-clamp-2">
                           {recipe.description}
                         </p>
+                      )}
+
+                      {/* Recipe Tags preview */}
+                      {recipe.tags && recipe.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {recipe.tags.slice(0, 3).map((t, idx) => {
+                            const cleanTag = t.trim().replace(/^#/, '');
+                            const isAi = cleanTag.toLowerCase() === 'ai';
+                            return (
+                              <span
+                                key={idx}
+                                className={`text-[10px] px-2 py-0.5 rounded-md border flex items-center gap-0.5 ${
+                                  isAi
+                                    ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30 font-semibold'
+                                    : 'bg-white/5 text-slate-400 border-white/5'
+                                }`}
+                              >
+                                {isAi && <Sparkles className="w-2.5 h-2.5 text-emerald-400" />}
+                                #{cleanTag}
+                              </span>
+                            );
+                          })}
+                        </div>
                       )}
                     </div>
 

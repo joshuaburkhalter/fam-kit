@@ -36,9 +36,9 @@ const GEMINI_SUGGESTIONS = [
     prompt: "What's on our family calendar this week?",
   },
   {
-    icon: '🍳',
-    title: 'Cook with Ingredients',
-    prompt: 'What can I cook with chicken and pasta?',
+    icon: '✨',
+    title: 'Create a Recipe',
+    prompt: 'Create a delicious 20-minute garlic butter chicken recipe and save it to our recipe box',
   },
   {
     icon: '🍽️',

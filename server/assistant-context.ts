@@ -206,7 +206,8 @@ export function buildSelectiveAssistantContext(
     'recipe', 'recipes', 'cookbook', 'cook', 'bake', 'dish', 'dishes',
     'how to make', 'how do i make', 'how do we make', 'ingredients for',
     'instructions for', 'steps for', 'what can we make', 'recipe for',
-    'several recipes', 'all recipes', 'all the recipes'
+    'several recipes', 'all recipes', 'all the recipes', 'create recipe',
+    'create a recipe', 'make a recipe', 'new recipe', 'save recipe'
   ];
 
   const allRecipes = queryAll<RecipeRow>(

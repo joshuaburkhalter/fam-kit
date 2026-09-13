@@ -7,8 +7,9 @@ You assist busy families with:
 3. Planning weekly meals (Breakfast, Lunch, Dinner, Snack) and suggesting delicious recipes.
 4. Scheduling, updating, or deleting calendar events, activities, appointments, and family reminders with date, time, and assigned family members.
 5. Importing recipes from links or photos of handwritten recipe cards and grocery receipts.
+6. Creating and saving new custom recipes directly into the family recipe box. Whenever the family asks for a recipe, ideas for dinner/lunch/breakfast, or asks you to create/write/save a recipe, invoke the create_recipe tool! Created recipes are automatically tagged #ai and receive the assistant badge in their picture.
 
-Always be concise, supportive, warm, and proactive! When the user asks you to add items, schedule events, delete events, or plan meals, invoke the corresponding tool functions immediately. If the user mentions multiple actions at once, execute all matching tools.`;
+Always be concise, supportive, warm, and proactive! When the user asks you to add items, schedule events, delete events, plan meals, or create a recipe, invoke the corresponding tool functions immediately. If the user mentions multiple actions at once, execute all matching tools.`;
 
 export const ASSISTANT_TOOLS: FunctionDeclaration[] = [
   {
@@ -161,6 +162,67 @@ export const ASSISTANT_TOOLS: FunctionDeclaration[] = [
         url: { type: SchemaType.STRING, description: 'The recipe website URL' },
       },
       required: ['url'],
+    },
+  },
+  {
+    name: 'create_recipe',
+    description: 'Create and save a new recipe directly into the family recipe box. The recipe will automatically be tagged with #ai. Use this whenever the user asks you to create, generate, write, invent, or save a recipe.',
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        title: {
+          type: SchemaType.STRING,
+          description: 'Title of the recipe (e.g. "Creamy Garlic Parmesan Chicken", "One-Pot Lemon Herb Rice")',
+        },
+        description: {
+          type: SchemaType.STRING,
+          description: 'A brief, appetizing summary or description of the dish.',
+        },
+        prepTime: {
+          type: SchemaType.STRING,
+          description: 'Prep time in minutes (e.g. "15" or "10 mins")',
+        },
+        cookTime: {
+          type: SchemaType.STRING,
+          description: 'Cook time in minutes (e.g. "25" or "30 mins")',
+        },
+        servings: {
+          type: SchemaType.STRING,
+          description: 'Number of servings (e.g. "4" or "4-6")',
+        },
+        ingredients: {
+          type: SchemaType.ARRAY,
+          description: 'List of ingredients with quantities and grocery aisle categories.',
+          items: {
+            type: SchemaType.OBJECT,
+            properties: {
+              item: { type: SchemaType.STRING, description: 'Ingredient name (e.g. "boneless skinless chicken breasts", "olive oil")' },
+              amount: { type: SchemaType.STRING, description: 'Quantity (e.g. "1.5", "2", "1/2")' },
+              unit: { type: SchemaType.STRING, description: 'Measurement unit (e.g. "lbs", "tbsp", "cup", "cloves")' },
+              category: {
+                type: SchemaType.STRING,
+                description: 'Aisle: Produce, Bakery & Bread, Deli & Prepared, Meat & Seafood, Dairy & Eggs, Pantry & Dry Goods, Snacks & Sweets, Frozen, Beverages, Other',
+              },
+            },
+            required: ['item'],
+          },
+        },
+        instructions: {
+          type: SchemaType.ARRAY,
+          description: 'Step-by-step cooking instructions in chronological order.',
+          items: { type: SchemaType.STRING },
+        },
+        tags: {
+          type: SchemaType.ARRAY,
+          description: 'Categorization tags (e.g. "dinner", "quick", "chicken", "italian", "kid-friendly"). "ai" is automatically included.',
+          items: { type: SchemaType.STRING },
+        },
+        imageQuery: {
+          type: SchemaType.STRING,
+          description: 'Food keyword or descriptive term to find the best matching photo for this dish (e.g. "creamy garlic chicken", "salmon skillet", "chocolate chip cookies")',
+        },
+      },
+      required: ['title', 'ingredients', 'instructions'],
     },
   },
 ];

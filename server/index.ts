@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { getDb, queryAll, queryOne, execute, saveDb, createDefaultAisles } from './db.js';
 import { getGeminiModel } from './gemini.js';
-import { parseRecipeFromUrl, parseRecipeFromHtml } from './recipe-parser.js';
+import { parseRecipeFromUrl, parseRecipeFromHtml, getCuratedFoodImage } from './recipe-parser.js';
 import { sendPushNotificationToHousehold, vapidPublicKey } from './push.js';
 import { buildSelectiveAssistantContext } from './assistant-context.js';
 
@@ -555,6 +555,82 @@ ${contextString}
           } catch (err: any) {
             console.error('Recipe parse error:', err);
           }
+        }
+
+        // Tool: create_recipe
+        else if (name === 'create_recipe' && toolArgs.title) {
+          const recipeId = `r_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+          const now = new Date().toISOString();
+
+          // Normalize ingredients into structured objects
+          const rawIngredients = Array.isArray(toolArgs.ingredients) ? toolArgs.ingredients : [];
+          const formattedIngredients = rawIngredients.map((ing: any) => {
+            if (typeof ing === 'string') return { item: ing };
+            return {
+              item: ing.item || ing.name || String(ing),
+              amount: ing.amount ? String(ing.amount) : undefined,
+              unit: ing.unit ? String(ing.unit) : undefined,
+              category: ing.category || undefined,
+            };
+          });
+
+          // Normalize instructions into strings
+          const rawInstructions = Array.isArray(toolArgs.instructions) ? toolArgs.instructions : [];
+          const formattedInstructions = rawInstructions.map((inst: any) => String(inst).trim()).filter(Boolean);
+
+          // Normalize tags: ALWAYS ensure 'ai' is included
+          const rawTags = Array.isArray(toolArgs.tags) ? toolArgs.tags : [];
+          const tagSet = new Set<string>();
+          tagSet.add('ai');
+          for (const t of rawTags) {
+            if (typeof t === 'string') {
+              const clean = t.trim().replace(/^#/, '');
+              if (clean) tagSet.add(clean);
+            }
+          }
+          const tagsString = Array.from(tagSet).join(', ');
+
+          // Determine photo: toolArgs.imageUrl or curated matching food image
+          let imageUrl = toolArgs.imageUrl;
+          if (!imageUrl || typeof imageUrl !== 'string' || !imageUrl.startsWith('http')) {
+            imageUrl = getCuratedFoodImage(toolArgs.title, [toolArgs.imageQuery || '', ...Array.from(tagSet)]);
+          }
+
+          const prepTime = toolArgs.prepTime ? String(toolArgs.prepTime).replace(/[^0-9]/g, '') : null;
+          const cookTime = toolArgs.cookTime ? String(toolArgs.cookTime).replace(/[^0-9]/g, '') : null;
+          const servings = toolArgs.servings ? String(toolArgs.servings).replace(/[^0-9]/g, '') : null;
+
+          execute(
+            `INSERT INTO recipes (id, title, description, imageUrl, prepTime, cookTime, servings, sourceUrl, ingredients, instructions, tags, householdId, createdAt)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              recipeId,
+              toolArgs.title.trim(),
+              toolArgs.description?.trim() || null,
+              imageUrl,
+              prepTime || null,
+              cookTime || null,
+              servings || null,
+              'Created by AI Assistant',
+              JSON.stringify(formattedIngredients),
+              JSON.stringify(formattedInstructions),
+              tagsString,
+              householdId,
+              now,
+            ]
+          );
+
+          actionsExecuted.push({
+            type: 'recipe_created',
+            summary: `Created recipe: "${toolArgs.title.trim()}" (tagged #ai)`,
+            data: { id: recipeId, title: toolArgs.title.trim(), tags: Array.from(tagSet), imageUrl },
+          });
+
+          sendPushNotificationToHousehold(householdId, {
+            title: '🍳 New Recipe Created',
+            body: `"${toolArgs.title.trim()}" was added to your recipe box with #ai tag`,
+            url: '/recipes',
+          });
         }
       }
     }
