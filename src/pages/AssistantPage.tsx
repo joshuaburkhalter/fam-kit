@@ -7,7 +7,7 @@ import {
   Volume2,
   VolumeX,
   Sparkles,
-  Loader2,
+  MessageCircle,
   CheckCircle,
   X,
   Trash2,
@@ -503,12 +503,13 @@ export const AssistantPage: React.FC = () => {
 
         {isLoading && (
           <div className="flex gap-3 justify-start items-center">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 shrink-0 shadow-md">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 shrink-0 shadow-md shadow-emerald-500/20">
               <Sparkles className="w-4 h-4" />
             </div>
-            <div className="glass-panel p-4 rounded-3xl rounded-tl-sm flex items-center gap-2.5 text-xs text-slate-300">
-              <Loader2 className="w-4 h-4 text-emerald-400 animate-spin" />
-              <span>Thinking and coordinating family data...</span>
+            <div className="glass-panel px-4 py-3.5 rounded-3xl rounded-tl-sm border-white/10 flex items-center gap-1.5 shadow-lg">
+              <span className="w-2 h-2 rounded-full bg-slate-300 animate-ios-dot" style={{ animationDelay: '0ms' }} />
+              <span className="w-2 h-2 rounded-full bg-slate-300 animate-ios-dot" style={{ animationDelay: '200ms' }} />
+              <span className="w-2 h-2 rounded-full bg-slate-300 animate-ios-dot" style={{ animationDelay: '400ms' }} />
             </div>
           </div>
         )}
@@ -560,7 +561,7 @@ export const AssistantPage: React.FC = () => {
                 className="w-full h-full flex items-center justify-center text-slate-950"
                 title="Message Gemini Assistant"
               >
-                <Sparkles className="w-6 h-6 stroke-[2.2]" />
+                <MessageCircle className="w-6 h-6 stroke-[2.2]" />
               </button>
             ) : (
               <form
