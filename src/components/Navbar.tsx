@@ -37,8 +37,9 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
   const [showUserDropdown, setShowUserDropdown] = useState(false);
 
   const handleCopyInvite = () => {
-    if (household?.invite_code) {
-      navigator.clipboard.writeText(household.invite_code);
+    const code = household?.invite_code || (household as any)?.inviteCode;
+    if (code) {
+      navigator.clipboard.writeText(code);
       setCopiedInvite(true);
       setTimeout(() => setCopiedInvite(false), 2000);
     }
@@ -78,7 +79,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
                     ) : (
                       <Copy className="w-2.5 h-2.5" />
                     )}
-                    {household.invite_code}
+                    {household.invite_code || (household as any).inviteCode}
                   </button>
                 </div>
               )}

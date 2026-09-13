@@ -2,6 +2,7 @@ export interface Household {
   id: string;
   name: string;
   invite_code: string;
+  inviteCode?: string;
   created_at: string;
 }
 

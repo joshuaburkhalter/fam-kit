@@ -423,7 +423,7 @@ export const AuthPage: React.FC = () => {
                       maxLength={8}
                       value={joinInviteCode}
                       onChange={(e) => setJoinInviteCode(e.target.value.toUpperCase())}
-                      placeholder="e.g. HOMEBASE or MILLER"
+                      placeholder="e.g. H5XWAE"
                       className="w-full bg-slate-900/90 border border-white/10 rounded-xl px-3.5 py-2 text-xs font-mono tracking-widest uppercase text-emerald-400 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
                     />
                   </div>

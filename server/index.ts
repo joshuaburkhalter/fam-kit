@@ -47,6 +47,37 @@ function getHouseholdId(req: express.Request): string {
   return row?.id || 'fam_default_1';
 }
 
+export function generateRandomInviteCode(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}
+
+function getUniqueInviteCode(): string {
+  while (true) {
+    const code = generateRandomInviteCode();
+    const existing = queryOne('SELECT id FROM households WHERE inviteCode = ?', [code]);
+    if (!existing) return code;
+  }
+}
+
+function formatHousehold(h: any) {
+  if (!h) return null;
+  const code = h.inviteCode || h.invite_code || '';
+  return {
+    ...h,
+    id: h.id,
+    name: h.name,
+    inviteCode: code,
+    invite_code: code,
+    createdAt: h.createdAt || h.created_at || '',
+    created_at: h.createdAt || h.created_at || '',
+  };
+}
+
 // ---------------- AUTH ROUTES ----------------
 
 // 0. Auth: Login
@@ -91,7 +122,7 @@ app.post('/api/auth/login', (req, res) => {
   res.json({
     token: user.id,
     user: safeUser,
-    household,
+    household: formatHousehold(household),
   });
 });
 
@@ -139,11 +170,7 @@ app.post('/api/auth/register', (req, res) => {
     }
 
     targetHouseholdId = `fam_${Date.now()}`;
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    let code = '';
-    for (let i = 0; i < 6; i++) {
-      code += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
+    const code = getUniqueInviteCode();
 
     execute('INSERT INTO households VALUES (?, ?, ?, ?)', [targetHouseholdId, householdName.trim(), code, now]);
     createDefaultAisles(targetHouseholdId);
@@ -184,7 +211,7 @@ app.post('/api/auth/register', (req, res) => {
   res.json({
     token: userId,
     user,
-    household,
+    household: formatHousehold(household),
   });
 });
 
@@ -196,7 +223,7 @@ app.get('/api/auth/me', (req, res) => {
   }
 
   const household = queryOne('SELECT * FROM households WHERE id = ?', [user.householdId]);
-  res.json({ user, household });
+  res.json({ user, household: formatHousehold(household) });
 });
 
 // 0. Auth: Demo Users across Households
@@ -1245,7 +1272,7 @@ app.get('/api/family', (req, res) => {
   const householdId = getHouseholdId(req);
   const household = queryOne('SELECT * FROM households WHERE id = ?', [householdId]);
   const members = queryAll('SELECT * FROM users WHERE householdId = ?', [householdId]);
-  res.json({ ...household, members });
+  res.json({ ...formatHousehold(household), members });
 });
 
 app.post('/api/family', (req, res) => {
@@ -1280,7 +1307,7 @@ app.post('/api/family', (req, res) => {
     }
     const h = queryOne('SELECT * FROM households WHERE id = ?', [found.id]);
     const m = queryAll('SELECT * FROM users WHERE householdId = ?', [found.id]);
-    return res.json({ household: { ...h, members: m } });
+    return res.json({ household: { ...formatHousehold(h), members: m } });
   }
 
   if (name) {

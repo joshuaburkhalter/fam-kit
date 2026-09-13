@@ -251,6 +251,25 @@ function initSchema(db: Database) {
     console.error('Error backfilling usernames:', err);
   }
 
+  // Ensure all households have a randomized alphanumeric invite code
+  try {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const generateCode = () => {
+      let c = '';
+      for (let i = 0; i < 6; i++) c += chars.charAt(Math.floor(Math.random() * chars.length));
+      return c;
+    };
+    const households = db.exec("SELECT id, inviteCode FROM households WHERE inviteCode IN ('FAMKIT', 'HOMEBASE', 'MILLER') OR length(inviteCode) < 4");
+    if (households.length > 0 && households[0].values) {
+      for (const row of households[0].values) {
+        const hid = String(row[0]);
+        db.run("UPDATE households SET inviteCode = ? WHERE id = ?", [generateCode(), hid]);
+      }
+    }
+  } catch (err) {
+    console.error('Error randomizing invite codes:', err);
+  }
+
   // Check if seeded
   const check = db.exec('SELECT COUNT(*) as count FROM households');
   const count = (check[0]?.values[0]?.[0] as number) || 0;
@@ -298,7 +317,13 @@ function seedDemoData(db: Database) {
   const now = new Date().toISOString();
   const householdId = 'fam_default_1';
 
-  db.run(`INSERT INTO households VALUES (?, ?, ?, ?)`, [householdId, 'The Burkhalter Family', 'FAMKIT', now]);
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let demoInviteCode = '';
+  for (let i = 0; i < 6; i++) {
+    demoInviteCode += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+
+  db.run(`INSERT INTO households VALUES (?, ?, ?, ?)`, [householdId, 'The Burkhalter Family', demoInviteCode, now]);
 
   db.run(`INSERT INTO users (id, name, username, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, ['u1', 'Joshua', 'joshua', 'joshua@redpointaudio.com', '👨‍💻', '#10b981', 'Parent', householdId, 'password123']);
   db.run(`INSERT INTO users (id, name, username, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, ['u2', 'Sarah', 'sarah', 'sarah@famkit.app', '👩‍🏫', '#ec4899', 'Parent', householdId, 'password123']);
@@ -432,7 +457,13 @@ function seedMillerFamily(db: Database) {
   const now = new Date().toISOString();
   const householdId = 'fam_default_2';
 
-  db.run(`INSERT OR IGNORE INTO households VALUES (?, ?, ?, ?)`, [householdId, 'The Miller Family', 'MILLER', now]);
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let millerInviteCode = '';
+  for (let i = 0; i < 6; i++) {
+    millerInviteCode += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+
+  db.run(`INSERT OR IGNORE INTO households VALUES (?, ?, ?, ?)`, [householdId, 'The Miller Family', millerInviteCode, now]);
 
   db.run(`INSERT OR IGNORE INTO users (id, name, username, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, ['u5', 'Alex Miller', 'alex', 'alex@miller.com', '👨‍💼', '#3b82f6', 'Parent', householdId, 'password123']);
   db.run(`INSERT OR IGNORE INTO users (id, name, username, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, ['u6', 'Jamie Miller', 'jamie', 'jamie@miller.com', '👩‍🔬', '#8b5cf6', 'Parent', householdId, 'password123']);

@@ -37,8 +37,9 @@ export const FamilyPage: React.FC = () => {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const handleCopyCode = () => {
-    if (household?.invite_code) {
-      navigator.clipboard.writeText(household.invite_code);
+    const code = household?.invite_code || (household as any)?.inviteCode;
+    if (code) {
+      navigator.clipboard.writeText(code);
       setCopiedCode(true);
       setTimeout(() => setCopiedCode(false), 2000);
     }
@@ -146,7 +147,7 @@ export const FamilyPage: React.FC = () => {
               Invite Code:
             </div>
             <div className="text-3xl font-black font-mono tracking-[0.25em] text-emerald-400 select-all">
-              {household?.invite_code || 'HOMEBASE'}
+              {household?.invite_code || (household as any)?.inviteCode || '••••••'}
             </div>
           </div>
 
@@ -354,7 +355,7 @@ export const FamilyPage: React.FC = () => {
                 type="text"
                 required
                 maxLength={8}
-                placeholder="e.g. HOMEBASE"
+                placeholder="e.g. H5XWAE"
                 value={joinInviteCode}
                 onChange={(e) => setJoinInviteCode(e.target.value.toUpperCase())}
                 className="w-full bg-slate-900 border border-white/10 rounded-xl px-3.5 py-2 text-sm font-mono tracking-widest uppercase text-white focus:outline-none focus:border-indigo-500"

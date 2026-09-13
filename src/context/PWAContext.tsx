@@ -102,9 +102,22 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const normalizeHousehold = (h: any): Household | null => {
+    if (!h) return null;
+    const code = h.invite_code || h.inviteCode || '';
+    return {
+      id: h.id,
+      name: h.name,
+      invite_code: code,
+      inviteCode: code,
+      created_at: h.created_at || h.createdAt || '',
+    };
+  };
+
   const setHousehold = (h: Household) => {
-    setHouseholdState(h);
-    localStorage.setItem('famkit_household_id', h.id);
+    const normalized = normalizeHousehold(h);
+    setHouseholdState(normalized);
+    if (normalized) localStorage.setItem('famkit_household_id', normalized.id);
     refreshHouseholdsAndUsers();
   };
 
@@ -115,7 +128,7 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('famkit_household_id', res.household.id);
 
     setCurrentUserState(res.user);
-    setHouseholdState(res.household);
+    setHouseholdState(normalizeHousehold(res.household));
 
     try {
       const [householdUsers, householdAisles] = await Promise.all([
@@ -146,7 +159,7 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('famkit_household_id', res.household.id);
 
     setCurrentUserState(res.user);
-    setHouseholdState(res.household);
+    setHouseholdState(normalizeHousehold(res.household));
 
     try {
       const [householdUsers, householdAisles] = await Promise.all([
@@ -179,7 +192,7 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const { user, household: h } = await api.getMe();
           if (user && h) {
             setCurrentUserState(user);
-            setHouseholdState(h);
+            setHouseholdState(normalizeHousehold(h));
             localStorage.setItem('famkit_user_id', user.id);
             localStorage.setItem('famkit_household_id', h.id);
 
