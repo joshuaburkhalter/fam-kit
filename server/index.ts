@@ -889,8 +889,6 @@ app.post('/api/recipes/:id/regenerate-image', async (req, res) => {
   try {
     const householdId = getHouseholdId(req);
     const { id } = req.params;
-    const { mode, customApiKey } = req.body; // mode: 'imagen' | 'search'
-    const apiKey = customApiKey || process.env.GEMINI_API_KEY;
 
     const recipe = queryOne<{
       id: string;
