@@ -7,8 +7,6 @@ import {
   Volume2,
   VolumeX,
   Sparkles,
-  Bot,
-  User as UserIcon,
   Loader2,
   CheckCircle,
   X,
@@ -383,7 +381,7 @@ export const AssistantPage: React.FC = () => {
             >
               {isAi && (
                 <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 shrink-0 mt-1 shadow-md shadow-emerald-500/20">
-                  <Bot className="w-4 h-4" />
+                  <Sparkles className="w-4 h-4" />
                 </div>
               )}
 
@@ -489,12 +487,12 @@ export const AssistantPage: React.FC = () => {
                   />
                 ) : (
                   <div
-                    className="w-8 h-8 rounded-xl flex items-center justify-center text-white shrink-0 mt-1 shadow"
+                    className="w-8 h-8 rounded-xl flex items-center justify-center text-white shrink-0 mt-1 shadow font-bold text-xs"
                     style={{
                       backgroundColor: currentUser?.avatar_color || '#10b981',
                     }}
                   >
-                    <UserIcon className="w-4 h-4" />
+                    {currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'U'}
                   </div>
                 )
               )}
@@ -506,7 +504,7 @@ export const AssistantPage: React.FC = () => {
         {isLoading && (
           <div className="flex gap-3 justify-start items-center">
             <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 shrink-0 shadow-md">
-              <Bot className="w-4 h-4" />
+              <Sparkles className="w-4 h-4" />
             </div>
             <div className="glass-panel p-4 rounded-3xl rounded-tl-sm flex items-center gap-2.5 text-xs text-slate-300">
               <Loader2 className="w-4 h-4 text-emerald-400 animate-spin" />
