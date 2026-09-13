@@ -287,6 +287,13 @@ ${contextString}
     let assistantMessage = response.text() || '';
 
     if (functionCalls && functionCalls.length > 0) {
+      // Avoid repeating pictures across recipes created in this batch or recently
+      const recentRecipeImages = queryAll<{ imageUrl: string }>(
+        'SELECT imageUrl FROM recipes WHERE householdId = ? AND imageUrl IS NOT NULL ORDER BY createdAt DESC LIMIT 30',
+        [householdId]
+      ).map((r) => r.imageUrl).filter(Boolean);
+      const usedImagesInBatch = new Set<string>(recentRecipeImages);
+
       for (const call of functionCalls) {
         const { name } = call;
         const toolArgs = (call.args || {}) as any;
@@ -590,15 +597,19 @@ ${contextString}
           }
           const tagsString = Array.from(tagSet).join(', ');
 
-          // Determine photo: toolArgs.imageUrl or accurate matching food photo (curated/Wikipedia/AI)
+          // Determine photo: toolArgs.imageUrl or accurate matching food photo (signature/Wikipedia/AI)
           let imageUrl = toolArgs.imageUrl;
-          if (!imageUrl || typeof imageUrl !== 'string' || !imageUrl.startsWith('http')) {
+          if (!imageUrl || typeof imageUrl !== 'string' || !imageUrl.startsWith('http') || usedImagesInBatch.has(imageUrl)) {
             imageUrl = await findAccurateRecipePhoto(
               toolArgs.title,
               toolArgs.description || '',
               Array.from(tagSet),
-              toolArgs.imageQuery
+              toolArgs.imageQuery,
+              usedImagesInBatch
             );
+          }
+          if (imageUrl) {
+            usedImagesInBatch.add(imageUrl);
           }
 
           const prepTime = toolArgs.prepTime ? String(toolArgs.prepTime).replace(/[^0-9]/g, '') : null;

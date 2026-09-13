@@ -181,63 +181,111 @@ export function getCuratedFoodImage(title: string = '', tags: string[] = []): st
   return CURATED_FOOD_IMAGES.default;
 }
 
+export const SIGNATURE_DISH_IMAGES: Record<string, string[]> = {
+  'chicken parmesan': [
+    'https://images.unsplash.com/photo-1632778149955-e80f8ceca2e8?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1598515214211-89d3c73ae83b?w=800&auto=format&fit=crop&q=80',
+  ],
+  'chicken parmigiana': [
+    'https://images.unsplash.com/photo-1632778149955-e80f8ceca2e8?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1598515214211-89d3c73ae83b?w=800&auto=format&fit=crop&q=80',
+  ],
+  'chicken parm': [
+    'https://images.unsplash.com/photo-1632778149955-e80f8ceca2e8?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1598515214211-89d3c73ae83b?w=800&auto=format&fit=crop&q=80',
+  ],
+  'parmesan chicken': [
+    'https://images.unsplash.com/photo-1632778149955-e80f8ceca2e8?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1598515214211-89d3c73ae83b?w=800&auto=format&fit=crop&q=80',
+  ],
+  'parm chicken': [
+    'https://images.unsplash.com/photo-1632778149955-e80f8ceca2e8?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1598515214211-89d3c73ae83b?w=800&auto=format&fit=crop&q=80',
+  ],
+  'chicken alfredo': [
+    'https://images.unsplash.com/photo-1645112411341-6c4fd023714a?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1555949258-eb67b1ef0ceb?w=800&auto=format&fit=crop&q=80',
+  ],
+  'chicken marsala': [
+    'https://images.unsplash.com/photo-1604908177453-7462950a6a3b?w=800&auto=format&fit=crop&q=80',
+  ],
+  'chicken piccata': [
+    'https://images.unsplash.com/photo-1532550907401-a500c9a57435?w=800&auto=format&fit=crop&q=80',
+  ],
+  'chicken tenders': [
+    'https://images.unsplash.com/photo-1562967914-608f82629710?w=800&auto=format&fit=crop&q=80',
+  ],
+  'chicken tender': [
+    'https://images.unsplash.com/photo-1562967914-608f82629710?w=800&auto=format&fit=crop&q=80',
+  ],
+  'chicken nuggets': [
+    'https://images.unsplash.com/photo-1562967914-608f82629710?w=800&auto=format&fit=crop&q=80',
+  ],
+  'fried chicken': [
+    'https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1569058242253-92a9c755a0ec?w=800&auto=format&fit=crop&q=80',
+  ],
+  'crispy chicken': [
+    'https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?w=800&auto=format&fit=crop&q=80',
+  ],
+  'chicken wings': [
+    'https://images.unsplash.com/photo-1567620832903-9fc6debc209f?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1527477321055-43615b65171b?w=800&auto=format&fit=crop&q=80',
+  ],
+  'chicken wing': [
+    'https://images.unsplash.com/photo-1567620832903-9fc6debc209f?w=800&auto=format&fit=crop&q=80',
+  ],
+  'roast chicken': [
+    'https://images.unsplash.com/photo-1598103442097-8b74394b95c6?w=800&auto=format&fit=crop&q=80',
+  ],
+  'garlic butter salmon': [
+    'https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?w=800&auto=format&fit=crop&q=80',
+  ],
+  'beef stroganoff': [
+    'https://images.unsplash.com/photo-1544025162-d76694265947?w=800&auto=format&fit=crop&q=80',
+  ],
+  'shrimp scampi': [
+    'https://images.unsplash.com/photo-1559742811-822873691df8?w=800&auto=format&fit=crop&q=80',
+  ],
+  'mac and cheese': [
+    'https://images.unsplash.com/photo-1543339308-43e59d6b73a6?w=800&auto=format&fit=crop&q=80',
+  ],
+  'macaroni and cheese': [
+    'https://images.unsplash.com/photo-1543339308-43e59d6b73a6?w=800&auto=format&fit=crop&q=80',
+  ],
+  'lasagna': [
+    'https://images.unsplash.com/photo-1574894709920-11b28e7367e3?w=800&auto=format&fit=crop&q=80',
+  ],
+  'chocolate chip cookie': [
+    'https://images.unsplash.com/photo-1499636136210-6f4ee915583e?w=800&auto=format&fit=crop&q=80',
+  ],
+};
+
 export async function findAccurateRecipePhoto(
   title: string = '',
   description: string = '',
   tags: string[] = [],
-  imageQuery?: string
+  imageQuery?: string,
+  usedImages: Set<string> = new Set<string>()
 ): Promise<string> {
   const queryText = `${title} ${imageQuery || ''} ${tags.join(' ')}`.toLowerCase();
 
-  const DISH_SPECIALTIES = [
-    'chicken parmesan',
-    'chicken parmigiana',
-    'chicken parm',
-    'parmesan chicken',
-    'parm chicken',
-    'parmesan',
-    'parm',
-    'chicken alfredo',
-    'chicken marsala',
-    'chicken piccata',
-    'chicken tenders',
-    'chicken tender',
-    'chicken nuggets',
-    'chicken nugget',
-    'chicken wings',
-    'chicken wing',
-    'chicken soup',
-    'roast chicken',
-    'fried chicken',
-    'crispy chicken',
-    'mac and cheese',
-    'macaroni and cheese',
-    'garlic butter salmon',
-    'beef stroganoff',
-    'shrimp scampi',
-  ];
-
-  // 1. Check specialized signature dishes first
-  for (const dish of DISH_SPECIALTIES) {
-    if (queryText.includes(dish) && CURATED_FOOD_IMAGES[dish]) {
-      return CURATED_FOOD_IMAGES[dish];
-    }
-  }
-
-  // 2. High-priority curated match: check multi-word dishes (length >= 6)
-  const sortedKeys = Object.keys(CURATED_FOOD_IMAGES)
-    .filter((k) => k !== 'default' && k.length >= 6)
-    .sort((a, b) => b.length - a.length);
-
-  for (const key of sortedKeys) {
-    if (queryText.includes(key)) {
-      return CURATED_FOOD_IMAGES[key];
+  // 1. Check specialized signature dishes first (sorted by dish name length descending)
+  const signatureKeys = Object.keys(SIGNATURE_DISH_IMAGES).sort((a, b) => b.length - a.length);
+  for (const dish of signatureKeys) {
+    if (queryText.includes(dish)) {
+      const candidates = SIGNATURE_DISH_IMAGES[dish];
+      const unused = candidates.find((url) => !usedImages.has(url));
+      if (unused) {
+        usedImages.add(unused);
+        return unused;
+      }
     }
   }
 
   // 2. Try Wikipedia Dish Photo Search
   const cleanTitle = title
-    .replace(/^(how to make|easy|best|crispy|creamy|homemade|quick|simple|ultimate|classic)\s+/gi, '')
+    .replace(/^(how to make|easy|best|crispy|creamy|homemade|quick|simple|ultimate|classic|baked|pan-seared|slow cooker|instant pot)\s+/gi, '')
     .replace(/\s+(recipe|dish|style)$/gi, '')
     .trim();
 
@@ -265,10 +313,11 @@ export async function findAccurateRecipePhoto(
 
         const words = cleanTitle.toLowerCase().split(/\s+/).filter((w) => w.length >= 3);
         const match =
-          pages.find((p) => p.thumbnail?.source && words.every((w) => p.title.toLowerCase().includes(w))) ||
-          pages.find((p) => p.thumbnail?.source && words.some((w) => p.title.toLowerCase().includes(w)));
+          pages.find((p) => p.thumbnail?.source && !usedImages.has(p.thumbnail.source) && words.every((w) => p.title.toLowerCase().includes(w))) ||
+          pages.find((p) => p.thumbnail?.source && !usedImages.has(p.thumbnail.source) && words.some((w) => p.title.toLowerCase().includes(w)));
 
         if (match?.thumbnail?.source) {
+          usedImages.add(match.thumbnail.source);
           return match.thumbnail.source;
         }
       }
@@ -277,24 +326,19 @@ export async function findAccurateRecipePhoto(
     }
   }
 
-  // 3. Check full curated dictionary (sorted by length)
-  const allKeys = Object.keys(CURATED_FOOD_IMAGES)
-    .filter((k) => k !== 'default')
-    .sort((a, b) => b.length - a.length);
-
-  for (const key of allKeys) {
-    if (queryText.includes(key)) {
-      return CURATED_FOOD_IMAGES[key];
-    }
-  }
-
-  // 4. Dynamic AI-generated food photography via Pollinations
-  const photoPrompt = `${title}, ${description || ''}, plated gourmet food photography, appetizing, high resolution`
+  // 3. Dynamic dish-specific AI food photography via Pollinations
+  // We craft a prompt specifically tailored to this recipe title and descriptive image query
+  const descriptiveDetails = imageQuery || `${title}, ${description || ''}`.slice(0, 120);
+  const photoPrompt = `${descriptiveDetails}, professional gourmet food photography, plated restaurant dish, appetizing, crisp focus, studio culinary lighting`
     .replace(/[\n\r]+/g, ' ')
     .trim()
     .slice(0, 200);
 
-  return `https://image.pollinations.ai/prompt/${encodeURIComponent(photoPrompt)}?width=800&height=500&nologo=true`;
+  // Use a unique random seed to guarantee distinct images even for similar recipes
+  const seed = Math.floor(Math.random() * 900000) + 100000;
+  const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(photoPrompt)}?width=800&height=500&nologo=true&seed=${seed}`;
+  usedImages.add(pollinationsUrl);
+  return pollinationsUrl;
 }
 
 export async function synthesizeRecipeFromUrlWithAi(url: string, apiKey: string): Promise<ParsedRecipe> {
