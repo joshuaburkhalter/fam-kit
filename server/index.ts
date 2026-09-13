@@ -108,12 +108,13 @@ app.post('/api/auth/login', (req, res) => {
   }
 
   const household = queryOne('SELECT * FROM households WHERE id = ?', [user.householdId]);
+  const isPhoto = user.avatar && (user.avatar.startsWith('data:image') || user.avatar.startsWith('http://') || user.avatar.startsWith('https://'));
   const safeUser = {
     id: user.id,
     name: user.name,
     username: user.username,
     email: user.email,
-    avatar: user.avatar,
+    avatar: isPhoto ? user.avatar : null,
     color: user.color,
     role: user.role,
     householdId: user.householdId,
@@ -1271,8 +1272,15 @@ app.delete('/api/calendar', (req, res) => {
 app.get('/api/family', (req, res) => {
   const householdId = getHouseholdId(req);
   const household = queryOne('SELECT * FROM households WHERE id = ?', [householdId]);
-  const members = queryAll('SELECT * FROM users WHERE householdId = ?', [householdId]);
-  res.json({ ...formatHousehold(household), members });
+  const members = queryAll<any>('SELECT * FROM users WHERE householdId = ?', [householdId]);
+  const cleanedMembers = members.map((m) => {
+    const isPhoto = m.avatar && (m.avatar.startsWith('data:image') || m.avatar.startsWith('http://') || m.avatar.startsWith('https://'));
+    return {
+      ...m,
+      avatar: isPhoto ? m.avatar : null,
+    };
+  });
+  res.json({ ...formatHousehold(household), members: cleanedMembers });
 });
 
 app.post('/api/family', (req, res) => {
@@ -1367,7 +1375,7 @@ app.put('/api/users/profile', (req, res) => {
   const newColor = color && typeof color === 'string' ? color : existing.color;
   const newRole = role && typeof role === 'string' ? role : existing.role;
   const newPassword = password && typeof password === 'string' && password.trim() ? password.trim() : existing.password;
-  const newAvatar = avatar !== undefined ? avatar : existing.avatar;
+  const newAvatar = (avatar && typeof avatar === 'string' && (avatar.startsWith('data:image') || avatar.startsWith('http://') || avatar.startsWith('https://'))) ? avatar : null;
 
   execute(
     'UPDATE users SET name = ?, username = ?, email = ?, color = ?, role = ?, password = ?, avatar = ? WHERE id = ?',
@@ -1379,6 +1387,8 @@ app.put('/api/users/profile', (req, res) => {
     [targetUserId]
   );
 
+  const isUpdatedPhoto = updated!.avatar && (updated!.avatar.startsWith('data:image') || updated!.avatar.startsWith('http://') || updated!.avatar.startsWith('https://'));
+
   res.json({
     user: {
       id: updated!.id,
@@ -1386,7 +1396,7 @@ app.put('/api/users/profile', (req, res) => {
       name: updated!.name,
       username: updated!.username || undefined,
       email: updated!.email || undefined,
-      avatar: updated!.avatar || undefined,
+      avatar: isUpdatedPhoto ? updated!.avatar : undefined,
       avatar_color: updated!.color,
       role: (updated!.role.toLowerCase() as any) || 'member',
       created_at: '',

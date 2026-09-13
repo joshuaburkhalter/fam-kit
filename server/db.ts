@@ -204,6 +204,9 @@ function initSchema(db: Database) {
   try {
     db.run(`UPDATE users SET password = 'password123' WHERE password IS NULL OR password = ''`);
   } catch {}
+  try {
+    db.run(`UPDATE users SET avatar = NULL WHERE avatar IS NOT NULL AND avatar NOT LIKE 'data:image%' AND avatar NOT LIKE 'http%'`);
+  } catch {}
 
   // Username column migration & backfill
   try {

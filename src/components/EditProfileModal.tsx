@@ -73,6 +73,11 @@ function compressImage(file: File, maxSize: number = 256): Promise<string> {
   });
 }
 
+const isValidPhoto = (imgStr?: string | null): boolean => {
+  if (!imgStr || typeof imgStr !== 'string') return false;
+  return imgStr.startsWith('data:image') || imgStr.startsWith('http://') || imgStr.startsWith('https://');
+};
+
 export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onClose }) => {
   const { currentUser, users, updateProfile, switchUser } = usePWA();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -98,7 +103,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
       setEmail(currentUser.email || '');
       setRole(currentUser.role || 'member');
       setColor(currentUser.avatar_color || AVATAR_COLORS[0]);
-      setAvatarImage(currentUser.avatar || '');
+      setAvatarImage(isValidPhoto(currentUser.avatar) ? currentUser.avatar! : '');
       setNewPassword('');
       setErrorMessage(null);
       setSuccessMessage(null);
@@ -224,10 +229,10 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                 >
                   {isProcessingPhoto ? (
                     <Loader2 className="w-6 h-6 animate-spin text-white" />
-                  ) : avatarImage ? (
+                  ) : isValidPhoto(avatarImage) ? (
                     <img src={avatarImage} alt="Profile preview" className="w-full h-full object-cover" />
                   ) : (
-                    <span>{name ? name.charAt(0).toUpperCase() : 'U'}</span>
+                    <span className="font-bold text-2xl select-none">{name ? name.charAt(0).toUpperCase() : 'J'}</span>
                   )}
 
                   {/* Hover Camera Overlay */}
@@ -264,10 +269,10 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                     className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer border border-slate-700"
                   >
                     <Upload className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>{avatarImage ? 'Change Photo' : 'Upload Photo'}</span>
+                    <span>{isValidPhoto(avatarImage) ? 'Change Photo' : 'Upload Photo'}</span>
                   </button>
 
-                  {avatarImage && (
+                  {isValidPhoto(avatarImage) && (
                     <button
                       type="button"
                       onClick={handleRemovePhoto}
