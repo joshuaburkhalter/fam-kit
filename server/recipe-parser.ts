@@ -266,7 +266,8 @@ export async function findAccurateRecipePhoto(
   description: string = '',
   tags: string[] = [],
   imageQuery?: string,
-  usedImages: Set<string> = new Set<string>()
+  usedImages: Set<string> = new Set<string>(),
+  ingredients: Array<any> = []
 ): Promise<string> {
   const queryText = `${title} ${imageQuery || ''} ${tags.join(' ')}`.toLowerCase();
 
@@ -283,13 +284,26 @@ export async function findAccurateRecipePhoto(
     }
   }
 
-  // 2. Try Wikipedia Dish Photo Search
+  // 2. Try Wikipedia Dish Photo Search (STRICT matching only)
   const cleanTitle = title
     .replace(/^(how to make|easy|best|crispy|creamy|homemade|quick|simple|ultimate|classic|baked|pan-seared|slow cooker|instant pot)\s+/gi, '')
     .replace(/\s+(recipe|dish|style)$/gi, '')
     .trim();
 
-  if (cleanTitle) {
+  // Culinary stop words that should NEVER be used as the sole basis for matching a Wikipedia article
+  const CULINARY_STOP_WORDS = new Set([
+    'soup', 'soups', 'salad', 'salads', 'noodle', 'noodles', 'rice', 'dish', 'dishes', 'food', 'recipe',
+    'style', 'creamy', 'crispy', 'easy', 'best', 'homemade', 'quick', 'simple', 'ultimate', 'classic',
+    'baked', 'pan', 'instant', 'pot', 'slow', 'cooker', 'casserole', 'skillet', 'sauce', 'stew', 'bowl',
+    'dip', 'pie', 'pasta', 'dinner', 'lunch', 'breakfast'
+  ]);
+
+  const distinctKeywords = cleanTitle
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w.length >= 3 && !CULINARY_STOP_WORDS.has(w));
+
+  if (cleanTitle && distinctKeywords.length > 0) {
     try {
       const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&format=json&generator=search&gsrsearch=${encodeURIComponent(
         cleanTitle
@@ -311,10 +325,14 @@ export async function findAccurateRecipePhoto(
           thumbnail?: { source: string };
         }>;
 
-        const words = cleanTitle.toLowerCase().split(/\s+/).filter((w) => w.length >= 3);
-        const match =
-          pages.find((p) => p.thumbnail?.source && !usedImages.has(p.thumbnail.source) && words.every((w) => p.title.toLowerCase().includes(w))) ||
-          pages.find((p) => p.thumbnail?.source && !usedImages.has(p.thumbnail.source) && words.some((w) => p.title.toLowerCase().includes(w)));
+        // ONLY accept a Wikipedia page if ALL distinct culinary keywords match the article title!
+        // This prevents "Wild Rice & Mushroom Soup" from ever matching "Chicken soup" just because both are "soup".
+        const match = pages.find(
+          (p) =>
+            p.thumbnail?.source &&
+            !usedImages.has(p.thumbnail.source) &&
+            distinctKeywords.every((w) => p.title.toLowerCase().includes(w))
+        );
 
         if (match?.thumbnail?.source) {
           usedImages.add(match.thumbnail.source);
@@ -327,12 +345,30 @@ export async function findAccurateRecipePhoto(
   }
 
   // 3. Dynamic dish-specific AI food photography via Pollinations
-  // We craft a prompt specifically tailored to this recipe title and descriptive image query
-  const descriptiveDetails = imageQuery || `${title}, ${description || ''}`.slice(0, 120);
-  const photoPrompt = `${descriptiveDetails}, professional gourmet food photography, plated restaurant dish, appetizing, crisp focus, studio culinary lighting`
+  // We craft a prompt with key ingredients and full culinary details so the picture accurately depicts the dish
+  const keyIngredients = (ingredients || [])
+    .slice(0, 5)
+    .map((ing) => (typeof ing === 'string' ? ing : ing.item || ing.name))
+    .filter(Boolean)
+    .map((name: string) => name.replace(/^[0-9/\s\.\-]+(lbs?|cups?|tbsp|tsp|cloves?|cans?|oz|pkg)?\s*(of\s+)?/i, '').trim())
+    .filter((name: string) => name.length >= 3 && !/^(salt|pepper|black pepper|water|olive oil|vegetable oil|butter)$/i.test(name))
+    .slice(0, 4)
+    .join(', ');
+
+  const visualSubject = imageQuery || title;
+  const promptParts = [
+    visualSubject,
+    keyIngredients ? `with ${keyIngredients}` : '',
+    description ? description.slice(0, 100) : '',
+    'plated gourmet restaurant food photography, delicious, appetizing, crisp focus, shallow depth of field, authentic culinary presentation'
+  ].filter(Boolean);
+
+  const photoPrompt = promptParts
+    .join(', ')
     .replace(/[\n\r]+/g, ' ')
+    .replace(/\s+/g, ' ')
     .trim()
-    .slice(0, 200);
+    .slice(0, 240);
 
   // Use a unique random seed to guarantee distinct images even for similar recipes
   const seed = Math.floor(Math.random() * 900000) + 100000;

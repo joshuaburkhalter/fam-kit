@@ -605,7 +605,8 @@ ${contextString}
               toolArgs.description || '',
               Array.from(tagSet),
               toolArgs.imageQuery,
-              usedImagesInBatch
+              usedImagesInBatch,
+              formattedIngredients
             );
           }
           if (imageUrl) {
@@ -1226,6 +1227,13 @@ getDb().then(() => {
        SET imageUrl = 'https://images.unsplash.com/photo-1632778149955-e80f8ceca2e8?w=800&auto=format&fit=crop&q=80' 
        WHERE (LOWER(title) LIKE '%parm%' OR LOWER(title) LIKE '%parmigiana%')
          AND (imageUrl LIKE '%1604908176997%' OR imageUrl LIKE '%546069901%')`
+    );
+    // Self-heal: update any Wild Rice / Mushroom Soup recipes that got the Wikipedia chicken noodle soup image
+    execute(
+      `UPDATE recipes
+       SET imageUrl = 'https://image.pollinations.ai/prompt/creamy%20wild%20rice%20and%20mushroom%20soup%20with%20sauteed%20cremini%20mushrooms%20in%20a%20rustic%20bowl%2C%20gourmet%20food%20photography%2C%20appetizing?width=800&height=500&nologo=true&seed=73921'
+       WHERE (LOWER(title) LIKE '%wild rice%' OR LOWER(title) LIKE '%mushroom soup%')
+         AND (imageUrl LIKE '%Chicken_Noodle_Soup%' OR imageUrl LIKE '%547592166%')`
     );
     saveDb();
   } catch {}
