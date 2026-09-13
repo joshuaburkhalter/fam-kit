@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { getDb, queryAll, queryOne, execute, saveDb, createDefaultAisles } from './db.js';
 import { getGeminiModel } from './gemini.js';
-import { parseRecipeFromUrl, parseRecipeFromHtml, getCuratedFoodImage } from './recipe-parser.js';
+import { parseRecipeFromUrl, parseRecipeFromHtml, getCuratedFoodImage, findAccurateRecipePhoto } from './recipe-parser.js';
 import { sendPushNotificationToHousehold, vapidPublicKey } from './push.js';
 import { buildSelectiveAssistantContext } from './assistant-context.js';
 
@@ -590,10 +590,15 @@ ${contextString}
           }
           const tagsString = Array.from(tagSet).join(', ');
 
-          // Determine photo: toolArgs.imageUrl or curated matching food image
+          // Determine photo: toolArgs.imageUrl or accurate matching food photo (curated/Wikipedia/AI)
           let imageUrl = toolArgs.imageUrl;
           if (!imageUrl || typeof imageUrl !== 'string' || !imageUrl.startsWith('http')) {
-            imageUrl = getCuratedFoodImage(toolArgs.title, [toolArgs.imageQuery || '', ...Array.from(tagSet)]);
+            imageUrl = await findAccurateRecipePhoto(
+              toolArgs.title,
+              toolArgs.description || '',
+              Array.from(tagSet),
+              toolArgs.imageQuery
+            );
           }
 
           const prepTime = toolArgs.prepTime ? String(toolArgs.prepTime).replace(/[^0-9]/g, '') : null;
@@ -1203,6 +1208,17 @@ app.get('*', (req, res) => {
 
 // Initialize database & start server
 getDb().then(() => {
+  try {
+    // Self-heal: update any existing Chicken Parm recipes that had the generic chicken bowl image
+    execute(
+      `UPDATE recipes 
+       SET imageUrl = 'https://images.unsplash.com/photo-1632778149955-e80f8ceca2e8?w=800&auto=format&fit=crop&q=80' 
+       WHERE (LOWER(title) LIKE '%parm%' OR LOWER(title) LIKE '%parmigiana%')
+         AND (imageUrl LIKE '%1604908176997%' OR imageUrl LIKE '%546069901%')`
+    );
+    saveDb();
+  } catch {}
+
   app.listen(Number(PORT), '0.0.0.0', () => {
     console.log(`⚡ Homebase server running on http://0.0.0.0:${PORT}`);
   });
