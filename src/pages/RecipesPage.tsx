@@ -102,7 +102,13 @@ export const RecipesPage: React.FC = () => {
     if (!household) return;
     try {
       const res = await api.addRecipeToGrocery(recipe.id, household.id);
-      setAddedGroceryFeedback(`Added ${res.addedCount} ingredients to Grocery List!`);
+      // Also add to Shopped Recipes list
+      await api.addWeeklyMeal(household.id, {
+        title: recipe.title,
+        recipe_id: recipe.id,
+      }).catch((e) => console.warn('Auto-add to shopped meals:', e));
+
+      setAddedGroceryFeedback(`Added ${res.addedCount} ingredients to Grocery List & Meals on Deck!`);
       setTimeout(() => setAddedGroceryFeedback(null), 3500);
     } catch (err: any) {
       console.error('Add to grocery failed:', err);

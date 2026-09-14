@@ -1093,8 +1093,8 @@ app.get('/api/meals/week', (req, res) => {
   const weekStartDate = req.query.weekStartDate as string;
 
   const meals = weekStartDate
-    ? queryAll('SELECT * FROM weekly_meals WHERE householdId = ? AND weekStartDate = ? ORDER BY createdAt ASC', [householdId, weekStartDate])
-    : queryAll('SELECT * FROM weekly_meals WHERE householdId = ? ORDER BY createdAt ASC', [householdId]);
+    ? queryAll('SELECT * FROM weekly_meals WHERE householdId = ? AND weekStartDate = ? ORDER BY isMade ASC, createdAt DESC', [householdId, weekStartDate])
+    : queryAll('SELECT * FROM weekly_meals WHERE householdId = ? ORDER BY isMade ASC, createdAt DESC', [householdId]);
 
   res.json(meals.map((m: any) => ({ ...m, isMade: Boolean(m.isMade) })));
 });
@@ -1105,6 +1105,18 @@ app.post('/api/meals/week', (req, res) => {
 
   if (!title) {
     return res.status(400).json({ error: 'Title is required' });
+  }
+
+  // If recipeId is provided and already unmade in shopped list, reuse it
+  if (recipeId) {
+    const existing = queryOne<{ id: string }>(
+      'SELECT id FROM weekly_meals WHERE householdId = ? AND recipeId = ? AND isMade = 0',
+      [householdId, recipeId]
+    );
+    if (existing) {
+      const current = queryOne('SELECT * FROM weekly_meals WHERE id = ?', [existing.id]);
+      return res.json(current ? { ...current, isMade: Boolean(current.isMade) } : { id: existing.id, title });
+    }
   }
 
   const id = `wm_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
@@ -1175,6 +1187,12 @@ app.post('/api/meals/log', (req, res) => {
   // If linked to a weekly meal, mark that weekly meal as made
   if (weeklyMealId) {
     execute('UPDATE weekly_meals SET isMade = 1, madeDate = ? WHERE id = ?', [logDate, weeklyMealId]);
+  } else if (recipeId) {
+    execute('UPDATE weekly_meals SET isMade = 1, madeDate = ? WHERE householdId = ? AND recipeId = ? AND isMade = 0', [
+      logDate,
+      householdId,
+      recipeId,
+    ]);
   }
 
   const saved = queryOne('SELECT * FROM meal_logs WHERE id = ?', [id]);
