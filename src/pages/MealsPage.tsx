@@ -6,7 +6,6 @@ import {
   Plus,
   Trash2,
   Check,
-  CheckCircle2,
   Clock,
   BookOpen,
   ShoppingCart,
@@ -16,16 +15,16 @@ import {
   Loader2,
   Sparkles,
   ExternalLink,
-  ChevronDown,
-  ChevronUp,
   User,
   Search,
+  Zap,
 } from 'lucide-react';
 import {
   format,
   isToday,
   isYesterday,
   parseISO,
+  subDays,
 } from 'date-fns';
 import type { WeeklyMeal, MealLog, Recipe } from '../types';
 import { usePWA } from '../context/PWAContext';
@@ -64,7 +63,7 @@ export const MealsPage: React.FC = () => {
     return !(mealsDataCache && mealsDataCache.householdId === householdId);
   });
 
-  // Tab State: 'shopped' = Shopped Recipes (On Hand), 'log' = Cooking Log
+  // Tab State: 'shopped' = Weekly Meals / Shopped, 'log' = Daily Cooking Log
   const [activeTab, setActiveTab] = useState<'shopped' | 'log'>('shopped');
 
   // Modals
@@ -74,8 +73,12 @@ export const MealsPage: React.FC = () => {
   const [recipeSearch, setRecipeSearch] = useState('');
   const [checkedIngredients, setCheckedIngredients] = useState<Record<string, boolean>>({});
 
-  // Collapsible for completed shopped meals
-  const [showCompletedMeals, setShowCompletedMeals] = useState(false);
+  // Quick Date Picker Modal for adding a meal to a specific day
+  const [quickDateMeal, setQuickDateMeal] = useState<WeeklyMeal | null>(null);
+  const [targetDate, setTargetDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+
+  // Quick picker from log day header
+  const [logDayPickerDate, setLogDayPickerDate] = useState<string | null>(null);
 
   // Manual Log Meal Modal Form
   const [logForm, setLogForm] = useState({
@@ -129,13 +132,15 @@ export const MealsPage: React.FC = () => {
 
       if (!isMountedRef.current) return;
 
-      setMeals(weeklyRes);
+      // Only unmade weekly meals belong in the weekly list
+      const unmadeMeals = weeklyRes.filter((m) => !m.is_made);
+      setMeals(unmadeMeals);
       setMealLogs(logsRes);
       setRecipes(recRes);
 
       mealsDataCache = {
         householdId,
-        meals: weeklyRes,
+        meals: unmadeMeals,
         mealLogs: logsRes,
         recipes: recRes,
       };
@@ -152,19 +157,18 @@ export const MealsPage: React.FC = () => {
     fetchData();
   }, [householdId]);
 
-  // Derived meal lists
-  const onDeckMeals = meals.filter((m) => !m.is_made);
-  const madeMeals = meals.filter((m) => m.is_made);
-
   // Map recipeId -> Recipe for fast lookup
   const recipeMap = new Map<string, Recipe>();
   recipes.forEach((r) => recipeMap.set(r.id, r));
 
-  // Handle Mark as Made (cooked)
-  const handleMarkAsMade = async (meal: WeeklyMeal, dateStr = format(new Date(), 'yyyy-MM-dd')) => {
+  /**
+   * CORE ACTION: Quick add a weekly meal to a specific day.
+   * This adds it to the Daily Cooking Log for that date and removes it from the weekly meals list!
+   */
+  const handleQuickAddToDay = async (meal: WeeklyMeal, dateStr: string) => {
     if (!householdId) return;
     try {
-      // 1. Log the meal
+      // 1. Log the meal for the given date
       const newLog = await api.logMealMade(householdId, {
         title: meal.title,
         recipe_id: meal.recipe_id,
@@ -174,45 +178,65 @@ export const MealsPage: React.FC = () => {
         weekly_meal_id: meal.id,
       });
 
-      // 2. Update local state
-      setMeals((prev) =>
-        prev.map((m) => (m.id === meal.id ? { ...m, is_made: true, made_date: dateStr } : m))
-      );
+      // 2. Explicitly remove from weekly_meals
+      await api.deleteWeeklyMeal(meal.id);
+
+      // 3. Update local state: remove from weekly meals, add to logs
+      setMeals((prev) => prev.filter((m) => m.id !== meal.id));
       setMealLogs((prev) => [newLog, ...prev]);
 
       if (mealsDataCache && mealsDataCache.householdId === householdId) {
-        mealsDataCache.meals = mealsDataCache.meals.map((m) =>
-          m.id === meal.id ? { ...m, is_made: true, made_date: dateStr } : m
-        );
+        mealsDataCache.meals = mealsDataCache.meals.filter((m) => m.id !== meal.id);
         mealsDataCache.mealLogs = [newLog, ...mealsDataCache.mealLogs];
       }
 
-      showToast(`🎉 Marked "${meal.title}" as made today!`);
+      // Close any open modals
+      setQuickDateMeal(null);
+      setLogDayPickerDate(null);
+
+      const dayLabel = isToday(parseISO(dateStr))
+        ? 'Today'
+        : isYesterday(parseISO(dateStr))
+        ? 'Yesterday'
+        : format(parseISO(dateStr), 'MMM d');
+
+      showToast(`Added "${meal.title}" to ${dayLabel} & removed from weekly meals!`);
     } catch (err) {
-      console.error('Failed to mark meal as made', err);
-      showToast('Error recording meal');
+      console.error('Failed to add meal to day', err);
+      showToast('Error adding meal to day');
     }
   };
 
-  // Handle Undo Mark as Made
-  const handleUndoMade = async (meal: WeeklyMeal) => {
+  // Move a logged meal back to the weekly meals list (Undo action)
+  const handleMoveBackToWeekly = async (log: MealLog) => {
+    if (!householdId) return;
     try {
-      await api.updateWeeklyMeal(meal.id, { is_made: false, made_date: undefined });
-      setMeals((prev) =>
-        prev.map((m) => (m.id === meal.id ? { ...m, is_made: false, made_date: undefined } : m))
-      );
+      // 1. Re-add to weekly meals
+      const added = await api.addWeeklyMeal(householdId, {
+        title: log.title,
+        recipe_id: log.recipe_id,
+        notes: log.notes,
+      });
+
+      // 2. Delete the log entry
+      await api.deleteMealLog(log.id);
+
+      // 3. Update state
+      setMeals((prev) => [added, ...prev]);
+      setMealLogs((prev) => prev.filter((l) => l.id !== log.id));
+
       if (mealsDataCache && mealsDataCache.householdId === householdId) {
-        mealsDataCache.meals = mealsDataCache.meals.map((m) =>
-          m.id === meal.id ? { ...m, is_made: false, made_date: undefined } : m
-        );
+        mealsDataCache.meals = [added, ...mealsDataCache.meals];
+        mealsDataCache.mealLogs = mealsDataCache.mealLogs.filter((l) => l.id !== log.id);
       }
-      showToast(`Returned "${meal.title}" to shopped list`);
+
+      showToast(`Moved "${log.title}" back to weekly meals!`);
     } catch (err) {
-      console.error('Failed to undo meal status', err);
+      console.error('Failed to move meal back', err);
     }
   };
 
-  // Handle Delete Shopped Meal
+  // Handle Delete Weekly Meal
   const handleDeleteMeal = async (id: string) => {
     try {
       await api.deleteWeeklyMeal(id);
@@ -220,7 +244,7 @@ export const MealsPage: React.FC = () => {
       if (mealsDataCache && mealsDataCache.householdId === householdId) {
         mealsDataCache.meals = mealsDataCache.meals.filter((m) => m.id !== id);
       }
-      showToast('Recipe removed from list');
+      showToast('Removed from weekly meals');
     } catch (err) {
       console.error('Failed to delete meal', err);
     }
@@ -240,7 +264,7 @@ export const MealsPage: React.FC = () => {
     }
   };
 
-  // Add Recipe to Shopped list
+  // Add Recipe to Weekly list
   const handleAddRecipeToShopped = async (recipe: Recipe) => {
     if (!householdId) return;
     try {
@@ -253,9 +277,9 @@ export const MealsPage: React.FC = () => {
         mealsDataCache.meals = [added, ...mealsDataCache.meals];
       }
       setIsRecipePickerOpen(false);
-      showToast(`Added "${recipe.title}" to shopped list!`);
+      showToast(`Added "${recipe.title}" to weekly meals!`);
     } catch (err) {
-      console.error('Failed to add recipe to shopped', err);
+      console.error('Failed to add recipe', err);
     }
   };
 
@@ -273,7 +297,7 @@ export const MealsPage: React.FC = () => {
         mealsDataCache.meals = [added, ...mealsDataCache.meals];
       }
       setQuickDishInput('');
-      showToast(`Added "${added.title}" to on-deck list!`);
+      showToast(`Added "${added.title}" to weekly meals!`);
     } catch (err) {
       console.error('Failed to add meal', err);
     } finally {
@@ -313,6 +337,18 @@ export const MealsPage: React.FC = () => {
         notes: logForm.notes.trim() || undefined,
         cooked_by_user_id: logForm.cookedByUserId || undefined,
       });
+
+      // If this title matched an unmade weekly meal, remove it
+      const matchedWeekly = meals.find(
+        (m) =>
+          (logForm.recipeId && m.recipe_id === logForm.recipeId) ||
+          m.title.toLowerCase() === logForm.title.trim().toLowerCase()
+      );
+      if (matchedWeekly) {
+        await api.deleteWeeklyMeal(matchedWeekly.id);
+        setMeals((prev) => prev.filter((m) => m.id !== matchedWeekly.id));
+      }
+
       setMealLogs((prev) => [newLog, ...prev]);
       if (mealsDataCache && mealsDataCache.householdId === householdId) {
         mealsDataCache.mealLogs = [newLog, ...mealsDataCache.mealLogs];
@@ -385,7 +421,7 @@ export const MealsPage: React.FC = () => {
                 Meals & Cooking
               </h1>
               <p className="text-xs sm:text-sm text-slate-400">
-                Shopped recipes on deck & daily cooking history
+                Shopped weekly meals & daily cooking log
               </p>
             </div>
           </div>
@@ -402,7 +438,7 @@ export const MealsPage: React.FC = () => {
             }`}
           >
             <ShoppingCart className="w-4 h-4" />
-            <span>Shopped Recipes</span>
+            <span>Weekly Meals</span>
             <span
               className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
                 activeTab === 'shopped'
@@ -410,7 +446,7 @@ export const MealsPage: React.FC = () => {
                   : 'bg-slate-800 text-emerald-400'
               }`}
             >
-              {onDeckMeals.length}
+              {meals.length}
             </span>
           </button>
           <button
@@ -442,20 +478,25 @@ export const MealsPage: React.FC = () => {
           <p className="text-sm">Loading meals and recipes...</p>
         </div>
       ) : activeTab === 'shopped' ? (
-        /* ================= TAB 1: SHOPPED RECIPES (ON DECK) ================= */
+        /* ================= TAB 1: WEEKLY MEALS / SHOPPED ================= */
         <div className="space-y-6">
           {/* Top Quick Actions Bar */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/60 p-4 rounded-3xl border border-slate-800/80 backdrop-blur-sm">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <h2 className="text-sm font-bold uppercase tracking-wider text-slate-300">
-                Recipes Ready to Cook ({onDeckMeals.length})
-              </h2>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <h2 className="text-sm font-bold uppercase tracking-wider text-slate-300">
+                  Weekly Meals on Hand ({meals.length})
+                </h2>
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Quick-add any meal to today or another day to move it into your cooking log
+              </p>
             </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setIsRecipePickerOpen(true)}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 font-semibold text-xs transition-all shadow-sm"
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 font-semibold text-xs transition-all shadow-sm shrink-0"
               >
                 <Plus className="w-4 h-4" />
                 <span>+ Pick from Saved Recipes</span>
@@ -463,15 +504,15 @@ export const MealsPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Shopped Recipe Cards */}
-          {onDeckMeals.length === 0 ? (
+          {/* Weekly Meals Cards */}
+          {meals.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 px-4 bg-slate-900/30 rounded-3xl border border-dashed border-slate-800 text-center">
               <div className="w-14 h-14 rounded-3xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500 mb-3 shadow-inner">
                 <Utensils className="w-7 h-7 text-emerald-500/50" />
               </div>
-              <h3 className="text-base font-semibold text-white mb-1">No recipes on deck yet</h3>
+              <h3 className="text-base font-semibold text-white mb-1">No meals in your weekly list</h3>
               <p className="text-xs sm:text-sm text-slate-400 max-w-md mb-5">
-                When you plan meals or tap <span className="text-emerald-400 font-medium">"Add All to Grocery List"</span> on any recipe, it will automatically appear here ready to cook!
+                When you browse recipes and tap <span className="text-emerald-400 font-medium">"Add All to Grocery List"</span>, or choose recipes below, they appear here ready to cook!
               </p>
               <div className="flex flex-wrap items-center justify-center gap-2.5">
                 <button
@@ -485,15 +526,12 @@ export const MealsPage: React.FC = () => {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {onDeckMeals.map((meal) => {
+              {meals.map((meal) => {
                 const recipe = meal.recipe_id ? recipeMap.get(meal.recipe_id) : undefined;
                 return (
                   <div
                     key={meal.id}
-                    onClick={() => recipe && setViewingRecipe(recipe)}
-                    className={`group relative bg-slate-900/80 hover:bg-slate-900 border border-slate-800/90 hover:border-slate-700/80 rounded-3xl p-4 transition-all duration-200 shadow-lg hover:shadow-emerald-500/5 flex flex-col justify-between ${
-                      recipe ? 'cursor-pointer' : ''
-                    }`}
+                    className="bg-slate-900/80 border border-slate-800/90 rounded-3xl p-4 transition-all duration-200 shadow-lg hover:border-slate-700/80 flex flex-col justify-between"
                   >
                     <div>
                       {/* Card Header & Thumbnail */}
@@ -502,7 +540,7 @@ export const MealsPage: React.FC = () => {
                           <img
                             src={recipe.image_url}
                             alt={recipe.title}
-                            className="w-16 h-16 rounded-2xl object-cover border border-slate-800 shrink-0 shadow-md group-hover:scale-105 transition-transform"
+                            className="w-16 h-16 rounded-2xl object-cover border border-slate-800 shrink-0 shadow-md"
                           />
                         ) : (
                           <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-800 flex items-center justify-center text-emerald-400 shrink-0 shadow-inner">
@@ -512,16 +550,13 @@ export const MealsPage: React.FC = () => {
 
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-2">
-                            <h3 className="text-base font-bold text-white group-hover:text-emerald-400 transition-colors line-clamp-2">
+                            <h3 className="text-base font-bold text-white line-clamp-2">
                               {meal.title}
                             </h3>
                             <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteMeal(meal.id);
-                              }}
+                              onClick={() => handleDeleteMeal(meal.id)}
                               className="text-slate-600 hover:text-rose-400 p-1.5 rounded-xl hover:bg-rose-500/10 transition-colors shrink-0"
-                              title="Remove from on deck"
+                              title="Remove from weekly meals"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -539,12 +574,12 @@ export const MealsPage: React.FC = () => {
                               {recipe.servings && (
                                 <span className="inline-flex items-center gap-1 text-[11px] text-slate-400 bg-slate-800/80 px-2 py-0.5 rounded-lg border border-slate-700/50">
                                   <Utensils className="w-3 h-3 text-teal-400" />
-                                  {recipe.servings} servings
+                                  {recipe.servings} serv
                                 </span>
                               )}
                               {recipe.ingredients && (
                                 <span className="text-[11px] text-slate-500">
-                                  {recipe.ingredients.length} ingredients
+                                  {recipe.ingredients.length} ingr
                                 </span>
                               )}
                             </div>
@@ -559,18 +594,23 @@ export const MealsPage: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Bottom Action Buttons */}
+                    {/* Bottom Action Area */}
                     <div className="pt-3 mt-2 border-t border-slate-800/60 flex items-center justify-between gap-2">
+                      {/* View Recipe Button (Only if user wants to view details) */}
                       {recipe ? (
-                        <div className="flex items-center gap-1 text-xs text-emerald-400 font-medium">
-                          <span>View recipe</span>
-                          <ExternalLink className="w-3 h-3" />
-                        </div>
+                        <button
+                          onClick={() => setViewingRecipe(recipe)}
+                          className="flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300 font-medium py-1 px-2 rounded-lg hover:bg-emerald-500/10 transition-colors"
+                        >
+                          <BookOpen className="w-3.5 h-3.5" />
+                          <span>View Recipe</span>
+                        </button>
                       ) : (
                         <span className="text-xs text-slate-500">Custom meal</span>
                       )}
 
-                      <div className="flex items-center gap-2">
+                      {/* Quick Add Actions */}
+                      <div className="flex items-center gap-1.5">
                         {recipe && (
                           <button
                             onClick={(e) => handleShopIngredients(recipe, e)}
@@ -580,82 +620,34 @@ export const MealsPage: React.FC = () => {
                             <ShoppingCart className="w-4 h-4" />
                           </button>
                         )}
+
+                        {/* Pick Day Button */}
                         <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleMarkAsMade(meal);
+                          onClick={() => {
+                            setQuickDateMeal(meal);
+                            setTargetDate(format(new Date(), 'yyyy-MM-dd'));
                           }}
-                          className="px-3.5 py-1.5 rounded-2xl bg-emerald-500/20 hover:bg-emerald-500 text-emerald-300 hover:text-slate-950 border border-emerald-500/40 hover:border-transparent font-bold text-xs flex items-center gap-1.5 transition-all shadow-sm"
+                          className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/80 font-medium text-xs flex items-center gap-1 transition-all"
+                          title="Quick add to a specific day"
                         >
-                          <Check className="w-3.5 h-3.5" />
-                          <span>Made Today</span>
+                          <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                          <span className="hidden sm:inline">Pick Day</span>
+                        </button>
+
+                        {/* Quick Add to Today (1-Click!) */}
+                        <button
+                          onClick={() => handleQuickAddToDay(meal, format(new Date(), 'yyyy-MM-dd'))}
+                          className="px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20"
+                          title="Quick add to Today and remove from weekly list"
+                        >
+                          <Zap className="w-3.5 h-3.5 fill-slate-950" />
+                          <span>Add to Today</span>
                         </button>
                       </div>
                     </div>
                   </div>
                 );
               })}
-            </div>
-          )}
-
-          {/* Collapsible Recently Made Section */}
-          {madeMeals.length > 0 && (
-            <div className="mt-8 pt-4 border-t border-slate-800/80">
-              <button
-                onClick={() => setShowCompletedMeals(!showCompletedMeals)}
-                className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-slate-900/40 hover:bg-slate-900/70 border border-slate-800/60 text-slate-400 hover:text-white transition-all text-xs sm:text-sm font-semibold"
-              >
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  <span>Recently Cooked Recipes ({madeMeals.length})</span>
-                </div>
-                {showCompletedMeals ? (
-                  <ChevronUp className="w-4 h-4" />
-                ) : (
-                  <ChevronDown className="w-4 h-4" />
-                )}
-              </button>
-
-              {showCompletedMeals && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3 animate-in fade-in slide-in-from-top-2 duration-200">
-                  {madeMeals.map((meal) => (
-                    <div
-                      key={meal.id}
-                      className="bg-slate-900/40 border border-slate-800/50 rounded-2xl p-3.5 flex items-center justify-between gap-3 text-xs"
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                        <div className="min-w-0">
-                          <p className="font-semibold text-slate-300 truncate line-through opacity-75">
-                            {meal.title}
-                          </p>
-                          {meal.made_date && (
-                            <p className="text-[10px] text-slate-500">
-                              Cooked: {meal.made_date}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          onClick={() => handleUndoMade(meal)}
-                          className="px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-[11px] flex items-center gap-1 transition-colors"
-                          title="Return to on deck"
-                        >
-                          <RotateCcw className="w-3 h-3" />
-                          <span>Undo</span>
-                        </button>
-                        <button
-                          onClick={() => handleDeleteMeal(meal.id)}
-                          className="p-1.5 rounded-xl text-slate-600 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           )}
         </div>
@@ -670,7 +662,7 @@ export const MealsPage: React.FC = () => {
                 Cooking History ({mealLogs.length} Meals Logged)
               </h2>
               <p className="text-xs text-slate-400">
-                A day-by-day record of everything your family made and enjoyed
+                A day-by-day record of what was made by your household
               </p>
             </div>
             <button
@@ -682,6 +674,33 @@ export const MealsPage: React.FC = () => {
             </button>
           </div>
 
+          {/* Quick Add Strip: Weekly Meals on Deck */}
+          {meals.length > 0 && (
+            <div className="bg-slate-900/40 border border-slate-800/80 rounded-3xl p-4">
+              <div className="flex items-center justify-between gap-2 mb-3">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-teal-400" />
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300">
+                    Quick Add to Today from Weekly Meals ({meals.length})
+                  </h3>
+                </div>
+                <span className="text-[11px] text-slate-500">1-tap moves dish to log</span>
+              </div>
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
+                {meals.map((m) => (
+                  <button
+                    key={m.id}
+                    onClick={() => handleQuickAddToDay(m, format(new Date(), 'yyyy-MM-dd'))}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800/90 hover:bg-emerald-500 hover:text-slate-950 border border-slate-700/80 text-xs font-semibold text-slate-200 shrink-0 transition-all group"
+                  >
+                    <Plus className="w-3.5 h-3.5 text-emerald-400 group-hover:text-slate-950" />
+                    <span className="truncate max-w-[160px]">{m.title}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Daily Groups */}
           {sortedLogDates.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 px-4 bg-slate-900/30 rounded-3xl border border-dashed border-slate-800 text-center">
@@ -690,7 +709,7 @@ export const MealsPage: React.FC = () => {
               </div>
               <h3 className="text-base font-semibold text-white mb-1">No meals logged yet</h3>
               <p className="text-xs sm:text-sm text-slate-400 max-w-md mb-5">
-                When you cook shopped recipes or record quick meals, your daily cooking log will appear here chronologically!
+                When you make dishes or quick-add weekly meals, your daily cooking log will appear here chronologically!
               </p>
               <button
                 onClick={() => setIsLogModalOpen(true)}
@@ -707,15 +726,27 @@ export const MealsPage: React.FC = () => {
                 return (
                   <div key={dateStr} className="space-y-3">
                     {/* Date Header */}
-                    <div className="flex items-center gap-3">
-                      <div className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
-                      <h3 className="text-sm sm:text-base font-bold text-white tracking-wide">
-                        {formatLogDateHeader(dateStr)}
-                      </h3>
-                      <span className="text-xs text-slate-500 font-medium">
-                        ({logsForDate.length} {logsForDate.length === 1 ? 'dish' : 'dishes'})
-                      </span>
-                      <div className="flex-1 h-px bg-slate-800/80" />
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
+                        <h3 className="text-sm sm:text-base font-bold text-white tracking-wide">
+                          {formatLogDateHeader(dateStr)}
+                        </h3>
+                        <span className="text-xs text-slate-500 font-medium">
+                          ({logsForDate.length} {logsForDate.length === 1 ? 'dish' : 'dishes'})
+                        </span>
+                      </div>
+
+                      {/* Quick Add to THIS specific day */}
+                      {meals.length > 0 && (
+                        <button
+                          onClick={() => setLogDayPickerDate(dateStr)}
+                          className="flex items-center gap-1 text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-1 rounded-xl transition-colors border border-emerald-500/20"
+                        >
+                          <Plus className="w-3 h-3" />
+                          <span>+ Add to {isToday(parseISO(dateStr)) ? 'Today' : isYesterday(parseISO(dateStr)) ? 'Yesterday' : format(parseISO(dateStr), 'MMM d')}</span>
+                        </button>
+                      )}
                     </div>
 
                     {/* Meal items for this date */}
@@ -727,10 +758,7 @@ export const MealsPage: React.FC = () => {
                         return (
                           <div
                             key={log.id}
-                            onClick={() => recipe && setViewingRecipe(recipe)}
-                            className={`bg-slate-900/70 hover:bg-slate-900 border border-slate-800 rounded-2xl p-3.5 transition-all flex items-start justify-between gap-3 shadow-md ${
-                              recipe ? 'cursor-pointer hover:border-slate-700' : ''
-                            }`}
+                            className="bg-slate-900/70 border border-slate-800 rounded-2xl p-3.5 flex items-start justify-between gap-3 shadow-md"
                           >
                             <div className="flex items-start gap-3 min-w-0">
                               {recipe?.image_url ? (
@@ -746,15 +774,18 @@ export const MealsPage: React.FC = () => {
                               )}
 
                               <div className="min-w-0">
-                                <h4 className="text-sm font-bold text-white hover:text-emerald-400 transition-colors truncate">
+                                <h4 className="text-sm font-bold text-white truncate">
                                   {log.title}
                                 </h4>
 
                                 {recipe && (
-                                  <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400/90 font-medium mt-0.5">
+                                  <button
+                                    onClick={() => setViewingRecipe(recipe)}
+                                    className="inline-flex items-center gap-1 text-[11px] text-emerald-400 hover:text-emerald-300 font-medium mt-0.5"
+                                  >
                                     <BookOpen className="w-3 h-3" />
-                                    <span>Recipe Linked</span>
-                                  </span>
+                                    <span>View Recipe</span>
+                                  </button>
                                 )}
 
                                 {chefName && (
@@ -772,16 +803,23 @@ export const MealsPage: React.FC = () => {
                               </div>
                             </div>
 
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteLog(log.id);
-                              }}
-                              className="text-slate-600 hover:text-rose-400 p-1.5 rounded-xl hover:bg-rose-500/10 transition-colors shrink-0"
-                              title="Delete log entry"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            <div className="flex items-center gap-1 shrink-0">
+                              {/* Move back to weekly meals button */}
+                              <button
+                                onClick={() => handleMoveBackToWeekly(log)}
+                                className="p-1.5 rounded-xl text-slate-500 hover:text-teal-300 hover:bg-teal-500/10 transition-colors"
+                                title="Move back to Weekly Meals"
+                              >
+                                <RotateCcw className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteLog(log.id)}
+                                className="p-1.5 rounded-xl text-slate-600 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                                title="Delete log entry"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </div>
                         );
                       })}
@@ -791,6 +829,122 @@ export const MealsPage: React.FC = () => {
               })}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ================= MODAL: QUICK ADD TO A SPECIFIC DAY ================= */}
+      {quickDateMeal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-sm shadow-2xl p-5 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-emerald-400" />
+                <span>Add to Day</span>
+              </h3>
+              <button
+                onClick={() => setQuickDateMeal(null)}
+                className="p-1 rounded-xl text-slate-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-sm font-semibold text-white mb-1">{quickDateMeal.title}</p>
+            <p className="text-xs text-slate-400 mb-4">
+              Choose which day this meal was made. It will be added to that day's cooking log and removed from the weekly meals list.
+            </p>
+
+            {/* Quick date presets */}
+            <div className="grid grid-cols-2 gap-2 mb-4">
+              <button
+                onClick={() => setTargetDate(format(new Date(), 'yyyy-MM-dd'))}
+                className={`px-3 py-2 rounded-xl text-xs font-semibold border transition-all ${
+                  targetDate === format(new Date(), 'yyyy-MM-dd')
+                    ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300'
+                    : 'bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-800'
+                }`}
+              >
+                Today ({format(new Date(), 'MMM d')})
+              </button>
+              <button
+                onClick={() => setTargetDate(format(subDays(new Date(), 1), 'yyyy-MM-dd'))}
+                className={`px-3 py-2 rounded-xl text-xs font-semibold border transition-all ${
+                  targetDate === format(subDays(new Date(), 1), 'yyyy-MM-dd')
+                    ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300'
+                    : 'bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-800'
+                }`}
+              >
+                Yesterday ({format(subDays(new Date(), 1), 'MMM d')})
+              </button>
+            </div>
+
+            <div className="mb-5">
+              <label className="block text-xs font-semibold text-slate-400 mb-1.5">
+                Or choose custom date:
+              </label>
+              <input
+                type="date"
+                value={targetDate}
+                onChange={(e) => setTargetDate(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-emerald-500/60"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2">
+              <button
+                onClick={() => setQuickDateMeal(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleQuickAddToDay(quickDateMeal, targetDate)}
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 font-bold text-xs shadow-md shadow-emerald-500/20"
+              >
+                Add & Remove from Weekly
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL: PICK WEEKLY MEAL FOR SPECIFIC LOG DATE ================= */}
+      {logDayPickerDate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-md shadow-2xl p-5 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <Utensils className="w-4 h-4 text-emerald-400" />
+                  <span>Add to {isToday(parseISO(logDayPickerDate)) ? 'Today' : format(parseISO(logDayPickerDate), 'MMM d')}</span>
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Select a weekly meal to log for this day
+                </p>
+              </div>
+              <button
+                onClick={() => setLogDayPickerDate(null)}
+                className="p-1 rounded-xl text-slate-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+              {meals.map((meal) => (
+                <button
+                  key={meal.id}
+                  onClick={() => handleQuickAddToDay(meal, logDayPickerDate)}
+                  className="w-full text-left bg-slate-950/70 hover:bg-emerald-500/10 border border-slate-800 hover:border-emerald-500/40 rounded-2xl p-3 flex items-center justify-between gap-2 transition-all group"
+                >
+                  <span className="font-semibold text-xs sm:text-sm text-white group-hover:text-emerald-400 truncate">
+                    {meal.title}
+                  </span>
+                  <Plus className="w-4 h-4 text-emerald-400 shrink-0" />
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 
@@ -953,20 +1107,25 @@ export const MealsPage: React.FC = () => {
               <button
                 onClick={async () => {
                   if (!householdId) return;
-                  await api.logMealMade(householdId, {
-                    title: viewingRecipe.title,
-                    recipe_id: viewingRecipe.id,
-                    date: format(new Date(), 'yyyy-MM-dd'),
-                    cooked_by_user_id: currentUser?.id,
-                  });
-                  await fetchData(true);
+                  const matchedWeekly = meals.find((m) => m.recipe_id === viewingRecipe.id);
+                  if (matchedWeekly) {
+                    await handleQuickAddToDay(matchedWeekly, format(new Date(), 'yyyy-MM-dd'));
+                  } else {
+                    await api.logMealMade(householdId, {
+                      title: viewingRecipe.title,
+                      recipe_id: viewingRecipe.id,
+                      date: format(new Date(), 'yyyy-MM-dd'),
+                      cooked_by_user_id: currentUser?.id,
+                    });
+                    await fetchData(true);
+                  }
                   setViewingRecipe(null);
-                  showToast(`🎉 Logged "${viewingRecipe.title}" as cooked today!`);
+                  showToast(`Added "${viewingRecipe.title}" to cooking log!`);
                 }}
                 className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-bold text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-emerald-500/20 transition-all"
               >
                 <Check className="w-4 h-4" />
-                <span>Cooked This! Add to Log</span>
+                <span>Made Today · Add to Log</span>
               </button>
             </div>
           </div>
@@ -985,7 +1144,7 @@ export const MealsPage: React.FC = () => {
                   <span>Pick from Saved Recipes</span>
                 </h3>
                 <p className="text-xs text-slate-400">
-                  Select a recipe to put on deck for this week's meals
+                  Select a recipe to add to your weekly meals
                 </p>
               </div>
               <button
@@ -1018,7 +1177,7 @@ export const MealsPage: React.FC = () => {
                 </div>
               ) : (
                 filteredRecipes.map((r) => {
-                  const isAlreadyOnDeck = onDeckMeals.some((m) => m.recipe_id === r.id);
+                  const isAlreadyInWeekly = meals.some((m) => m.recipe_id === r.id);
                   return (
                     <div
                       key={r.id}
@@ -1050,15 +1209,15 @@ export const MealsPage: React.FC = () => {
 
                       <button
                         onClick={() => handleAddRecipeToShopped(r)}
-                        disabled={isAlreadyOnDeck}
+                        disabled={isAlreadyInWeekly}
                         className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1 shrink-0 transition-all ${
-                          isAlreadyOnDeck
+                          isAlreadyInWeekly
                             ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
                             : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-md shadow-emerald-500/20'
                         }`}
                       >
-                        {isAlreadyOnDeck ? (
-                          <span>On Deck</span>
+                        {isAlreadyInWeekly ? (
+                          <span>In Weekly</span>
                         ) : (
                           <>
                             <Plus className="w-3.5 h-3.5" />
@@ -1091,6 +1250,38 @@ export const MealsPage: React.FC = () => {
                 <X className="w-5 h-5" />
               </button>
             </div>
+
+            {/* Quick-Pick from Weekly Meals if any */}
+            {meals.length > 0 && (
+              <div className="p-4 bg-slate-950/50 border-b border-slate-800">
+                <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">
+                  Or pick from weekly meals (removes on save):
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {meals.map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() =>
+                        setLogForm((prev) => ({
+                          ...prev,
+                          title: m.title,
+                          recipeId: m.recipe_id || '',
+                          notes: m.notes || '',
+                        }))
+                      }
+                      className={`px-2.5 py-1 rounded-xl text-xs font-semibold border transition-all ${
+                        logForm.title === m.title
+                          ? 'bg-emerald-500 text-slate-950 border-transparent font-bold'
+                          : 'bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700'
+                      }`}
+                    >
+                      {m.title}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <form onSubmit={handleSubmitManualLog} className="p-4 sm:p-5 space-y-4">
               <div>
@@ -1182,7 +1373,7 @@ export const MealsPage: React.FC = () => {
             <Plus className="w-4 h-4 text-emerald-400 shrink-0" />
             <input
               type="text"
-              placeholder="Quick add dish or meal on deck..."
+              placeholder="Quick add dish to weekly meals..."
               value={quickDishInput}
               onChange={(e) => setQuickDishInput(e.target.value)}
               className="flex-1 min-w-0 bg-transparent text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none"

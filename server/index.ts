@@ -1184,14 +1184,18 @@ app.post('/api/meals/log', (req, res) => {
     [id, title, recipeId || null, logDate, notes || null, cookedByUserId || null, householdId, now]
   );
 
-  // If linked to a weekly meal, mark that weekly meal as made
+  // If linked to a weekly meal, remove that meal from the weekly meals list
   if (weeklyMealId) {
-    execute('UPDATE weekly_meals SET isMade = 1, madeDate = ? WHERE id = ?', [logDate, weeklyMealId]);
+    execute('DELETE FROM weekly_meals WHERE id = ?', [weeklyMealId]);
   } else if (recipeId) {
-    execute('UPDATE weekly_meals SET isMade = 1, madeDate = ? WHERE householdId = ? AND recipeId = ? AND isMade = 0', [
-      logDate,
+    execute('DELETE FROM weekly_meals WHERE householdId = ? AND recipeId = ?', [
       householdId,
       recipeId,
+    ]);
+  } else if (title) {
+    execute('DELETE FROM weekly_meals WHERE householdId = ? AND LOWER(title) = LOWER(?)', [
+      householdId,
+      title.trim(),
     ]);
   }
 
