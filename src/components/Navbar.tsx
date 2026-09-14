@@ -28,7 +28,9 @@ interface NavbarProps {
 export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
   const {
     household,
+    users,
     currentUser,
+    switchUser,
     logout,
     isOnline,
     canInstallPWA,
@@ -270,6 +272,57 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
                     Settings
                   </button>
                 </div>
+
+                {/* Quick Profile Switcher for other family members */}
+                {users.length > 1 && (
+                  <div className="py-1.5 border-b border-white/10">
+                    <div className="px-3 py-1 text-[10px] uppercase font-bold tracking-wider text-slate-400 flex items-center gap-1.5">
+                      <Users className="w-3 h-3 text-emerald-400" />
+                      <span>Switch Active Profile</span>
+                    </div>
+                    <div className="flex flex-col gap-0.5 mt-0.5 px-1">
+                      {users
+                        .filter((u) => u.id !== currentUser?.id)
+                        .map((m) => (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onClick={() => {
+                              switchUser(m);
+                              setShowUserDropdown(false);
+                            }}
+                            className="w-full flex items-center justify-between p-2 rounded-xl hover:bg-white/10 text-xs transition-colors cursor-pointer text-left group"
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              {m.avatar && (m.avatar.startsWith('data:image') || m.avatar.startsWith('http')) ? (
+                                <img src={m.avatar} alt={m.name} className="w-6 h-6 rounded-lg object-cover shrink-0" />
+                              ) : (
+                                <div
+                                  className="w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-bold text-white shrink-0"
+                                  style={{ backgroundColor: m.avatar_color || '#10b981' }}
+                                >
+                                  {m.name.charAt(0)}
+                                </div>
+                              )}
+                              <div className="truncate min-w-0">
+                                <span className="font-medium text-slate-200 group-hover:text-white truncate block">
+                                  {m.name}
+                                </span>
+                                {m.username && (
+                                  <span className="text-[10px] font-mono text-emerald-400/80 block -mt-0.5 truncate">
+                                    @{m.username}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <span className="text-[10px] text-slate-400 group-hover:text-emerald-400 transition-colors shrink-0">
+                              Switch
+                            </span>
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Logout Action */}
                 <div className="pt-1.5">

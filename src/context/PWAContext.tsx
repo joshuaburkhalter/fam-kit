@@ -47,12 +47,73 @@ interface PWAContextType {
   switchUser: (user: User) => void;
 }
 
+const normalizeUser = (u: any): User | null => {
+  if (!u) return null;
+  const isPhoto = u.avatar && typeof u.avatar === 'string' && (u.avatar.startsWith('data:image') || u.avatar.startsWith('http'));
+  const userColor = u.avatar_color || u.color || u.avatarColor || '#10b981';
+  return {
+    id: u.id,
+    household_id: u.household_id || u.householdId || '',
+    name: u.name,
+    username: u.username || undefined,
+    email: u.email || undefined,
+    avatar: isPhoto ? u.avatar : undefined,
+    avatar_color: userColor,
+    role: (u.role?.toLowerCase() as any) || 'member',
+    created_at: u.created_at || u.createdAt || '',
+  };
+};
+
+function saveDeviceProfile(user: User, householdName?: string) {
+  try {
+    const stored = localStorage.getItem('famkit_device_profiles');
+    let list: Array<{
+      id: string;
+      name: string;
+      username?: string;
+      avatar?: string;
+      avatar_color: string;
+      role: string;
+      householdId?: string;
+      householdName?: string;
+    }> = stored ? JSON.parse(stored) : [];
+
+    const existingIndex = list.findIndex((p) => p.id === user.id);
+    const profileEntry = {
+      id: user.id,
+      name: user.name,
+      username: user.username,
+      avatar: user.avatar,
+      avatar_color: user.avatar_color,
+      role: user.role,
+      householdId: user.household_id,
+      householdName: householdName || undefined,
+    };
+
+    if (existingIndex >= 0) {
+      list[existingIndex] = profileEntry;
+    } else {
+      list.unshift(profileEntry);
+    }
+    list = list.slice(0, 10);
+    localStorage.setItem('famkit_device_profiles', JSON.stringify(list));
+  } catch (err) {
+    console.warn('Failed to save device profile:', err);
+  }
+}
+
 const PWAContext = createContext<PWAContextType | undefined>(undefined);
 
 export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [household, setHouseholdState] = useState<Household | null>(null);
   const [users, setUsers] = useState<User[]>([]);
-  const [currentUser, setCurrentUserState] = useState<User | null>(null);
+  const [currentUser, setCurrentUserState] = useState<User | null>(() => {
+    try {
+      const cached = localStorage.getItem('famkit_current_user');
+      if (cached) return normalizeUser(JSON.parse(cached));
+    } catch {}
+    return null;
+  });
   const [aisles, setAisles] = useState<Aisle[]>([]);
   const [isLoadingAuth, setIsLoadingAuth] = useState<boolean>(true);
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
@@ -137,8 +198,15 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('famkit_user_id', res.user.id);
     localStorage.setItem('famkit_household_id', res.household.id);
 
-    setCurrentUserState(res.user);
+    const normUser = normalizeUser(res.user);
+    setCurrentUserState(normUser);
     setHouseholdState(normalizeHousehold(res.household));
+
+    if (normUser) {
+      localStorage.setItem('famkit_current_user', JSON.stringify(normUser));
+      localStorage.setItem('famkit_last_username', normUser.username || normUser.name);
+      saveDeviceProfile(normUser, res.household?.name);
+    }
 
     try {
       const [householdUsers, householdAisles] = await Promise.all([
@@ -168,8 +236,15 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('famkit_user_id', res.user.id);
     localStorage.setItem('famkit_household_id', res.household.id);
 
-    setCurrentUserState(res.user);
+    const normUser = normalizeUser(res.user);
+    setCurrentUserState(normUser);
     setHouseholdState(normalizeHousehold(res.household));
+
+    if (normUser) {
+      localStorage.setItem('famkit_current_user', JSON.stringify(normUser));
+      localStorage.setItem('famkit_last_username', normUser.username || normUser.name);
+      saveDeviceProfile(normUser, res.household?.name);
+    }
 
     try {
       const [householdUsers, householdAisles] = await Promise.all([
@@ -187,6 +262,7 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.removeItem('famkit_auth_token');
     localStorage.removeItem('famkit_user_id');
     localStorage.removeItem('famkit_household_id');
+    localStorage.removeItem('famkit_current_user');
     setCurrentUserState(null);
     setHouseholdState(null);
     setUsers([]);
@@ -201,9 +277,15 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         try {
           const { user, household: h } = await api.getMe();
           if (user && h) {
-            setCurrentUserState(user);
+            const normUser = normalizeUser(user);
+            setCurrentUserState(normUser);
             setHouseholdState(normalizeHousehold(h));
-            localStorage.setItem('famkit_user_id', user.id);
+            if (normUser) {
+              localStorage.setItem('famkit_user_id', normUser.id);
+              localStorage.setItem('famkit_current_user', JSON.stringify(normUser));
+              localStorage.setItem('famkit_last_username', normUser.username || normUser.name);
+              saveDeviceProfile(normUser, h.name);
+            }
             localStorage.setItem('famkit_household_id', h.id);
 
             const [householdUsers, householdAisles] = await Promise.all([
@@ -325,15 +407,27 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       userId: currentUser.id,
       ...data,
     });
-    setCurrentUserState(updated);
-    setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
+    const normUser = normalizeUser(updated);
+    if (normUser) {
+      setCurrentUserState(normUser);
+      setUsers((prev) => prev.map((u) => (u.id === normUser.id ? normUser : u)));
+      localStorage.setItem('famkit_current_user', JSON.stringify(normUser));
+      localStorage.setItem('famkit_last_username', normUser.username || normUser.name);
+      saveDeviceProfile(normUser, household?.name);
+      return normUser;
+    }
     return updated;
   };
 
   const switchUser = (user: User) => {
-    setCurrentUserState(user);
-    localStorage.setItem('famkit_user_id', user.id);
-    localStorage.setItem('famkit_auth_token', user.id);
+    const normUser = normalizeUser(user);
+    if (!normUser) return;
+    setCurrentUserState(normUser);
+    localStorage.setItem('famkit_user_id', normUser.id);
+    localStorage.setItem('famkit_auth_token', normUser.id);
+    localStorage.setItem('famkit_current_user', JSON.stringify(normUser));
+    localStorage.setItem('famkit_last_username', normUser.username || normUser.name);
+    saveDeviceProfile(normUser, household?.name);
   };
 
   return (

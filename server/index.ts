@@ -78,6 +78,29 @@ function formatHousehold(h: any) {
   };
 }
 
+function formatUser(u: any) {
+  if (!u) return null;
+  const isPhoto = u.avatar && typeof u.avatar === 'string' && (u.avatar.startsWith('data:image') || u.avatar.startsWith('http://') || u.avatar.startsWith('https://'));
+  const userColor = u.avatar_color || u.color || u.avatarColor || '#10b981';
+  const role = (u.role && typeof u.role === 'string') ? u.role.toLowerCase() : 'member';
+  const hid = u.household_id || u.householdId || '';
+  return {
+    id: u.id,
+    household_id: hid,
+    householdId: hid,
+    name: u.name,
+    username: u.username || undefined,
+    email: u.email || undefined,
+    avatar: isPhoto ? u.avatar : null,
+    color: userColor,
+    avatar_color: userColor,
+    avatarColor: userColor,
+    role,
+    createdAt: u.createdAt || u.created_at || '',
+    created_at: u.createdAt || u.created_at || '',
+  };
+}
+
 // ---------------- AUTH ROUTES ----------------
 
 // 0. Auth: Login
@@ -108,21 +131,10 @@ app.post('/api/auth/login', (req, res) => {
   }
 
   const household = queryOne('SELECT * FROM households WHERE id = ?', [user.householdId]);
-  const isPhoto = user.avatar && (user.avatar.startsWith('data:image') || user.avatar.startsWith('http://') || user.avatar.startsWith('https://'));
-  const safeUser = {
-    id: user.id,
-    name: user.name,
-    username: user.username,
-    email: user.email,
-    avatar: isPhoto ? user.avatar : null,
-    color: user.color,
-    role: user.role,
-    householdId: user.householdId,
-  };
 
   res.json({
     token: user.id,
-    user: safeUser,
+    user: formatUser(user),
     household: formatHousehold(household),
   });
 });
@@ -211,7 +223,7 @@ app.post('/api/auth/register', (req, res) => {
 
   res.json({
     token: userId,
-    user,
+    user: formatUser(user),
     household: formatHousehold(household),
   });
 });
@@ -224,7 +236,7 @@ app.get('/api/auth/me', (req, res) => {
   }
 
   const household = queryOne('SELECT * FROM households WHERE id = ?', [user.householdId]);
-  res.json({ user, household: formatHousehold(household) });
+  res.json({ user: formatUser(user), household: formatHousehold(household) });
 });
 
 // 0. Auth: Demo Users across Households
@@ -1273,13 +1285,7 @@ app.get('/api/family', (req, res) => {
   const householdId = getHouseholdId(req);
   const household = queryOne('SELECT * FROM households WHERE id = ?', [householdId]);
   const members = queryAll<any>('SELECT * FROM users WHERE householdId = ?', [householdId]);
-  const cleanedMembers = members.map((m) => {
-    const isPhoto = m.avatar && (m.avatar.startsWith('data:image') || m.avatar.startsWith('http://') || m.avatar.startsWith('https://'));
-    return {
-      ...m,
-      avatar: isPhoto ? m.avatar : null,
-    };
-  });
+  const cleanedMembers = members.map((m) => formatUser(m));
   res.json({ ...formatHousehold(household), members: cleanedMembers });
 });
 
@@ -1375,7 +1381,10 @@ app.put('/api/users/profile', (req, res) => {
   const newColor = color && typeof color === 'string' ? color : existing.color;
   const newRole = role && typeof role === 'string' ? role : existing.role;
   const newPassword = password && typeof password === 'string' && password.trim() ? password.trim() : existing.password;
-  const newAvatar = (avatar && typeof avatar === 'string' && (avatar.startsWith('data:image') || avatar.startsWith('http://') || avatar.startsWith('https://'))) ? avatar : null;
+  let newAvatar = existing.avatar;
+  if (avatar !== undefined) {
+    newAvatar = (avatar && typeof avatar === 'string' && (avatar.startsWith('data:image') || avatar.startsWith('http://') || avatar.startsWith('https://'))) ? avatar : null;
+  }
 
   execute(
     'UPDATE users SET name = ?, username = ?, email = ?, color = ?, role = ?, password = ?, avatar = ? WHERE id = ?',
@@ -1387,20 +1396,8 @@ app.put('/api/users/profile', (req, res) => {
     [targetUserId]
   );
 
-  const isUpdatedPhoto = updated!.avatar && (updated!.avatar.startsWith('data:image') || updated!.avatar.startsWith('http://') || updated!.avatar.startsWith('https://'));
-
   res.json({
-    user: {
-      id: updated!.id,
-      household_id: updated!.householdId,
-      name: updated!.name,
-      username: updated!.username || undefined,
-      email: updated!.email || undefined,
-      avatar: isUpdatedPhoto ? updated!.avatar : undefined,
-      avatar_color: updated!.color,
-      role: (updated!.role.toLowerCase() as any) || 'member',
-      created_at: '',
-    },
+    user: formatUser(updated),
   });
 });
 

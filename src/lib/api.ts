@@ -151,14 +151,14 @@ export const api = {
     if (fam && fam.members) {
       return fam.members.map((m: any) => ({
         id: m.id,
-        household_id: m.householdId,
+        household_id: m.household_id || m.householdId,
         name: m.name,
         username: m.username,
         email: m.email || undefined,
         avatar: m.avatar || undefined,
-        avatar_color: m.color || '#10b981',
+        avatar_color: m.avatar_color || m.color || '#10b981',
         role: (m.role?.toLowerCase() as any) || 'member',
-        created_at: '',
+        created_at: m.created_at || m.createdAt || '',
       }));
     }
     return [];
@@ -171,12 +171,12 @@ export const api = {
     });
     return {
       id: res.id,
-      household_id: householdId,
+      household_id: res.household_id || res.householdId || householdId,
       name: res.name,
       username: res.username,
       email: res.email || undefined,
       avatar: res.avatar || undefined,
-      avatar_color: res.color,
+      avatar_color: res.avatar_color || res.color || avatarColor || '#10b981',
       role: (res.role?.toLowerCase() as any) || 'member',
       created_at: '',
     };
@@ -198,7 +198,7 @@ export const api = {
     role?: string;
     password?: string;
   }): Promise<User> => {
-    const res = await fetchJson<{ user: User }>('/users/profile', {
+    const res = await fetchJson<{ user: any }>('/users/profile', {
       method: 'PUT',
       body: JSON.stringify({
         userId: data.userId,
@@ -211,7 +211,18 @@ export const api = {
         password: data.password,
       }),
     });
-    return res.user;
+    const u = res.user;
+    return {
+      id: u.id,
+      household_id: u.household_id || u.householdId,
+      name: u.name,
+      username: u.username || undefined,
+      email: u.email || undefined,
+      avatar: u.avatar || undefined,
+      avatar_color: u.avatar_color || u.color || data.avatarColor || '#10b981',
+      role: (u.role?.toLowerCase() as any) || 'member',
+      created_at: u.created_at || u.createdAt || '',
+    };
   },
 
   // Aisles

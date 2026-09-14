@@ -32,7 +32,40 @@ export const AuthPage: React.FC = () => {
   const [tab, setTab] = useState<'login' | 'register'>('login');
 
   // Sign in state
-  const [loginIdentifier, setLoginIdentifier] = useState('');
+  const [savedProfiles] = useState<Array<{
+    id: string;
+    name: string;
+    username?: string;
+    avatar?: string;
+    avatar_color: string;
+    role: string;
+    householdName?: string;
+  }>>(() => {
+    try {
+      const stored = localStorage.getItem('famkit_device_profiles');
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [loginIdentifier, setLoginIdentifier] = useState(() => {
+    return localStorage.getItem('famkit_last_username') || '';
+  });
+
+  const [selectedProfileId, setSelectedProfileId] = useState<string | null>(() => {
+    const lastUser = localStorage.getItem('famkit_last_username');
+    if (!lastUser) return null;
+    try {
+      const stored = localStorage.getItem('famkit_device_profiles');
+      const list = stored ? JSON.parse(stored) : [];
+      const match = list.find((p: any) => p.username === lastUser || p.name === lastUser || p.id === lastUser);
+      return match ? match.id : (list[0]?.id || null);
+    } catch {
+      return null;
+    }
+  });
+
   const [loginPassword, setLoginPassword] = useState('');
   const [showLoginPassword, setShowLoginPassword] = useState(false);
 
@@ -185,6 +218,70 @@ export const AuthPage: React.FC = () => {
           {/* SIGN IN FORM */}
           {tab === 'login' ? (
             <form onSubmit={handleLogin} className="space-y-4">
+              {/* Profile Choices on This Device */}
+              {savedProfiles.length > 0 && (
+                <div className="space-y-2 pb-1 border-b border-white/10">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                      <Users className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Choose Profile on This Device</span>
+                    </label>
+                    <span className="text-[10px] text-slate-500 font-mono">
+                      {savedProfiles.length} saved
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    {savedProfiles.map((p) => {
+                      const isSelected = selectedProfileId === p.id || loginIdentifier.toLowerCase() === (p.username || '').toLowerCase() || loginIdentifier.toLowerCase() === p.name.toLowerCase();
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedProfileId(p.id);
+                            setLoginIdentifier(p.username || p.name);
+                            setErrorMessage(null);
+                          }}
+                          className={`p-2.5 rounded-2xl border flex items-center gap-2.5 text-left transition-all cursor-pointer ${
+                            isSelected
+                              ? 'bg-emerald-500/15 border-emerald-500/50 ring-1 ring-emerald-500/30 shadow-md shadow-emerald-500/10'
+                              : 'bg-slate-900/60 border-white/5 hover:border-white/20 hover:bg-slate-900/90'
+                          }`}
+                        >
+                          {p.avatar && (p.avatar.startsWith('data:image') || p.avatar.startsWith('http')) ? (
+                            <img
+                              src={p.avatar}
+                              alt={p.name}
+                              className="w-8 h-8 rounded-xl object-cover shrink-0 ring-1 ring-white/10"
+                            />
+                          ) : (
+                            <div
+                              className="w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold text-white shrink-0 shadow"
+                              style={{ backgroundColor: p.avatar_color || '#10b981' }}
+                            >
+                              {p.name.charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <div className="text-xs font-bold text-white truncate">{p.name}</div>
+                            {p.username ? (
+                              <div className="text-[10px] font-mono text-emerald-400 truncate">
+                                @{p.username}
+                              </div>
+                            ) : (
+                              <div className="text-[10px] text-slate-400 truncate capitalize">
+                                {p.role || 'Member'}
+                              </div>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label className="text-xs font-semibold text-slate-300 block mb-1.5">
                   Username or Email
