@@ -300,16 +300,22 @@ export const GroceryPage: React.FC = () => {
   const isGroceryList = activeListType === 'grocery';
 
   if (isGroceryList) {
+    const placedItemIds = new Set<string>();
+
     sortedAisles.forEach((aisle) => {
-      const aisleItems = activeItems.filter((it) => it.aisle_id === aisle.id);
+      const aisleItems = activeItems.filter(
+        (it) =>
+          !placedItemIds.has(it.id) &&
+          (it.aisle_id === aisle.id || it.category?.toLowerCase() === aisle.name.toLowerCase())
+      );
+      aisleItems.forEach((it) => placedItemIds.add(it.id));
       if (aisleItems.length > 0) {
         itemsByAisle.push({ aisle, items: aisleItems });
       }
     });
 
     activeItems.forEach((it) => {
-      const hasAisle = effectiveAisles.some((a) => a.id === it.aisle_id);
-      if (!hasAisle) {
+      if (!placedItemIds.has(it.id)) {
         uncategorizedItems.push(it);
       }
     });
