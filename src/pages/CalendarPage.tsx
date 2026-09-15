@@ -5,14 +5,10 @@ import {
   Trash2,
   Clock,
   MapPin,
-  ChevronDown,
   X,
   Loader2,
-  Filter,
   ArrowDown,
   Sparkles,
-  User,
-  Check,
 } from 'lucide-react';
 import {
   format,
@@ -35,8 +31,8 @@ export const CalendarPage: React.FC = () => {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Timeline configuration
-  const [spanDays, setSpanDays] = useState<number>(30); // 14, 30, 60 days
+  // Timeline configuration: 14 days by default, expandable by 14
+  const [daysCount, setDaysCount] = useState<number>(14);
   const [selectedMemberId, setSelectedMemberId] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'all' | 'events-only'>('all');
 
@@ -66,9 +62,9 @@ export const CalendarPage: React.FC = () => {
     ignore: isModalOpen,
   });
 
-  // Calculate timeline date range: start from 2 days ago for immediate recent context, span forward
-  const rangeStart = subDays(new Date(), 2);
-  const rangeEnd = addDays(new Date(), spanDays);
+  // Calculate timeline date range: starts from yesterday (1 day past context) through 14 days ahead
+  const rangeStart = subDays(new Date(), 1);
+  const rangeEnd = addDays(rangeStart, daysCount);
   const timelineDays = eachDayOfInterval({ start: rangeStart, end: rangeEnd });
 
   const loadData = async () => {
@@ -113,16 +109,6 @@ export const CalendarPage: React.FC = () => {
     if (selectedMemberId === 'all') return true;
     return ev.assigned_user_id === selectedMemberId;
   });
-
-  // Count upcoming events
-  const upcomingCount = filteredEvents.filter((ev) => {
-    try {
-      const d = parseISO(ev.start_time);
-      return d >= subDays(new Date(), 1);
-    } catch {
-      return false;
-    }
-  }).length;
 
   const handleOpenAddModal = (dateStr?: string) => {
     setEditingEventId(null);
@@ -242,142 +228,109 @@ export const CalendarPage: React.FC = () => {
   };
 
   return (
-    <div className="max-w-3xl mx-auto px-3 sm:px-4 pt-2 pb-36 md:pb-28 space-y-4">
-      {/* Top Header Card */}
-      <div className="bg-slate-900/90 border border-white/10 rounded-2xl p-4 shadow-lg space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center">
-              <CalendarIcon className="w-5 h-5" />
-            </div>
-            <div>
-              <h1 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-                Family Agenda
-                {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" />}
-              </h1>
-              <p className="text-xs text-slate-400">
-                Timeline spanning {spanDays} days • {upcomingCount} upcoming {upcomingCount === 1 ? 'event' : 'events'}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {/* Jump to Today Button */}
-            <button
-              type="button"
-              onClick={scrollToToday}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-500/30 text-indigo-300 text-xs font-semibold transition-all active:scale-95 shadow-sm"
-              title="Jump to Today in timeline"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Today</span>
-            </button>
-
-            {/* Schedule New Event */}
-            <button
-              type="button"
-              onClick={() => handleOpenAddModal()}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-md shadow-indigo-600/20 active:scale-95"
-            >
-              <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">Add Event</span>
-            </button>
-          </div>
+    <div className="max-w-2xl mx-auto px-3 sm:px-4 pt-1 pb-36 md:pb-28 space-y-3">
+      {/* Clean, Lightweight Header Bar */}
+      <div className="flex items-center justify-between pt-1 pb-1">
+        <div className="flex items-center gap-2">
+          <h1 className="text-lg sm:text-xl font-bold text-white tracking-tight">Calendar</h1>
+          {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" />}
         </div>
 
-        {/* Span Selector & View Mode Switch */}
-        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-white/5">
-          {/* Days Span Selector */}
-          <div className="flex items-center gap-1 bg-slate-950/60 p-1 rounded-xl border border-white/5 text-xs">
-            <span className="text-slate-400 text-[11px] px-2 font-medium">Span:</span>
-            {[
-              { label: '14 Days', days: 14 },
-              { label: '30 Days', days: 30 },
-              { label: '60 Days', days: 60 },
-            ].map((opt) => (
-              <button
-                key={opt.days}
-                type="button"
-                onClick={() => setSpanDays(opt.days)}
-                className={`px-2.5 py-1 rounded-lg font-semibold transition-all ${
-                  spanDays === opt.days
-                    ? 'bg-indigo-600 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
+        <div className="flex items-center gap-2">
+          {/* Today Jump Button */}
+          <button
+            type="button"
+            onClick={scrollToToday}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-white/10 hover:border-indigo-500/40 text-indigo-300 text-xs font-semibold transition-all active:scale-95 shadow-sm"
+            title="Jump to Today"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Today</span>
+          </button>
 
-          {/* View Filter: All Days vs Events Only */}
-          <div className="flex items-center gap-1 bg-slate-950/60 p-1 rounded-xl border border-white/5 text-xs">
-            <button
-              type="button"
-              onClick={() => setViewMode('all')}
-              className={`px-2.5 py-1 rounded-lg font-semibold transition-all ${
-                viewMode === 'all'
-                  ? 'bg-slate-800 text-white'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              All Days
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode('events-only')}
-              className={`px-2.5 py-1 rounded-lg font-semibold transition-all ${
-                viewMode === 'events-only'
-                  ? 'bg-slate-800 text-white'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Events Only
-            </button>
-          </div>
+          {/* New Event Button */}
+          <button
+            type="button"
+            onClick={() => handleOpenAddModal()}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-sm active:scale-95"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Event</span>
+          </button>
         </div>
-
-        {/* Member Filter Chips */}
-        {users.length > 0 && (
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-1 no-scrollbar text-xs">
-            <button
-              type="button"
-              onClick={() => setSelectedMemberId('all')}
-              className={`px-3 py-1 rounded-full font-semibold transition-all shrink-0 flex items-center gap-1.5 ${
-                selectedMemberId === 'all'
-                  ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40'
-                  : 'bg-white/5 text-slate-400 hover:text-slate-200 hover:bg-white/10 border border-transparent'
-              }`}
-            >
-              <span>Whole Family</span>
-            </button>
-            {users.map((u) => {
-              const isSelected = selectedMemberId === u.id;
-              return (
-                <button
-                  key={u.id}
-                  type="button"
-                  onClick={() => setSelectedMemberId(u.id)}
-                  className={`px-2.5 py-1 rounded-full font-medium transition-all shrink-0 flex items-center gap-1.5 ${
-                    isSelected
-                      ? 'bg-slate-800 text-white border border-white/20'
-                      : 'bg-white/5 text-slate-400 hover:text-slate-200 hover:bg-white/10 border border-transparent'
-                  }`}
-                >
-                  <span
-                    className="w-2 h-2 rounded-full"
-                    style={{ backgroundColor: u.avatar_color || '#818cf8' }}
-                  />
-                  <span>{u.name}</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
       </div>
 
-      {/* Vertical Agenda Timeline */}
-      <div className="relative pl-1 sm:pl-2">
+      {/* Sub-Bar: Compact Family Avatars + Tiny All/Events Toggle */}
+      <div className="flex items-center justify-between gap-2 py-1">
+        {/* Simple, Small Family User Toggle */}
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+          {/* "All" button */}
+          <button
+            type="button"
+            onClick={() => setSelectedMemberId('all')}
+            className={`h-7 px-2.5 rounded-full text-[11px] font-bold transition-all shrink-0 flex items-center justify-center ${
+              selectedMemberId === 'all'
+                ? 'bg-indigo-600 text-white shadow-xs'
+                : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-white/10'
+            }`}
+          >
+            All
+          </button>
+
+          {/* Member Avatar Dots */}
+          {users.map((u) => {
+            const isSelected = selectedMemberId === u.id;
+            const initial = (u.name || 'U').charAt(0).toUpperCase();
+            return (
+              <button
+                key={u.id}
+                type="button"
+                onClick={() => setSelectedMemberId(isSelected ? 'all' : u.id)}
+                title={u.name}
+                className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold text-white transition-all shrink-0 ${
+                  isSelected
+                    ? 'ring-2 ring-indigo-400 ring-offset-2 ring-offset-slate-950 scale-105 shadow-sm'
+                    : selectedMemberId !== 'all'
+                    ? 'opacity-40 hover:opacity-100'
+                    : 'opacity-90 hover:opacity-100 hover:scale-105'
+                }`}
+                style={{ backgroundColor: u.avatar_color || '#6366f1' }}
+              >
+                {initial}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Much Smaller & Simpler View Mode Toggle */}
+        <div className="flex items-center bg-slate-900 rounded-lg p-0.5 border border-white/10 shrink-0 text-[11px]">
+          <button
+            type="button"
+            onClick={() => setViewMode('all')}
+            className={`px-2 py-0.5 rounded-md font-medium transition-all ${
+              viewMode === 'all'
+                ? 'bg-slate-800 text-white font-semibold'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            All
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('events-only')}
+            className={`px-2 py-0.5 rounded-md font-medium transition-all ${
+              viewMode === 'events-only'
+                ? 'bg-slate-800 text-white font-semibold'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            Events
+          </button>
+        </div>
+      </div>
+
+      {/* Clean Timeline List */}
+      <div className="relative pt-1">
         {timelineDays.map((day, idx) => {
           const dateStr = format(day, 'yyyy-MM-dd');
           const isCurrentDay = isToday(day);
@@ -404,175 +357,127 @@ export const CalendarPage: React.FC = () => {
 
           return (
             <React.Fragment key={dateStr}>
-              {/* Month Transition Header Banner */}
+              {/* Subtle Month Header */}
               {isFirstOfMonth && (
-                <div className="pt-4 pb-2 sticky top-0 z-20 backdrop-blur-md bg-slate-950/80 -mx-2 px-2 py-1.5 flex items-center gap-2">
-                  <div className="text-xs font-bold uppercase tracking-wider text-indigo-400 font-mono">
+                <div className="pt-3 pb-1.5 sticky top-0 z-10 backdrop-blur-md bg-slate-950/85 flex items-center gap-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-mono">
                     {format(day, 'MMMM yyyy')}
-                  </div>
-                  <div className="flex-1 h-px bg-gradient-to-r from-indigo-500/30 to-transparent" />
+                  </span>
+                  <div className="flex-1 h-px bg-white/10" />
                 </div>
               )}
 
-              {/* Day Timeline Row */}
+              {/* Day Row */}
               <div
                 ref={isCurrentDay ? todayRef : undefined}
-                className={`relative flex gap-3 sm:gap-4 pb-5 group transition-colors ${
-                  isCurrentDay ? 'scroll-mt-24' : ''
+                className={`relative flex gap-3 pb-3 group ${
+                  isCurrentDay ? 'scroll-mt-20' : ''
                 }`}
               >
-                {/* 1. Left Date Badge Column */}
-                <div className="w-14 sm:w-16 shrink-0 flex flex-col items-center pt-0.5 select-none">
+                {/* 1. Date Column */}
+                <div className="w-12 shrink-0 flex flex-col items-center pt-0.5 select-none">
                   <span
-                    className={`text-[11px] font-bold uppercase tracking-wider ${
-                      isCurrentDay
-                        ? 'text-indigo-400'
-                        : isTomorrowDay
-                        ? 'text-purple-400'
-                        : 'text-slate-400'
+                    className={`text-[10px] font-bold uppercase tracking-wider ${
+                      isCurrentDay ? 'text-indigo-400' : 'text-slate-400'
                     }`}
                   >
                     {format(day, 'EEE')}
                   </span>
-                  <span
-                    className={`text-lg sm:text-xl font-black leading-tight ${
-                      isCurrentDay
-                        ? 'text-indigo-300 scale-110 drop-shadow-md'
-                        : 'text-slate-200'
-                    }`}
-                  >
-                    {format(day, 'd')}
-                  </span>
-                  <span className="text-[10px] text-slate-400 font-medium">
-                    {format(day, 'MMM')}
-                  </span>
-                </div>
 
-                {/* 2. Central Vertical Timeline Rail & Connector Node */}
-                <div className="relative flex flex-col items-center">
-                  {/* Timeline Rail Connecting Line */}
-                  <div
-                    className={`absolute top-0 bottom-0 w-0.5 -z-0 ${
-                      isCurrentDay
-                        ? 'bg-gradient-to-b from-indigo-500 via-indigo-500/40 to-slate-800'
-                        : 'bg-slate-800'
-                    }`}
-                  />
-
-                  {/* Timeline Node Dot */}
-                  <div
-                    className={`relative z-10 rounded-full mt-1.5 transition-transform group-hover:scale-125 ${
-                      isCurrentDay
-                        ? 'w-4 h-4 bg-indigo-500 ring-4 ring-indigo-500/30 shadow-lg shadow-indigo-500/50'
-                        : dayEvents.length > 0
-                        ? 'w-3 h-3 bg-emerald-400 ring-2 ring-emerald-400/20'
-                        : 'w-2 h-2 bg-slate-700'
-                    }`}
-                  />
-                </div>
-
-                {/* 3. Right Content: Events Container */}
-                <div className="flex-1 min-w-0">
-                  {/* Day Subheader */}
-                  <div className="flex items-center justify-between gap-2 mb-1.5 pt-0.5">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span
-                        className={`text-xs font-bold truncate ${
-                          isCurrentDay ? 'text-indigo-300' : 'text-slate-300'
-                        }`}
-                      >
-                        {format(day, 'EEEE')}
-                      </span>
-
-                      {isCurrentDay && (
-                        <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-500/25 text-indigo-300 border border-indigo-500/40">
-                          Today
-                        </span>
-                      )}
-                      {isTomorrowDay && (
-                        <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                          Tomorrow
-                        </span>
-                      )}
-                      {isYesterdayDay && (
-                        <span className="text-[10px] font-medium text-slate-400 text-[11px]">
-                          Yesterday
-                        </span>
-                      )}
+                  {isCurrentDay ? (
+                    <div className="w-7 h-7 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-sm shadow-sm mt-0.5">
+                      {format(day, 'd')}
                     </div>
+                  ) : (
+                    <span className="text-base font-bold text-slate-200 mt-0.5">
+                      {format(day, 'd')}
+                    </span>
+                  )}
 
-                    {/* Quick Add on Date Button */}
-                    <button
-                      type="button"
-                      onClick={() => handleOpenAddModal(dateStr)}
-                      className="p-1 rounded-lg text-slate-400 hover:text-indigo-300 hover:bg-indigo-500/10 transition-colors shrink-0"
-                      title={`Add event on ${format(day, 'MMM d')}`}
-                    >
-                      <Plus className="w-4 h-4" />
-                    </button>
-                  </div>
+                  {isCurrentDay && (
+                    <span className="text-[9px] font-bold text-indigo-400 uppercase tracking-tight mt-0.5">
+                      Today
+                    </span>
+                  )}
+                  {isTomorrowDay && (
+                    <span className="text-[9px] font-medium text-slate-400 uppercase tracking-tight mt-0.5">
+                      Tmrw
+                    </span>
+                  )}
+                </div>
 
-                  {/* Event Cards List */}
+                {/* 2. Thin Timeline Rail Line */}
+                <div className="relative flex flex-col items-center">
+                  <div
+                    className={`absolute top-0 bottom-0 w-[1px] ${
+                      isCurrentDay ? 'bg-indigo-500/50' : 'bg-slate-800'
+                    }`}
+                  />
+                  <div
+                    className={`relative z-10 rounded-full mt-2 ${
+                      isCurrentDay
+                        ? 'w-2.5 h-2.5 bg-indigo-500 ring-2 ring-indigo-400/30'
+                        : dayEvents.length > 0
+                        ? 'w-2 h-2 bg-emerald-400'
+                        : 'w-1.5 h-1.5 bg-slate-700'
+                    }`}
+                  />
+                </div>
+
+                {/* 3. Content Column */}
+                <div className="flex-1 min-w-0 pt-0.5">
                   {dayEvents.length > 0 ? (
-                    <div className="space-y-2">
+                    <div className="space-y-1.5">
                       {dayEvents.map((ev) => {
                         const assignedUser = users.find((u) => u.id === ev.assigned_user_id);
                         return (
                           <div
                             key={ev.id}
                             onClick={() => handleOpenEditModal(ev)}
-                            className="relative overflow-hidden p-3 sm:p-3.5 rounded-2xl bg-slate-900/90 hover:bg-slate-850 border border-white/10 hover:border-indigo-500/40 transition-all cursor-pointer group shadow-sm active:scale-[0.99]"
+                            className="relative overflow-hidden p-2.5 sm:p-3 rounded-xl bg-slate-900 border border-white/10 hover:border-indigo-500/40 transition-all cursor-pointer group active:scale-[0.99] shadow-xs"
                           >
-                            {/* Member Color Stripe on Left */}
+                            {/* Member Color Stripe */}
                             <div
-                              className="absolute left-0 top-0 bottom-0 w-1.5"
+                              className="absolute left-0 top-0 bottom-0 w-1"
                               style={{
-                                backgroundColor: assignedUser?.avatar_color || '#818cf8',
+                                backgroundColor: assignedUser?.avatar_color || '#6366f1',
                               }}
                             />
 
-                            <div className="pl-1.5 space-y-1.5">
+                            <div className="pl-1 space-y-1">
+                              {/* Top row: Time & Member */}
                               <div className="flex items-center justify-between gap-2">
-                                {/* Time Range Badge */}
-                                <div className="inline-flex items-center gap-1.5 text-xs font-mono font-semibold text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded-lg border border-indigo-500/20">
+                                <div className="inline-flex items-center gap-1 text-[11px] font-mono text-indigo-300 font-medium">
                                   <Clock className="w-3 h-3 text-indigo-400" />
                                   <span>{formatTimeRange(ev)}</span>
                                 </div>
 
-                                {/* Member Assigned Avatar / Name */}
                                 {assignedUser && (
-                                  <div className="flex items-center gap-1.5 shrink-0">
+                                  <div className="flex items-center gap-1 shrink-0">
                                     <div
-                                      className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-xs"
+                                      className="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white"
                                       style={{
-                                        backgroundColor: assignedUser.avatar_color || '#818cf8',
+                                        backgroundColor: assignedUser.avatar_color || '#6366f1',
                                       }}
                                     >
                                       {assignedUser.name.charAt(0).toUpperCase()}
                                     </div>
-                                    <span className="text-xs text-slate-300 font-medium hidden sm:inline">
+                                    <span className="text-[11px] text-slate-400 font-medium hidden sm:inline">
                                       {assignedUser.name}
                                     </span>
                                   </div>
                                 )}
                               </div>
 
-                              {/* Title */}
-                              <h3 className="text-sm sm:text-base font-semibold text-white group-hover:text-indigo-200 transition-colors">
+                              {/* Event Title */}
+                              <h3 className="text-sm font-semibold text-white group-hover:text-indigo-200 transition-colors">
                                 {ev.title}
                               </h3>
 
-                              {/* Description if present */}
-                              {ev.description && (
-                                <p className="text-xs text-slate-400 line-clamp-2">
-                                  {ev.description}
-                                </p>
-                              )}
-
-                              {/* Location if present */}
+                              {/* Location */}
                               {ev.location && (
-                                <div className="flex items-center gap-1.5 text-xs text-slate-400 pt-0.5">
-                                  <MapPin className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                                <div className="flex items-center gap-1 text-[11px] text-slate-400 pt-0.5">
+                                  <MapPin className="w-3 h-3 text-slate-500 shrink-0" />
                                   <span className="truncate">{ev.location}</span>
                                 </div>
                               )}
@@ -582,18 +487,21 @@ export const CalendarPage: React.FC = () => {
                       })}
                     </div>
                   ) : (
-                    /* Empty Day Placeholder */
+                    /* Minimalist Empty Day Row */
                     <div
                       onClick={() => handleOpenAddModal(dateStr)}
-                      className="py-2.5 px-3 rounded-xl border border-dashed border-white/5 hover:border-white/20 bg-slate-900/30 hover:bg-slate-900/60 transition-all cursor-pointer flex items-center justify-between group"
+                      className="py-1 px-2 rounded-lg hover:bg-slate-900/60 transition-colors cursor-pointer flex items-center justify-between group"
                     >
-                      <span className="text-xs text-slate-400 italic group-hover:text-slate-300 transition-colors">
-                        No events scheduled
+                      <span className="text-xs text-slate-500 group-hover:text-slate-400">
+                        {isCurrentDay ? 'No events today' : 'No events'}
                       </span>
-                      <span className="text-[11px] font-semibold text-slate-400 group-hover:text-indigo-400 flex items-center gap-1 transition-colors">
+                      <button
+                        type="button"
+                        className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-indigo-400 text-xs flex items-center gap-0.5 transition-opacity"
+                      >
                         <Plus className="w-3 h-3" />
                         <span>Add</span>
-                      </span>
+                      </button>
                     </div>
                   )}
                 </div>
@@ -602,15 +510,15 @@ export const CalendarPage: React.FC = () => {
           );
         })}
 
-        {/* Load More Days Button at bottom */}
-        <div className="pt-4 pb-8 flex justify-center">
+        {/* Load More Days (+14 Days) */}
+        <div className="pt-3 pb-8 flex justify-center">
           <button
             type="button"
-            onClick={() => setSpanDays((prev) => prev + 30)}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-slate-900 border border-white/15 hover:border-indigo-500/40 text-slate-300 hover:text-white text-xs font-bold transition-all shadow-md active:scale-95"
+            onClick={() => setDaysCount((prev) => prev + 14)}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-900 border border-white/10 hover:border-indigo-500/40 text-slate-300 hover:text-white text-xs font-semibold transition-all active:scale-95 shadow-sm"
           >
-            <ArrowDown className="w-4 h-4 text-indigo-400" />
-            <span>Load More Days (+30 Days)</span>
+            <ArrowDown className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Load 14 More Days</span>
           </button>
         </div>
       </div>
@@ -625,7 +533,7 @@ export const CalendarPage: React.FC = () => {
             {/* Bottom Sheet Header */}
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center">
                   <CalendarIcon className="w-4 h-4" />
                 </div>
                 <div>
@@ -633,21 +541,21 @@ export const CalendarPage: React.FC = () => {
                     {editingEventId ? 'Edit Event' : 'Schedule Event'}
                   </h3>
                   <p className="text-xs text-slate-400">
-                    {editingEventId ? 'Update event details' : 'Add to family agenda timeline'}
+                    {editingEventId ? 'Update event details' : 'Add to family calendar'}
                   </p>
                 </div>
               </div>
 
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+                className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* EVENT FORM */}
-            <form onSubmit={handleSaveModal} className="space-y-4">
+            <form onSubmit={handleSaveModal} className="space-y-3.5">
               {/* Title */}
               <div>
                 <label className="text-xs font-semibold text-slate-300 block mb-1">
@@ -657,7 +565,7 @@ export const CalendarPage: React.FC = () => {
                   type="text"
                   required
                   autoFocus
-                  placeholder="e.g. Maya Soccer Tournament, Dentist Appointment..."
+                  placeholder="e.g. Soccer game, Dentist, Family Dinner..."
                   value={formTitle}
                   onChange={(e) => setFormTitle(e.target.value)}
                   className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
@@ -698,7 +606,7 @@ export const CalendarPage: React.FC = () => {
               </div>
 
               {/* All Day Toggle */}
-              <div className="flex items-center justify-between py-1 px-1">
+              <div className="flex items-center justify-between py-0.5 px-0.5">
                 <label className="text-xs font-semibold text-slate-300 cursor-pointer select-none">
                   All Day Event
                 </label>
@@ -745,7 +653,7 @@ export const CalendarPage: React.FC = () => {
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. Central Park Field 4, Dr. Smith Office..."
+                  placeholder="e.g. Park, School, Dr. Smith Office..."
                   value={formLocation}
                   onChange={(e) => setFormLocation(e.target.value)}
                   className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
@@ -755,11 +663,11 @@ export const CalendarPage: React.FC = () => {
               {/* Notes / Description */}
               <div>
                 <label className="text-xs font-semibold text-slate-300 block mb-1">
-                  Notes / Description (Optional)
+                  Notes (Optional)
                 </label>
                 <textarea
                   rows={2}
-                  placeholder="Additional details, reminder notes, equipment needed..."
+                  placeholder="Additional notes or details..."
                   value={formDescription}
                   onChange={(e) => setFormDescription(e.target.value)}
                   className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 resize-none"
@@ -775,7 +683,7 @@ export const CalendarPage: React.FC = () => {
                       await handleDeleteEvent(editingEventId);
                       setIsModalOpen(false);
                     }}
-                    className="min-h-[44px] px-3.5 py-2.5 rounded-xl text-xs font-semibold text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 transition-colors flex items-center gap-1.5"
+                    className="min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-semibold text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 transition-colors flex items-center gap-1.5"
                   >
                     <Trash2 className="w-4 h-4" />
                     <span>Delete</span>
@@ -788,17 +696,17 @@ export const CalendarPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setIsModalOpen(false)}
-                    className="min-h-[44px] px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-white"
+                    className="min-h-[44px] px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={!formTitle.trim() || isSaving}
-                    className="min-h-[44px] px-5 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white shadow-lg shadow-indigo-600/25 flex items-center gap-1.5 transition-all"
+                    className="min-h-[44px] px-5 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white shadow-md shadow-indigo-600/20 flex items-center gap-1.5 transition-all"
                   >
                     {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
-                    <span>{editingEventId ? 'Save Changes' : 'Schedule Event'}</span>
+                    <span>{editingEventId ? 'Save' : 'Add Event'}</span>
                   </button>
                 </div>
               </div>
@@ -809,13 +717,13 @@ export const CalendarPage: React.FC = () => {
 
       {/* Animated Expanding Quick Add Dock & FAB */}
       <div className="fixed bottom-[calc(76px+1rem+env(safe-area-inset-bottom,0px))] md:bottom-8 left-0 right-0 z-40 px-4 pointer-events-none">
-        <div className="max-w-3xl mx-auto pointer-events-none flex justify-end">
+        <div className="max-w-2xl mx-auto pointer-events-none flex justify-end">
           <div
             ref={dockRef}
-            className={`fab-dock-transition pointer-events-auto h-[52px] border shadow-2xl flex items-center overflow-hidden ${
+            className={`fab-dock-transition pointer-events-auto h-[48px] border shadow-2xl flex items-center overflow-hidden ${
               isQuickAddExpanded
-                ? 'w-full rounded-3xl border-white/25 bg-slate-900/95 backdrop-blur-xl shadow-indigo-500/10 px-2'
-                : 'w-[52px] rounded-full border-indigo-400/40 bg-gradient-to-r from-indigo-500 to-purple-500 cursor-pointer shadow-xl shadow-indigo-500/30 hover:scale-105 active:scale-95 justify-center'
+                ? 'w-full rounded-3xl border-white/20 bg-slate-900/95 backdrop-blur-xl px-2'
+                : 'w-[48px] rounded-full border-indigo-400/40 bg-gradient-to-r from-indigo-500 to-purple-500 cursor-pointer shadow-lg shadow-indigo-500/25 hover:scale-105 active:scale-95 justify-center'
             }`}
           >
             {!isQuickAddExpanded ? (
@@ -825,7 +733,7 @@ export const CalendarPage: React.FC = () => {
                 className="w-full h-full flex items-center justify-center text-white"
                 title="Quick Add Event"
               >
-                <Plus className="w-6 h-6 stroke-[2.5]" />
+                <Plus className="w-5 h-5 stroke-[2.5]" />
               </button>
             ) : (
               <form onSubmit={handleQuickAdd} className="w-full flex items-center gap-2">
@@ -833,22 +741,10 @@ export const CalendarPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsQuickAddExpanded(false)}
-                  className="p-2 rounded-2xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white shrink-0"
+                  className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white shrink-0"
                   title="Close"
                 >
                   <X className="w-4 h-4" />
-                </button>
-
-                {/* Secondary action: Full Modal Options Button */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleOpenAddModal(quickDate);
-                  }}
-                  className="p-2.5 rounded-2xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white shrink-0"
-                  title="More details & scheduling"
-                >
-                  <CalendarIcon className="w-4 h-4" />
                 </button>
 
                 {/* Secondary action: Date selector */}
@@ -856,28 +752,27 @@ export const CalendarPage: React.FC = () => {
                   type="date"
                   value={quickDate}
                   onChange={(e) => setQuickDate(e.target.value)}
-                  className="bg-white/5 border border-white/10 text-xs text-slate-300 rounded-2xl px-2 py-2 focus:outline-none focus:border-indigo-500 shrink-0"
+                  className="bg-white/5 border border-white/10 text-xs text-slate-300 rounded-xl px-2 py-1.5 focus:outline-none focus:border-indigo-500 shrink-0"
                 />
 
-                {/* Middle: Input */}
+                {/* Input */}
                 <input
                   autoFocus
                   type="text"
-                  placeholder="Quick add (e.g. Soccer 4:30pm)..."
+                  placeholder="e.g. Soccer 4:30pm..."
                   value={quickInput}
                   onChange={(e) => setQuickInput(e.target.value)}
-                  className="flex-1 min-w-0 bg-transparent border-none text-sm text-white placeholder-slate-500 focus:outline-none py-2 px-1"
+                  className="flex-1 min-w-0 bg-transparent border-none text-xs text-white placeholder-slate-500 focus:outline-none py-1.5 px-1"
                 />
 
-                {/* Far Right: Add Button */}
+                {/* Add Button */}
                 <button
                   type="submit"
                   disabled={!quickInput.trim()}
-                  className="p-2 sm:px-3.5 sm:py-2 rounded-2xl text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shrink-0 disabled:opacity-40 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-400 hover:to-purple-400 shadow-indigo-500/20"
-                  title="Add Event"
+                  className="px-3 py-1.5 rounded-xl text-white font-bold text-xs flex items-center gap-1 transition-all shadow-sm shrink-0 disabled:opacity-40 bg-indigo-600 hover:bg-indigo-500"
                 >
-                  <Plus className="w-4 h-4" />
-                  <span className="hidden sm:inline">Add</span>
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add</span>
                 </button>
               </form>
             )}
