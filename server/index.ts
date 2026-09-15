@@ -776,12 +776,99 @@ app.get('/api/grocery', (req, res) => {
   const lists = queryAll('SELECT * FROM custom_lists WHERE householdId = ? ORDER BY createdAt ASC', [householdId]);
   const aisles = queryAll('SELECT * FROM aisles WHERE householdId = ? ORDER BY orderIndex ASC', [householdId]);
 
+  // Auto-heal any existing grocery items missing an aisleId
+  if (!listId) {
+    for (const it of items) {
+      if (!it.aisleId) {
+        const matched = guessAisleForGroceryItem(it.name, aisles);
+        if (matched) {
+          it.aisleId = matched.id;
+          it.category = matched.name;
+          execute('UPDATE grocery_items SET aisleId = ?, category = ? WHERE id = ?', [
+            matched.id,
+            matched.name,
+            it.id,
+          ]);
+        }
+      }
+    }
+  }
+
   res.json({
     items: items.map((i: any) => ({ ...i, checked: Boolean(i.checked) })),
     lists,
     aisles,
   });
 });
+
+function cleanIngredientName(raw: string): string {
+  return raw
+    .toLowerCase()
+    .replace(/^[\d\s½⅓⅔¼¾⅛⅜⅝⅞/.,-]+(?:to\s+[\d\s½⅓⅔¼¾⅛⅜⅝⅞/.,-]+)?/i, '')
+    .replace(/\b(?:cups?|c|tablespoons?|tbsp?|teaspoons?|tsp?|pounds?|lbs?|ounces?|oz|grams?|g|kg|ml|liters?|pinches?|cloves?|stalks?|bunches?|cans?|bottles?|packages?|pkgs?|slices?|pieces?)\b/gi, '')
+    .replace(/\([^)]*\)/g, '')
+    .replace(/\b(?:divided|optional|to taste|for serving|freshly|grated|chopped|sliced|diced|minced|cubed|crushed|plus more as needed)\b/gi, '')
+    .replace(/[^\w\s-]/g, ' ')
+    .trim();
+}
+
+function guessAisleForGroceryItem(rawName: string, aisles: Array<{ id: string; name: string }>) {
+  const clean = cleanIngredientName(rawName);
+  const lower = rawName.toLowerCase();
+
+  const findAisle = (regex: RegExp) => aisles.find((a) => regex.test(a.name));
+
+  // 1. Specific compound checks first
+  if (/\b(?:peanut|almond|cashew|sunflower|nut)\s*butter\b/i.test(lower)) {
+    return findAisle(/pantry/i);
+  }
+  if (/\b(?:chile|chili|curry|garlic|onion)\s*powder\b/i.test(lower)) {
+    return findAisle(/pantry/i);
+  }
+  if (/\b(?:coconut|almond|oat|soy)\s*milk\b/i.test(lower)) {
+    return findAisle(/dairy/i) || findAisle(/pantry/i);
+  }
+  if (/\b(?:naan|tortilla|pita|bread|bun|roll|bagel|baguette|croissant|crust)\b/i.test(clean)) {
+    return findAisle(/bakery|bread/i);
+  }
+
+  // 2. Meat & Seafood
+  if (/\b(?:chicken|beef|pork|steak|bacon|turkey|salmon|fish|shrimp|sausage|lamb|tuna|meat|prawns?|scallops?|halibut|cod|tilapia|ribs?|ground beef|ground turkey)\b/i.test(clean)) {
+    return findAisle(/meat|seafood/i);
+  }
+
+  // 3. Dairy & Eggs
+  if (/\b(?:paneer|milk|yogurt|yoghurt|cheese|butter|cream|eggs?|mozzarella|cheddar|parmesan|feta|ricotta|provolone|curd|sour cream)\b/i.test(clean)) {
+    return findAisle(/dairy/i);
+  }
+
+  // 4. Produce (fresh fruits, vegetables, fresh herbs)
+  if (/\b(?:cilantro|mint|onion|onions|garlic|chile|chiles|chili|chilies|peppers?|lemons?|limes?|ginger|herbs?|spinach|lettuce|apples?|bananas?|potatoes?|avocados?|carrots?|basil|tomatoes?|shallots?|kale|scallions?|berries|strawberries|blueberries|mushrooms?|cucumbers?|parsley|rosemary|thyme|zucchini|cabbage|cauliflower|broccoli|celery|asparagus|corn|peas)\b/i.test(clean)) {
+    return findAisle(/produce/i);
+  }
+
+  // 5. Frozen
+  if (/\b(?:frozen|ice cream|gelato|popsicle|popsicles)\b/i.test(lower)) {
+    return findAisle(/frozen/i);
+  }
+
+  // 6. Beverages (strict word boundaries so "tea" doesn't match "teaspoon")
+  if (/\b(?:juice|coffee|tea|soda|wine|beer|seltzer|cider|cola|lemonade|beverage)\b/i.test(clean)) {
+    return findAisle(/beverage|drink/i);
+  }
+
+  // 7. Snacks & Sweets
+  if (/\b(?:chips?|crackers?|chocolate|cookies?|candy|popcorn|pretzels?|nuts?|cashews?|almonds?|peanuts?|walnuts?)\b/i.test(clean)) {
+    return findAisle(/snack|sweet/i);
+  }
+
+  // 8. Pantry & Dry Goods
+  if (/\b(?:rice|pasta|noodles?|oil|ghee|salt|sea salt|seeds?|cumin|spices?|seasoning|flour|sugar|broth|stock|sauce|soy sauce|vinegar|beans?|can|canned|extract|honey|syrup|vanilla|cinnamon|oregano|curry|water|mustard|ketchup|mayo|mayonnaise|yeast|baking powder|baking soda|oats?|quinoa)\b/i.test(clean) || /\b(?:ghee|oil|salt|seeds?|cumin|powder)\b/i.test(lower)) {
+    return findAisle(/pantry/i);
+  }
+
+  return findAisle(/pantry/i) || findAisle(/other/i) || aisles[0] || null;
+}
 
 app.post('/api/grocery', (req, res) => {
   const householdId = getHouseholdId(req);
@@ -804,17 +891,33 @@ app.post('/api/grocery', (req, res) => {
   const id = `g_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
   const now = new Date().toISOString();
 
+  let finalAisleId = aisleId || null;
+  let finalCategory = category || 'Other';
+
+  // If no aisleId is specified and it's for the main grocery list, auto-categorize based on item name
+  if (!finalAisleId && (!listId || listId === 'grocery')) {
+    const aisles = queryAll<{ id: string; name: string }>(
+      'SELECT id, name FROM aisles WHERE householdId = ? ORDER BY display_order ASC',
+      [householdId]
+    );
+    const matched = guessAisleForGroceryItem(name, aisles);
+    if (matched) {
+      finalAisleId = matched.id;
+      finalCategory = matched.name;
+    }
+  }
+
   execute(
     `INSERT INTO grocery_items (id, name, category, aisleId, quantity, unit, note, checked, listId, addedById, householdId, createdAt)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, name, category || 'Other', aisleId || null, quantity || '1', unit || null, note || null, 0, listId || null, addedById || 'u1', householdId, now]
+    [id, name, finalCategory, finalAisleId, quantity || '1', unit || null, note || null, 0, listId || null, addedById || 'u1', householdId, now]
   );
 
   res.json({
     id,
     name,
-    category: category || 'Other',
-    aisleId,
+    category: finalCategory,
+    aisleId: finalAisleId,
     quantity: quantity || '1',
     unit,
     note,

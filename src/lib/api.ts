@@ -333,6 +333,7 @@ export const api = {
     data: {
       name: string;
       aisle_id?: string;
+      category?: string;
       quantity?: string;
       unit?: string;
       notes?: string;
@@ -346,6 +347,7 @@ export const api = {
       body: JSON.stringify({
         name: data.name,
         aisleId: data.aisle_id,
+        category: data.category,
         quantity: data.quantity,
         unit: data.unit,
         note: data.notes,
@@ -534,6 +536,7 @@ export const api = {
         name: ing.item,
         quantity: ing.amount,
         unit: ing.unit,
+        category: ing.category,
       });
       count++;
     }
@@ -549,6 +552,7 @@ export const api = {
           name: ing.item.trim(),
           quantity: ing.amount,
           unit: ing.unit,
+          category: ing.category,
           notes: `From recipe: ${recipe.title}`,
         });
         count++;
