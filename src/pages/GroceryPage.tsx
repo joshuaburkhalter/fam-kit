@@ -767,7 +767,7 @@ export const GroceryPage: React.FC = () => {
                   <select
                     value={selectedAisleId}
                     onChange={(e) => setSelectedAisleId(e.target.value)}
-                    className="bg-white/5 border border-white/10 text-xs text-slate-300 rounded-2xl px-2.5 py-2.5 focus:outline-none focus:border-emerald-500 shrink-0 max-w-[100px] sm:max-w-[140px] truncate"
+                    className="bg-white/5 border border-white/10 hover:border-emerald-500/30 text-xs text-emerald-400 font-semibold rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-emerald-500 shrink-0 max-w-[100px] sm:max-w-[140px] truncate transition-colors cursor-pointer"
                   >
                     <option value="" className="bg-slate-900 text-white">Auto Aisle</option>
                     {sortedAisles.map((a) => (
