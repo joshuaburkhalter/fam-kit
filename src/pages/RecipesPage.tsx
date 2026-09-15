@@ -17,6 +17,7 @@ import {
   Sparkles,
   Loader2,
   ImageIcon,
+  BookOpen,
 } from 'lucide-react';
 import type { Recipe } from '../types';
 import { usePWA } from '../context/PWAContext';
@@ -206,7 +207,7 @@ export const RecipesPage: React.FC = () => {
   const hasAiRecipes = recipes.some((r) => isAiRecipe(r));
 
   return (
-    <div className="max-w-6xl mx-auto p-2 sm:p-4 pb-36 md:pb-28 space-y-4">
+    <div className="max-w-3xl mx-auto px-3 sm:px-6 pt-3 pb-36 md:pb-28 space-y-4">
       {/* If a recipe is selected, show detail view / Cook Mode */}
       {selectedRecipe ? (
         <div className="space-y-4 animate-in fade-in duration-150">
@@ -546,6 +547,33 @@ export const RecipesPage: React.FC = () => {
       ) : (
         /* Recipe Box Grid List View */
         <div className="space-y-4">
+          {/* Consistent Mobile-First Header */}
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-md shadow-emerald-500/20 text-slate-950">
+                <BookOpen className="w-5 h-5 stroke-[2.2]" />
+              </div>
+              <div>
+                <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white flex items-center gap-2">
+                  Recipes
+                  {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" />}
+                </h1>
+                <p className="text-[11px] sm:text-xs text-slate-400 font-medium">
+                  {recipes.length} saved recipes in your collection
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsScraperOpen(true)}
+              className="flex items-center gap-1 px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 active:scale-95"
+            >
+              <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>Import</span>
+            </button>
+          </div>
+
           {/* Category / Tag Filter Pills */}
           {(hasAiRecipes || allUniqueTags.length > 0) && (
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none no-scrollbar">
@@ -553,8 +581,8 @@ export const RecipesPage: React.FC = () => {
                 onClick={() => setSelectedTag(null)}
                 className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
                   selectedTag === null
-                    ? 'bg-pink-500 text-white shadow-md shadow-pink-500/20'
-                    : 'bg-slate-900/80 hover:bg-slate-800 text-slate-300 border border-white/5'
+                    ? 'bg-emerald-500 text-slate-950 font-bold shadow-md shadow-emerald-500/20'
+                    : 'bg-slate-900/80 hover:bg-slate-850 text-slate-300 border border-white/10'
                 }`}
               >
                 All Recipes ({recipes.length})
@@ -586,8 +614,8 @@ export const RecipesPage: React.FC = () => {
                     onClick={() => setSelectedTag(selectedTag === tag ? null : tag)}
                     className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
                       selectedTag === tag
-                        ? 'bg-pink-500 text-white shadow-md shadow-pink-500/20'
-                        : 'bg-slate-900/80 hover:bg-slate-800 text-slate-300 border border-white/5'
+                        ? 'bg-emerald-500 text-slate-950 font-bold shadow-md shadow-emerald-500/20'
+                        : 'bg-slate-900/80 hover:bg-slate-850 text-slate-300 border border-white/10'
                     }`}
                   >
                     #{tag}
@@ -601,7 +629,7 @@ export const RecipesPage: React.FC = () => {
             <div className="py-12 text-center text-xs text-slate-400">Loading recipes...</div>
           ) : filteredRecipes.length === 0 ? (
             <div className="py-16 text-center glass-panel rounded-3xl p-8 border border-white/5 space-y-3">
-              <div className="w-12 h-12 rounded-2xl bg-pink-500/10 text-pink-400 flex items-center justify-center mx-auto">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center mx-auto">
                 <ChefHat className="w-6 h-6" />
               </div>
               <h3 className="text-base font-bold text-white">No recipes found</h3>
@@ -616,7 +644,7 @@ export const RecipesPage: React.FC = () => {
                     setSelectedTag(null);
                     setIsScraperOpen(true);
                   }}
-                  className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-400 hover:to-rose-400 text-white px-4 py-2 rounded-2xl text-xs font-bold inline-flex items-center gap-2 transition-all shadow-lg shadow-pink-500/20"
+                  className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-4 py-2 rounded-2xl text-xs font-bold inline-flex items-center gap-2 transition-all shadow-md shadow-emerald-500/20"
                 >
                   <Link2 className="w-4 h-4" />
                   <span>Import Recipe from Web</span>
@@ -624,12 +652,12 @@ export const RecipesPage: React.FC = () => {
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {filteredRecipes.map((recipe) => (
                 <div
                   key={recipe.id}
                   onClick={() => setSelectedRecipe(recipe)}
-                  className="glass-panel rounded-3xl border border-white/10 hover:border-pink-500/40 overflow-hidden cursor-pointer transition-all hover:scale-[1.01] shadow-lg flex flex-col group"
+                  className="glass-panel rounded-3xl border border-white/10 hover:border-emerald-500/40 overflow-hidden cursor-pointer transition-all hover:scale-[1.01] shadow-lg flex flex-col group"
                 >
                   {/* Picture container with Assistant AI icon in bottom right-hand corner */}
                   <div className="relative w-full h-44 overflow-hidden border-b border-white/10">
@@ -716,20 +744,20 @@ export const RecipesPage: React.FC = () => {
             <div className="max-w-3xl mx-auto pointer-events-none flex justify-end">
               <div
                 ref={dockRef}
-                className={`fab-dock-transition pointer-events-auto h-[52px] border shadow-2xl flex items-center overflow-hidden ${
+                className={`fab-dock-transition pointer-events-auto h-[50px] border shadow-2xl flex items-center overflow-hidden ${
                   isSearchExpanded
-                    ? 'w-full rounded-3xl border-white/25 bg-slate-900/95 backdrop-blur-xl shadow-pink-500/10 px-2'
-                    : 'w-[52px] rounded-full border-pink-400/40 bg-gradient-to-r from-pink-500 to-rose-500 cursor-pointer shadow-xl shadow-pink-500/30 hover:scale-105 active:scale-95 justify-center'
+                    ? 'w-full rounded-3xl border-white/25 bg-slate-900/95 backdrop-blur-xl shadow-emerald-500/10 px-2'
+                    : 'w-[50px] rounded-full border-emerald-400/40 bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 cursor-pointer shadow-xl shadow-emerald-500/30 hover:scale-105 active:scale-95 justify-center'
                 }`}
               >
                 {!isSearchExpanded ? (
                   <button
                     type="button"
                     onClick={() => setIsSearchExpanded(true)}
-                    className="w-full h-full flex items-center justify-center text-white"
+                    className="w-full h-full flex items-center justify-center text-slate-950"
                     title="Search Recipes"
                   >
-                    <Search className="w-6 h-6 stroke-[2.2]" />
+                    <Search className="w-5 h-5 stroke-[2.2]" />
                   </button>
                 ) : (
                   <div className="w-full flex items-center gap-2">
@@ -737,20 +765,20 @@ export const RecipesPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setIsSearchExpanded(false)}
-                      className="p-2 rounded-2xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white shrink-0"
+                      className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white shrink-0"
                       title="Close search"
                     >
                       <X className="w-4 h-4" />
                     </button>
 
-                    {/* Secondary action: Import from Web (to the right of close button, left of text box) */}
+                    {/* Secondary action: Import from Web */}
                     <button
                       type="button"
                       onClick={() => setIsScraperOpen(true)}
-                      className="p-2 sm:px-3 sm:py-2 rounded-2xl bg-white/5 hover:bg-pink-500/20 text-slate-300 hover:text-pink-400 border border-white/10 hover:border-pink-500/30 text-xs font-bold flex items-center gap-1.5 transition-all shrink-0"
+                      className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl bg-white/5 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-400 border border-white/10 hover:border-emerald-500/30 text-xs font-bold flex items-center gap-1.5 transition-all shrink-0"
                       title="Import Recipe from Web"
                     >
-                      <Link2 className="w-4 h-4 text-pink-400" />
+                      <Link2 className="w-3.5 h-3.5 text-emerald-400" />
                       <span className="hidden sm:inline">Import</span>
                     </button>
 
@@ -761,14 +789,14 @@ export const RecipesPage: React.FC = () => {
                       placeholder="Search recipes by title or tags (e.g. Pasta, Quick)..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="flex-1 min-w-0 bg-transparent border-none text-sm text-white placeholder-slate-500 focus:outline-none px-1"
+                      className="flex-1 min-w-0 bg-transparent border-none text-xs text-white placeholder-slate-500 focus:outline-none px-1"
                     />
 
                     {searchQuery && (
                       <button
                         type="button"
                         onClick={() => setSearchQuery('')}
-                        className="p-2 rounded-xl text-slate-400 hover:text-white shrink-0"
+                        className="p-1.5 rounded-xl text-slate-400 hover:text-white shrink-0"
                         title="Clear search text"
                       >
                         <X className="w-4 h-4" />
@@ -778,10 +806,10 @@ export const RecipesPage: React.FC = () => {
                     {/* Far right: Main action button (Search) */}
                     <button
                       type="button"
-                      className="p-2 sm:px-3.5 sm:py-2 rounded-2xl bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-400 hover:to-rose-400 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-pink-500/20 shrink-0"
+                      className="px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20 shrink-0"
                       title="Search recipes"
                     >
-                      <Search className="w-4 h-4" />
+                      <Search className="w-3.5 h-3.5" />
                       <span className="hidden sm:inline">Search</span>
                     </button>
                   </div>

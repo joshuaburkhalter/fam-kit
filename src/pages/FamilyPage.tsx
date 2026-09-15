@@ -112,16 +112,20 @@ export const FamilyPage: React.FC = () => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-2 sm:p-4 pb-24 md:pb-12 space-y-6">
-      {/* Top Banner: Household Details */}
-      <div className="p-6 rounded-3xl glass-panel border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-black text-white tracking-tight">{household?.name || 'Household'}</h1>
-          <p className="text-xs text-slate-400 mt-1">
-            Manage your family household profiles, shared lists, and devices
-          </p>
+    <div className="max-w-3xl mx-auto px-3 sm:px-6 pt-3 pb-36 md:pb-28 space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between pb-1">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 font-black shadow-lg shadow-emerald-500/20 shrink-0">
+            <Users className="w-5 h-5 stroke-[2.5]" />
+          </div>
+          <div>
+            <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">Family</h1>
+            <p className="text-xs text-slate-400">Members & household access</p>
+          </div>
         </div>
-        <div className="flex items-center gap-2 text-xs font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-full self-start sm:self-auto">
+
+        <div className="flex items-center gap-2 text-xs font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-full shrink-0">
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
           {users.length} {users.length === 1 ? 'Member' : 'Members'}
         </div>
@@ -339,7 +343,7 @@ export const FamilyPage: React.FC = () => {
         {/* Join Household with Code Card */}
         <div className="glass-panel rounded-3xl p-6 border border-white/10 space-y-4">
           <h3 className="text-base font-bold text-white flex items-center gap-2">
-            <KeyRound className="w-4 h-4 text-indigo-400" />
+            <KeyRound className="w-4 h-4 text-emerald-400" />
             Join Existing Household
           </h3>
           <p className="text-xs text-slate-400">
@@ -358,7 +362,7 @@ export const FamilyPage: React.FC = () => {
                 placeholder="e.g. H5XWAE"
                 value={joinInviteCode}
                 onChange={(e) => setJoinInviteCode(e.target.value.toUpperCase())}
-                className="w-full bg-slate-900 border border-white/10 rounded-xl px-3.5 py-2 text-sm font-mono tracking-widest uppercase text-white focus:outline-none focus:border-indigo-500"
+                className="w-full bg-slate-900 border border-white/10 rounded-xl px-3.5 py-2 text-sm font-mono tracking-widest uppercase text-white focus:outline-none focus:border-emerald-500"
               />
             </div>
 
@@ -372,14 +376,14 @@ export const FamilyPage: React.FC = () => {
                 placeholder="Your first name"
                 value={joinUserName}
                 onChange={(e) => setJoinUserName(e.target.value)}
-                className="w-full bg-slate-900 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                className="w-full bg-slate-900 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
               />
             </div>
 
             <button
               type="submit"
               disabled={!joinInviteCode.trim() || !joinUserName.trim() || isSubmitting}
-              className="w-full bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl text-xs transition-colors shadow-lg shadow-indigo-500/20 mt-2"
+              className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-bold py-2.5 rounded-xl text-xs transition-colors shadow-lg shadow-emerald-500/20 mt-2"
             >
               Join Household
             </button>
@@ -389,8 +393,11 @@ export const FamilyPage: React.FC = () => {
 
       {/* Confirmation Modal for Removing a Member */}
       {memberToDelete && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="glass-panel w-full max-w-md rounded-3xl p-6 shadow-2xl border border-white/10 space-y-4">
+        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="glass-panel w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl border-t sm:border border-white/10 space-y-4 my-0 sm:my-auto">
+            {/* Mobile drag handle */}
+            <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mb-2 sm:hidden shrink-0" />
+
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-2xl bg-red-500/15 text-red-400 flex items-center justify-center border border-red-500/30 shrink-0">
                 <Trash2 className="w-5 h-5" />
@@ -415,7 +422,7 @@ export const FamilyPage: React.FC = () => {
                 type="button"
                 onClick={() => setMemberToDelete(null)}
                 disabled={isDeleting}
-                className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors"
+                className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors cursor-pointer"
               >
                 Cancel
               </button>
@@ -423,7 +430,7 @@ export const FamilyPage: React.FC = () => {
                 type="button"
                 onClick={handleConfirmDelete}
                 disabled={isDeleting}
-                className="px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-red-600/30 transition-all disabled:opacity-50"
+                className="px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-red-600/30 transition-all disabled:opacity-50 cursor-pointer"
               >
                 {isDeleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
                 {isDeleting ? 'Removing...' : 'Remove Member'}

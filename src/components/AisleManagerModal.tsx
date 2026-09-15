@@ -127,16 +127,19 @@ export const AisleManagerModal: React.FC<AisleManagerModalProps> = ({
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-100"
+      className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-100"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="glass-panel w-full max-w-lg rounded-3xl p-5 sm:p-6 shadow-2xl border border-white/10 flex flex-col max-h-[82vh] sm:max-h-[88vh] my-auto"
+        className="glass-panel w-full max-w-lg rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 shadow-2xl border-t sm:border border-white/10 flex flex-col max-h-[90vh] sm:max-h-[88vh] my-0 sm:my-auto"
       >
+        {/* Mobile drag handle */}
+        <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mb-3 sm:hidden shrink-0" />
+
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-white/10">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
+            <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
               <MoveVertical className="w-5 h-5" />
             </div>
             <div>

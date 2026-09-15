@@ -178,9 +178,12 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
   const otherMembers = users.filter((u) => u.id !== currentUser.id);
 
   const modalContent = (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-5 bg-black/85 backdrop-blur-md animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-5 bg-black/85 backdrop-blur-md animate-in fade-in duration-150">
       {/* Solid opaque dialog with header, scrollable body, and sticky footer */}
-      <div className="bg-[#0f172a] w-full max-w-lg rounded-3xl shadow-2xl shadow-black border border-slate-700/80 flex flex-col max-h-[92vh] overflow-hidden animate-in zoom-in-95 duration-150">
+      <div className="bg-[#0f172a] w-full max-w-lg rounded-t-3xl sm:rounded-3xl shadow-2xl shadow-black border-t sm:border border-slate-700/80 flex flex-col max-h-[92vh] overflow-hidden animate-in zoom-in-95 duration-150">
+        {/* Mobile drag handle */}
+        <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mt-2.5 mb-1 sm:hidden shrink-0" />
+
         {/* Sticky Header */}
         <div className="flex items-center justify-between p-5 pb-4 border-b border-slate-800 shrink-0 bg-[#0f172a]">
           <div className="flex items-center gap-2.5">

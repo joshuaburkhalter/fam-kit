@@ -190,17 +190,17 @@ export const SettingsPage: React.FC = () => {
   };
 
   return (
-    <div className="max-w-3xl mx-auto p-3 sm:p-5 pb-28 md:pb-16 space-y-5">
+    <div className="max-w-3xl mx-auto px-3 sm:px-6 pt-3 pb-36 md:pb-28 space-y-4">
       {/* Header */}
-      <div className="p-5 rounded-3xl glass-panel border border-white/10 flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-black text-white flex items-center gap-2">
-            <SettingsIcon className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-400" />
-            Settings & Household
-          </h1>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Manage your family household, voice preferences, and aisles
-          </p>
+      <div className="flex items-center justify-between pb-1">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 font-black shadow-lg shadow-emerald-500/20 shrink-0">
+            <SettingsIcon className="w-5 h-5 stroke-[2.5]" />
+          </div>
+          <div>
+            <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">Settings</h1>
+            <p className="text-xs text-slate-400">Household, voice & aisle setup</p>
+          </div>
         </div>
 
         <div className="text-right shrink-0">

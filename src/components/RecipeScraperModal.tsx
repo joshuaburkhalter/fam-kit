@@ -61,24 +61,27 @@ export const RecipeScraperModal: React.FC<RecipeScraperModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
-      <div className="glass-panel w-full max-w-xl rounded-3xl p-5 sm:p-6 shadow-2xl border border-white/10 flex flex-col max-h-[85vh] sm:max-h-[90vh] my-auto">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
+      <div className="w-full max-w-xl bg-slate-900 border-t border-white/15 rounded-t-3xl p-5 pb-8 shadow-2xl animate-in slide-in-from-bottom duration-200 flex flex-col max-h-[90vh]">
+        {/* Top Drag Handle */}
+        <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mb-3" />
+
         {/* Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-white/10">
+        <div className="flex items-center justify-between pb-3 border-b border-white/10">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-pink-500/10 text-pink-400 border border-pink-500/20">
+            <div className="p-2 rounded-xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
               <Link2 className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-white">Import Recipe from Web</h2>
-              <p className="text-xs text-slate-400">
-                Paste any recipe URL to extract Schema.org JSON-LD, meta tags, and ingredients
+              <h2 className="text-base font-bold text-white">Import Recipe from Web</h2>
+              <p className="text-[11px] text-slate-400">
+                Paste any recipe URL to extract ingredients and instructions
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
+            className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -97,7 +100,7 @@ export const RecipeScraperModal: React.FC<RecipeScraperModalProps> = ({
                 placeholder="https://www.allrecipes.com/recipe/..."
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                className="w-full bg-slate-900/80 border border-white/10 rounded-xl pl-3.5 pr-10 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-pink-500"
+                className="w-full bg-slate-950 border border-white/10 rounded-xl pl-3.5 pr-10 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
               />
               {url && (
                 <button
@@ -112,7 +115,7 @@ export const RecipeScraperModal: React.FC<RecipeScraperModalProps> = ({
             <button
               type="submit"
               disabled={isLoading || !url.trim()}
-              className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-400 hover:to-rose-400 disabled:opacity-50 text-white px-5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shadow-lg shadow-pink-500/20 shrink-0"
+              className="bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 px-5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shadow-md shadow-emerald-500/20 shrink-0"
             >
               {isLoading ? (
                 <>
@@ -144,7 +147,7 @@ export const RecipeScraperModal: React.FC<RecipeScraperModalProps> = ({
         <div className="flex-1 overflow-y-auto py-3 space-y-4">
           {isLoading && (
             <div className="py-12 text-center space-y-3">
-              <Loader2 className="w-8 h-8 animate-spin text-pink-400 mx-auto" />
+              <Loader2 className="w-8 h-8 animate-spin text-emerald-400 mx-auto" />
               <p className="text-xs text-slate-300 font-medium">
                 Parsing JSON-LD schema & meta tags with Gemini 3.6 Flash...
               </p>
