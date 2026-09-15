@@ -3,7 +3,7 @@ import {
   Mic,
   MicOff,
   Send,
-  Image as ImageIcon,
+  Camera,
   Volume2,
   VolumeX,
   Sparkles,
@@ -593,23 +593,24 @@ export const AssistantPage: React.FC = () => {
                   <X className="w-4 h-4" />
                 </button>
 
-                {/* Hidden image input */}
+                {/* Hidden camera input: capture="environment" launches the device camera directly on mobile */}
                 <input
                   type="file"
                   ref={fileInputRef}
                   onChange={handleImageUpload}
                   accept="image/*"
+                  capture="environment"
                   className="hidden"
                 />
 
-                {/* Secondary action: Photo attach button (to the right of close button, left of text box) */}
+                {/* Secondary action: Camera capture button (to the right of close button, left of text box) */}
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  title="Upload photo of fridge, receipt, or recipe"
+                  title="Snap photo with camera"
                   className="p-1.5 sm:px-2 rounded-xl bg-white/5 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-400 border border-white/10 hover:border-emerald-500/30 text-xs font-bold flex items-center gap-1.5 transition-all shrink-0"
                 >
-                  <ImageIcon className="w-3.5 h-3.5 text-emerald-400" />
+                  <Camera className="w-3.5 h-3.5 text-emerald-400" />
                 </button>
 
                 {/* Secondary action: Voice Mic Button */}
