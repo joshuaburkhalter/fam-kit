@@ -9,11 +9,13 @@ import {
   Loader2,
   ArrowDown,
   Sparkles,
+  Send,
 } from 'lucide-react';
 import {
   format,
   addDays,
   subDays,
+  differenceInDays,
   isSameDay,
   isToday,
   isTomorrow,
@@ -25,6 +27,116 @@ import type { CalendarEvent } from '../types';
 import { usePWA } from '../context/PWAContext';
 import { api } from '../lib/api';
 import { useFabAutoClose } from '../hooks/useFabAutoClose';
+
+/**
+ * Natural language parser for calendar events (fallback when Gemini is offline or unconfigured)
+ * Handles inputs like "board game night on monday from 6-9", "soccer practice tomorrow at 4pm", etc.
+ */
+function parseNaturalLanguageEvent(raw: string, members: { id: string; name: string }[]) {
+  const text = raw.trim();
+  const lower = text.toLowerCase();
+  const now = new Date();
+
+  // 1. Detect Day / Date
+  let targetDate = new Date();
+  const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
+  if (lower.includes('tomorrow')) {
+    targetDate = addDays(now, 1);
+  } else if (lower.includes('today') || lower.includes('tonight')) {
+    targetDate = now;
+  } else {
+    for (let i = 0; i < dayNames.length; i++) {
+      const name = dayNames[i];
+      const regex = new RegExp(`\\b(next\\s+)?${name}\\b`, 'i');
+      const match = lower.match(regex);
+      if (match) {
+        const targetDayIndex = i;
+        const currentDayIndex = now.getDay();
+        let diff = targetDayIndex - currentDayIndex;
+        if (diff <= 0) diff += 7; // next occurrence
+        if (match[1]) diff += 7; // explicit "next [day]"
+        targetDate = addDays(now, diff);
+        break;
+      }
+    }
+  }
+
+  // 2. Detect Times
+  let startTime = '18:00';
+  let endTime = '19:00';
+  let isAllDay = false;
+
+  // Range match: "from 6-9", "6-9pm", "from 6:30 to 8:30pm", "6pm - 9pm"
+  const rangeMatch = lower.match(
+    /\b(?:from\s+)?(\d{1,2})(?::(\d{2}))?\s*(?:am|pm)?\s*(?:-|–|to)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b/i
+  );
+  // Single time match: "at 4pm", "4:30pm", "at 10am"
+  const singleMatch = lower.match(/\b(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i);
+
+  if (rangeMatch) {
+    let startH = parseInt(rangeMatch[1], 10);
+    const startM = rangeMatch[2] || '00';
+    let endH = parseInt(rangeMatch[3], 10);
+    const endM = rangeMatch[4] || '00';
+    const ampm = (rangeMatch[5] || '').toLowerCase();
+
+    // Default evening assumptions for typical ranges like 6-9, 5-7
+    if (ampm === 'pm' || (!ampm && startH < 12)) {
+      if (endH < 12) endH += 12;
+      if (startH < 12 && startH <= endH - 12) startH += 12;
+      else if (startH < 12 && endH >= 12 && startH < endH) startH += 12;
+    } else if (ampm === 'am') {
+      if (startH === 12) startH = 0;
+      if (endH === 12) endH = 0;
+    }
+
+    startTime = `${String(startH).padStart(2, '0')}:${startM}`;
+    endTime = `${String(endH).padStart(2, '0')}:${endM}`;
+  } else if (singleMatch) {
+    let hour = parseInt(singleMatch[1], 10);
+    const min = singleMatch[2] || '00';
+    const ampm = singleMatch[3].toLowerCase();
+    if (ampm === 'pm' && hour < 12) hour += 12;
+    if (ampm === 'am' && hour === 12) hour = 0;
+    startTime = `${String(hour).padStart(2, '0')}:${min}`;
+    endTime = `${String((hour + 1) % 24).padStart(2, '0')}:${min}`;
+  } else if (lower.includes('all day')) {
+    isAllDay = true;
+    startTime = '00:00';
+    endTime = '23:59';
+  }
+
+  // 3. Clean up Title
+  let cleanTitle = text
+    .replace(/\b(?:on\s+)?(?:next\s+)?(?:sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/gi, '')
+    .replace(/\b(?:tomorrow|today|tonight|all day)\b/gi, '')
+    .replace(/\b(?:from\s+)?\d{1,2}(?::\d{2})?\s*(?:am|pm)?\s*(?:-|–|to)\s*\d{1,2}(?::\d{2})?\s*(?:am|pm)?\b/gi, '')
+    .replace(/\b(?:at\s+)?\d{1,2}(?::\d{2})?\s*(?:am|pm)\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!cleanTitle) cleanTitle = 'Family Event';
+  cleanTitle = cleanTitle.charAt(0).toUpperCase() + cleanTitle.slice(1);
+
+  // 4. Assigned Member
+  let assignedUserId: string | undefined;
+  for (const m of members) {
+    if (lower.includes(m.name.toLowerCase())) {
+      assignedUserId = m.id;
+      break;
+    }
+  }
+
+  return {
+    title: cleanTitle,
+    date: format(targetDate, 'yyyy-MM-dd'),
+    startTime,
+    endTime,
+    isAllDay,
+    assignedUserId,
+  };
+}
 
 export const CalendarPage: React.FC = () => {
   const { household, users, currentUser } = usePWA();
@@ -49,10 +161,15 @@ export const CalendarPage: React.FC = () => {
   const [formAssignedUser, setFormAssignedUser] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
-  // Quick Add State (Bottom-Right FAB)
+  // Assistant Chat FAB State
   const [isQuickAddExpanded, setIsQuickAddExpanded] = useState(false);
   const [quickInput, setQuickInput] = useState('');
-  const [quickDate, setQuickDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
+  const [isAssistantSubmitting, setIsAssistantSubmitting] = useState(false);
+  const [assistantFeedback, setAssistantFeedback] = useState<{
+    type: 'success' | 'error';
+    message: string;
+    date?: string;
+  } | null>(null);
 
   const todayRef = useRef<HTMLDivElement>(null);
 
@@ -190,40 +307,103 @@ export const CalendarPage: React.FC = () => {
     }
   };
 
-  const handleQuickAdd = async (e: React.FormEvent) => {
+  // Assistant Natural Language Scheduling Handler
+  const handleAssistantSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!household || !quickInput.trim()) return;
+    if (!household || !quickInput.trim() || isAssistantSubmitting) return;
 
     const raw = quickInput.trim();
-    let startTime = '09:00';
-    let endTime = '10:00';
-
-    const timeMatch = raw.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i);
-    if (timeMatch) {
-      let hour = parseInt(timeMatch[1]);
-      const min = timeMatch[2] || '00';
-      const ampm = timeMatch[3].toLowerCase();
-      if (ampm === 'pm' && hour < 12) hour += 12;
-      if (ampm === 'am' && hour === 12) hour = 0;
-      const startHourStr = String(hour).padStart(2, '0');
-      startTime = `${startHourStr}:${min}`;
-      const endHourStr = String((hour + 1) % 24).padStart(2, '0');
-      endTime = `${endHourStr}:${min}`;
-    }
+    setIsAssistantSubmitting(true);
+    setAssistantFeedback(null);
 
     try {
-      const created = await api.createCalendarEvent(household.id, {
-        title: raw,
-        start_time: `${quickDate}T${startTime}:00`,
-        end_time: `${quickDate}T${endTime}:00`,
-        assigned_user_id: currentUser?.id,
+      let scheduledTitle = '';
+      let scheduledDate = '';
+
+      // 1. First attempt via Gemini Assistant API
+      try {
+        const now = new Date();
+        const res = await api.sendAssistantMessage({
+          message: raw,
+          householdId: household.id,
+          userId: currentUser?.id,
+          clientDate: format(now, 'yyyy-MM-dd'),
+          clientDay: format(now, 'EEEE'),
+          clientTime: format(now, 'HH:mm'),
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        });
+
+        const calAction = res.actionsExecuted?.find(
+          (a) => a.tool === 'calendar_event_added' || a.tool === 'add_calendar_events'
+        );
+
+        if (calAction && calAction.data && calAction.data.length > 0) {
+          scheduledTitle = calAction.data[0].title;
+          scheduledDate = calAction.data[0].date;
+        }
+      } catch {
+        // Fallback silently to client natural language parser if Gemini is unconfigured or returns error
+      }
+
+      // 2. If Gemini didn't execute action, use local natural language parser
+      if (!scheduledTitle) {
+        const parsed = parseNaturalLanguageEvent(raw, users);
+        const startIso = new Date(`${parsed.date}T${parsed.startTime}:00`).toISOString();
+        const endIso = new Date(`${parsed.date}T${parsed.endTime}:00`).toISOString();
+
+        await api.createCalendarEvent(household.id, {
+          title: parsed.title,
+          start_time: startIso,
+          end_time: endIso,
+          is_all_day: parsed.isAllDay,
+          assigned_user_id: parsed.assignedUserId || currentUser?.id,
+        });
+
+        scheduledTitle = parsed.title;
+        scheduledDate = parsed.date;
+      }
+
+      // 3. Ensure date is within visible span
+      if (scheduledDate) {
+        try {
+          const parsedD = parseISO(scheduledDate);
+          const daysDiff = differenceInDays(parsedD, new Date());
+          if (daysDiff >= daysCount) {
+            setDaysCount(daysDiff + 7);
+          }
+        } catch {}
+      }
+
+      // 4. Reload calendar events
+      await loadData();
+
+      // 5. Success feedback
+      let dateLabel = scheduledDate;
+      try {
+        dateLabel = format(parseISO(scheduledDate), 'EEE, MMM d');
+      } catch {}
+
+      setAssistantFeedback({
+        type: 'success',
+        message: `Added "${scheduledTitle}" for ${dateLabel}!`,
+        date: scheduledDate,
       });
-      setEvents((prev) => [...prev, created]);
+
       setQuickInput('');
       setIsQuickAddExpanded(false);
+
+      // Auto-clear feedback toast after 4s
+      setTimeout(() => {
+        setAssistantFeedback(null);
+      }, 4000);
     } catch (err) {
-      console.error('Failed to quick add event:', err);
-      loadData();
+      console.error('Failed to schedule with assistant:', err);
+      setAssistantFeedback({
+        type: 'error',
+        message: 'Could not schedule event. Please try again or tap a day to add.',
+      });
+    } finally {
+      setIsAssistantSubmitting(false);
     }
   };
 
@@ -715,7 +895,23 @@ export const CalendarPage: React.FC = () => {
         </div>
       )}
 
-      {/* Animated Expanding Quick Add Dock & FAB */}
+      {/* Floating Feedback Toast */}
+      {assistantFeedback && (
+        <div className="fixed bottom-[calc(76px+4.5rem+env(safe-area-inset-bottom,0px))] md:bottom-20 left-4 right-4 z-50 flex justify-center pointer-events-none animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <div
+            className={`px-4 py-2.5 rounded-2xl shadow-xl border text-xs font-semibold flex items-center gap-2 pointer-events-auto backdrop-blur-xl ${
+              assistantFeedback.type === 'success'
+                ? 'bg-slate-900/95 border-indigo-500/40 text-indigo-300 shadow-indigo-500/20'
+                : 'bg-red-950/95 border-red-500/40 text-red-200 shadow-red-500/20'
+            }`}
+          >
+            <Sparkles className="w-4 h-4 text-indigo-400 shrink-0" />
+            <span>{assistantFeedback.message}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Animated Expanding Assistant Chat Dock & FAB */}
       <div className="fixed bottom-[calc(76px+1rem+env(safe-area-inset-bottom,0px))] md:bottom-8 left-0 right-0 z-40 px-4 pointer-events-none">
         <div className="max-w-2xl mx-auto pointer-events-none flex justify-end">
           <div
@@ -723,7 +919,7 @@ export const CalendarPage: React.FC = () => {
             className={`fab-dock-transition pointer-events-auto h-[48px] border shadow-2xl flex items-center overflow-hidden ${
               isQuickAddExpanded
                 ? 'w-full rounded-3xl border-white/20 bg-slate-900/95 backdrop-blur-xl px-2'
-                : 'w-[48px] rounded-full border-indigo-400/40 bg-gradient-to-r from-indigo-500 to-purple-500 cursor-pointer shadow-lg shadow-indigo-500/25 hover:scale-105 active:scale-95 justify-center'
+                : 'w-[48px] rounded-full border-indigo-400/40 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 cursor-pointer shadow-lg shadow-indigo-500/25 hover:scale-105 active:scale-95 justify-center'
             }`}
           >
             {!isQuickAddExpanded ? (
@@ -731,12 +927,12 @@ export const CalendarPage: React.FC = () => {
                 type="button"
                 onClick={() => setIsQuickAddExpanded(true)}
                 className="w-full h-full flex items-center justify-center text-white"
-                title="Quick Add Event"
+                title="Ask Assistant to schedule an event"
               >
-                <Plus className="w-5 h-5 stroke-[2.5]" />
+                <Sparkles className="w-5 h-5" />
               </button>
             ) : (
-              <form onSubmit={handleQuickAdd} className="w-full flex items-center gap-2">
+              <form onSubmit={handleAssistantSchedule} className="w-full flex items-center gap-2">
                 {/* Close button */}
                 <button
                   type="button"
@@ -747,32 +943,36 @@ export const CalendarPage: React.FC = () => {
                   <X className="w-4 h-4" />
                 </button>
 
-                {/* Secondary action: Date selector */}
-                <input
-                  type="date"
-                  value={quickDate}
-                  onChange={(e) => setQuickDate(e.target.value)}
-                  className="bg-white/5 border border-white/10 text-xs text-slate-300 rounded-xl px-2 py-1.5 focus:outline-none focus:border-indigo-500 shrink-0"
-                />
+                {/* Assistant Sparkles Icon */}
+                <div className="w-7 h-7 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0">
+                  <Sparkles className="w-3.5 h-3.5" />
+                </div>
 
-                {/* Input */}
+                {/* Natural Language Input - Date field removed! */}
                 <input
                   autoFocus
                   type="text"
-                  placeholder="e.g. Soccer 4:30pm..."
+                  placeholder="e.g. Board game night on monday from 6-9..."
                   value={quickInput}
                   onChange={(e) => setQuickInput(e.target.value)}
+                  disabled={isAssistantSubmitting}
                   className="flex-1 min-w-0 bg-transparent border-none text-xs text-white placeholder-slate-500 focus:outline-none py-1.5 px-1"
                 />
 
-                {/* Add Button */}
+                {/* Send / Add Button */}
                 <button
                   type="submit"
-                  disabled={!quickInput.trim()}
-                  className="px-3 py-1.5 rounded-xl text-white font-bold text-xs flex items-center gap-1 transition-all shadow-sm shrink-0 disabled:opacity-40 bg-indigo-600 hover:bg-indigo-500"
+                  disabled={!quickInput.trim() || isAssistantSubmitting}
+                  className="px-3 py-1.5 rounded-xl text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-sm shrink-0 disabled:opacity-40 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-400 hover:to-purple-400 shadow-indigo-500/20"
                 >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Add</span>
+                  {isAssistantSubmitting ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Send className="w-3.5 h-3.5" />
+                  )}
+                  <span className="hidden sm:inline">
+                    {isAssistantSubmitting ? 'Adding...' : 'Add'}
+                  </span>
                 </button>
               </form>
             )}
