@@ -46,7 +46,6 @@ export const GroceryPage: React.FC = () => {
     return groceryDataCache && groceryDataCache.aisles.length > 0 ? groceryDataCache.aisles : aisles;
   });
   const [newItemName, setNewItemName] = useState('');
-  const [selectedAisleId, setSelectedAisleId] = useState<string>('');
   const [isInputExpanded, setIsInputExpanded] = useState(false);
   const [isNewListModalOpen, setIsNewListModalOpen] = useState(false);
   const [newListTitle, setNewListTitle] = useState('');
@@ -166,7 +165,6 @@ export const GroceryPage: React.FC = () => {
     try {
       const item = await api.addGroceryItem(household.id, {
         name: newItemName.trim(),
-        aisle_id: selectedAisleId || undefined,
         list_type: activeListType,
         added_by_user_id: currentUser?.id,
         added_by_user_name: currentUser?.name,
@@ -761,22 +759,6 @@ export const GroceryPage: React.FC = () => {
                 >
                   <X className="w-4 h-4" />
                 </button>
-
-                {/* Secondary action: Optional Aisle selector dropdown (to the right of close button, left of text box) */}
-                {isGroceryList && (
-                  <select
-                    value={selectedAisleId}
-                    onChange={(e) => setSelectedAisleId(e.target.value)}
-                    className="bg-white/5 border border-white/10 hover:border-emerald-500/30 text-xs text-emerald-400 font-semibold rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-emerald-500 shrink-0 max-w-[100px] sm:max-w-[140px] truncate transition-colors cursor-pointer"
-                  >
-                    <option value="" className="bg-slate-900 text-white">Auto Aisle</option>
-                    {sortedAisles.map((a) => (
-                      <option key={a.id} value={a.id} className="bg-slate-900 text-white">
-                        {a.name}
-                      </option>
-                    ))}
-                  </select>
-                )}
 
                 {/* Middle: Input */}
                 <input
