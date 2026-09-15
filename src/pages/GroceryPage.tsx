@@ -525,32 +525,32 @@ export const GroceryPage: React.FC = () => {
                       <div
                         key={item.id}
                         onClick={() => handleToggleItem(item.id)}
-                        className="flex items-center justify-between p-3.5 transition-colors cursor-pointer group hover:bg-white/5"
+                        className="flex items-center justify-between px-3.5 py-2.5 transition-colors cursor-pointer group hover:bg-white/5 gap-2 min-h-[44px]"
                       >
-                        <div className="flex items-center gap-3.5">
-                          <div className="w-6 h-6 rounded-lg border border-white/20 bg-slate-900/80 flex items-center justify-center transition-all group-hover:border-emerald-500">
+                        <div className="flex items-center gap-3 min-w-0 flex-1 overflow-hidden whitespace-nowrap">
+                          <div className="w-5 h-5 rounded-md border border-white/20 bg-slate-900/80 flex items-center justify-center shrink-0 transition-all group-hover:border-emerald-500">
                             {item.is_completed && (
-                              <Check className="w-4 h-4 text-emerald-400 font-bold" />
+                              <Check className="w-3.5 h-3.5 text-emerald-400 font-bold" />
                             )}
                           </div>
-                          <div>
-                            <span className="text-sm font-semibold text-slate-100">
-                              {item.name}
+                          <span className="text-sm font-semibold text-slate-100 truncate">
+                            {item.name}
+                          </span>
+                          {item.quantity && (
+                            <span className="text-xs font-mono text-slate-400 shrink-0">
+                              ({item.quantity}{item.unit ? ` ${item.unit}` : ''})
                             </span>
-                            {item.quantity && (
-                              <span className="ml-2 text-xs font-mono text-slate-400">
-                                ({item.quantity} {item.unit || ''})
-                              </span>
-                            )}
-                            {item.notes && (
-                              <p className="text-[11px] text-slate-500">{item.notes}</p>
-                            )}
-                          </div>
+                          )}
+                          {item.notes && (
+                            <span className="text-xs text-slate-400/80 truncate font-normal">
+                              • {item.notes}
+                            </span>
+                          )}
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5 shrink-0">
                           {item.added_by_user_name && (
-                            <span className="text-[10px] text-slate-500 hidden sm:inline">
+                            <span className="text-[10px] text-slate-500 hidden sm:inline shrink-0">
                               {item.added_by_user_name}
                             </span>
                           )}
@@ -559,7 +559,8 @@ export const GroceryPage: React.FC = () => {
                               e.stopPropagation();
                               handleDeleteItem(item.id);
                             }}
-                            className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all"
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 opacity-40 group-hover:opacity-100 transition-all"
+                            title="Delete item"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -575,12 +576,12 @@ export const GroceryPage: React.FC = () => {
         {/* Uncategorized Items (if Grocery list) */}
         {isGroceryList && uncategorizedItems.length > 0 && (
           <div className="glass-panel rounded-3xl border border-white/10 overflow-hidden shadow-sm">
-            <div className="flex items-center gap-2.5 p-3.5 bg-slate-900/40 border-b border-white/5">
-              <div className="w-3.5 h-3.5 rounded-full bg-slate-600" />
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+            <div className="flex items-center gap-2.5 px-3.5 py-2.5 bg-slate-900/40 border-b border-white/5">
+              <div className="w-2.5 h-2.5 rounded-full bg-slate-600 shrink-0" />
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-400 truncate">
                 Other / Uncategorized
               </span>
-              <span className="text-[10px] font-mono bg-white/5 px-2 py-0.5 rounded-full text-slate-400">
+              <span className="text-[10px] font-mono bg-white/5 px-2 py-0.5 rounded-full text-slate-400 shrink-0">
                 {uncategorizedItems.length}
               </span>
             </div>
@@ -589,23 +590,41 @@ export const GroceryPage: React.FC = () => {
                 <div
                   key={item.id}
                   onClick={() => handleToggleItem(item.id)}
-                  className="flex items-center justify-between p-3.5 hover:bg-white/5 transition-colors cursor-pointer group"
+                  className="flex items-center justify-between px-3.5 py-2.5 hover:bg-white/5 transition-colors cursor-pointer group gap-2 min-h-[44px]"
                 >
-                  <div className="flex items-center gap-3.5">
-                    <div className="w-6 h-6 rounded-lg border border-white/20 bg-slate-900/80 flex items-center justify-center">
-                      {item.is_completed && <Check className="w-4 h-4 text-emerald-400" />}
+                  <div className="flex items-center gap-3 min-w-0 flex-1 overflow-hidden whitespace-nowrap">
+                    <div className="w-5 h-5 rounded-md border border-white/20 bg-slate-900/80 flex items-center justify-center shrink-0">
+                      {item.is_completed && <Check className="w-3.5 h-3.5 text-emerald-400 font-bold" />}
                     </div>
-                    <span className="text-sm font-semibold text-slate-100">{item.name}</span>
+                    <span className="text-sm font-semibold text-slate-100 truncate">{item.name}</span>
+                    {item.quantity && (
+                      <span className="text-xs font-mono text-slate-400 shrink-0">
+                        ({item.quantity}{item.unit ? ` ${item.unit}` : ''})
+                      </span>
+                    )}
+                    {item.notes && (
+                      <span className="text-xs text-slate-400/80 truncate font-normal">
+                        • {item.notes}
+                      </span>
+                    )}
                   </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteItem(item.id);
-                    }}
-                    className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {item.added_by_user_name && (
+                      <span className="text-[10px] text-slate-500 hidden sm:inline shrink-0">
+                        {item.added_by_user_name}
+                      </span>
+                    )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteItem(item.id);
+                      }}
+                      className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 opacity-40 group-hover:opacity-100 transition-all"
+                      title="Delete item"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -619,23 +638,41 @@ export const GroceryPage: React.FC = () => {
               <div
                 key={item.id}
                 onClick={() => handleToggleItem(item.id)}
-                className="flex items-center justify-between p-3.5 hover:bg-white/5 transition-colors cursor-pointer group"
+                className="flex items-center justify-between px-3.5 py-2.5 hover:bg-white/5 transition-colors cursor-pointer group gap-2 min-h-[44px]"
               >
-                <div className="flex items-center gap-3.5">
-                  <div className="w-6 h-6 rounded-lg border border-white/20 bg-slate-900/80 flex items-center justify-center group-hover:border-emerald-500">
-                    {item.is_completed && <Check className="w-4 h-4 text-emerald-400 font-bold" />}
+                <div className="flex items-center gap-3 min-w-0 flex-1 overflow-hidden whitespace-nowrap">
+                  <div className="w-5 h-5 rounded-md border border-white/20 bg-slate-900/80 flex items-center justify-center shrink-0 group-hover:border-emerald-500">
+                    {item.is_completed && <Check className="w-3.5 h-3.5 text-emerald-400 font-bold" />}
                   </div>
-                  <span className="text-sm font-semibold text-slate-100">{item.name}</span>
+                  <span className="text-sm font-semibold text-slate-100 truncate">{item.name}</span>
+                  {item.quantity && (
+                    <span className="text-xs font-mono text-slate-400 shrink-0">
+                      ({item.quantity}{item.unit ? ` ${item.unit}` : ''})
+                    </span>
+                  )}
+                  {item.notes && (
+                    <span className="text-xs text-slate-400/80 truncate font-normal">
+                      • {item.notes}
+                    </span>
+                  )}
                 </div>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDeleteItem(item.id);
-                  }}
-                  className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {item.added_by_user_name && (
+                    <span className="text-[10px] text-slate-500 hidden sm:inline shrink-0">
+                      {item.added_by_user_name}
+                    </span>
+                  )}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteItem(item.id);
+                    }}
+                    className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 opacity-40 group-hover:opacity-100 transition-all"
+                    title="Delete item"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -657,27 +694,38 @@ export const GroceryPage: React.FC = () => {
               </button>
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               {completedItems.map((item) => (
                 <div
                   key={item.id}
                   onClick={() => handleToggleItem(item.id)}
-                  className="flex items-center justify-between p-2.5 rounded-2xl bg-slate-900/30 hover:bg-slate-900/60 transition-colors cursor-pointer group opacity-60 hover:opacity-100"
+                  className="flex items-center justify-between px-3 py-2 sm:px-3.5 sm:py-2 rounded-xl bg-slate-900/30 hover:bg-slate-900/60 transition-colors cursor-pointer group opacity-60 hover:opacity-100 gap-2 min-h-[40px]"
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="w-5 h-5 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                  <div className="flex items-center gap-3 min-w-0 flex-1 overflow-hidden whitespace-nowrap">
+                    <div className="w-5 h-5 rounded-md bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
                       <Check className="w-3.5 h-3.5 font-bold" />
                     </div>
-                    <span className="text-sm line-through text-slate-400 font-medium">
+                    <span className="text-sm line-through text-slate-400 font-medium truncate">
                       {item.name}
                     </span>
+                    {item.quantity && (
+                      <span className="text-xs font-mono text-slate-500 shrink-0 line-through">
+                        ({item.quantity}{item.unit ? ` ${item.unit}` : ''})
+                      </span>
+                    )}
+                    {item.notes && (
+                      <span className="text-xs text-slate-500 truncate font-normal line-through">
+                        • {item.notes}
+                      </span>
+                    )}
                   </div>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       handleDeleteItem(item.id);
                     }}
-                    className="p-1 text-slate-500 hover:text-red-400"
+                    className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 opacity-40 group-hover:opacity-100 transition-all shrink-0"
+                    title="Delete item"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -687,7 +735,6 @@ export const GroceryPage: React.FC = () => {
           </div>
         )}
       </div>
-
 
       {/* New Custom List Bottom Sheet */}
       {isNewListModalOpen && (
