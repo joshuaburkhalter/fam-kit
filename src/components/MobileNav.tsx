@@ -38,7 +38,7 @@ export const MobileNav: React.FC<MobileNavProps> = ({ activeTab, setActiveTab })
               <div
                 className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
                   isActive
-                    ? 'bg-gradient-to-tr from-emerald-400 to-teal-300 text-slate-950 shadow-lg shadow-emerald-500/20'
+                    ? 'bg-theme-gradient text-theme-text shadow-lg shadow-theme-glow'
                     : 'bg-transparent text-slate-400'
                 }`}
               >
@@ -46,7 +46,7 @@ export const MobileNav: React.FC<MobileNavProps> = ({ activeTab, setActiveTab })
               </div>
               <span
                 className={`text-[10px] font-semibold tracking-tight mt-0.5 ${
-                  isActive ? 'text-emerald-400' : 'text-slate-400'
+                  isActive ? 'text-theme' : 'text-slate-400'
                 }`}
               >
                 {tab.label}

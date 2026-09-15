@@ -349,7 +349,7 @@ export const GroceryPage: React.FC = () => {
             setNewListTitle('');
             setIsNewListModalOpen(true);
           }}
-          className="flex items-center gap-1 px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 active:scale-95"
+          className="flex items-center gap-1 px-3.5 py-1.5 rounded-xl bg-theme hover:bg-theme-hover text-theme-text text-xs font-bold transition-all shadow-md shadow-theme/20 active:scale-95"
         >
           <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
           <span>New List</span>
@@ -362,11 +362,11 @@ export const GroceryPage: React.FC = () => {
           <button
             type="button"
             onClick={() => setIsListDropdownOpen(!isListDropdownOpen)}
-            className="w-full flex items-center justify-between bg-slate-900/90 hover:bg-slate-850 border border-white/15 hover:border-emerald-500/40 px-4 py-2.5 sm:py-3 rounded-2xl transition-all group shadow-md"
+            className="w-full flex items-center justify-between bg-slate-900/90 hover:bg-slate-850 border border-white/15 hover:border-theme/40 px-4 py-2.5 sm:py-3 rounded-2xl transition-all group shadow-md"
           >
             <div className="flex items-center gap-2.5 min-w-0">
               <span className="text-xl shrink-0">{currentListIcon}</span>
-              <span className="text-sm sm:text-base font-bold text-white group-hover:text-emerald-400 transition-colors truncate">
+              <span className="text-sm sm:text-base font-bold text-white group-hover:text-theme transition-colors truncate">
                 {currentListName}
               </span>
             </div>
@@ -376,13 +376,13 @@ export const GroceryPage: React.FC = () => {
                   loading...
                 </span>
               ) : (
-                <span className="text-xs bg-emerald-500/15 text-emerald-400 font-mono px-2.5 py-0.5 rounded-full border border-emerald-500/30 font-semibold">
+                <span className="text-xs bg-theme/15 text-theme font-mono px-2.5 py-0.5 rounded-full border border-theme/30 font-semibold">
                   {activeItems.length} {activeItems.length === 1 ? 'item' : 'items'}
                 </span>
               )}
               <ChevronDown
                 className={`w-4 h-4 text-slate-400 group-hover:text-white transition-transform duration-200 ${
-                  isListDropdownOpen ? 'rotate-180 text-emerald-400' : ''
+                  isListDropdownOpen ? 'rotate-180 text-theme' : ''
                 }`}
               />
             </div>
@@ -401,7 +401,7 @@ export const GroceryPage: React.FC = () => {
                   onClick={() => handleSelectList('grocery')}
                   className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-colors ${
                     activeListType === 'grocery'
-                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                      ? 'bg-theme/20 text-theme border border-theme/30'
                       : 'hover:bg-white/5 text-slate-200'
                   }`}
                 >
@@ -420,7 +420,7 @@ export const GroceryPage: React.FC = () => {
                       key={cl.id}
                       className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-colors group/item ${
                         isSelected
-                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                          ? 'bg-theme/20 text-theme border border-theme/30'
                           : 'hover:bg-white/5 text-slate-200'
                       }`}
                     >
@@ -433,7 +433,7 @@ export const GroceryPage: React.FC = () => {
                       </button>
 
                       <div className="flex items-center gap-1">
-                        {isSelected && <Check className="w-3.5 h-3.5 text-emerald-400 mr-1" />}
+                        {isSelected && <Check className="w-3.5 h-3.5 text-theme mr-1" />}
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -457,7 +457,7 @@ export const GroceryPage: React.FC = () => {
                     setIsNewListModalOpen(true);
                     setIsListDropdownOpen(false);
                   }}
-                  className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold bg-white/5 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-400 border border-white/5 hover:border-emerald-500/30 transition-all"
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold bg-white/5 hover:bg-theme/20 text-slate-300 hover:text-theme border border-white/5 hover:border-theme/30 transition-all"
                 >
                   <ListPlus className="w-3.5 h-3.5" />
                   Create New List
@@ -472,12 +472,12 @@ export const GroceryPage: React.FC = () => {
       <div className="space-y-4">
         {isLoading && items.length === 0 ? (
           <div className="py-16 text-center glass-panel rounded-3xl p-8 border border-white/5 space-y-3 animate-in fade-in duration-150">
-            <div className="w-8 h-8 rounded-full border-2 border-emerald-500/20 border-t-emerald-400 animate-spin mx-auto" />
+            <div className="w-8 h-8 rounded-full border-2 border-theme/20 border-t-theme animate-spin mx-auto" />
             <div className="text-xs text-slate-400 font-medium">Loading {currentListName}...</div>
           </div>
         ) : !isLoading && items.length === 0 ? (
           <div className="py-16 text-center glass-panel rounded-3xl p-8 border border-white/5 space-y-3 animate-in fade-in duration-150">
-            <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center mx-auto">
+            <div className="w-12 h-12 rounded-2xl bg-theme/10 text-theme flex items-center justify-center mx-auto">
               <ListChecks className="w-6 h-6" />
             </div>
             <h3 className="text-base font-bold text-white">{currentListName} is empty</h3>
@@ -530,9 +530,9 @@ export const GroceryPage: React.FC = () => {
                         className="flex items-center justify-between p-3.5 transition-colors cursor-pointer group hover:bg-white/5"
                       >
                         <div className="flex items-center gap-3.5">
-                          <div className="w-6 h-6 rounded-lg border border-white/20 bg-slate-900/80 flex items-center justify-center transition-all group-hover:border-emerald-500">
+                          <div className="w-6 h-6 rounded-lg border border-white/20 bg-slate-900/80 flex items-center justify-center transition-all group-hover:border-theme">
                             {item.is_completed && (
-                              <Check className="w-4 h-4 text-emerald-400 font-bold" />
+                              <Check className="w-4 h-4 text-theme font-bold" />
                             )}
                           </div>
                           <div>
@@ -594,8 +594,8 @@ export const GroceryPage: React.FC = () => {
                   className="flex items-center justify-between p-3.5 hover:bg-white/5 transition-colors cursor-pointer group"
                 >
                   <div className="flex items-center gap-3.5">
-                    <div className="w-6 h-6 rounded-lg border border-white/20 bg-slate-900/80 flex items-center justify-center">
-                      {item.is_completed && <Check className="w-4 h-4 text-emerald-400" />}
+                    <div className="w-6 h-6 rounded-lg border border-white/20 bg-slate-900/80 flex items-center justify-center group-hover:border-theme">
+                      {item.is_completed && <Check className="w-4 h-4 text-theme font-bold" />}
                     </div>
                     <span className="text-sm font-semibold text-slate-100">{item.name}</span>
                   </div>
@@ -624,8 +624,8 @@ export const GroceryPage: React.FC = () => {
                 className="flex items-center justify-between p-3.5 hover:bg-white/5 transition-colors cursor-pointer group"
               >
                 <div className="flex items-center gap-3.5">
-                  <div className="w-6 h-6 rounded-lg border border-white/20 bg-slate-900/80 flex items-center justify-center group-hover:border-emerald-500">
-                    {item.is_completed && <Check className="w-4 h-4 text-emerald-400 font-bold" />}
+                  <div className="w-6 h-6 rounded-lg border border-white/20 bg-slate-900/80 flex items-center justify-center group-hover:border-theme">
+                    {item.is_completed && <Check className="w-4 h-4 text-theme font-bold" />}
                   </div>
                   <span className="text-sm font-semibold text-slate-100">{item.name}</span>
                 </div>
@@ -648,7 +648,7 @@ export const GroceryPage: React.FC = () => {
           <div className="glass-panel-subtle rounded-3xl border border-white/5 p-4 mt-6 space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-wider">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                <CheckCircle2 className="w-4 h-4 text-theme" />
                 Crossed Off ({completedItems.length})
               </div>
               <button
@@ -667,7 +667,7 @@ export const GroceryPage: React.FC = () => {
                   className="flex items-center justify-between p-2.5 rounded-2xl bg-slate-900/30 hover:bg-slate-900/60 transition-colors cursor-pointer group opacity-60 hover:opacity-100"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-5 h-5 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                    <div className="w-5 h-5 rounded-lg bg-theme/20 text-theme flex items-center justify-center">
                       <Check className="w-3.5 h-3.5 font-bold" />
                     </div>
                     <span className="text-sm line-through text-slate-400 font-medium">
@@ -697,7 +697,7 @@ export const GroceryPage: React.FC = () => {
           <div className="w-full max-w-lg bg-slate-900 border-t border-white/15 rounded-t-3xl p-5 pb-8 shadow-2xl animate-in slide-in-from-bottom duration-200 space-y-4">
             <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto" />
             <h3 className="text-base font-bold text-white flex items-center gap-2">
-              <ListPlus className="w-5 h-5 text-emerald-400" />
+              <ListPlus className="w-5 h-5 text-theme" />
               Create Custom List
             </h3>
             <form onSubmit={handleCreateCustomList} className="space-y-3">
@@ -708,7 +708,7 @@ export const GroceryPage: React.FC = () => {
                 placeholder="e.g. Costco, Home Depot, Camping Gear..."
                 value={newListTitle}
                 onChange={(e) => setNewListTitle(e.target.value)}
-                className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-theme"
               />
               <div className="flex items-center justify-end gap-2 pt-2">
                 <button
@@ -721,7 +721,7 @@ export const GroceryPage: React.FC = () => {
                 <button
                   type="submit"
                   disabled={!newListTitle.trim()}
-                  className="min-h-[44px] bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-bold px-5 py-2 rounded-xl text-xs shadow-md shadow-emerald-500/20"
+                  className="min-h-[44px] bg-theme hover:bg-theme-hover disabled:opacity-50 text-theme-text font-bold px-5 py-2 rounded-xl text-xs shadow-md shadow-theme/20"
                 >
                   Create List
                 </button>
@@ -737,15 +737,15 @@ export const GroceryPage: React.FC = () => {
             ref={dockRef}
             className={`fab-dock-transition pointer-events-auto h-[50px] border shadow-2xl flex items-center overflow-hidden ${
               isInputExpanded
-                ? 'w-full rounded-3xl border-white/25 bg-slate-900/95 backdrop-blur-xl shadow-emerald-500/10 px-2'
-                : 'w-[50px] rounded-full border-emerald-400/40 bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 cursor-pointer shadow-xl shadow-emerald-500/30 hover:scale-105 active:scale-95 justify-center'
+                ? 'w-full rounded-3xl border-white/25 bg-slate-900/95 backdrop-blur-xl shadow-theme/10 px-2'
+                : 'w-[50px] rounded-full border-theme/40 bg-theme hover:bg-theme-hover text-theme-text cursor-pointer shadow-xl shadow-theme/30 hover:scale-105 active:scale-95 justify-center'
             }`}
           >
             {!isInputExpanded ? (
               <button
                 type="button"
                 onClick={() => setIsInputExpanded(true)}
-                className="w-full h-full flex items-center justify-center text-slate-950"
+                className="w-full h-full flex items-center justify-center text-theme-text"
                 title={`Add item to ${currentListName}`}
               >
                 <Plus className="w-6 h-6 stroke-[2.5]" />
@@ -767,7 +767,7 @@ export const GroceryPage: React.FC = () => {
                   <select
                     value={selectedAisleId}
                     onChange={(e) => setSelectedAisleId(e.target.value)}
-                    className="bg-white/5 border border-white/10 text-xs text-slate-300 rounded-2xl px-2.5 py-2.5 focus:outline-none focus:border-emerald-500 shrink-0 max-w-[100px] sm:max-w-[140px] truncate"
+                    className="bg-white/5 border border-white/10 text-xs text-slate-300 rounded-2xl px-2.5 py-2.5 focus:outline-none focus:border-theme shrink-0 max-w-[100px] sm:max-w-[140px] truncate"
                   >
                     <option value="" className="bg-slate-900 text-white">Auto Aisle</option>
                     {sortedAisles.map((a) => (
@@ -792,7 +792,7 @@ export const GroceryPage: React.FC = () => {
                 <button
                   type="submit"
                   disabled={!newItemName.trim()}
-                  className="p-2 sm:px-3.5 sm:py-2 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 disabled:opacity-40 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20 shrink-0"
+                  className="p-2 sm:px-3.5 sm:py-2 rounded-2xl bg-theme hover:bg-theme-hover disabled:opacity-40 text-theme-text font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-theme/20 shrink-0"
                   title="Add item"
                 >
                   <Plus className="w-4 h-4" />

@@ -100,7 +100,7 @@ export const RecipeScraperModal: React.FC<RecipeScraperModalProps> = ({
                 placeholder="https://www.allrecipes.com/recipe/..."
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                className="w-full bg-slate-950 border border-white/10 rounded-xl pl-3.5 pr-10 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                className="w-full bg-slate-950 border border-white/10 rounded-xl pl-3.5 pr-10 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-theme"
               />
               {url && (
                 <button
@@ -115,7 +115,7 @@ export const RecipeScraperModal: React.FC<RecipeScraperModalProps> = ({
             <button
               type="submit"
               disabled={isLoading || !url.trim()}
-              className="bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 px-5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shadow-md shadow-emerald-500/20 shrink-0"
+              className="bg-theme hover:bg-theme-hover disabled:opacity-50 text-theme-text px-5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shadow-md shadow-theme/20 shrink-0"
             >
               {isLoading ? (
                 <>
@@ -147,7 +147,7 @@ export const RecipeScraperModal: React.FC<RecipeScraperModalProps> = ({
         <div className="flex-1 overflow-y-auto py-3 space-y-4">
           {isLoading && (
             <div className="py-12 text-center space-y-3">
-              <Loader2 className="w-8 h-8 animate-spin text-emerald-400 mx-auto" />
+              <Loader2 className="w-8 h-8 animate-spin text-theme mx-auto" />
               <p className="text-xs text-slate-300 font-medium">
                 Parsing JSON-LD schema & meta tags with Gemini 3.6 Flash...
               </p>
@@ -156,8 +156,8 @@ export const RecipeScraperModal: React.FC<RecipeScraperModalProps> = ({
 
           {importedRecipe && !isLoading && (
             <div className="space-y-4 animate-in fade-in duration-200">
-              <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-between">
-                <div className="flex items-center gap-2 text-emerald-400 text-xs font-semibold">
+              <div className="p-4 rounded-2xl bg-theme/10 border border-theme/20 flex items-center justify-between">
+                <div className="flex items-center gap-2 text-theme text-xs font-semibold">
                   <Check className="w-4 h-4" />
                   Recipe successfully parsed and saved!
                 </div>

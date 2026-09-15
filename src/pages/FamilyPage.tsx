@@ -125,8 +125,8 @@ export const FamilyPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 text-xs font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-full shrink-0">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+        <div className="flex items-center gap-2 text-xs font-semibold text-theme bg-theme/10 border border-theme/20 px-3 py-1.5 rounded-full shrink-0">
+          <span className="w-2 h-2 rounded-full bg-theme animate-pulse" />
           {users.length} {users.length === 1 ? 'Member' : 'Members'}
         </div>
       </div>
@@ -134,7 +134,7 @@ export const FamilyPage: React.FC = () => {
       {/* Full-Width Family Invite Code Card */}
       <div className="glass-panel rounded-3xl p-6 border border-white/10 space-y-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center border border-emerald-500/30">
+          <div className="w-10 h-10 rounded-2xl bg-theme/15 text-theme flex items-center justify-center border border-theme/30">
             <KeyRound className="w-5 h-5" />
           </div>
           <div>
@@ -145,19 +145,19 @@ export const FamilyPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 p-4 rounded-2xl bg-slate-950/80 border border-emerald-500/20">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 p-4 rounded-2xl bg-slate-950/80 border border-theme/20">
           <div className="flex items-center gap-4">
             <div className="text-xs text-slate-400 font-semibold uppercase tracking-wider hidden sm:block">
               Invite Code:
             </div>
-            <div className="text-3xl font-black font-mono tracking-[0.25em] text-emerald-400 select-all">
+            <div className="text-3xl font-black font-mono tracking-[0.25em] text-theme select-all">
               {household?.invite_code || (household as any)?.inviteCode || '••••••'}
             </div>
           </div>
 
           <button
             onClick={handleCopyCode}
-            className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold shadow-lg shadow-emerald-500/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
+            className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-theme hover:bg-theme-hover text-theme-text text-xs font-bold shadow-lg shadow-theme/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
           >
             {copiedCode ? (
               <>
@@ -175,7 +175,7 @@ export const FamilyPage: React.FC = () => {
       </div>
 
       {feedback && (
-        <div className="p-3.5 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center gap-2 text-emerald-400 text-xs font-semibold animate-in fade-in">
+        <div className="p-3.5 rounded-2xl bg-theme/15 border border-theme/30 flex items-center gap-2 text-theme text-xs font-semibold animate-in fade-in">
           <Check className="w-4 h-4" />
           {feedback}
         </div>
@@ -184,7 +184,7 @@ export const FamilyPage: React.FC = () => {
       {/* Household Members List */}
       <div className="glass-panel rounded-3xl p-6 border border-white/10 space-y-4">
         <h2 className="text-sm font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
-          <Users className="w-4 h-4 text-emerald-400" />
+          <Users className="w-4 h-4 text-theme" />
           Family Members ({users.length})
         </h2>
 
@@ -196,7 +196,7 @@ export const FamilyPage: React.FC = () => {
                 key={u.id}
                 className={`p-4 rounded-2xl border transition-all flex items-center justify-between ${
                   isCurrent
-                    ? 'bg-emerald-500/10 border-emerald-500/40 ring-1 ring-emerald-500/20'
+                    ? 'bg-theme/10 border-theme/40 ring-1 ring-theme/20'
                     : 'bg-slate-900/60 border-white/5'
                 }`}
               >
@@ -211,14 +211,14 @@ export const FamilyPage: React.FC = () => {
                     <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
                       {u.name}
                       {isCurrent && (
-                        <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full font-semibold">
+                        <span className="text-[10px] bg-theme/20 text-theme border border-theme/30 px-2 py-0.5 rounded-full font-semibold">
                           You
                         </span>
                       )}
                     </h4>
                     <div className="flex items-center gap-1.5 mt-0.5">
                       {u.username && (
-                        <span className="text-[11px] font-mono font-semibold text-emerald-400">
+                        <span className="text-[11px] font-mono font-semibold text-theme">
                           @{u.username}
                         </span>
                       )}
@@ -232,7 +232,7 @@ export const FamilyPage: React.FC = () => {
 
                 <div className="flex items-center gap-1.5">
                   {isCurrent && (
-                    <span title="Currently active profile" className="p-1 rounded-lg bg-emerald-500/20 text-emerald-400">
+                    <span title="Currently active profile" className="p-1 rounded-lg bg-theme/20 text-theme">
                       <Check className="w-3.5 h-3.5 font-bold" />
                     </span>
                   )}
@@ -261,7 +261,7 @@ export const FamilyPage: React.FC = () => {
         {/* Add Member Card */}
         <div className="glass-panel rounded-3xl p-6 border border-white/10 space-y-4">
           <h3 className="text-base font-bold text-white flex items-center gap-2">
-            <UserPlus className="w-4 h-4 text-emerald-400" />
+            <UserPlus className="w-4 h-4 text-theme" />
             Add Family Profile
           </h3>
 
@@ -275,7 +275,7 @@ export const FamilyPage: React.FC = () => {
                   placeholder="e.g. Maya, Grandpa Joe"
                   value={newMemberName}
                   onChange={(e) => setNewMemberName(e.target.value)}
-                  className="w-full bg-slate-900 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+                  className="w-full bg-slate-900 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-theme"
                 />
               </div>
 
@@ -284,7 +284,7 @@ export const FamilyPage: React.FC = () => {
                   Username <span className="text-[10px] text-slate-500">(Optional)</span>
                 </label>
                 <div className="relative">
-                  <span className="text-xs font-bold text-emerald-400 absolute left-2.5 top-1/2 -translate-y-1/2 select-none">
+                  <span className="text-xs font-bold text-theme absolute left-2.5 top-1/2 -translate-y-1/2 select-none">
                     @
                   </span>
                   <input
@@ -292,7 +292,7 @@ export const FamilyPage: React.FC = () => {
                     placeholder={newMemberName ? newMemberName.toLowerCase().replace(/\s+/g, '') : "e.g. maya"}
                     value={newMemberUsername}
                     onChange={(e) => setNewMemberUsername(e.target.value.toLowerCase().replace(/\s+/g, ''))}
-                    className="w-full bg-slate-900 border border-white/10 rounded-xl pl-6 pr-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
+                    className="w-full bg-slate-900 border border-white/10 rounded-xl pl-6 pr-3 py-2 text-xs text-white focus:outline-none focus:border-theme font-mono"
                   />
                 </div>
               </div>
@@ -304,7 +304,7 @@ export const FamilyPage: React.FC = () => {
                 <select
                   value={newMemberRole}
                   onChange={(e) => setNewMemberRole(e.target.value as any)}
-                  className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+                  className="w-full bg-slate-900 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-theme"
                 >
                   <option value="parent">Parent</option>
                   <option value="child">Child</option>
@@ -333,7 +333,7 @@ export const FamilyPage: React.FC = () => {
             <button
               type="submit"
               disabled={!newMemberName.trim() || isSubmitting}
-              className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-bold py-2.5 rounded-xl text-xs transition-colors shadow-lg shadow-emerald-500/20 mt-2"
+              className="w-full bg-theme hover:bg-theme-hover disabled:opacity-50 text-theme-text font-bold py-2.5 rounded-xl text-xs transition-colors shadow-lg shadow-theme/20 mt-2"
             >
               Add Family Member
             </button>
@@ -343,7 +343,7 @@ export const FamilyPage: React.FC = () => {
         {/* Join Household with Code Card */}
         <div className="glass-panel rounded-3xl p-6 border border-white/10 space-y-4">
           <h3 className="text-base font-bold text-white flex items-center gap-2">
-            <KeyRound className="w-4 h-4 text-emerald-400" />
+            <KeyRound className="w-4 h-4 text-theme" />
             Join Existing Household
           </h3>
           <p className="text-xs text-slate-400">
@@ -362,7 +362,7 @@ export const FamilyPage: React.FC = () => {
                 placeholder="e.g. H5XWAE"
                 value={joinInviteCode}
                 onChange={(e) => setJoinInviteCode(e.target.value.toUpperCase())}
-                className="w-full bg-slate-900 border border-white/10 rounded-xl px-3.5 py-2 text-sm font-mono tracking-widest uppercase text-white focus:outline-none focus:border-emerald-500"
+                className="w-full bg-slate-900 border border-white/10 rounded-xl px-3.5 py-2 text-sm font-mono tracking-widest uppercase text-white focus:outline-none focus:border-theme"
               />
             </div>
 
@@ -376,14 +376,14 @@ export const FamilyPage: React.FC = () => {
                 placeholder="Your first name"
                 value={joinUserName}
                 onChange={(e) => setJoinUserName(e.target.value)}
-                className="w-full bg-slate-900 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+                className="w-full bg-slate-900 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-theme"
               />
             </div>
 
             <button
               type="submit"
               disabled={!joinInviteCode.trim() || !joinUserName.trim() || isSubmitting}
-              className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-bold py-2.5 rounded-xl text-xs transition-colors shadow-lg shadow-emerald-500/20 mt-2"
+              className="w-full bg-theme hover:bg-theme-hover disabled:opacity-50 text-theme-text font-bold py-2.5 rounded-xl text-xs transition-colors shadow-lg shadow-theme/20 mt-2"
             >
               Join Household
             </button>

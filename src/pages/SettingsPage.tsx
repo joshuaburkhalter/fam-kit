@@ -205,14 +205,14 @@ export const SettingsPage: React.FC = () => {
 
         <div className="text-right shrink-0">
           <span className="text-xs font-bold text-white block">{household?.name || 'Household'}</span>
-          <span className="text-[11px] text-emerald-400 font-mono">
+          <span className="text-[11px] text-theme font-mono">
             {users.length} {users.length === 1 ? 'member' : 'members'}
           </span>
         </div>
       </div>
 
       {statusMessage && (
-        <div className="p-3 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center gap-2 text-emerald-400 text-xs font-semibold animate-in fade-in">
+        <div className="p-3 rounded-2xl bg-theme/15 border border-theme/30 flex items-center gap-2 text-theme text-xs font-semibold animate-in fade-in">
           <Check className="w-4 h-4" />
           {statusMessage}
         </div>
@@ -222,7 +222,7 @@ export const SettingsPage: React.FC = () => {
       <div className="glass-panel rounded-3xl p-5 border border-white/10 space-y-3">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            <div className="p-2 rounded-xl bg-theme/10 text-theme border border-theme/20">
               <KeyRound className="w-4 h-4" />
             </div>
             <div>
@@ -235,7 +235,7 @@ export const SettingsPage: React.FC = () => {
 
           <button
             onClick={handleCopyInvite}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 cursor-pointer shrink-0"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-theme hover:bg-theme-hover text-theme-text text-xs font-bold transition-all shadow-md shadow-theme/20 cursor-pointer shrink-0"
           >
             {copiedInvite ? (
               <>
@@ -256,13 +256,13 @@ export const SettingsPage: React.FC = () => {
       <div className="glass-panel rounded-3xl p-5 border border-white/10 space-y-3">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            <div className="p-2 rounded-xl bg-theme/10 text-theme border border-theme/20">
               <Users className="w-4 h-4" />
             </div>
             <div>
               <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
                 Family Members
-                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 font-mono">
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-theme/20 text-theme font-mono">
                   {users.length}
                 </span>
               </h3>
@@ -280,7 +280,7 @@ export const SettingsPage: React.FC = () => {
             </button>
             <button
               onClick={() => setShowAddMemberModal(true)}
-              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition-all shadow-md shadow-emerald-500/20 flex items-center gap-1 cursor-pointer"
+              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-theme hover:bg-theme-hover text-theme-text transition-all shadow-md shadow-theme/20 flex items-center gap-1 cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
               <span>Add Member</span>
@@ -298,7 +298,7 @@ export const SettingsPage: React.FC = () => {
                 key={u.id}
                 className={`p-3 rounded-2xl border flex items-center justify-between gap-2.5 transition-all ${
                   isCurrent
-                    ? 'bg-emerald-500/10 border-emerald-500/35 ring-1 ring-emerald-500/20'
+                    ? 'bg-theme/10 border-theme/35 ring-1 ring-theme/20'
                     : 'bg-slate-900/60 border-white/5'
                 }`}
               >
@@ -321,13 +321,13 @@ export const SettingsPage: React.FC = () => {
                     <div className="flex items-center gap-1.5 truncate">
                       <span className="text-xs font-bold text-white truncate">{u.name}</span>
                       {isCurrent && (
-                        <span className="text-[9px] bg-emerald-500/25 text-emerald-300 px-1.5 py-0.2 rounded-full font-semibold shrink-0">
+                        <span className="text-[9px] bg-theme/25 text-theme px-1.5 py-0.2 rounded-full font-semibold shrink-0">
                           You
                         </span>
                       )}
                     </div>
                     <div className="flex items-center gap-1 text-[11px] truncate">
-                      <span className="font-mono text-emerald-400 font-medium truncate">@{handle}</span>
+                      <span className="font-mono text-theme font-medium truncate">@{handle}</span>
                       <span className="text-slate-600 text-[10px]">•</span>
                       <span className="text-slate-400 text-[10px] capitalize">{u.role || 'Member'}</span>
                     </div>
@@ -339,7 +339,7 @@ export const SettingsPage: React.FC = () => {
                     <button
                       onClick={() => setIsEditProfileOpen(true)}
                       title="Edit Your Profile"
-                      className="p-1.5 rounded-lg text-emerald-400 hover:bg-emerald-500/20 transition-colors cursor-pointer"
+                      className="p-1.5 rounded-lg text-theme hover:bg-theme/20 transition-colors cursor-pointer"
                     >
                       <Edit3 className="w-3.5 h-3.5" />
                     </button>
@@ -352,9 +352,9 @@ export const SettingsPage: React.FC = () => {
                           setTimeout(() => setStatusMessage(null), 3000);
                         }}
                         title={`Switch to ${u.name}`}
-                        className="px-2 py-1 rounded-lg text-[11px] font-semibold text-slate-300 hover:text-emerald-400 hover:bg-emerald-500/10 border border-white/10 hover:border-emerald-500/30 transition-colors flex items-center gap-1 cursor-pointer"
+                        className="px-2 py-1 rounded-lg text-[11px] font-semibold text-slate-300 hover:text-theme hover:bg-theme/10 border border-white/10 hover:border-theme/30 transition-colors flex items-center gap-1 cursor-pointer"
                       >
-                        <UserCheck className="w-3 h-3 text-emerald-400" />
+                        <UserCheck className="w-3 h-3 text-theme" />
                         <span>Switch</span>
                       </button>
                       {users.length > 1 && (
@@ -395,7 +395,7 @@ export const SettingsPage: React.FC = () => {
             onClick={() => setAutoAudioResponses(false)}
             className={`p-3.5 rounded-2xl border cursor-pointer flex items-start gap-3 transition-all ${
               !autoAudioResponses
-                ? 'bg-emerald-500/10 border-emerald-500/40 ring-1 ring-emerald-500/25'
+                ? 'bg-theme/10 border-theme/40 ring-1 ring-theme/25'
                 : 'bg-slate-900/60 border-white/5 hover:border-white/10'
             }`}
           >
@@ -404,7 +404,7 @@ export const SettingsPage: React.FC = () => {
               name="autoAudioOption"
               checked={!autoAudioResponses}
               onChange={() => setAutoAudioResponses(false)}
-              className="mt-0.5 h-4 w-4 text-emerald-500 accent-emerald-500 cursor-pointer"
+              className="mt-0.5 h-4 w-4 text-theme accent-theme cursor-pointer"
             />
             <div>
               <div className="text-xs font-bold text-white flex items-center gap-1.5">
@@ -422,7 +422,7 @@ export const SettingsPage: React.FC = () => {
             onClick={() => setAutoAudioResponses(true)}
             className={`p-3.5 rounded-2xl border cursor-pointer flex items-start gap-3 transition-all ${
               autoAudioResponses
-                ? 'bg-emerald-500/10 border-emerald-500/40 ring-1 ring-emerald-500/25'
+                ? 'bg-theme/10 border-theme/40 ring-1 ring-theme/25'
                 : 'bg-slate-900/60 border-white/5 hover:border-white/10'
             }`}
           >
@@ -431,11 +431,11 @@ export const SettingsPage: React.FC = () => {
               name="autoAudioOption"
               checked={autoAudioResponses}
               onChange={() => setAutoAudioResponses(true)}
-              className="mt-0.5 h-4 w-4 text-emerald-500 accent-emerald-500 cursor-pointer"
+              className="mt-0.5 h-4 w-4 text-theme accent-theme cursor-pointer"
             />
             <div>
               <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
+                <Volume2 className="w-3.5 h-3.5 text-theme" />
                 Auto-Read Aloud
               </div>
               <div className="text-[11px] text-slate-400 mt-0.5">
@@ -471,7 +471,7 @@ export const SettingsPage: React.FC = () => {
               onClick={() => handlePushToggle(true)}
               className={`p-3.5 rounded-2xl border cursor-pointer flex items-start gap-3 transition-all ${
                 isPushSubscribed
-                  ? 'bg-emerald-500/10 border-emerald-500/40 ring-1 ring-emerald-500/25'
+                  ? 'bg-theme/10 border-theme/40 ring-1 ring-theme/25'
                   : 'bg-slate-900/60 border-white/5 hover:border-white/10'
               }`}
             >
@@ -480,7 +480,7 @@ export const SettingsPage: React.FC = () => {
                 name="pushAlertsOption"
                 checked={isPushSubscribed}
                 onChange={() => handlePushToggle(true)}
-                className="mt-0.5 h-4 w-4 text-emerald-500 accent-emerald-500 cursor-pointer"
+                className="mt-0.5 h-4 w-4 text-theme accent-theme cursor-pointer"
               />
               <div className="flex-1 min-w-0">
                 <div className="text-xs font-bold text-white flex items-center justify-between gap-1">
@@ -493,7 +493,7 @@ export const SettingsPage: React.FC = () => {
                         handleSendTestPush();
                       }}
                       disabled={isSendingTestPush}
-                      className="text-[10px] bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer"
+                      className="text-[10px] bg-theme/20 hover:bg-theme/30 text-theme px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer"
                     >
                       {isSendingTestPush ? 'Sending...' : 'Test Alert'}
                     </button>
@@ -511,7 +511,7 @@ export const SettingsPage: React.FC = () => {
             <label
               className={`p-3.5 rounded-2xl border cursor-pointer flex items-start gap-3 transition-all ${
                 !isPushSubscribed
-                  ? 'bg-emerald-500/10 border-emerald-500/40 ring-1 ring-emerald-500/25'
+                  ? 'bg-theme/10 border-theme/40 ring-1 ring-theme/25'
                   : 'bg-slate-900/60 border-white/5 hover:border-white/10'
               }`}
             >
@@ -520,7 +520,7 @@ export const SettingsPage: React.FC = () => {
                 name="pushAlertsOption"
                 checked={!isPushSubscribed}
                 onChange={() => {}}
-                className="mt-0.5 h-4 w-4 text-emerald-500 accent-emerald-500 cursor-pointer"
+                className="mt-0.5 h-4 w-4 text-theme accent-theme cursor-pointer"
               />
               <div>
                 <div className="text-xs font-bold text-white">Disabled</div>
@@ -537,7 +537,7 @@ export const SettingsPage: React.FC = () => {
       <div className="glass-panel rounded-3xl p-5 border border-white/10">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            <div className="p-2 rounded-xl bg-theme/10 text-theme border border-theme/20">
               <MoveVertical className="w-4 h-4" />
             </div>
             <div>
@@ -553,7 +553,7 @@ export const SettingsPage: React.FC = () => {
             onClick={() => setIsAisleModalOpen(true)}
             className="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10 flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
           >
-            <MoveVertical className="w-3.5 h-3.5 text-emerald-400" />
+            <MoveVertical className="w-3.5 h-3.5 text-theme" />
             <span>Configure Aisles</span>
           </button>
         </div>
@@ -577,14 +577,14 @@ export const SettingsPage: React.FC = () => {
           </div>
 
           {isPWAInstalled ? (
-            <span className="flex items-center gap-1 text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 rounded-xl shrink-0">
+            <span className="flex items-center gap-1 text-xs font-bold text-theme bg-theme/10 border border-theme/30 px-3 py-1.5 rounded-xl shrink-0">
               <Check className="w-3.5 h-3.5 stroke-[2.5]" />
               Installed
             </span>
           ) : canInstallPWA ? (
             <button
               onClick={installPWA}
-              className="px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition-all shadow-md shadow-emerald-500/20 flex items-center gap-1.5 cursor-pointer shrink-0"
+              className="px-3.5 py-2 rounded-xl text-xs font-bold bg-theme hover:bg-theme-hover text-theme-text transition-all shadow-md shadow-theme/20 flex items-center gap-1.5 cursor-pointer shrink-0"
             >
               <Download className="w-3.5 h-3.5" />
               Install App
@@ -603,7 +603,7 @@ export const SettingsPage: React.FC = () => {
           <div className="glass-panel w-full max-w-md rounded-3xl p-5 sm:p-6 shadow-2xl border border-white/10 space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-white/10">
               <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <Users className="w-4 h-4 text-emerald-400" />
+                <Users className="w-4 h-4 text-theme" />
                 Add Family Member
               </h3>
               <button
@@ -623,7 +623,7 @@ export const SettingsPage: React.FC = () => {
                   placeholder="e.g. Maya"
                   value={newMemberName}
                   onChange={(e) => setNewMemberName(e.target.value)}
-                  className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+                  className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-theme"
                 />
               </div>
 
@@ -632,7 +632,7 @@ export const SettingsPage: React.FC = () => {
                   Username <span className="text-[10px] text-slate-500">(Optional)</span>
                 </label>
                 <div className="relative">
-                  <span className="text-xs font-bold text-emerald-400 absolute left-2.5 top-1/2 -translate-y-1/2 select-none">
+                  <span className="text-xs font-bold text-theme absolute left-2.5 top-1/2 -translate-y-1/2 select-none">
                     @
                   </span>
                   <input
@@ -640,7 +640,7 @@ export const SettingsPage: React.FC = () => {
                     placeholder={newMemberName ? newMemberName.toLowerCase().replace(/\s+/g, '') : 'username'}
                     value={newMemberUsername}
                     onChange={(e) => setNewMemberUsername(e.target.value.toLowerCase().replace(/\s+/g, ''))}
-                    className="w-full bg-slate-900 border border-white/10 rounded-xl pl-6 pr-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
+                    className="w-full bg-slate-900 border border-white/10 rounded-xl pl-6 pr-3 py-2 text-xs text-white focus:outline-none focus:border-theme font-mono"
                   />
                 </div>
               </div>
@@ -651,7 +651,7 @@ export const SettingsPage: React.FC = () => {
                   <select
                     value={newMemberRole}
                     onChange={(e) => setNewMemberRole(e.target.value as any)}
-                    className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+                    className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-theme"
                   >
                     <option value="parent">Parent</option>
                     <option value="child">Child</option>
@@ -688,7 +688,7 @@ export const SettingsPage: React.FC = () => {
                 <button
                   type="submit"
                   disabled={!newMemberName.trim() || isAddingMember}
-                  className="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold disabled:opacity-50"
+                  className="px-5 py-2 rounded-xl bg-theme hover:bg-theme-hover text-theme-text text-xs font-bold disabled:opacity-50"
                 >
                   {isAddingMember ? 'Adding...' : 'Add Member'}
                 </button>

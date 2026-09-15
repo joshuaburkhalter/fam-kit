@@ -13,6 +13,7 @@ import {
   Upload,
 } from 'lucide-react';
 import { usePWA } from '../context/PWAContext';
+import { applyUserTheme } from '../lib/theme';
 
 interface EditProfileModalProps {
   isOpen: boolean;
@@ -135,6 +136,13 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
     }
   };
 
+  const handleClose = () => {
+    if (currentUser?.avatar_color) {
+      applyUserTheme(currentUser.avatar_color);
+    }
+    onClose();
+  };
+
   const handleRemovePhoto = () => {
     setAvatarImage('');
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -187,7 +195,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
         {/* Sticky Header */}
         <div className="flex items-center justify-between p-5 pb-4 border-b border-slate-800 shrink-0 bg-[#0f172a]">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            <div className="p-2 rounded-xl bg-theme/10 text-theme border border-theme/20">
               <User className="w-4 h-4" />
             </div>
             <div>
@@ -198,7 +206,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
 
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
@@ -214,7 +222,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
             </div>
           )}
           {successMessage && (
-            <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-semibold flex items-center gap-2">
+            <div className="p-3 rounded-xl bg-theme/15 border border-theme/30 text-theme text-xs font-semibold flex items-center gap-2">
               <Check className="w-4 h-4 stroke-[2.5]" />
               {successMessage}
             </div>
@@ -227,7 +235,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
               <div className="relative group">
                 <div
                   onClick={() => fileInputRef.current?.click()}
-                  className="w-20 h-20 rounded-2xl overflow-hidden flex items-center justify-center text-xl font-black text-white shadow-lg cursor-pointer relative border-2 border-white/10 group-hover:border-emerald-500/50 transition-all"
+                  className="w-20 h-20 rounded-2xl overflow-hidden flex items-center justify-center text-xl font-black text-white shadow-lg cursor-pointer relative border-2 border-white/10 group-hover:border-theme/50 transition-all"
                   style={{ backgroundColor: color }}
                 >
                   {isProcessingPhoto ? (
@@ -249,7 +257,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   title="Upload Photo"
-                  className="absolute -bottom-1 -right-1 p-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-md transition-transform hover:scale-110 cursor-pointer"
+                  className="absolute -bottom-1 -right-1 p-1.5 rounded-lg bg-theme hover:bg-theme-hover text-theme-text shadow-md transition-transform hover:scale-110 cursor-pointer"
                 >
                   <Camera className="w-3.5 h-3.5 stroke-[2.5]" />
                 </button>
@@ -271,7 +279,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                     disabled={isProcessingPhoto}
                     className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer border border-slate-700"
                   >
-                    <Upload className="w-3.5 h-3.5 text-emerald-400" />
+                    <Upload className="w-3.5 h-3.5 text-theme" />
                     <span>{isValidPhoto(avatarImage) ? 'Change Photo' : 'Upload Photo'}</span>
                   </button>
 
@@ -306,7 +314,10 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                   <button
                     type="button"
                     key={c}
-                    onClick={() => setColor(c)}
+                    onClick={() => {
+                      setColor(c);
+                      applyUserTheme(c);
+                    }}
                     style={{ backgroundColor: c }}
                     className={`w-7 h-7 rounded-full transition-all cursor-pointer ${
                       color === c ? 'scale-110 ring-2 ring-white shadow-lg' : 'opacity-70 hover:opacity-100'
@@ -326,7 +337,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="e.g. Joshua Burkhalter"
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-theme"
                 />
               </div>
 
@@ -335,7 +346,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                   Username <span className="text-[10px] text-slate-500">(used for login)</span>
                 </label>
                 <div className="relative">
-                  <span className="text-xs font-bold text-emerald-400 absolute left-2.5 top-1/2 -translate-y-1/2 select-none">
+                  <span className="text-xs font-bold text-theme absolute left-2.5 top-1/2 -translate-y-1/2 select-none">
                     @
                   </span>
                   <input
@@ -343,7 +354,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                     value={username}
                     onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/\s+/g, ''))}
                     placeholder="e.g. joshua"
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl pl-6 pr-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl pl-6 pr-3 py-2 text-xs text-white focus:outline-none focus:border-theme font-mono"
                   />
                 </div>
               </div>
@@ -360,7 +371,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="e.g. joshua@example.com"
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-theme"
                 />
               </div>
 
@@ -369,7 +380,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                 <select
                   value={role}
                   onChange={(e) => setRole(e.target.value as any)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-theme"
                 >
                   <option value="parent">Parent</option>
                   <option value="child">Child</option>
@@ -389,7 +400,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   placeholder="Enter new password"
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 pr-9 text-xs text-white focus:outline-none focus:border-emerald-500"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 pr-9 text-xs text-white focus:outline-none focus:border-theme"
                 />
                 <button
                   type="button"
@@ -405,7 +416,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
             {otherMembers.length > 0 && (
               <div className="pt-3 border-t border-slate-800 space-y-2">
                 <label className="text-xs font-semibold text-slate-400 flex items-center gap-1.5">
-                  <Users className="w-3.5 h-3.5 text-emerald-400" />
+                  <Users className="w-3.5 h-3.5 text-theme" />
                   Switch Active Profile on This Device
                 </label>
                 <div className="flex flex-wrap gap-2">
@@ -417,7 +428,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                         switchUser(m);
                         onClose();
                       }}
-                      className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-emerald-500/40 text-xs transition-colors cursor-pointer"
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-theme/40 text-xs transition-colors cursor-pointer"
                     >
                       {m.avatar && (m.avatar.startsWith('data:image') || m.avatar.startsWith('http')) ? (
                         <img src={m.avatar} alt={m.name} className="w-5 h-5 rounded-full object-cover" />
@@ -442,7 +453,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
         <div className="flex items-center justify-end gap-2.5 p-4 sm:p-5 border-t border-slate-800 bg-[#0f172a] shrink-0">
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             className="px-4 py-2 rounded-xl text-xs font-medium text-slate-300 hover:bg-slate-800 transition-colors cursor-pointer"
           >
             Cancel
@@ -451,7 +462,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
             type="submit"
             form="edit-profile-form"
             disabled={isSaving || isProcessingPhoto}
-            className="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold shadow-lg shadow-emerald-500/20 flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+            className="px-5 py-2 rounded-xl bg-theme hover:bg-theme-hover text-theme-text text-xs font-bold shadow-lg shadow-theme/20 flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
           >
             {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5 stroke-[2.5]" />}
             <span>Save Profile</span>
