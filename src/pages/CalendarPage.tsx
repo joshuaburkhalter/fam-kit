@@ -429,10 +429,10 @@ export const CalendarPage: React.FC = () => {
           <button
             type="button"
             onClick={scrollToToday}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-white/10 hover:border-theme/40 text-theme text-xs font-semibold transition-all active:scale-95 shadow-sm"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-white/10 hover:border-emerald-500/40 text-emerald-400 text-xs font-semibold transition-all active:scale-95 shadow-sm"
             title="Jump to Today"
           >
-            <Sparkles className="w-3.5 h-3.5 text-theme" />
+            <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
             <span>Today</span>
           </button>
 
@@ -440,7 +440,7 @@ export const CalendarPage: React.FC = () => {
           <button
             type="button"
             onClick={() => handleOpenAddModal()}
-            className="flex items-center gap-1 px-3.5 py-1.5 rounded-xl bg-theme hover:bg-theme-hover text-theme-text text-xs font-bold transition-all shadow-md shadow-theme/20 active:scale-95"
+            className="flex items-center gap-1 px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 active:scale-95"
           >
             <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
             <span>Event</span>
@@ -458,7 +458,7 @@ export const CalendarPage: React.FC = () => {
             onClick={() => setSelectedMemberId('all')}
             className={`h-7 px-2.5 rounded-full text-[11px] font-bold transition-all shrink-0 flex items-center justify-center ${
               selectedMemberId === 'all'
-                ? 'bg-theme text-theme-text shadow-xs'
+                ? 'bg-emerald-500 text-slate-950 shadow-xs'
                 : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-white/10'
             }`}
           >
@@ -477,7 +477,7 @@ export const CalendarPage: React.FC = () => {
                 title={u.name}
                 className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold text-white transition-all shrink-0 ${
                   isSelected
-                    ? 'ring-2 ring-theme ring-offset-2 ring-offset-slate-950 scale-105 shadow-sm'
+                    ? 'ring-2 ring-emerald-400 ring-offset-2 ring-offset-slate-950 scale-105 shadow-sm'
                     : selectedMemberId !== 'all'
                     ? 'opacity-40 hover:opacity-100'
                     : 'opacity-90 hover:opacity-100 hover:scale-105'
@@ -566,14 +566,14 @@ export const CalendarPage: React.FC = () => {
                 <div className="w-12 shrink-0 flex flex-col items-center pt-0.5 select-none">
                   <span
                     className={`text-[10px] font-bold uppercase tracking-wider ${
-                      isCurrentDay ? 'text-theme' : 'text-slate-400'
+                      isCurrentDay ? 'text-emerald-400' : 'text-slate-400'
                     }`}
                   >
                     {format(day, 'EEE')}
                   </span>
 
                   {isCurrentDay ? (
-                    <div className="w-7 h-7 rounded-full bg-theme text-theme-text flex items-center justify-center font-bold text-sm shadow-sm mt-0.5">
+                    <div className="w-7 h-7 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center font-bold text-sm shadow-sm mt-0.5">
                       {format(day, 'd')}
                     </div>
                   ) : (
@@ -583,7 +583,7 @@ export const CalendarPage: React.FC = () => {
                   )}
 
                   {isCurrentDay && (
-                    <span className="text-[9px] font-bold text-theme uppercase tracking-tight mt-0.5">
+                    <span className="text-[9px] font-bold text-emerald-400 uppercase tracking-tight mt-0.5">
                       Today
                     </span>
                   )}
@@ -598,15 +598,15 @@ export const CalendarPage: React.FC = () => {
                 <div className="relative flex flex-col items-center">
                   <div
                     className={`absolute top-0 bottom-0 w-[1px] ${
-                      isCurrentDay ? 'bg-theme/50' : 'bg-slate-800'
+                      isCurrentDay ? 'bg-emerald-500/50' : 'bg-slate-800'
                     }`}
                   />
                   <div
                     className={`relative z-10 rounded-full mt-2 ${
                       isCurrentDay
-                        ? 'w-2.5 h-2.5 bg-theme ring-2 ring-theme/30'
+                        ? 'w-2.5 h-2.5 bg-emerald-400 ring-2 ring-emerald-400/30'
                         : dayEvents.length > 0
-                        ? 'w-2 h-2 bg-theme'
+                        ? 'w-2 h-2 bg-emerald-400'
                         : 'w-1.5 h-1.5 bg-slate-700'
                     }`}
                   />
@@ -622,7 +622,7 @@ export const CalendarPage: React.FC = () => {
                           <div
                             key={ev.id}
                             onClick={() => handleOpenEditModal(ev)}
-                            className="relative overflow-hidden p-2.5 sm:p-3 rounded-xl bg-slate-900 border border-white/10 hover:border-theme/40 transition-all cursor-pointer group active:scale-[0.99] shadow-xs"
+                            className="relative overflow-hidden p-2.5 sm:p-3 rounded-xl bg-slate-900 border border-white/10 hover:border-emerald-500/40 transition-all cursor-pointer group active:scale-[0.99] shadow-xs"
                           >
                             {/* Member Color Stripe */}
                             <div
@@ -635,8 +635,8 @@ export const CalendarPage: React.FC = () => {
                             <div className="pl-1 space-y-1">
                               {/* Top row: Time & Member */}
                               <div className="flex items-center justify-between gap-2">
-                                <div className="inline-flex items-center gap-1 text-[11px] font-mono text-theme font-medium">
-                                  <Clock className="w-3 h-3 text-theme" />
+                                <div className="inline-flex items-center gap-1 text-[11px] font-mono text-emerald-400 font-medium">
+                                  <Clock className="w-3 h-3 text-emerald-400" />
                                   <span>{formatTimeRange(ev)}</span>
                                 </div>
 
@@ -703,9 +703,9 @@ export const CalendarPage: React.FC = () => {
           <button
             type="button"
             onClick={() => setDaysCount((prev) => prev + 14)}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-900 border border-white/10 hover:border-theme/40 text-slate-300 hover:text-white text-xs font-semibold transition-all active:scale-95 shadow-sm"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-900 border border-white/10 hover:border-emerald-500/40 text-slate-300 hover:text-white text-xs font-semibold transition-all active:scale-95 shadow-sm"
           >
-            <ArrowDown className="w-3.5 h-3.5 text-theme" />
+            <ArrowDown className="w-3.5 h-3.5 text-emerald-400" />
             <span>Load 14 More Days</span>
           </button>
         </div>
@@ -721,7 +721,7 @@ export const CalendarPage: React.FC = () => {
             {/* Bottom Sheet Header */}
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-theme/20 text-theme flex items-center justify-center">
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
                   <CalendarIcon className="w-4 h-4" />
                 </div>
                 <div>
@@ -756,7 +756,7 @@ export const CalendarPage: React.FC = () => {
                   placeholder="e.g. Soccer game, Dentist, Family Dinner..."
                   value={formTitle}
                   onChange={(e) => setFormTitle(e.target.value)}
-                  className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-theme"
+                  className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
                 />
               </div>
 
@@ -771,7 +771,7 @@ export const CalendarPage: React.FC = () => {
                     required
                     value={formDate}
                     onChange={(e) => setFormDate(e.target.value)}
-                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-theme"
+                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
                   />
                 </div>
                 <div>
@@ -781,7 +781,7 @@ export const CalendarPage: React.FC = () => {
                   <select
                     value={formAssignedUser}
                     onChange={(e) => setFormAssignedUser(e.target.value)}
-                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-theme"
+                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
                   >
                     <option value="">Whole Family</option>
                     {users.map((u) => (
@@ -802,7 +802,7 @@ export const CalendarPage: React.FC = () => {
                   type="checkbox"
                   checked={formIsAllDay}
                   onChange={(e) => setFormIsAllDay(e.target.checked)}
-                  className="w-4 h-4 rounded text-theme bg-slate-950 border-white/20 focus:ring-theme"
+                  className="w-4 h-4 rounded text-emerald-500 bg-slate-950 border-white/20 focus:ring-emerald-500"
                 />
               </div>
 
@@ -817,7 +817,7 @@ export const CalendarPage: React.FC = () => {
                       type="time"
                       value={formStartTime}
                       onChange={(e) => setFormStartTime(e.target.value)}
-                      className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-theme"
+                      className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
                     />
                   </div>
                   <div>
@@ -828,7 +828,7 @@ export const CalendarPage: React.FC = () => {
                       type="time"
                       value={formEndTime}
                       onChange={(e) => setFormEndTime(e.target.value)}
-                      className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-theme"
+                      className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
                     />
                   </div>
                 </div>
@@ -844,7 +844,7 @@ export const CalendarPage: React.FC = () => {
                   placeholder="e.g. Park, School, Dr. Smith Office..."
                   value={formLocation}
                   onChange={(e) => setFormLocation(e.target.value)}
-                  className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-theme"
+                  className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
                 />
               </div>
 
@@ -858,7 +858,7 @@ export const CalendarPage: React.FC = () => {
                   placeholder="Additional notes or details..."
                   value={formDescription}
                   onChange={(e) => setFormDescription(e.target.value)}
-                  className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-theme resize-none"
+                  className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 resize-none"
                 />
               </div>
 
@@ -891,7 +891,7 @@ export const CalendarPage: React.FC = () => {
                   <button
                     type="submit"
                     disabled={!formTitle.trim() || isSaving}
-                    className="min-h-[44px] px-5 py-2 rounded-xl text-xs font-bold bg-theme hover:bg-theme-hover disabled:opacity-50 text-theme-text shadow-md shadow-theme/20 flex items-center gap-1.5 transition-all"
+                    className="min-h-[44px] px-5 py-2 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 shadow-md shadow-emerald-500/20 flex items-center gap-1.5 transition-all"
                   >
                     {isSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                     <span>{editingEventId ? 'Save' : 'Add Event'}</span>
@@ -909,11 +909,11 @@ export const CalendarPage: React.FC = () => {
           <div
             className={`px-4 py-2.5 rounded-2xl shadow-xl border text-xs font-semibold flex items-center gap-2 pointer-events-auto backdrop-blur-xl ${
               assistantFeedback.type === 'success'
-                ? 'bg-slate-900/95 border-theme/40 text-theme shadow-theme/20'
+                ? 'bg-slate-900/95 border-emerald-500/40 text-emerald-300 shadow-emerald-500/20'
                 : 'bg-red-950/95 border-red-500/40 text-red-200 shadow-red-500/20'
             }`}
           >
-            <Sparkles className="w-4 h-4 text-theme shrink-0" />
+            <Sparkles className="w-4 h-4 text-emerald-400 shrink-0" />
             <span>{assistantFeedback.message}</span>
           </div>
         </div>
@@ -927,14 +927,14 @@ export const CalendarPage: React.FC = () => {
             className={`fab-dock-transition pointer-events-auto h-[50px] border shadow-2xl flex items-center overflow-hidden ${
               isQuickAddExpanded
                 ? 'w-full rounded-3xl border-white/20 bg-slate-900/95 backdrop-blur-xl px-2'
-                : 'w-[50px] rounded-full border-theme/30 bg-theme hover:bg-theme-hover cursor-pointer shadow-xl shadow-theme/30 hover:scale-105 active:scale-95 justify-center'
+                : 'w-[50px] rounded-full border-emerald-400/30 bg-emerald-500 hover:bg-emerald-400 cursor-pointer shadow-xl shadow-emerald-500/30 hover:scale-105 active:scale-95 justify-center'
             }`}
           >
             {!isQuickAddExpanded ? (
               <button
                 type="button"
                 onClick={() => setIsQuickAddExpanded(true)}
-                className="w-full h-full flex items-center justify-center text-theme-text"
+                className="w-full h-full flex items-center justify-center text-slate-950"
                 title="Add Event"
               >
                 <Plus className="w-6 h-6 stroke-[2.5]" />
@@ -979,7 +979,7 @@ export const CalendarPage: React.FC = () => {
                 <button
                   type="submit"
                   disabled={!quickInput.trim() || isAssistantSubmitting}
-                  className="px-3.5 py-1.5 rounded-xl text-theme-text font-bold text-xs flex items-center gap-1 transition-all shadow-md shrink-0 disabled:opacity-40 bg-theme hover:bg-theme-hover shadow-theme/25 active:scale-95"
+                  className="px-3.5 py-1.5 rounded-xl text-slate-950 font-bold text-xs flex items-center gap-1 transition-all shadow-md shrink-0 disabled:opacity-40 bg-emerald-500 hover:bg-emerald-400 shadow-emerald-500/25 active:scale-95"
                 >
                   {isAssistantSubmitting ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />

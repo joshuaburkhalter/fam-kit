@@ -14,11 +14,6 @@ export default {
       colors: {
         background: '#080b12',
         card: '#121827',
-        theme: {
-          DEFAULT: 'rgb(var(--theme-rgb) / <alpha-value>)',
-          hover: 'rgb(var(--theme-hover-rgb) / <alpha-value>)',
-          text: 'var(--theme-text)',
-        },
       },
     },
   },

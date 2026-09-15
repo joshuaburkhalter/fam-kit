@@ -4,22 +4,6 @@
 
 :root {
   color-scheme: dark;
-  --theme-rgb: 16 185 129;
-  --theme-hover-rgb: 52 211 153;
-  --theme-color: #10b981;
-  --theme-hover: #34d399;
-  --theme-text: #020617;
-  --theme-gradient-start: #10b981;
-  --theme-gradient-end: #2dd4bf;
-}
-
-/* User theme utilities */
-.bg-theme-gradient {
-  background: linear-gradient(135deg, var(--theme-gradient-start), var(--theme-gradient-end));
-}
-
-.shadow-theme-glow {
-  box-shadow: 0 8px 25px -4px rgba(var(--theme-rgb), 0.35);
 }
 
 body {

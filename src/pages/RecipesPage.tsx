@@ -254,7 +254,7 @@ export const RecipesPage: React.FC = () => {
 
               <button
                 onClick={() => handleAddAllToGrocery(selectedRecipe)}
-                className="bg-theme hover:bg-theme-hover text-theme-text px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-md shadow-theme/20 shrink-0"
+                className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20 shrink-0"
                 title="Add all ingredients to Grocery List"
               >
                 <ShoppingCart className="w-3.5 h-3.5" />
@@ -567,7 +567,7 @@ export const RecipesPage: React.FC = () => {
             <button
               type="button"
               onClick={() => setIsScraperOpen(true)}
-              className="flex items-center gap-1 px-3.5 py-1.5 rounded-xl bg-theme hover:bg-theme-hover text-theme-text text-xs font-bold transition-all shadow-md shadow-theme/20 active:scale-95"
+              className="flex items-center gap-1 px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 active:scale-95"
             >
               <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
               <span>Import</span>
@@ -581,7 +581,7 @@ export const RecipesPage: React.FC = () => {
                 onClick={() => setSelectedTag(null)}
                 className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
                   selectedTag === null
-                    ? 'bg-theme text-theme-text font-bold shadow-md shadow-theme/20'
+                    ? 'bg-emerald-500 text-slate-950 font-bold shadow-md shadow-emerald-500/20'
                     : 'bg-slate-900/80 hover:bg-slate-850 text-slate-300 border border-white/10'
                 }`}
               >
@@ -593,8 +593,8 @@ export const RecipesPage: React.FC = () => {
                   onClick={() => setSelectedTag(selectedTag === 'ai' ? null : 'ai')}
                   className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap flex items-center gap-1.5 transition-all ${
                     selectedTag === 'ai'
-                      ? 'bg-theme text-theme-text font-bold shadow-md shadow-theme/20 ring-1 ring-white/40'
-                      : 'bg-theme/10 hover:bg-theme/20 text-theme border border-theme/25'
+                      ? 'bg-gradient-to-r from-emerald-400 to-teal-300 text-zinc-950 font-bold shadow-md shadow-emerald-500/20 ring-1 ring-white/40'
+                      : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/25'
                   }`}
                 >
                   <Sparkles className="w-3.5 h-3.5 stroke-[2.2]" />
@@ -614,7 +614,7 @@ export const RecipesPage: React.FC = () => {
                     onClick={() => setSelectedTag(selectedTag === tag ? null : tag)}
                     className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
                       selectedTag === tag
-                        ? 'bg-theme text-theme-text font-bold shadow-md shadow-theme/20'
+                        ? 'bg-emerald-500 text-slate-950 font-bold shadow-md shadow-emerald-500/20'
                         : 'bg-slate-900/80 hover:bg-slate-850 text-slate-300 border border-white/10'
                     }`}
                   >
@@ -629,7 +629,7 @@ export const RecipesPage: React.FC = () => {
             <div className="py-12 text-center text-xs text-slate-400">Loading recipes...</div>
           ) : filteredRecipes.length === 0 ? (
             <div className="py-16 text-center glass-panel rounded-3xl p-8 border border-white/5 space-y-3">
-              <div className="w-12 h-12 rounded-2xl bg-theme/10 text-theme flex items-center justify-center mx-auto">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center mx-auto">
                 <ChefHat className="w-6 h-6" />
               </div>
               <h3 className="text-base font-bold text-white">No recipes found</h3>
@@ -644,7 +644,7 @@ export const RecipesPage: React.FC = () => {
                     setSelectedTag(null);
                     setIsScraperOpen(true);
                   }}
-                  className="bg-theme hover:bg-theme-hover text-theme-text px-4 py-2 rounded-2xl text-xs font-bold inline-flex items-center gap-2 transition-all shadow-md shadow-theme/20"
+                  className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-4 py-2 rounded-2xl text-xs font-bold inline-flex items-center gap-2 transition-all shadow-md shadow-emerald-500/20"
                 >
                   <Link2 className="w-4 h-4" />
                   <span>Import Recipe from Web</span>
@@ -657,7 +657,7 @@ export const RecipesPage: React.FC = () => {
                 <div
                   key={recipe.id}
                   onClick={() => setSelectedRecipe(recipe)}
-                  className="glass-panel rounded-3xl border border-white/10 hover:border-theme/40 overflow-hidden cursor-pointer transition-all hover:scale-[1.01] shadow-lg flex flex-col group"
+                  className="glass-panel rounded-3xl border border-white/10 hover:border-emerald-500/40 overflow-hidden cursor-pointer transition-all hover:scale-[1.01] shadow-lg flex flex-col group"
                 >
                   {/* Picture container with Assistant AI icon in bottom right-hand corner */}
                   <div className="relative w-full h-44 overflow-hidden border-b border-white/10">
@@ -676,7 +676,7 @@ export const RecipesPage: React.FC = () => {
                     {/* Assistant AI icon badge in bottom right-hand corner */}
                     {isAiRecipe(recipe) && (
                       <div
-                        className="absolute bottom-2.5 right-2.5 z-10 w-7 h-7 rounded-xl bg-theme text-theme-text flex items-center justify-center shadow-lg border border-white/30 transition-transform group-hover:scale-110"
+                        className="absolute bottom-2.5 right-2.5 z-10 w-7 h-7 rounded-xl bg-gradient-to-tr from-emerald-400 to-teal-300 flex items-center justify-center text-zinc-950 shadow-lg shadow-emerald-950/50 border border-white/30 transition-transform group-hover:scale-110"
                         title="Created by AI Assistant (#ai)"
                       >
                         <Sparkles className="w-4 h-4 stroke-[2.2]" />
@@ -686,7 +686,7 @@ export const RecipesPage: React.FC = () => {
 
                   <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
                     <div>
-                      <h3 className="text-sm font-bold text-white line-clamp-1 group-hover:text-theme transition-colors">
+                      <h3 className="text-sm font-bold text-white line-clamp-1 group-hover:text-pink-400 transition-colors">
                         {recipe.title}
                       </h3>
                       {recipe.description && (
@@ -706,11 +706,11 @@ export const RecipesPage: React.FC = () => {
                                 key={idx}
                                 className={`text-[10px] px-2 py-0.5 rounded-md border flex items-center gap-0.5 ${
                                   isAi
-                                    ? 'bg-theme/15 text-theme border-theme/30 font-semibold'
+                                    ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30 font-semibold'
                                     : 'bg-white/5 text-slate-400 border-white/5'
                                 }`}
                               >
-                                {isAi && <Sparkles className="w-2.5 h-2.5 text-theme" />}
+                                {isAi && <Sparkles className="w-2.5 h-2.5 text-emerald-400" />}
                                 #{cleanTag}
                               </span>
                             );
@@ -723,13 +723,13 @@ export const RecipesPage: React.FC = () => {
                       <div className="flex items-center gap-3">
                         {((recipe.prep_time_minutes || 0) + (recipe.cook_time_minutes || 0) > 0) ? (
                           <span className="flex items-center gap-1 font-mono">
-                            <Clock className="w-3 h-3 text-slate-400" />
+                            <Clock className="w-3 h-3 text-pink-400" />
                             {(recipe.prep_time_minutes || 0) + (recipe.cook_time_minutes || 0)}m
                           </span>
                         ) : null}
                         <span>{recipe.ingredients.length} items</span>
                       </div>
-                      <span className="text-theme font-semibold group-hover:translate-x-0.5 transition-transform">
+                      <span className="text-pink-400 font-semibold group-hover:translate-x-0.5 transition-transform">
                         View & Cook &rarr;
                       </span>
                     </div>
@@ -746,15 +746,15 @@ export const RecipesPage: React.FC = () => {
                 ref={dockRef}
                 className={`fab-dock-transition pointer-events-auto h-[50px] border shadow-2xl flex items-center overflow-hidden ${
                   isSearchExpanded
-                    ? 'w-full rounded-3xl border-white/25 bg-slate-900/95 backdrop-blur-xl shadow-theme/10 px-2'
-                    : 'w-[50px] rounded-full border-theme/40 bg-theme hover:bg-theme-hover text-theme-text cursor-pointer shadow-xl shadow-theme/30 hover:scale-105 active:scale-95 justify-center'
+                    ? 'w-full rounded-3xl border-white/25 bg-slate-900/95 backdrop-blur-xl shadow-emerald-500/10 px-2'
+                    : 'w-[50px] rounded-full border-emerald-400/40 bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 cursor-pointer shadow-xl shadow-emerald-500/30 hover:scale-105 active:scale-95 justify-center'
                 }`}
               >
                 {!isSearchExpanded ? (
                   <button
                     type="button"
                     onClick={() => setIsSearchExpanded(true)}
-                    className="w-full h-full flex items-center justify-center text-theme-text"
+                    className="w-full h-full flex items-center justify-center text-slate-950"
                     title="Search Recipes"
                   >
                     <Search className="w-5 h-5 stroke-[2.2]" />
@@ -775,10 +775,10 @@ export const RecipesPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setIsScraperOpen(true)}
-                      className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl bg-white/5 hover:bg-theme/20 text-slate-300 hover:text-theme border border-white/10 hover:border-theme/30 text-xs font-bold flex items-center gap-1.5 transition-all shrink-0"
+                      className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl bg-white/5 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-400 border border-white/10 hover:border-emerald-500/30 text-xs font-bold flex items-center gap-1.5 transition-all shrink-0"
                       title="Import Recipe from Web"
                     >
-                      <Link2 className="w-3.5 h-3.5 text-theme" />
+                      <Link2 className="w-3.5 h-3.5 text-emerald-400" />
                       <span className="hidden sm:inline">Import</span>
                     </button>
 
@@ -806,7 +806,7 @@ export const RecipesPage: React.FC = () => {
                     {/* Far right: Main action button (Search) */}
                     <button
                       type="button"
-                      className="px-3.5 py-1.5 rounded-xl bg-theme hover:bg-theme-hover text-theme-text font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-theme/20 shrink-0"
+                      className="px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20 shrink-0"
                       title="Search recipes"
                     >
                       <Search className="w-3.5 h-3.5" />

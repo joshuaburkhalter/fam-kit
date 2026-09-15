@@ -318,7 +318,7 @@ export const AssistantPage: React.FC = () => {
             onClick={() => setAutoAudioResponses(!autoAudioResponses)}
             className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all border cursor-pointer ${
               autoAudioResponses
-                ? 'bg-theme/15 text-theme border-theme/30 shadow-sm hover:bg-theme/25'
+                ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30 shadow-sm hover:bg-emerald-500/25'
                 : 'bg-slate-900 hover:bg-slate-850 text-slate-500 hover:text-slate-300 border-white/10'
             }`}
             title={
@@ -348,7 +348,7 @@ export const AssistantPage: React.FC = () => {
             {/* Greeting */}
             <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
               Hello,{' '}
-              <span className="text-theme">
+              <span className="bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-300 bg-clip-text text-transparent">
                 {currentUser?.name?.split(' ')[0] || 'there'}
               </span>
             </h2>
@@ -366,45 +366,44 @@ export const AssistantPage: React.FC = () => {
                     setIsInputExpanded(true);
                     handleSendMessage(item.prompt);
                   }}
-                  className="flex items-start gap-3 p-3 rounded-2xl glass-panel border border-white/10 hover:border-theme/40 hover:bg-slate-850 text-left transition-all group hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-black/20 cursor-pointer"
+                  className="flex items-start gap-3 p-3 rounded-2xl glass-panel border border-white/10 hover:border-emerald-500/40 hover:bg-slate-850 text-left transition-all group hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-black/20 cursor-pointer"
                 >
-                  <span className="text-xl shrink-0 p-1.5 rounded-xl bg-white/5 group-hover:bg-theme/10 transition-colors">
+                  <span className="text-xl shrink-0 p-1.5 rounded-xl bg-white/5 group-hover:bg-emerald-500/10 transition-colors">
                     {item.icon}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <div className="text-xs font-bold text-white group-hover:text-theme transition-colors">
+                    <div className="text-xs font-bold text-white group-hover:text-emerald-400 transition-colors">
                       {item.title}
                     </div>
                     <div className="text-[11px] text-slate-400 truncate mt-0.5">
                       {item.subtitle || item.prompt}
                     </div>
                   </div>
-                  <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-theme group-hover:translate-x-0.5 transition-all mt-1 shrink-0" />
                 </button>
               ))}
             </div>
           </div>
         ) : (
           messages.map((msg) => {
-            const isAi = msg.role === 'assistant';
-            return (
-              <div
-                key={msg.id}
-                className={`flex gap-2.5 sm:gap-3 ${isAi ? 'justify-start' : 'justify-end'}`}
-              >
-                {isAi && (
-                  <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 shrink-0 mt-1 shadow-md shadow-emerald-500/20">
-                    <Sparkles className="w-4 h-4 stroke-[2.2]" />
-                  </div>
-                )}
+          const isAi = msg.role === 'assistant';
+          return (
+            <div
+              key={msg.id}
+              className={`flex gap-3 ${isAi ? 'justify-start' : 'justify-end'}`}
+            >
+              {isAi && (
+                <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 shrink-0 mt-1 shadow-md shadow-emerald-500/20">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+              )}
 
-                <div
-                  className={`max-w-[85%] sm:max-w-[75%] rounded-3xl p-4 shadow-lg ${
-                    isAi
-                      ? 'glass-panel text-slate-100 rounded-tl-sm border-white/10'
-                      : 'bg-theme text-theme-text font-medium rounded-tr-sm shadow-theme/20'
-                  }`}
-                >
+              <div
+                className={`max-w-[85%] sm:max-w-[75%] rounded-3xl p-4 shadow-lg ${
+                  isAi
+                    ? 'glass-panel text-slate-100 rounded-tl-sm border-white/10'
+                    : 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-medium rounded-tr-sm shadow-emerald-500/20'
+                }`}
+              >
                 {/* Uploaded image if any */}
                 {msg.imageUrl && (
                   <img
@@ -563,15 +562,15 @@ export const AssistantPage: React.FC = () => {
             ref={dockRef}
             className={`fab-dock-transition pointer-events-auto h-[52px] border shadow-2xl flex items-center overflow-hidden ${
               isInputExpanded
-                ? 'w-full rounded-3xl border-white/25 bg-slate-900/95 backdrop-blur-xl shadow-theme/10 px-2'
-                : 'w-[52px] rounded-full border-theme/40 bg-theme-gradient text-theme-text cursor-pointer shadow-xl shadow-theme/30 hover:scale-105 active:scale-95 justify-center'
+                ? 'w-full rounded-3xl border-white/25 bg-slate-900/95 backdrop-blur-xl shadow-emerald-500/10 px-2'
+                : 'w-[52px] rounded-full border-emerald-400/40 bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 cursor-pointer shadow-xl shadow-emerald-500/30 hover:scale-105 active:scale-95 justify-center'
             }`}
           >
             {!isInputExpanded ? (
               <button
                 type="button"
                 onClick={() => setIsInputExpanded(true)}
-                className="w-full h-full flex items-center justify-center text-theme-text"
+                className="w-full h-full flex items-center justify-center text-slate-950"
                 title="Message Gemini Assistant"
               >
                 <MessageCircle className="w-6 h-6 stroke-[2.2]" />
@@ -621,7 +620,7 @@ export const AssistantPage: React.FC = () => {
                   className={`p-2 rounded-2xl transition-all shrink-0 ${
                     isListening
                       ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-500/30'
-                      : 'bg-white/5 hover:bg-white/10 text-slate-400 hover:text-theme'
+                      : 'bg-white/5 hover:bg-white/10 text-slate-400 hover:text-emerald-400'
                   }`}
                 >
                   {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
@@ -645,7 +644,7 @@ export const AssistantPage: React.FC = () => {
                 <button
                   type="submit"
                   disabled={(!input.trim() && !selectedImage) || isLoading}
-                  className="p-2 sm:px-3.5 sm:py-2 rounded-2xl bg-theme-gradient hover:bg-theme disabled:opacity-40 text-theme-text font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-theme/20 shrink-0"
+                  className="p-2 sm:px-3.5 sm:py-2 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 disabled:opacity-40 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20 shrink-0"
                   title="Send message"
                 >
                   <Send className="w-4 h-4" />

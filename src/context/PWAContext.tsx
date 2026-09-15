@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { Household, User, Aisle } from '../types';
 import { api } from '../lib/api';
-import { applyUserTheme } from '../lib/theme';
 
 interface PWAContextType {
   household: Household | null;
@@ -111,20 +110,10 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [currentUser, setCurrentUserState] = useState<User | null>(() => {
     try {
       const cached = localStorage.getItem('famkit_current_user');
-      if (cached) {
-        const u = normalizeUser(JSON.parse(cached));
-        if (u) applyUserTheme(u.avatar_color);
-        return u;
-      }
+      if (cached) return normalizeUser(JSON.parse(cached));
     } catch {}
-    applyUserTheme('#10b981');
     return null;
   });
-
-  // Automatically update CSS theme variables whenever active user's chosen color changes
-  useEffect(() => {
-    applyUserTheme(currentUser?.avatar_color);
-  }, [currentUser?.avatar_color]);
   const [aisles, setAisles] = useState<Aisle[]>([]);
   const [isLoadingAuth, setIsLoadingAuth] = useState<boolean>(true);
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);

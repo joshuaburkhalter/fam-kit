@@ -399,8 +399,8 @@ export const MealsPage: React.FC = () => {
     <div className="min-h-screen bg-slate-950 text-slate-100 pb-36 pt-3 px-3 sm:px-6 max-w-3xl mx-auto">
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-theme text-theme-text font-bold px-4 py-2.5 rounded-full shadow-2xl flex items-center gap-2 border border-theme/30 text-xs sm:text-sm animate-in fade-in slide-in-from-top-3 duration-200">
-          <Sparkles className="w-4 h-4 fill-current shrink-0" />
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-emerald-500 text-slate-950 font-bold px-4 py-2.5 rounded-full shadow-2xl flex items-center gap-2 border border-emerald-300 text-xs sm:text-sm animate-in fade-in slide-in-from-top-3 duration-200">
+          <Sparkles className="w-4 h-4 fill-slate-950 shrink-0" />
           <span>{toastMessage}</span>
         </div>
       )}
@@ -424,7 +424,7 @@ export const MealsPage: React.FC = () => {
 
           <button
             onClick={() => setIsRecipePickerOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-theme/15 hover:bg-theme/25 border border-theme/40 text-theme font-bold text-xs transition-all active:scale-95 shadow-sm"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-400 font-bold text-xs transition-all active:scale-95 shadow-sm"
           >
             <Plus className="w-4 h-4 stroke-[2.5]" />
             <span>Add Recipe</span>
@@ -437,7 +437,7 @@ export const MealsPage: React.FC = () => {
             onClick={() => setActiveTab('shopped')}
             className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all active:scale-[0.98] ${
               activeTab === 'shopped'
-                ? 'bg-theme text-theme-text shadow-md shadow-theme/20'
+                ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 shadow-md shadow-emerald-500/20'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
@@ -446,8 +446,8 @@ export const MealsPage: React.FC = () => {
             <span
               className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
                 activeTab === 'shopped'
-                  ? 'bg-black/20 text-current'
-                  : 'bg-slate-800 text-theme'
+                  ? 'bg-slate-950/25 text-slate-950'
+                  : 'bg-slate-800 text-emerald-400'
               }`}
             >
               {meals.length}
@@ -458,7 +458,7 @@ export const MealsPage: React.FC = () => {
             onClick={() => setActiveTab('log')}
             className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all active:scale-[0.98] ${
               activeTab === 'log'
-                ? 'bg-theme text-theme-text shadow-md shadow-theme/20'
+                ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 shadow-md shadow-emerald-500/20'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
@@ -467,7 +467,7 @@ export const MealsPage: React.FC = () => {
             <span
               className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
                 activeTab === 'log'
-                  ? 'bg-black/20 text-current'
+                  ? 'bg-slate-950/25 text-slate-950'
                   : 'bg-slate-800 text-slate-300'
               }`}
             >
@@ -479,7 +479,7 @@ export const MealsPage: React.FC = () => {
 
       {isLoading ? (
         <div className="flex flex-col items-center justify-center py-24 text-slate-500 gap-3">
-          <Loader2 className="w-8 h-8 animate-spin text-theme" />
+          <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
           <p className="text-xs font-medium">Loading your recipes on deck...</p>
         </div>
       ) : activeTab === 'shopped' ? (
@@ -487,16 +487,16 @@ export const MealsPage: React.FC = () => {
         <div className="space-y-3.5">
           {meals.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 px-4 bg-slate-900/40 rounded-3xl border border-dashed border-slate-800 text-center">
-              <div className="w-16 h-16 rounded-3xl bg-slate-900 border border-slate-800 flex items-center justify-center text-theme mb-3 shadow-inner">
+              <div className="w-16 h-16 rounded-3xl bg-slate-900 border border-slate-800 flex items-center justify-center text-emerald-400/80 mb-3 shadow-inner">
                 <Utensils className="w-8 h-8" />
               </div>
               <h3 className="text-base font-bold text-white mb-1">No recipes on deck</h3>
               <p className="text-xs text-slate-400 max-w-xs mb-5 leading-relaxed">
-                When you browse your recipes and tap <span className="text-theme font-semibold">"Add All to Grocery List"</span>, or choose recipes below, they will appear here ready to cook!
+                When you browse your recipes and tap <span className="text-emerald-400 font-semibold">"Add All to Grocery List"</span>, or choose recipes below, they will appear here ready to cook!
               </p>
               <button
                 onClick={() => setIsRecipePickerOpen(true)}
-                className="w-full sm:w-auto px-5 py-3 rounded-2xl bg-theme hover:bg-theme-hover text-theme-text font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-theme/20 active:scale-95 transition-transform"
+                className="w-full sm:w-auto px-5 py-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-95 transition-transform"
               >
                 <BookOpen className="w-4 h-4 stroke-[2.5]" />
                 <span>Pick Recipes to Cook</span>
@@ -523,14 +523,14 @@ export const MealsPage: React.FC = () => {
                           className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover border border-slate-800 shrink-0 shadow-sm group-hover:scale-105 transition-transform"
                         />
                       ) : (
-                        <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-800 flex items-center justify-center text-theme shrink-0">
+                        <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-800 flex items-center justify-center text-emerald-400 shrink-0">
                           <ChefHat className="w-8 h-8 opacity-75" />
                         </div>
                       )}
 
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-1.5">
-                          <h3 className="text-sm sm:text-base font-bold text-white line-clamp-2 leading-snug group-hover:text-theme transition-colors">
+                          <h3 className="text-sm sm:text-base font-bold text-white line-clamp-2 leading-snug group-hover:text-emerald-400 transition-colors">
                             {meal.title}
                           </h3>
 
@@ -548,7 +548,7 @@ export const MealsPage: React.FC = () => {
                           <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                             {(recipe.cook_time_minutes || recipe.prep_time_minutes) && (
                               <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-300 bg-slate-800 px-2 py-0.5 rounded-lg border border-slate-700/60">
-                                <Clock className="w-3 h-3 text-theme" />
+                                <Clock className="w-3 h-3 text-emerald-400" />
                                 {(recipe.prep_time_minutes || 0) + (recipe.cook_time_minutes || 0)}m
                               </span>
                             )}
@@ -581,7 +581,7 @@ export const MealsPage: React.FC = () => {
                     {/* Bottom Action Bar: Thumb Friendly Mobile Actions */}
                     <div className="pt-2.5 mt-2.5 border-t border-slate-800/60 flex items-center justify-between gap-2">
                       {recipe ? (
-                        <div className="flex items-center gap-1 text-xs text-theme font-semibold">
+                        <div className="flex items-center gap-1 text-xs text-emerald-400 font-semibold">
                           <span>View recipe</span>
                           <ChevronRight className="w-3.5 h-3.5" />
                         </div>
@@ -620,7 +620,7 @@ export const MealsPage: React.FC = () => {
                             e.stopPropagation();
                             handleMarkMealCooked(meal, format(new Date(), 'yyyy-MM-dd'));
                           }}
-                          className="px-3.5 py-1.5 rounded-xl bg-theme hover:bg-theme-hover text-theme-text font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-theme/20 active:scale-95"
+                          className="px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20 active:scale-95"
                           title="Mark as cooked today and move to log"
                         >
                           <Check className="w-3.5 h-3.5 stroke-[2.5]" />
@@ -640,7 +640,7 @@ export const MealsPage: React.FC = () => {
           <div className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-900 border border-slate-800">
             <div>
               <h2 className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-                <History className="w-4 h-4 text-theme" />
+                <History className="w-4 h-4 text-emerald-400" />
                 <span>Cooking History ({mealLogs.length})</span>
               </h2>
               <p className="text-[11px] text-slate-400">
@@ -649,7 +649,7 @@ export const MealsPage: React.FC = () => {
             </div>
             <button
               onClick={() => setIsLogModalOpen(true)}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-theme hover:bg-theme-hover text-theme-text font-bold text-xs shadow-md shadow-theme/20 active:scale-95"
+              className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 font-bold text-xs shadow-md shadow-emerald-500/20 active:scale-95"
             >
               <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
               <span>+ Log Meal</span>
@@ -667,9 +667,9 @@ export const MealsPage: React.FC = () => {
                   <button
                     key={m.id}
                     onClick={() => handleMarkMealCooked(m, format(new Date(), 'yyyy-MM-dd'))}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-theme hover:text-theme-text text-slate-200 border border-slate-700/60 text-xs font-semibold shrink-0 transition-colors active:scale-95"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-emerald-500 hover:text-slate-950 text-slate-200 border border-slate-700/60 text-xs font-semibold shrink-0 transition-colors active:scale-95"
                   >
-                    <Plus className="w-3.5 h-3.5 text-theme" />
+                    <Plus className="w-3.5 h-3.5 text-emerald-400" />
                     <span className="truncate max-w-[140px]">{m.title}</span>
                   </button>
                 ))}
@@ -700,7 +700,7 @@ export const MealsPage: React.FC = () => {
                     {/* Day Header */}
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-theme" />
+                        <span className="w-2 h-2 rounded-full bg-emerald-400" />
                         <h3 className="text-xs sm:text-sm font-bold text-white tracking-wide">
                           {formatLogDateHeader(dateStr)}
                         </h3>
@@ -712,7 +712,7 @@ export const MealsPage: React.FC = () => {
                       {meals.length > 0 && (
                         <button
                           onClick={() => setLogDayPickerDate(dateStr)}
-                          className="text-[10px] font-bold text-theme bg-theme/10 px-2 py-1 rounded-lg border border-theme/20 active:scale-95"
+                          className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-lg border border-emerald-500/20 active:scale-95"
                         >
                           + Add Meal
                         </button>
@@ -741,7 +741,7 @@ export const MealsPage: React.FC = () => {
                                   className="w-11 h-11 rounded-xl object-cover border border-slate-800 shrink-0"
                                 />
                               ) : (
-                                <div className="w-11 h-11 rounded-xl bg-slate-800 border border-slate-700/60 flex items-center justify-center text-theme shrink-0">
+                                <div className="w-11 h-11 rounded-xl bg-slate-800 border border-slate-700/60 flex items-center justify-center text-emerald-400 shrink-0">
                                   <Utensils className="w-4 h-4" />
                                 </div>
                               )}
@@ -753,7 +753,7 @@ export const MealsPage: React.FC = () => {
                                 <div className="flex items-center gap-2 text-[10px] text-slate-400 mt-0.5">
                                   {chefName && <span>by {chefName}</span>}
                                   {recipe && (
-                                    <span className="text-theme font-medium">Recipe</span>
+                                    <span className="text-emerald-400 font-medium">Recipe</span>
                                   )}
                                 </div>
                                 {log.notes && (
@@ -770,7 +770,7 @@ export const MealsPage: React.FC = () => {
                                   e.stopPropagation();
                                   handleMoveBackToShopped(log);
                                 }}
-                                className="p-2 rounded-xl text-slate-400 hover:text-theme hover:bg-slate-800 active:scale-95 transition-colors"
+                                className="p-2 rounded-xl text-slate-400 hover:text-emerald-400 hover:bg-slate-800 active:scale-95 transition-colors"
                                 title="Move back to shopped list"
                               >
                                 <RotateCcw className="w-3.5 h-3.5" />
@@ -851,7 +851,7 @@ export const MealsPage: React.FC = () => {
               <div className="flex items-center gap-2 text-xs bg-slate-950/70 p-2.5 rounded-2xl border border-slate-800">
                 {(viewingRecipe.prep_time_minutes || viewingRecipe.cook_time_minutes) && (
                   <div className="flex items-center gap-1 text-slate-300">
-                    <Clock className="w-3.5 h-3.5 text-theme" />
+                    <Clock className="w-3.5 h-3.5 text-emerald-400" />
                     <span>{(viewingRecipe.prep_time_minutes || 0) + (viewingRecipe.cook_time_minutes || 0)} min</span>
                   </div>
                 )}
@@ -866,7 +866,7 @@ export const MealsPage: React.FC = () => {
                     href={viewingRecipe.source_url}
                     target="_blank"
                     rel="noreferrer"
-                    className="ml-auto text-theme hover:underline flex items-center gap-1 text-[11px] font-semibold"
+                    className="ml-auto text-emerald-400 hover:underline flex items-center gap-1 text-[11px] font-semibold"
                   >
                     <span>Source</span>
                     <ExternalLink className="w-3 h-3" />
@@ -878,12 +878,12 @@ export const MealsPage: React.FC = () => {
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-                    <ShoppingCart className="w-3.5 h-3.5 text-theme" />
+                    <ShoppingCart className="w-3.5 h-3.5 text-emerald-400" />
                     <span>Ingredients ({viewingRecipe.ingredients.length})</span>
                   </h3>
                   <button
                     onClick={(e) => handleShopIngredients(viewingRecipe, e)}
-                    className="text-[11px] text-theme font-bold flex items-center gap-1 active:scale-95"
+                    className="text-[11px] text-emerald-400 font-bold flex items-center gap-1 active:scale-95"
                   >
                     <Plus className="w-3 h-3 stroke-[2.5]" />
                     <span>Add to Grocery</span>
@@ -912,9 +912,9 @@ export const MealsPage: React.FC = () => {
                               [key]: e.target.checked,
                             }))
                           }
-                          className="rounded text-theme focus:ring-0 bg-slate-900 border-slate-700 w-4 h-4"
+                          className="rounded text-emerald-500 focus:ring-0 bg-slate-900 border-slate-700 w-4 h-4"
                         />
-                        <span className="font-bold text-theme shrink-0">
+                        <span className="font-bold text-emerald-400 shrink-0">
                           {ing.amount} {ing.unit}
                         </span>
                         <span className="truncate">{ing.item}</span>
@@ -937,7 +937,7 @@ export const MealsPage: React.FC = () => {
                       key={idx}
                       className="flex items-start gap-2.5 bg-slate-950/50 border border-slate-800/80 rounded-2xl p-3 text-xs text-slate-300 leading-relaxed"
                     >
-                      <span className="w-5 h-5 rounded-full bg-theme/20 text-theme font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5 border border-theme/30">
+                      <span className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5 border border-emerald-500/30">
                         {idx + 1}
                       </span>
                       <p className="flex-1">{step}</p>
@@ -974,7 +974,7 @@ export const MealsPage: React.FC = () => {
                   setViewingRecipe(null);
                   showToast(`🎉 Logged "${viewingRecipe.title}" as made today!`);
                 }}
-                className="w-2/3 py-3 rounded-2xl bg-theme hover:bg-theme-hover text-theme-text font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-lg shadow-theme/20 active:scale-95"
+                className="w-2/3 py-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/20 active:scale-95"
               >
                 <Check className="w-4 h-4 stroke-[2.5]" />
                 <span>Made Today · Add to Log</span>
@@ -998,7 +998,7 @@ export const MealsPage: React.FC = () => {
             <div className="px-4 pb-3 border-b border-slate-800 flex items-center justify-between">
               <div>
                 <h3 className="text-base font-bold text-white flex items-center gap-1.5">
-                  <BookOpen className="w-4 h-4 text-theme" />
+                  <BookOpen className="w-4 h-4 text-emerald-400" />
                   <span>Choose Recipes to Shop & Cook</span>
                 </h3>
                 <p className="text-[11px] text-slate-400">
@@ -1022,7 +1022,7 @@ export const MealsPage: React.FC = () => {
                   placeholder="Search recipes by name or tag..."
                   value={recipeSearch}
                   onChange={(e) => setRecipeSearch(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-theme"
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
                 />
               </div>
             </div>
@@ -1049,7 +1049,7 @@ export const MealsPage: React.FC = () => {
                             className="w-11 h-11 rounded-xl object-cover border border-slate-800 shrink-0"
                           />
                         ) : (
-                          <div className="w-11 h-11 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-theme shrink-0">
+                          <div className="w-11 h-11 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-emerald-400 shrink-0">
                             <ChefHat className="w-5 h-5 opacity-70" />
                           </div>
                         )}
@@ -1069,7 +1069,7 @@ export const MealsPage: React.FC = () => {
                         className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1 shrink-0 transition-all active:scale-95 ${
                           isAlreadyOnDeck
                             ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                            : 'bg-theme hover:bg-theme-hover text-theme-text shadow-md shadow-theme/20'
+                            : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-md shadow-emerald-500/20'
                         }`}
                       >
                         {isAlreadyOnDeck ? (
@@ -1095,7 +1095,7 @@ export const MealsPage: React.FC = () => {
                   placeholder="Or type a custom dish (e.g. Tacos)..."
                   value={quickDishInput}
                   onChange={(e) => setQuickDishInput(e.target.value)}
-                  className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-theme"
+                  className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
                 />
                 <button
                   type="submit"
@@ -1122,7 +1122,7 @@ export const MealsPage: React.FC = () => {
 
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
-                <Calendar className="w-4 h-4 text-theme" />
+                <Calendar className="w-4 h-4 text-emerald-400" />
                 <span>Made on Which Day?</span>
               </h3>
               <button
@@ -1133,7 +1133,7 @@ export const MealsPage: React.FC = () => {
               </button>
             </div>
 
-            <p className="text-xs font-bold text-theme mb-1 truncate">{quickDateMeal.title}</p>
+            <p className="text-xs font-bold text-emerald-400 mb-1 truncate">{quickDateMeal.title}</p>
             <p className="text-[11px] text-slate-400 mb-3">
               Select the day this meal was prepared:
             </p>
@@ -1144,7 +1144,7 @@ export const MealsPage: React.FC = () => {
                 onClick={() => setTargetDate(format(new Date(), 'yyyy-MM-dd'))}
                 className={`py-2.5 rounded-xl text-xs font-bold border transition-all ${
                   targetDate === format(new Date(), 'yyyy-MM-dd')
-                    ? 'bg-theme/20 border-theme text-theme'
+                    ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300'
                     : 'bg-slate-950 border-slate-800 text-slate-300'
                 }`}
               >
@@ -1154,7 +1154,7 @@ export const MealsPage: React.FC = () => {
                 onClick={() => setTargetDate(format(subDays(new Date(), 1), 'yyyy-MM-dd'))}
                 className={`py-2.5 rounded-xl text-xs font-bold border transition-all ${
                   targetDate === format(subDays(new Date(), 1), 'yyyy-MM-dd')
-                    ? 'bg-theme/20 border-theme text-theme'
+                    ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300'
                     : 'bg-slate-950 border-slate-800 text-slate-300'
                 }`}
               >
@@ -1170,13 +1170,13 @@ export const MealsPage: React.FC = () => {
                 type="date"
                 value={targetDate}
                 onChange={(e) => setTargetDate(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-theme"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
               />
             </div>
 
             <button
               onClick={() => handleMarkMealCooked(quickDateMeal, targetDate)}
-              className="w-full py-3 rounded-2xl bg-theme hover:bg-theme-hover text-theme-text font-bold text-xs sm:text-sm shadow-md shadow-theme/20 active:scale-95"
+              className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 font-bold text-xs sm:text-sm shadow-md shadow-emerald-500/20 active:scale-95"
             >
               Add to Log & Remove from Shopped List
             </button>
@@ -1197,7 +1197,7 @@ export const MealsPage: React.FC = () => {
             <div className="flex items-center justify-between mb-3">
               <div>
                 <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
-                  <Utensils className="w-4 h-4 text-theme" />
+                  <Utensils className="w-4 h-4 text-emerald-400" />
                   <span>Add to {isToday(parseISO(logDayPickerDate)) ? 'Today' : format(parseISO(logDayPickerDate), 'MMM d')}</span>
                 </h3>
                 <p className="text-[11px] text-slate-400">
@@ -1217,12 +1217,12 @@ export const MealsPage: React.FC = () => {
                 <button
                   key={meal.id}
                   onClick={() => handleMarkMealCooked(meal, logDayPickerDate)}
-                  className="w-full text-left bg-slate-950 border border-slate-800 rounded-xl p-3 flex items-center justify-between gap-2 active:bg-theme/10 active:border-theme/30 transition-colors"
+                  className="w-full text-left bg-slate-950 border border-slate-800 rounded-xl p-3 flex items-center justify-between gap-2 active:bg-emerald-500/10 active:border-emerald-500/30 transition-colors"
                 >
                   <span className="font-semibold text-xs text-white truncate">
                     {meal.title}
                   </span>
-                  <Plus className="w-4 h-4 text-theme shrink-0" />
+                  <Plus className="w-4 h-4 text-emerald-400 shrink-0" />
                 </button>
               ))}
             </div>
@@ -1242,7 +1242,7 @@ export const MealsPage: React.FC = () => {
 
             <div className="flex items-center justify-between mb-3 border-b border-slate-800 pb-2">
               <h3 className="text-base font-bold text-white flex items-center gap-1.5">
-                <Utensils className="w-4 h-4 text-theme" />
+                <Utensils className="w-4 h-4 text-emerald-400" />
                 <span>Log a Meal Made</span>
               </h3>
               <button
@@ -1274,7 +1274,7 @@ export const MealsPage: React.FC = () => {
                       }
                       className={`px-2.5 py-1 rounded-xl text-xs font-semibold border transition-all ${
                         logForm.title === m.title
-                          ? 'bg-theme text-theme-text border-transparent font-bold'
+                          ? 'bg-emerald-500 text-slate-950 border-transparent font-bold'
                           : 'bg-slate-950 border-slate-800 text-slate-300'
                       }`}
                     >
@@ -1296,7 +1296,7 @@ export const MealsPage: React.FC = () => {
                   placeholder="e.g. Homemade Pizza, Chicken Salad..."
                   value={logForm.title}
                   onChange={(e) => setLogForm({ ...logForm, title: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-theme"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
                 />
               </div>
 
@@ -1309,7 +1309,7 @@ export const MealsPage: React.FC = () => {
                     type="date"
                     value={logForm.date}
                     onChange={(e) => setLogForm({ ...logForm, date: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-theme"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
                   />
                 </div>
 
@@ -1320,7 +1320,7 @@ export const MealsPage: React.FC = () => {
                   <select
                     value={logForm.cookedByUserId}
                     onChange={(e) => setLogForm({ ...logForm, cookedByUserId: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-theme"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
                   >
                     <option value="">(Household)</option>
                     {users.map((u) => (
@@ -1341,7 +1341,7 @@ export const MealsPage: React.FC = () => {
                   value={logForm.notes}
                   onChange={(e) => setLogForm({ ...logForm, notes: e.target.value })}
                   rows={2}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-theme resize-none"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 resize-none"
                 />
               </div>
 
@@ -1355,7 +1355,7 @@ export const MealsPage: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 rounded-xl bg-theme hover:bg-theme-hover text-theme-text font-bold text-xs shadow-md shadow-theme/20 active:scale-95"
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 font-bold text-xs shadow-md shadow-emerald-500/20 active:scale-95"
                 >
                   Save to Log
                 </button>
