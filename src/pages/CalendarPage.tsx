@@ -911,15 +911,15 @@ export const CalendarPage: React.FC = () => {
         </div>
       )}
 
-      {/* Animated Expanding Assistant Chat Dock & FAB */}
+      {/* Animated Expanding Quick Add Dock & Add FAB */}
       <div className="fixed bottom-[calc(76px+1rem+env(safe-area-inset-bottom,0px))] md:bottom-8 left-0 right-0 z-40 px-4 pointer-events-none">
         <div className="max-w-2xl mx-auto pointer-events-none flex justify-end">
           <div
             ref={dockRef}
-            className={`fab-dock-transition pointer-events-auto h-[48px] border shadow-2xl flex items-center overflow-hidden ${
+            className={`fab-dock-transition pointer-events-auto h-[50px] border shadow-2xl flex items-center overflow-hidden ${
               isQuickAddExpanded
                 ? 'w-full rounded-3xl border-white/20 bg-slate-900/95 backdrop-blur-xl px-2'
-                : 'w-[48px] rounded-full border-indigo-400/40 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 cursor-pointer shadow-lg shadow-indigo-500/25 hover:scale-105 active:scale-95 justify-center'
+                : 'w-[50px] rounded-full border-indigo-400/30 bg-indigo-600 hover:bg-indigo-500 cursor-pointer shadow-xl shadow-indigo-600/30 hover:scale-105 active:scale-95 justify-center'
             }`}
           >
             {!isQuickAddExpanded ? (
@@ -927,9 +927,9 @@ export const CalendarPage: React.FC = () => {
                 type="button"
                 onClick={() => setIsQuickAddExpanded(true)}
                 className="w-full h-full flex items-center justify-center text-white"
-                title="Ask Assistant to schedule an event"
+                title="Add Event"
               >
-                <Sparkles className="w-5 h-5" />
+                <Plus className="w-6 h-6 stroke-[2.5]" />
               </button>
             ) : (
               <form onSubmit={handleAssistantSchedule} className="w-full flex items-center gap-2">
@@ -943,36 +943,42 @@ export const CalendarPage: React.FC = () => {
                   <X className="w-4 h-4" />
                 </button>
 
-                {/* Assistant Sparkles Icon */}
-                <div className="w-7 h-7 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0">
-                  <Sparkles className="w-3.5 h-3.5" />
-                </div>
+                {/* More Details (Full Form) Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsQuickAddExpanded(false);
+                    handleOpenAddModal();
+                  }}
+                  className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white shrink-0"
+                  title="Open full event form"
+                >
+                  <CalendarIcon className="w-4 h-4" />
+                </button>
 
-                {/* Natural Language Input - Date field removed! */}
+                {/* Single Smart Input: Just type what you want to add */}
                 <input
                   autoFocus
                   type="text"
-                  placeholder="e.g. Board game night on monday from 6-9..."
+                  placeholder="Add event (e.g. Board game night on monday 6-9pm)..."
                   value={quickInput}
                   onChange={(e) => setQuickInput(e.target.value)}
                   disabled={isAssistantSubmitting}
                   className="flex-1 min-w-0 bg-transparent border-none text-xs text-white placeholder-slate-500 focus:outline-none py-1.5 px-1"
                 />
 
-                {/* Send / Add Button */}
+                {/* Add Button */}
                 <button
                   type="submit"
                   disabled={!quickInput.trim() || isAssistantSubmitting}
-                  className="px-3 py-1.5 rounded-xl text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-sm shrink-0 disabled:opacity-40 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-400 hover:to-purple-400 shadow-indigo-500/20"
+                  className="px-3.5 py-1.5 rounded-xl text-white font-bold text-xs flex items-center gap-1 transition-all shadow-md shrink-0 disabled:opacity-40 bg-indigo-600 hover:bg-indigo-500 shadow-indigo-600/25 active:scale-95"
                 >
                   {isAssistantSubmitting ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   ) : (
-                    <Send className="w-3.5 h-3.5" />
+                    <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
                   )}
-                  <span className="hidden sm:inline">
-                    {isAssistantSubmitting ? 'Adding...' : 'Add'}
-                  </span>
+                  <span>{isAssistantSubmitting ? 'Adding...' : 'Add'}</span>
                 </button>
               </form>
             )}
