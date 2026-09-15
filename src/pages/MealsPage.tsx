@@ -313,6 +313,7 @@ export const MealsPage: React.FC = () => {
           quantity: ing.amount,
           unit: ing.unit,
           category: ing.category,
+          notes: `For: ${recipe.title}`,
         });
       }
       showToast(`Added ${recipe.ingredients.length} ingredients to Grocery list!`);

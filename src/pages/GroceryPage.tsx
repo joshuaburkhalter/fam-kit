@@ -525,27 +525,31 @@ export const GroceryPage: React.FC = () => {
                       <div
                         key={item.id}
                         onClick={() => handleToggleItem(item.id)}
-                        className="flex items-center justify-between px-3.5 py-2.5 transition-colors cursor-pointer group hover:bg-white/5 gap-2 min-h-[44px]"
+                        className="flex items-center justify-between px-3.5 py-2 transition-colors cursor-pointer group hover:bg-white/5 gap-2 min-h-[42px]"
                       >
-                        <div className="flex items-center gap-3 min-w-0 flex-1 overflow-hidden whitespace-nowrap">
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
                           <div className="w-5 h-5 rounded-md border border-white/20 bg-slate-900/80 flex items-center justify-center shrink-0 transition-all group-hover:border-emerald-500">
                             {item.is_completed && (
                               <Check className="w-3.5 h-3.5 text-emerald-400 font-bold" />
                             )}
                           </div>
-                          <span className="text-sm font-semibold text-slate-100 truncate">
-                            {item.name}
-                          </span>
-                          {item.quantity && (
-                            <span className="text-xs font-mono text-slate-400 shrink-0">
-                              ({item.quantity}{item.unit ? ` ${item.unit}` : ''})
-                            </span>
-                          )}
-                          {item.notes && (
-                            <span className="text-xs text-slate-400/80 truncate font-normal">
-                              • {item.notes}
-                            </span>
-                          )}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-semibold text-slate-100 truncate">
+                                {item.name}
+                              </span>
+                              {item.quantity && (
+                                <span className="text-xs font-mono text-slate-400 shrink-0">
+                                  ({item.quantity}{item.unit ? ` ${item.unit}` : ''})
+                                </span>
+                              )}
+                            </div>
+                            {item.notes && (
+                              <p className="text-[11px] text-emerald-400/80 truncate leading-tight mt-0.5">
+                                {item.notes}
+                              </p>
+                            )}
+                          </div>
                         </div>
 
                         <div className="flex items-center gap-1.5 shrink-0">
@@ -590,23 +594,27 @@ export const GroceryPage: React.FC = () => {
                 <div
                   key={item.id}
                   onClick={() => handleToggleItem(item.id)}
-                  className="flex items-center justify-between px-3.5 py-2.5 hover:bg-white/5 transition-colors cursor-pointer group gap-2 min-h-[44px]"
+                  className="flex items-center justify-between px-3.5 py-2 hover:bg-white/5 transition-colors cursor-pointer group gap-2 min-h-[42px]"
                 >
-                  <div className="flex items-center gap-3 min-w-0 flex-1 overflow-hidden whitespace-nowrap">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
                     <div className="w-5 h-5 rounded-md border border-white/20 bg-slate-900/80 flex items-center justify-center shrink-0">
                       {item.is_completed && <Check className="w-3.5 h-3.5 text-emerald-400 font-bold" />}
                     </div>
-                    <span className="text-sm font-semibold text-slate-100 truncate">{item.name}</span>
-                    {item.quantity && (
-                      <span className="text-xs font-mono text-slate-400 shrink-0">
-                        ({item.quantity}{item.unit ? ` ${item.unit}` : ''})
-                      </span>
-                    )}
-                    {item.notes && (
-                      <span className="text-xs text-slate-400/80 truncate font-normal">
-                        • {item.notes}
-                      </span>
-                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-slate-100 truncate">{item.name}</span>
+                        {item.quantity && (
+                          <span className="text-xs font-mono text-slate-400 shrink-0">
+                            ({item.quantity}{item.unit ? ` ${item.unit}` : ''})
+                          </span>
+                        )}
+                      </div>
+                      {item.notes && (
+                        <p className="text-[11px] text-emerald-400/80 truncate leading-tight mt-0.5">
+                          {item.notes}
+                        </p>
+                      )}
+                    </div>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
                     {item.added_by_user_name && (
@@ -638,23 +646,27 @@ export const GroceryPage: React.FC = () => {
               <div
                 key={item.id}
                 onClick={() => handleToggleItem(item.id)}
-                className="flex items-center justify-between px-3.5 py-2.5 hover:bg-white/5 transition-colors cursor-pointer group gap-2 min-h-[44px]"
+                className="flex items-center justify-between px-3.5 py-2 hover:bg-white/5 transition-colors cursor-pointer group gap-2 min-h-[42px]"
               >
-                <div className="flex items-center gap-3 min-w-0 flex-1 overflow-hidden whitespace-nowrap">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
                   <div className="w-5 h-5 rounded-md border border-white/20 bg-slate-900/80 flex items-center justify-center shrink-0 group-hover:border-emerald-500">
                     {item.is_completed && <Check className="w-3.5 h-3.5 text-emerald-400 font-bold" />}
                   </div>
-                  <span className="text-sm font-semibold text-slate-100 truncate">{item.name}</span>
-                  {item.quantity && (
-                    <span className="text-xs font-mono text-slate-400 shrink-0">
-                      ({item.quantity}{item.unit ? ` ${item.unit}` : ''})
-                    </span>
-                  )}
-                  {item.notes && (
-                    <span className="text-xs text-slate-400/80 truncate font-normal">
-                      • {item.notes}
-                    </span>
-                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold text-slate-100 truncate">{item.name}</span>
+                      {item.quantity && (
+                        <span className="text-xs font-mono text-slate-400 shrink-0">
+                          ({item.quantity}{item.unit ? ` ${item.unit}` : ''})
+                        </span>
+                      )}
+                    </div>
+                    {item.notes && (
+                      <p className="text-[11px] text-emerald-400/80 truncate leading-tight mt-0.5">
+                        {item.notes}
+                      </p>
+                    )}
+                  </div>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   {item.added_by_user_name && (
@@ -699,25 +711,29 @@ export const GroceryPage: React.FC = () => {
                 <div
                   key={item.id}
                   onClick={() => handleToggleItem(item.id)}
-                  className="flex items-center justify-between px-3 py-2 sm:px-3.5 sm:py-2 rounded-xl bg-slate-900/30 hover:bg-slate-900/60 transition-colors cursor-pointer group opacity-60 hover:opacity-100 gap-2 min-h-[40px]"
+                  className="flex items-center justify-between px-3 py-1.5 sm:px-3.5 sm:py-1.5 rounded-xl bg-slate-900/30 hover:bg-slate-900/60 transition-colors cursor-pointer group opacity-60 hover:opacity-100 gap-2 min-h-[38px]"
                 >
-                  <div className="flex items-center gap-3 min-w-0 flex-1 overflow-hidden whitespace-nowrap">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
                     <div className="w-5 h-5 rounded-md bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
                       <Check className="w-3.5 h-3.5 font-bold" />
                     </div>
-                    <span className="text-sm line-through text-slate-400 font-medium truncate">
-                      {item.name}
-                    </span>
-                    {item.quantity && (
-                      <span className="text-xs font-mono text-slate-500 shrink-0 line-through">
-                        ({item.quantity}{item.unit ? ` ${item.unit}` : ''})
-                      </span>
-                    )}
-                    {item.notes && (
-                      <span className="text-xs text-slate-500 truncate font-normal line-through">
-                        • {item.notes}
-                      </span>
-                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm line-through text-slate-400 font-medium truncate">
+                          {item.name}
+                        </span>
+                        {item.quantity && (
+                          <span className="text-xs font-mono text-slate-500 shrink-0 line-through">
+                            ({item.quantity}{item.unit ? ` ${item.unit}` : ''})
+                          </span>
+                        )}
+                      </div>
+                      {item.notes && (
+                        <p className="text-[11px] text-slate-500 line-through truncate leading-tight mt-0.5">
+                          {item.notes}
+                        </p>
+                      )}
+                    </div>
                   </div>
                   <button
                     onClick={(e) => {

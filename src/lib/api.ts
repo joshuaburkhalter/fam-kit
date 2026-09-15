@@ -537,6 +537,7 @@ export const api = {
         quantity: ing.amount,
         unit: ing.unit,
         category: ing.category,
+        notes: `For: ${recipe.title}`,
       });
       count++;
     }
@@ -553,7 +554,7 @@ export const api = {
           quantity: ing.amount,
           unit: ing.unit,
           category: ing.category,
-          notes: `From recipe: ${recipe.title}`,
+          notes: `For: ${recipe.title}`,
         });
         count++;
       }
@@ -757,6 +758,7 @@ export const api = {
               name: ing.item,
               quantity: ing.amount,
               unit: ing.unit,
+              notes: `For: ${rec.title}`,
             });
             addedCount++;
           }
