@@ -517,8 +517,11 @@ export const CalendarPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Clean Timeline List */}
+      {/* Clean Synchronous Timeline List */}
       <div className="relative pt-1">
+        {/* Continuous Synchronous Timeline Rail Spine */}
+        <div className="absolute left-[4.5rem] -translate-x-1/2 top-4 bottom-14 w-[2px] bg-slate-800 pointer-events-none" />
+
         {timelineDays.map((day, idx) => {
           const dateStr = format(day, 'yyyy-MM-dd');
           const isCurrentDay = isToday(day);
@@ -545,20 +548,28 @@ export const CalendarPage: React.FC = () => {
 
           return (
             <React.Fragment key={dateStr}>
-              {/* Subtle Month Header */}
+              {/* Subtle Month Header seamlessly integrated into timeline */}
               {isFirstOfMonth && (
-                <div className="pt-3 pb-1.5 sticky top-0 z-10 backdrop-blur-md bg-slate-950/85 flex items-center gap-2">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-mono">
-                    {format(day, 'MMMM yyyy')}
-                  </span>
-                  <div className="flex-1 h-px bg-white/10" />
+                <div className="relative flex items-center gap-3 pt-4 pb-2 sticky top-0 z-20 backdrop-blur-md bg-slate-950/90">
+                  <div className="w-12 shrink-0 flex items-center justify-center">
+                    <CalendarIcon className="w-3.5 h-3.5 text-emerald-400/80" />
+                  </div>
+                  <div className="w-6 shrink-0 flex items-center justify-center relative z-10">
+                    <div className="w-2.5 h-2.5 rounded-full bg-slate-700 ring-2 ring-slate-950" />
+                  </div>
+                  <div className="flex-1 min-w-0 flex items-center gap-2">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-300 font-mono">
+                      {format(day, 'MMMM yyyy')}
+                    </span>
+                    <div className="flex-1 h-px bg-white/10" />
+                  </div>
                 </div>
               )}
 
               {/* Day Row */}
               <div
                 ref={isCurrentDay ? todayRef : undefined}
-                className={`relative flex gap-3 pb-3 group ${
+                className={`relative flex items-start gap-3 pb-3.5 group ${
                   isCurrentDay ? 'scroll-mt-20' : ''
                 }`}
               >
@@ -594,20 +605,15 @@ export const CalendarPage: React.FC = () => {
                   )}
                 </div>
 
-                {/* 2. Thin Timeline Rail Line */}
-                <div className="relative flex flex-col items-center">
+                {/* 2. Timeline Rail Node */}
+                <div className="w-6 shrink-0 flex flex-col items-center pt-2 relative z-10">
                   <div
-                    className={`absolute top-0 bottom-0 w-[1px] ${
-                      isCurrentDay ? 'bg-emerald-500/50' : 'bg-slate-800'
-                    }`}
-                  />
-                  <div
-                    className={`relative z-10 rounded-full mt-2 ${
+                    className={`rounded-full transition-all ${
                       isCurrentDay
-                        ? 'w-2.5 h-2.5 bg-emerald-400 ring-2 ring-emerald-400/30'
+                        ? 'w-3.5 h-3.5 bg-emerald-400 ring-4 ring-emerald-400/20 ring-offset-2 ring-offset-slate-950 shadow-sm shadow-emerald-500/50'
                         : dayEvents.length > 0
-                        ? 'w-2 h-2 bg-emerald-400'
-                        : 'w-1.5 h-1.5 bg-slate-700'
+                        ? 'w-2.5 h-2.5 bg-emerald-400 ring-2 ring-slate-950 group-hover:scale-125'
+                        : 'w-2 h-2 bg-slate-700 ring-2 ring-slate-950 group-hover:bg-slate-500 group-hover:scale-125'
                     }`}
                   />
                 </div>
@@ -678,14 +684,14 @@ export const CalendarPage: React.FC = () => {
                     /* Minimalist Empty Day Row */
                     <div
                       onClick={() => handleOpenAddModal(dateStr)}
-                      className="py-1 px-2 rounded-lg hover:bg-slate-900/60 transition-colors cursor-pointer flex items-center justify-between group"
+                      className="py-1 px-2.5 rounded-lg hover:bg-slate-900/60 transition-colors cursor-pointer flex items-center justify-between group/add"
                     >
-                      <span className="text-xs text-slate-500 group-hover:text-slate-400">
+                      <span className="text-xs text-slate-500 group-hover/add:text-slate-400">
                         {isCurrentDay ? 'No events today' : 'No events'}
                       </span>
                       <button
                         type="button"
-                        className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-emerald-400 text-xs flex items-center gap-0.5 transition-opacity"
+                        className="opacity-0 group-hover/add:opacity-100 text-slate-400 hover:text-emerald-400 text-xs flex items-center gap-0.5 transition-opacity"
                       >
                         <Plus className="w-3 h-3" />
                         <span>Add</span>
