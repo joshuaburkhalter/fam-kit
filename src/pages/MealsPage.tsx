@@ -18,6 +18,8 @@ import {
   User,
   Search,
   Zap,
+  ChevronRight,
+  Flame,
 } from 'lucide-react';
 import {
   format,
@@ -63,17 +65,17 @@ export const MealsPage: React.FC = () => {
     return !(mealsDataCache && mealsDataCache.householdId === householdId);
   });
 
-  // Tab State: 'shopped' = Weekly Meals / Shopped, 'log' = Daily Cooking Log
+  // Mobile Segmented Tab: 'shopped' (Recipes on hand to cook) | 'log' (What was made)
   const [activeTab, setActiveTab] = useState<'shopped' | 'log'>('shopped');
 
-  // Modals
+  // Modals (Native Mobile Bottom Sheets)
   const [viewingRecipe, setViewingRecipe] = useState<Recipe | null>(null);
   const [isRecipePickerOpen, setIsRecipePickerOpen] = useState(false);
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
   const [recipeSearch, setRecipeSearch] = useState('');
   const [checkedIngredients, setCheckedIngredients] = useState<Record<string, boolean>>({});
 
-  // Quick Date Picker Modal for adding a meal to a specific day
+  // Quick Date Picker Modal
   const [quickDateMeal, setQuickDateMeal] = useState<WeeklyMeal | null>(null);
   const [targetDate, setTargetDate] = useState(format(new Date(), 'yyyy-MM-dd'));
 
@@ -89,11 +91,11 @@ export const MealsPage: React.FC = () => {
     cookedByUserId: currentUser?.id || '',
   });
 
-  // Quick custom dish input for On-Deck list
+  // Quick custom dish input
   const [quickDishInput, setQuickDishInput] = useState('');
   const [isAddingQuick, setIsAddingQuick] = useState(false);
 
-  // Notification / Toast
+  // Notification Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const toastTimeoutRef = useRef<any>(null);
 
@@ -132,7 +134,7 @@ export const MealsPage: React.FC = () => {
 
       if (!isMountedRef.current) return;
 
-      // Only unmade weekly meals belong in the weekly list
+      // Only unmade meals belong in the active shopped recipes list
       const unmadeMeals = weeklyRes.filter((m) => !m.is_made);
       setMeals(unmadeMeals);
       setMealLogs(logsRes);
@@ -162,13 +164,12 @@ export const MealsPage: React.FC = () => {
   recipes.forEach((r) => recipeMap.set(r.id, r));
 
   /**
-   * CORE ACTION: Quick add a weekly meal to a specific day.
-   * This adds it to the Daily Cooking Log for that date and removes it from the weekly meals list!
+   * CORE ACTION: Mark meal as cooked on a given day.
+   * Logs to Daily Cooking Log and removes it from the shopped list!
    */
-  const handleQuickAddToDay = async (meal: WeeklyMeal, dateStr: string) => {
+  const handleMarkMealCooked = async (meal: WeeklyMeal, dateStr: string) => {
     if (!householdId) return;
     try {
-      // 1. Log the meal for the given date
       const newLog = await api.logMealMade(householdId, {
         title: meal.title,
         recipe_id: meal.recipe_id,
@@ -178,10 +179,8 @@ export const MealsPage: React.FC = () => {
         weekly_meal_id: meal.id,
       });
 
-      // 2. Explicitly remove from weekly_meals
       await api.deleteWeeklyMeal(meal.id);
 
-      // 3. Update local state: remove from weekly meals, add to logs
       setMeals((prev) => prev.filter((m) => m.id !== meal.id));
       setMealLogs((prev) => [newLog, ...prev]);
 
@@ -190,7 +189,6 @@ export const MealsPage: React.FC = () => {
         mealsDataCache.mealLogs = [newLog, ...mealsDataCache.mealLogs];
       }
 
-      // Close any open modals
       setQuickDateMeal(null);
       setLogDayPickerDate(null);
 
@@ -200,28 +198,25 @@ export const MealsPage: React.FC = () => {
         ? 'Yesterday'
         : format(parseISO(dateStr), 'MMM d');
 
-      showToast(`Added "${meal.title}" to ${dayLabel} & removed from weekly meals!`);
+      showToast(`🎉 Added "${meal.title}" to ${dayLabel} & removed from shopped list!`);
     } catch (err) {
-      console.error('Failed to add meal to day', err);
-      showToast('Error adding meal to day');
+      console.error('Failed to record cooked meal', err);
+      showToast('Error recording meal');
     }
   };
 
-  // Move a logged meal back to the weekly meals list (Undo action)
-  const handleMoveBackToWeekly = async (log: MealLog) => {
+  // Move a logged meal back to the shopped recipes list (Undo action)
+  const handleMoveBackToShopped = async (log: MealLog) => {
     if (!householdId) return;
     try {
-      // 1. Re-add to weekly meals
       const added = await api.addWeeklyMeal(householdId, {
         title: log.title,
         recipe_id: log.recipe_id,
         notes: log.notes,
       });
 
-      // 2. Delete the log entry
       await api.deleteMealLog(log.id);
 
-      // 3. Update state
       setMeals((prev) => [added, ...prev]);
       setMealLogs((prev) => prev.filter((l) => l.id !== log.id));
 
@@ -230,27 +225,28 @@ export const MealsPage: React.FC = () => {
         mealsDataCache.mealLogs = mealsDataCache.mealLogs.filter((l) => l.id !== log.id);
       }
 
-      showToast(`Moved "${log.title}" back to weekly meals!`);
+      showToast(`↩ Returned "${log.title}" to shopped recipes!`);
     } catch (err) {
       console.error('Failed to move meal back', err);
     }
   };
 
-  // Handle Delete Weekly Meal
-  const handleDeleteMeal = async (id: string) => {
+  // Delete from shopped list
+  const handleDeleteShoppedMeal = async (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
     try {
       await api.deleteWeeklyMeal(id);
       setMeals((prev) => prev.filter((m) => m.id !== id));
       if (mealsDataCache && mealsDataCache.householdId === householdId) {
         mealsDataCache.meals = mealsDataCache.meals.filter((m) => m.id !== id);
       }
-      showToast('Removed from weekly meals');
+      showToast('Removed from shopped recipes');
     } catch (err) {
       console.error('Failed to delete meal', err);
     }
   };
 
-  // Handle Delete Log Entry
+  // Delete log entry
   const handleDeleteLog = async (id: string) => {
     try {
       await api.deleteMealLog(id);
@@ -264,7 +260,7 @@ export const MealsPage: React.FC = () => {
     }
   };
 
-  // Add Recipe to Weekly list
+  // Add recipe to shopped list
   const handleAddRecipeToShopped = async (recipe: Recipe) => {
     if (!householdId) return;
     try {
@@ -277,14 +273,14 @@ export const MealsPage: React.FC = () => {
         mealsDataCache.meals = [added, ...mealsDataCache.meals];
       }
       setIsRecipePickerOpen(false);
-      showToast(`Added "${recipe.title}" to weekly meals!`);
+      showToast(`Added "${recipe.title}" to shopped recipes!`);
     } catch (err) {
       console.error('Failed to add recipe', err);
     }
   };
 
-  // Quick Add Custom Dish
-  const handleQuickAddDish = async (e: React.FormEvent) => {
+  // Quick add custom dish
+  const handleQuickAddCustom = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!householdId || !quickDishInput.trim()) return;
     setIsAddingQuick(true);
@@ -297,7 +293,8 @@ export const MealsPage: React.FC = () => {
         mealsDataCache.meals = [added, ...mealsDataCache.meals];
       }
       setQuickDishInput('');
-      showToast(`Added "${added.title}" to weekly meals!`);
+      setIsRecipePickerOpen(false);
+      showToast(`Added "${added.title}" to shopped meals!`);
     } catch (err) {
       console.error('Failed to add meal', err);
     } finally {
@@ -315,13 +312,13 @@ export const MealsPage: React.FC = () => {
           name: ing.item,
           quantity: ing.amount,
           unit: ing.unit,
-          category: ing.category || 'Pantry',
+          category: ing.category,
         });
       }
       showToast(`Added ${recipe.ingredients.length} ingredients to Grocery list!`);
     } catch (err) {
       console.error('Failed to add ingredients', err);
-      showToast('Error adding ingredients to groceries');
+      showToast('Error adding ingredients');
     }
   };
 
@@ -338,7 +335,6 @@ export const MealsPage: React.FC = () => {
         cooked_by_user_id: logForm.cookedByUserId || undefined,
       });
 
-      // If this title matched an unmade weekly meal, remove it
       const matchedWeekly = meals.find(
         (m) =>
           (logForm.recipeId && m.recipe_id === logForm.recipeId) ||
@@ -381,7 +377,7 @@ export const MealsPage: React.FC = () => {
       const parsed = parseISO(dateStr);
       if (isToday(parsed)) return 'Today';
       if (isYesterday(parsed)) return 'Yesterday';
-      return format(parsed, 'EEEE, MMMM d, yyyy');
+      return format(parsed, 'EEEE, MMM d');
     } catch {
       return dateStr;
     }
@@ -400,69 +396,78 @@ export const MealsPage: React.FC = () => {
   );
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 pb-36 pt-4 px-4 sm:px-6 max-w-5xl mx-auto">
+    <div className="min-h-screen bg-slate-950 text-slate-100 pb-36 pt-3 px-3 sm:px-6 max-w-3xl mx-auto">
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 bg-emerald-500/90 text-white font-medium px-4 py-2.5 rounded-2xl shadow-xl shadow-emerald-500/20 backdrop-blur-md flex items-center gap-2 border border-emerald-400/30 text-sm animate-in fade-in slide-in-from-top-4 duration-200">
-          <Sparkles className="w-4 h-4 text-emerald-100 shrink-0" />
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-emerald-500 text-slate-950 font-bold px-4 py-2.5 rounded-full shadow-2xl flex items-center gap-2 border border-emerald-300 text-xs sm:text-sm animate-in fade-in slide-in-from-top-3 duration-200">
+          <Sparkles className="w-4 h-4 fill-slate-950 shrink-0" />
           <span>{toastMessage}</span>
         </div>
       )}
 
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-        <div>
-          <div className="flex items-center gap-3 mb-1">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-500/20 text-slate-950">
-              <ChefHat className="w-5 h-5" />
+      {/* Mobile-First Header */}
+      <div className="mb-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-md shadow-emerald-500/20 text-slate-950">
+              <ChefHat className="w-5 h-5 stroke-[2.2]" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
-                Meals & Cooking
+              <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white">
+                Meals
               </h1>
-              <p className="text-xs sm:text-sm text-slate-400">
-                Shopped weekly meals & daily cooking log
+              <p className="text-[11px] sm:text-xs text-slate-400 font-medium">
+                Recipes shopped for & on deck to cook
               </p>
             </div>
           </div>
+
+          <button
+            onClick={() => setIsRecipePickerOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-400 font-bold text-xs transition-all active:scale-95 shadow-sm"
+          >
+            <Plus className="w-4 h-4 stroke-[2.5]" />
+            <span>Add Recipe</span>
+          </button>
         </div>
 
-        {/* View Mode Toggle */}
-        <div className="flex bg-slate-900/90 p-1 rounded-2xl border border-slate-800/80 shadow-inner shrink-0 self-start md:self-auto">
+        {/* Mobile Segmented Control (Full Width, Thumb Friendly) */}
+        <div className="grid grid-cols-2 p-1 rounded-2xl bg-slate-900 border border-slate-800 shadow-inner">
           <button
             onClick={() => setActiveTab('shopped')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+            className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all active:scale-[0.98] ${
               activeTab === 'shopped'
                 ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 shadow-md shadow-emerald-500/20'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
             <ShoppingCart className="w-4 h-4" />
-            <span>Weekly Meals</span>
+            <span>Shopped Recipes</span>
             <span
-              className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+              className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
                 activeTab === 'shopped'
-                  ? 'bg-slate-950/20 text-slate-950'
+                  ? 'bg-slate-950/25 text-slate-950'
                   : 'bg-slate-800 text-emerald-400'
               }`}
             >
               {meals.length}
             </span>
           </button>
+
           <button
             onClick={() => setActiveTab('log')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+            className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all active:scale-[0.98] ${
               activeTab === 'log'
                 ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 shadow-md shadow-emerald-500/20'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
             <History className="w-4 h-4" />
-            <span>Daily Cooking Log</span>
+            <span>Cooking Log</span>
             <span
-              className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+              className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
                 activeTab === 'log'
-                  ? 'bg-slate-950/20 text-slate-950'
+                  ? 'bg-slate-950/25 text-slate-950'
                   : 'bg-slate-800 text-slate-300'
               }`}
             >
@@ -473,143 +478,117 @@ export const MealsPage: React.FC = () => {
       </div>
 
       {isLoading ? (
-        <div className="flex flex-col items-center justify-center py-20 text-slate-500 gap-3">
+        <div className="flex flex-col items-center justify-center py-24 text-slate-500 gap-3">
           <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
-          <p className="text-sm">Loading meals and recipes...</p>
+          <p className="text-xs font-medium">Loading your recipes on deck...</p>
         </div>
       ) : activeTab === 'shopped' ? (
-        /* ================= TAB 1: WEEKLY MEALS / SHOPPED ================= */
-        <div className="space-y-6">
-          {/* Top Quick Actions Bar */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/60 p-4 rounded-3xl border border-slate-800/80 backdrop-blur-sm">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <h2 className="text-sm font-bold uppercase tracking-wider text-slate-300">
-                  Weekly Meals on Hand ({meals.length})
-                </h2>
+        /* ================= TAB 1: SHOPPED RECIPES LIST ================= */
+        <div className="space-y-3.5">
+          {meals.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 px-4 bg-slate-900/40 rounded-3xl border border-dashed border-slate-800 text-center">
+              <div className="w-16 h-16 rounded-3xl bg-slate-900 border border-slate-800 flex items-center justify-center text-emerald-400/80 mb-3 shadow-inner">
+                <Utensils className="w-8 h-8" />
               </div>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Quick-add any meal to today or another day to move it into your cooking log
+              <h3 className="text-base font-bold text-white mb-1">No recipes on deck</h3>
+              <p className="text-xs text-slate-400 max-w-xs mb-5 leading-relaxed">
+                When you browse your recipes and tap <span className="text-emerald-400 font-semibold">"Add All to Grocery List"</span>, or choose recipes below, they will appear here ready to cook!
               </p>
-            </div>
-            <div className="flex items-center gap-2">
               <button
                 onClick={() => setIsRecipePickerOpen(true)}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 font-semibold text-xs transition-all shadow-sm shrink-0"
+                className="w-full sm:w-auto px-5 py-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-95 transition-transform"
               >
-                <Plus className="w-4 h-4" />
-                <span>+ Pick from Saved Recipes</span>
+                <BookOpen className="w-4 h-4 stroke-[2.5]" />
+                <span>Pick Recipes to Cook</span>
               </button>
             </div>
-          </div>
-
-          {/* Weekly Meals Cards */}
-          {meals.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 px-4 bg-slate-900/30 rounded-3xl border border-dashed border-slate-800 text-center">
-              <div className="w-14 h-14 rounded-3xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500 mb-3 shadow-inner">
-                <Utensils className="w-7 h-7 text-emerald-500/50" />
-              </div>
-              <h3 className="text-base font-semibold text-white mb-1">No meals in your weekly list</h3>
-              <p className="text-xs sm:text-sm text-slate-400 max-w-md mb-5">
-                When you browse recipes and tap <span className="text-emerald-400 font-medium">"Add All to Grocery List"</span>, or choose recipes below, they appear here ready to cook!
-              </p>
-              <div className="flex flex-wrap items-center justify-center gap-2.5">
-                <button
-                  onClick={() => setIsRecipePickerOpen(true)}
-                  className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-bold text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-emerald-500/20 transition-all"
-                >
-                  <BookOpen className="w-4 h-4" />
-                  <span>Choose from Saved Recipes</span>
-                </button>
-              </div>
-            </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-3">
               {meals.map((meal) => {
                 const recipe = meal.recipe_id ? recipeMap.get(meal.recipe_id) : undefined;
                 return (
                   <div
                     key={meal.id}
-                    className="bg-slate-900/80 border border-slate-800/90 rounded-3xl p-4 transition-all duration-200 shadow-lg hover:border-slate-700/80 flex flex-col justify-between"
+                    onClick={() => recipe && setViewingRecipe(recipe)}
+                    className={`group bg-slate-900/90 border border-slate-800/90 rounded-3xl p-3.5 shadow-md active:bg-slate-900 transition-all ${
+                      recipe ? 'cursor-pointer hover:border-slate-700' : ''
+                    }`}
                   >
-                    <div>
-                      {/* Card Header & Thumbnail */}
-                      <div className="flex items-start gap-3.5 mb-3">
-                        {recipe?.image_url ? (
-                          <img
-                            src={recipe.image_url}
-                            alt={recipe.title}
-                            className="w-16 h-16 rounded-2xl object-cover border border-slate-800 shrink-0 shadow-md"
-                          />
-                        ) : (
-                          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-800 flex items-center justify-center text-emerald-400 shrink-0 shadow-inner">
-                            <ChefHat className="w-7 h-7 opacity-80" />
+                    {/* Top Row: Thumbnail + Title & Metadata */}
+                    <div className="flex items-start gap-3">
+                      {recipe?.image_url ? (
+                        <img
+                          src={recipe.image_url}
+                          alt={recipe.title}
+                          className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover border border-slate-800 shrink-0 shadow-sm group-hover:scale-105 transition-transform"
+                        />
+                      ) : (
+                        <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-800 flex items-center justify-center text-emerald-400 shrink-0">
+                          <ChefHat className="w-8 h-8 opacity-75" />
+                        </div>
+                      )}
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-1.5">
+                          <h3 className="text-sm sm:text-base font-bold text-white line-clamp-2 leading-snug group-hover:text-emerald-400 transition-colors">
+                            {meal.title}
+                          </h3>
+
+                          <button
+                            onClick={(e) => handleDeleteShoppedMeal(meal.id, e)}
+                            className="text-slate-500 hover:text-rose-400 p-1.5 -mr-1.5 -mt-1 rounded-xl transition-colors shrink-0"
+                            title="Remove from list"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        {/* Recipe badges */}
+                        {recipe ? (
+                          <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                            {(recipe.cook_time_minutes || recipe.prep_time_minutes) && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-300 bg-slate-800 px-2 py-0.5 rounded-lg border border-slate-700/60">
+                                <Clock className="w-3 h-3 text-emerald-400" />
+                                {(recipe.prep_time_minutes || 0) + (recipe.cook_time_minutes || 0)}m
+                              </span>
+                            )}
+                            {recipe.servings && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-300 bg-slate-800 px-2 py-0.5 rounded-lg border border-slate-700/60">
+                                <Utensils className="w-3 h-3 text-teal-400" />
+                                {recipe.servings} serv
+                              </span>
+                            )}
+                            {recipe.ingredients && (
+                              <span className="text-[10px] text-slate-400 font-medium">
+                                {recipe.ingredients.length} ingr
+                              </span>
+                            )}
                           </div>
+                        ) : (
+                          <span className="text-[11px] text-slate-500 italic mt-0.5 block">
+                            Custom dish
+                          </span>
                         )}
 
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-2">
-                            <h3 className="text-base font-bold text-white line-clamp-2">
-                              {meal.title}
-                            </h3>
-                            <button
-                              onClick={() => handleDeleteMeal(meal.id)}
-                              className="text-slate-600 hover:text-rose-400 p-1.5 rounded-xl hover:bg-rose-500/10 transition-colors shrink-0"
-                              title="Remove from weekly meals"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-
-                          {/* Recipe metadata badges */}
-                          {recipe && (
-                            <div className="flex flex-wrap items-center gap-2 mt-1.5">
-                              {(recipe.cook_time_minutes || recipe.prep_time_minutes) && (
-                                <span className="inline-flex items-center gap-1 text-[11px] text-slate-400 bg-slate-800/80 px-2 py-0.5 rounded-lg border border-slate-700/50">
-                                  <Clock className="w-3 h-3 text-emerald-400" />
-                                  {(recipe.prep_time_minutes || 0) + (recipe.cook_time_minutes || 0)}m
-                                </span>
-                              )}
-                              {recipe.servings && (
-                                <span className="inline-flex items-center gap-1 text-[11px] text-slate-400 bg-slate-800/80 px-2 py-0.5 rounded-lg border border-slate-700/50">
-                                  <Utensils className="w-3 h-3 text-teal-400" />
-                                  {recipe.servings} serv
-                                </span>
-                              )}
-                              {recipe.ingredients && (
-                                <span className="text-[11px] text-slate-500">
-                                  {recipe.ingredients.length} ingr
-                                </span>
-                              )}
-                            </div>
-                          )}
-
-                          {meal.notes && (
-                            <p className="text-xs text-slate-400 italic mt-1 line-clamp-1">
-                              "{meal.notes}"
-                            </p>
-                          )}
-                        </div>
+                        {meal.notes && (
+                          <p className="text-[11px] text-slate-400 italic mt-1 line-clamp-1">
+                            "{meal.notes}"
+                          </p>
+                        )}
                       </div>
                     </div>
 
-                    {/* Bottom Action Area */}
-                    <div className="pt-3 mt-2 border-t border-slate-800/60 flex items-center justify-between gap-2">
-                      {/* View Recipe Button (Only if user wants to view details) */}
+                    {/* Bottom Action Bar: Thumb Friendly Mobile Actions */}
+                    <div className="pt-2.5 mt-2.5 border-t border-slate-800/60 flex items-center justify-between gap-2">
                       {recipe ? (
-                        <button
-                          onClick={() => setViewingRecipe(recipe)}
-                          className="flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300 font-medium py-1 px-2 rounded-lg hover:bg-emerald-500/10 transition-colors"
-                        >
-                          <BookOpen className="w-3.5 h-3.5" />
-                          <span>View Recipe</span>
-                        </button>
+                        <div className="flex items-center gap-1 text-xs text-emerald-400 font-semibold">
+                          <span>View recipe</span>
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </div>
                       ) : (
-                        <span className="text-xs text-slate-500">Custom meal</span>
+                        <span className="text-xs text-slate-500">Dish</span>
                       )}
 
-                      {/* Quick Add Actions */}
                       <div className="flex items-center gap-1.5">
                         {recipe && (
                           <button
@@ -623,25 +602,29 @@ export const MealsPage: React.FC = () => {
 
                         {/* Pick Day Button */}
                         <button
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             setQuickDateMeal(meal);
                             setTargetDate(format(new Date(), 'yyyy-MM-dd'));
                           }}
-                          className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/80 font-medium text-xs flex items-center gap-1 transition-all"
-                          title="Quick add to a specific day"
+                          className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold flex items-center gap-1 border border-slate-700/60 transition-colors"
+                          title="Made on a specific date"
                         >
                           <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                          <span className="hidden sm:inline">Pick Day</span>
+                          <span className="hidden sm:inline">Made on...</span>
                         </button>
 
-                        {/* Quick Add to Today (1-Click!) */}
+                        {/* Main One-Tap Made Today Button */}
                         <button
-                          onClick={() => handleQuickAddToDay(meal, format(new Date(), 'yyyy-MM-dd'))}
-                          className="px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20"
-                          title="Quick add to Today and remove from weekly list"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleMarkMealCooked(meal, format(new Date(), 'yyyy-MM-dd'));
+                          }}
+                          className="px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20 active:scale-95"
+                          title="Mark as cooked today and move to log"
                         >
-                          <Zap className="w-3.5 h-3.5 fill-slate-950" />
-                          <span>Add to Today</span>
+                          <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                          <span>Made Today</span>
                         </button>
                       </div>
                     </div>
@@ -653,104 +636,91 @@ export const MealsPage: React.FC = () => {
         </div>
       ) : (
         /* ================= TAB 2: DAILY COOKING LOG ================= */
-        <div className="space-y-6">
-          {/* Top Bar */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/60 p-4 rounded-3xl border border-slate-800/80 backdrop-blur-sm">
+        <div className="space-y-4">
+          <div className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-900 border border-slate-800">
             <div>
-              <h2 className="text-sm font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
                 <History className="w-4 h-4 text-emerald-400" />
-                Cooking History ({mealLogs.length} Meals Logged)
+                <span>Cooking History ({mealLogs.length})</span>
               </h2>
-              <p className="text-xs text-slate-400">
-                A day-by-day record of what was made by your household
+              <p className="text-[11px] text-slate-400">
+                A daily record of what was prepared
               </p>
             </div>
             <button
               onClick={() => setIsLogModalOpen(true)}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-bold text-xs sm:text-sm transition-all shadow-md shadow-emerald-500/20 shrink-0 self-start sm:self-auto"
+              className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 font-bold text-xs shadow-md shadow-emerald-500/20 active:scale-95"
             >
-              <Plus className="w-4 h-4" />
-              <span>+ Log a Meal</span>
+              <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>+ Log Meal</span>
             </button>
           </div>
 
-          {/* Quick Add Strip: Weekly Meals on Deck */}
+          {/* Quick-add strip if there are shopped meals ready to cook */}
           {meals.length > 0 && (
-            <div className="bg-slate-900/40 border border-slate-800/80 rounded-3xl p-4">
-              <div className="flex items-center justify-between gap-2 mb-3">
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-teal-400" />
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300">
-                    Quick Add to Today from Weekly Meals ({meals.length})
-                  </h3>
-                </div>
-                <span className="text-[11px] text-slate-500">1-tap moves dish to log</span>
-              </div>
-              <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
+            <div className="p-3 bg-slate-900/60 border border-slate-800 rounded-2xl">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-2">
+                Quick-add from shopped recipes:
+              </span>
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
                 {meals.map((m) => (
                   <button
                     key={m.id}
-                    onClick={() => handleQuickAddToDay(m, format(new Date(), 'yyyy-MM-dd'))}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800/90 hover:bg-emerald-500 hover:text-slate-950 border border-slate-700/80 text-xs font-semibold text-slate-200 shrink-0 transition-all group"
+                    onClick={() => handleMarkMealCooked(m, format(new Date(), 'yyyy-MM-dd'))}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-emerald-500 hover:text-slate-950 text-slate-200 border border-slate-700/60 text-xs font-semibold shrink-0 transition-colors active:scale-95"
                   >
-                    <Plus className="w-3.5 h-3.5 text-emerald-400 group-hover:text-slate-950" />
-                    <span className="truncate max-w-[160px]">{m.title}</span>
+                    <Plus className="w-3.5 h-3.5 text-emerald-400" />
+                    <span className="truncate max-w-[140px]">{m.title}</span>
                   </button>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Daily Groups */}
           {sortedLogDates.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 px-4 bg-slate-900/30 rounded-3xl border border-dashed border-slate-800 text-center">
-              <div className="w-14 h-14 rounded-3xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500 mb-3 shadow-inner">
-                <History className="w-7 h-7 text-emerald-500/50" />
-              </div>
-              <h3 className="text-base font-semibold text-white mb-1">No meals logged yet</h3>
-              <p className="text-xs sm:text-sm text-slate-400 max-w-md mb-5">
-                When you make dishes or quick-add weekly meals, your daily cooking log will appear here chronologically!
+            <div className="text-center py-16 px-4 bg-slate-900/40 rounded-3xl border border-dashed border-slate-800">
+              <History className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+              <p className="text-sm font-semibold text-white">No meals logged yet</p>
+              <p className="text-xs text-slate-400 mt-1 mb-4">
+                Mark shopped recipes as made to start your cooking log!
               </p>
               <button
                 onClick={() => setIsLogModalOpen(true)}
-                className="px-4 py-2 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs sm:text-sm flex items-center gap-2 transition-colors border border-slate-700"
+                className="px-4 py-2 rounded-xl bg-slate-800 text-slate-200 font-bold text-xs"
               >
-                <Plus className="w-4 h-4 text-emerald-400" />
-                <span>Log Your First Meal</span>
+                Log a Meal
               </button>
             </div>
           ) : (
-            <div className="space-y-6">
+            <div className="space-y-5">
               {sortedLogDates.map((dateStr) => {
                 const logsForDate = groupedLogs[dateStr];
                 return (
-                  <div key={dateStr} className="space-y-3">
-                    {/* Date Header */}
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
-                        <h3 className="text-sm sm:text-base font-bold text-white tracking-wide">
+                  <div key={dateStr} className="space-y-2.5">
+                    {/* Day Header */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                        <h3 className="text-xs sm:text-sm font-bold text-white tracking-wide">
                           {formatLogDateHeader(dateStr)}
                         </h3>
-                        <span className="text-xs text-slate-500 font-medium">
-                          ({logsForDate.length} {logsForDate.length === 1 ? 'dish' : 'dishes'})
+                        <span className="text-[10px] text-slate-500 font-medium">
+                          ({logsForDate.length})
                         </span>
                       </div>
 
-                      {/* Quick Add to THIS specific day */}
                       {meals.length > 0 && (
                         <button
                           onClick={() => setLogDayPickerDate(dateStr)}
-                          className="flex items-center gap-1 text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-1 rounded-xl transition-colors border border-emerald-500/20"
+                          className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-lg border border-emerald-500/20 active:scale-95"
                         >
-                          <Plus className="w-3 h-3" />
-                          <span>+ Add to {isToday(parseISO(dateStr)) ? 'Today' : isYesterday(parseISO(dateStr)) ? 'Yesterday' : format(parseISO(dateStr), 'MMM d')}</span>
+                          + Add Meal
                         </button>
                       )}
                     </div>
 
-                    {/* Meal items for this date */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pl-4 border-l-2 border-slate-800/70 ml-1">
+                    {/* Log items for this day */}
+                    <div className="space-y-2 pl-3 border-l-2 border-slate-800/80">
                       {logsForDate.map((log) => {
                         const recipe = log.recipe_id ? recipeMap.get(log.recipe_id) : undefined;
                         const chefName = getUserName(log.cooked_by_user_id);
@@ -758,45 +728,36 @@ export const MealsPage: React.FC = () => {
                         return (
                           <div
                             key={log.id}
-                            className="bg-slate-900/70 border border-slate-800 rounded-2xl p-3.5 flex items-start justify-between gap-3 shadow-md"
+                            onClick={() => recipe && setViewingRecipe(recipe)}
+                            className={`p-3 rounded-2xl bg-slate-900/80 border border-slate-800 flex items-center justify-between gap-2.5 shadow-sm active:bg-slate-900 ${
+                              recipe ? 'cursor-pointer hover:border-slate-700' : ''
+                            }`}
                           >
-                            <div className="flex items-start gap-3 min-w-0">
+                            <div className="flex items-center gap-2.5 min-w-0">
                               {recipe?.image_url ? (
                                 <img
                                   src={recipe.image_url}
                                   alt={recipe.title}
-                                  className="w-12 h-12 rounded-xl object-cover border border-slate-800 shrink-0 shadow-sm"
+                                  className="w-11 h-11 rounded-xl object-cover border border-slate-800 shrink-0"
                                 />
                               ) : (
-                                <div className="w-12 h-12 rounded-xl bg-slate-800/80 border border-slate-700/60 flex items-center justify-center text-emerald-400 shrink-0">
-                                  <Utensils className="w-5 h-5" />
+                                <div className="w-11 h-11 rounded-xl bg-slate-800 border border-slate-700/60 flex items-center justify-center text-emerald-400 shrink-0">
+                                  <Utensils className="w-4 h-4" />
                                 </div>
                               )}
 
                               <div className="min-w-0">
-                                <h4 className="text-sm font-bold text-white truncate">
+                                <h4 className="text-xs sm:text-sm font-bold text-white truncate">
                                   {log.title}
                                 </h4>
-
-                                {recipe && (
-                                  <button
-                                    onClick={() => setViewingRecipe(recipe)}
-                                    className="inline-flex items-center gap-1 text-[11px] text-emerald-400 hover:text-emerald-300 font-medium mt-0.5"
-                                  >
-                                    <BookOpen className="w-3 h-3" />
-                                    <span>View Recipe</span>
-                                  </button>
-                                )}
-
-                                {chefName && (
-                                  <p className="text-[11px] text-slate-400 flex items-center gap-1 mt-1">
-                                    <User className="w-3 h-3 text-slate-500" />
-                                    <span>Made by {chefName}</span>
-                                  </p>
-                                )}
-
+                                <div className="flex items-center gap-2 text-[10px] text-slate-400 mt-0.5">
+                                  {chefName && <span>by {chefName}</span>}
+                                  {recipe && (
+                                    <span className="text-emerald-400 font-medium">Recipe</span>
+                                  )}
+                                </div>
                                 {log.notes && (
-                                  <p className="text-xs text-slate-400 italic mt-1">
+                                  <p className="text-[10px] text-slate-400 italic truncate mt-0.5">
                                     "{log.notes}"
                                   </p>
                                 )}
@@ -804,18 +765,23 @@ export const MealsPage: React.FC = () => {
                             </div>
 
                             <div className="flex items-center gap-1 shrink-0">
-                              {/* Move back to weekly meals button */}
                               <button
-                                onClick={() => handleMoveBackToWeekly(log)}
-                                className="p-1.5 rounded-xl text-slate-500 hover:text-teal-300 hover:bg-teal-500/10 transition-colors"
-                                title="Move back to Weekly Meals"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleMoveBackToShopped(log);
+                                }}
+                                className="p-2 rounded-xl text-slate-400 hover:text-emerald-400 hover:bg-slate-800 active:scale-95 transition-colors"
+                                title="Move back to shopped list"
                               >
                                 <RotateCcw className="w-3.5 h-3.5" />
                               </button>
                               <button
-                                onClick={() => handleDeleteLog(log.id)}
-                                className="p-1.5 rounded-xl text-slate-600 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
-                                title="Delete log entry"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteLog(log.id);
+                                }}
+                                className="p-2 rounded-xl text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 active:scale-95 transition-colors"
+                                title="Delete log"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
@@ -832,130 +798,21 @@ export const MealsPage: React.FC = () => {
         </div>
       )}
 
-      {/* ================= MODAL: QUICK ADD TO A SPECIFIC DAY ================= */}
-      {quickDateMeal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-sm shadow-2xl p-5 animate-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-emerald-400" />
-                <span>Add to Day</span>
-              </h3>
-              <button
-                onClick={() => setQuickDateMeal(null)}
-                className="p-1 rounded-xl text-slate-400 hover:text-white"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <p className="text-sm font-semibold text-white mb-1">{quickDateMeal.title}</p>
-            <p className="text-xs text-slate-400 mb-4">
-              Choose which day this meal was made. It will be added to that day's cooking log and removed from the weekly meals list.
-            </p>
-
-            {/* Quick date presets */}
-            <div className="grid grid-cols-2 gap-2 mb-4">
-              <button
-                onClick={() => setTargetDate(format(new Date(), 'yyyy-MM-dd'))}
-                className={`px-3 py-2 rounded-xl text-xs font-semibold border transition-all ${
-                  targetDate === format(new Date(), 'yyyy-MM-dd')
-                    ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300'
-                    : 'bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-800'
-                }`}
-              >
-                Today ({format(new Date(), 'MMM d')})
-              </button>
-              <button
-                onClick={() => setTargetDate(format(subDays(new Date(), 1), 'yyyy-MM-dd'))}
-                className={`px-3 py-2 rounded-xl text-xs font-semibold border transition-all ${
-                  targetDate === format(subDays(new Date(), 1), 'yyyy-MM-dd')
-                    ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300'
-                    : 'bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-800'
-                }`}
-              >
-                Yesterday ({format(subDays(new Date(), 1), 'MMM d')})
-              </button>
-            </div>
-
-            <div className="mb-5">
-              <label className="block text-xs font-semibold text-slate-400 mb-1.5">
-                Or choose custom date:
-              </label>
-              <input
-                type="date"
-                value={targetDate}
-                onChange={(e) => setTargetDate(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-emerald-500/60"
-              />
-            </div>
-
-            <div className="flex items-center justify-end gap-2">
-              <button
-                onClick={() => setQuickDateMeal(null)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleQuickAddToDay(quickDateMeal, targetDate)}
-                className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 font-bold text-xs shadow-md shadow-emerald-500/20"
-              >
-                Add & Remove from Weekly
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ================= MODAL: PICK WEEKLY MEAL FOR SPECIFIC LOG DATE ================= */}
-      {logDayPickerDate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-md shadow-2xl p-5 animate-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  <Utensils className="w-4 h-4 text-emerald-400" />
-                  <span>Add to {isToday(parseISO(logDayPickerDate)) ? 'Today' : format(parseISO(logDayPickerDate), 'MMM d')}</span>
-                </h3>
-                <p className="text-xs text-slate-400">
-                  Select a weekly meal to log for this day
-                </p>
-              </div>
-              <button
-                onClick={() => setLogDayPickerDate(null)}
-                className="p-1 rounded-xl text-slate-400 hover:text-white"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-              {meals.map((meal) => (
-                <button
-                  key={meal.id}
-                  onClick={() => handleQuickAddToDay(meal, logDayPickerDate)}
-                  className="w-full text-left bg-slate-950/70 hover:bg-emerald-500/10 border border-slate-800 hover:border-emerald-500/40 rounded-2xl p-3 flex items-center justify-between gap-2 transition-all group"
-                >
-                  <span className="font-semibold text-xs sm:text-sm text-white group-hover:text-emerald-400 truncate">
-                    {meal.title}
-                  </span>
-                  <Plus className="w-4 h-4 text-emerald-400 shrink-0" />
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ================= MODAL: RECIPE VIEWER ================= */}
+      {/* ================= MOBILE BOTTOM SHEET: RECIPE VIEWER ================= */}
       {viewingRecipe && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+        <div className="fixed inset-0 z-50 flex flex-col justify-end bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div
+            className="fixed inset-0"
+            onClick={() => setViewingRecipe(null)}
+          />
+          <div className="relative z-10 bg-slate-900 border-t border-slate-800 rounded-t-3xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-300">
+            {/* Drag Handle */}
+            <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto my-2 shrink-0" />
+
             {/* Modal Header */}
-            <div className="relative">
+            <div className="relative shrink-0">
               {viewingRecipe.image_url ? (
-                <div className="h-48 sm:h-64 w-full relative">
+                <div className="h-44 sm:h-56 w-full relative">
                   <img
                     src={viewingRecipe.image_url}
                     alt={viewingRecipe.title}
@@ -964,49 +821,44 @@ export const MealsPage: React.FC = () => {
                   <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/40 to-transparent" />
                 </div>
               ) : (
-                <div className="h-28 bg-gradient-to-r from-emerald-600 to-teal-700 flex items-center justify-center">
-                  <ChefHat className="w-12 h-12 text-white/30" />
+                <div className="h-20 bg-gradient-to-r from-emerald-600 to-teal-700 flex items-center justify-center">
+                  <ChefHat className="w-8 h-8 text-white/40" />
                 </div>
               )}
 
               <button
                 onClick={() => setViewingRecipe(null)}
-                className="absolute top-3 right-3 p-2 rounded-full bg-slate-950/60 hover:bg-slate-950 text-white backdrop-blur-md transition-colors border border-white/10"
+                className="absolute top-2.5 right-2.5 p-2 rounded-full bg-slate-950/70 hover:bg-slate-950 text-white backdrop-blur-md transition-colors border border-white/10"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
 
-              <div className="absolute bottom-3 left-4 right-4">
-                <h2 className="text-xl sm:text-2xl font-extrabold text-white drop-shadow-md">
+              <div className="absolute bottom-2.5 left-3.5 right-3.5">
+                <h2 className="text-lg sm:text-xl font-black text-white drop-shadow-md leading-tight">
                   {viewingRecipe.title}
                 </h2>
                 {viewingRecipe.description && (
-                  <p className="text-xs sm:text-sm text-slate-300 drop-shadow line-clamp-2 mt-0.5">
+                  <p className="text-[11px] text-slate-300 drop-shadow line-clamp-1 mt-0.5">
                     {viewingRecipe.description}
                   </p>
                 )}
               </div>
             </div>
 
-            {/* Modal Body */}
-            <div className="p-4 sm:p-6 overflow-y-auto space-y-6 flex-1">
-              {/* Meta stats bar */}
-              <div className="flex flex-wrap items-center gap-3 text-xs bg-slate-950/60 p-3 rounded-2xl border border-slate-800">
-                {viewingRecipe.prep_time_minutes && (
-                  <div className="flex items-center gap-1.5 text-slate-300">
-                    <Clock className="w-4 h-4 text-emerald-400" />
-                    <span>Prep: {viewingRecipe.prep_time_minutes}m</span>
-                  </div>
-                )}
-                {viewingRecipe.cook_time_minutes && (
-                  <div className="flex items-center gap-1.5 text-slate-300">
-                    <Utensils className="w-4 h-4 text-teal-400" />
-                    <span>Cook: {viewingRecipe.cook_time_minutes}m</span>
+            {/* Modal Scrollable Content */}
+            <div className="p-4 overflow-y-auto space-y-4 flex-1 overscroll-contain">
+              {/* Meta stats */}
+              <div className="flex items-center gap-2 text-xs bg-slate-950/70 p-2.5 rounded-2xl border border-slate-800">
+                {(viewingRecipe.prep_time_minutes || viewingRecipe.cook_time_minutes) && (
+                  <div className="flex items-center gap-1 text-slate-300">
+                    <Clock className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>{(viewingRecipe.prep_time_minutes || 0) + (viewingRecipe.cook_time_minutes || 0)} min</span>
                   </div>
                 )}
                 {viewingRecipe.servings && (
-                  <div className="text-slate-300">
-                    Serves: <span className="font-bold text-white">{viewingRecipe.servings}</span>
+                  <div className="flex items-center gap-1 text-slate-300 ml-2">
+                    <Utensils className="w-3.5 h-3.5 text-teal-400" />
+                    <span>{viewingRecipe.servings} serv</span>
                   </div>
                 )}
                 {viewingRecipe.source_url && (
@@ -1014,9 +866,9 @@ export const MealsPage: React.FC = () => {
                     href={viewingRecipe.source_url}
                     target="_blank"
                     rel="noreferrer"
-                    className="ml-auto text-emerald-400 hover:underline flex items-center gap-1"
+                    className="ml-auto text-emerald-400 hover:underline flex items-center gap-1 text-[11px] font-semibold"
                   >
-                    <span>Original Recipe</span>
+                    <span>Source</span>
                     <ExternalLink className="w-3 h-3" />
                   </a>
                 )}
@@ -1024,21 +876,21 @@ export const MealsPage: React.FC = () => {
 
               {/* Ingredients Checklist */}
               <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
-                    <ShoppingCart className="w-4 h-4 text-emerald-400" />
-                    <span>Ingredients Checklist ({viewingRecipe.ingredients.length})</span>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                    <ShoppingCart className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Ingredients ({viewingRecipe.ingredients.length})</span>
                   </h3>
                   <button
                     onClick={(e) => handleShopIngredients(viewingRecipe, e)}
-                    className="text-xs text-emerald-400 hover:text-emerald-300 font-semibold flex items-center gap-1"
+                    className="text-[11px] text-emerald-400 font-bold flex items-center gap-1 active:scale-95"
                   >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Add to Grocery List</span>
+                    <Plus className="w-3 h-3 stroke-[2.5]" />
+                    <span>Add to Grocery</span>
                   </button>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="space-y-1.5">
                   {viewingRecipe.ingredients.map((ing, idx) => {
                     const key = `${viewingRecipe.id}-${idx}`;
                     const isChecked = Boolean(checkedIngredients[key]);
@@ -1047,8 +899,8 @@ export const MealsPage: React.FC = () => {
                         key={idx}
                         className={`flex items-center gap-2.5 p-2.5 rounded-xl border text-xs cursor-pointer transition-colors ${
                           isChecked
-                            ? 'bg-slate-950/40 border-slate-800/50 text-slate-500 line-through'
-                            : 'bg-slate-950/80 border-slate-800 text-slate-200 hover:border-slate-700'
+                            ? 'bg-slate-950/40 border-slate-800/40 text-slate-500 line-through'
+                            : 'bg-slate-950/80 border-slate-800 text-slate-200'
                         }`}
                       >
                         <input
@@ -1060,9 +912,9 @@ export const MealsPage: React.FC = () => {
                               [key]: e.target.checked,
                             }))
                           }
-                          className="rounded text-emerald-500 focus:ring-0 bg-slate-900 border-slate-700"
+                          className="rounded text-emerald-500 focus:ring-0 bg-slate-900 border-slate-700 w-4 h-4"
                         />
-                        <span className="font-semibold text-emerald-400/90">
+                        <span className="font-bold text-emerald-400 shrink-0">
                           {ing.amount} {ing.unit}
                         </span>
                         <span className="truncate">{ing.item}</span>
@@ -1072,34 +924,34 @@ export const MealsPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Step-by-Step Instructions */}
+              {/* Directions */}
               <div>
-                <h3 className="text-sm font-bold uppercase tracking-wider text-slate-300 mb-3 flex items-center gap-2">
-                  <BookOpen className="w-4 h-4 text-teal-400" />
-                  <span>Instructions ({viewingRecipe.instructions.length} steps)</span>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300 mb-2 flex items-center gap-1.5">
+                  <BookOpen className="w-3.5 h-3.5 text-teal-400" />
+                  <span>Directions ({viewingRecipe.instructions.length})</span>
                 </h3>
 
-                <div className="space-y-3">
+                <div className="space-y-2.5">
                   {viewingRecipe.instructions.map((step, idx) => (
                     <div
                       key={idx}
-                      className="flex items-start gap-3 bg-slate-950/40 border border-slate-800/80 rounded-2xl p-3.5 text-xs sm:text-sm text-slate-300 leading-relaxed"
+                      className="flex items-start gap-2.5 bg-slate-950/50 border border-slate-800/80 rounded-2xl p-3 text-xs text-slate-300 leading-relaxed"
                     >
-                      <span className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 font-bold text-xs flex items-center justify-center shrink-0 border border-emerald-500/30">
+                      <span className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5 border border-emerald-500/30">
                         {idx + 1}
                       </span>
-                      <p className="flex-1 pt-0.5">{step}</p>
+                      <p className="flex-1">{step}</p>
                     </div>
                   ))}
                 </div>
               </div>
             </div>
 
-            {/* Modal Footer Actions */}
-            <div className="p-4 bg-slate-950/90 border-t border-slate-800 flex items-center justify-between gap-3">
+            {/* Sticky Bottom Actions */}
+            <div className="p-3.5 bg-slate-950 border-t border-slate-800 flex items-center gap-2 pb-safe">
               <button
                 onClick={() => setViewingRecipe(null)}
-                className="px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-semibold text-slate-400 hover:text-white transition-colors"
+                className="w-1/3 py-3 rounded-2xl text-xs font-bold text-slate-400 bg-slate-900 border border-slate-800"
               >
                 Close
               </button>
@@ -1109,7 +961,7 @@ export const MealsPage: React.FC = () => {
                   if (!householdId) return;
                   const matchedWeekly = meals.find((m) => m.recipe_id === viewingRecipe.id);
                   if (matchedWeekly) {
-                    await handleQuickAddToDay(matchedWeekly, format(new Date(), 'yyyy-MM-dd'));
+                    await handleMarkMealCooked(matchedWeekly, format(new Date(), 'yyyy-MM-dd'));
                   } else {
                     await api.logMealMade(householdId, {
                       title: viewingRecipe.title,
@@ -1120,11 +972,11 @@ export const MealsPage: React.FC = () => {
                     await fetchData(true);
                   }
                   setViewingRecipe(null);
-                  showToast(`Added "${viewingRecipe.title}" to cooking log!`);
+                  showToast(`🎉 Logged "${viewingRecipe.title}" as made today!`);
                 }}
-                className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-bold text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-emerald-500/20 transition-all"
+                className="w-2/3 py-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/20 active:scale-95"
               >
-                <Check className="w-4 h-4" />
+                <Check className="w-4 h-4 stroke-[2.5]" />
                 <span>Made Today · Add to Log</span>
               </button>
             </div>
@@ -1132,75 +984,79 @@ export const MealsPage: React.FC = () => {
         </div>
       )}
 
-      {/* ================= MODAL: PICK FROM SAVED RECIPES ================= */}
+      {/* ================= MOBILE BOTTOM SHEET: PICK RECIPES TO COOK ================= */}
       {isRecipePickerOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+        <div className="fixed inset-0 z-50 flex flex-col justify-end bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div
+            className="fixed inset-0"
+            onClick={() => setIsRecipePickerOpen(false)}
+          />
+          <div className="relative z-10 bg-slate-900 border-t border-slate-800 rounded-t-3xl max-h-[88vh] flex flex-col shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-300">
+            <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto my-2 shrink-0" />
+
             {/* Header */}
-            <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between">
+            <div className="px-4 pb-3 border-b border-slate-800 flex items-center justify-between">
               <div>
-                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <h3 className="text-base font-bold text-white flex items-center gap-1.5">
                   <BookOpen className="w-4 h-4 text-emerald-400" />
-                  <span>Pick from Saved Recipes</span>
+                  <span>Choose Recipes to Shop & Cook</span>
                 </h3>
-                <p className="text-xs text-slate-400">
-                  Select a recipe to add to your weekly meals
+                <p className="text-[11px] text-slate-400">
+                  Select recipes from your box to put on deck
                 </p>
               </div>
               <button
                 onClick={() => setIsRecipePickerOpen(false)}
-                className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800"
+                className="p-1.5 rounded-xl text-slate-400 hover:text-white"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Search Input */}
-            <div className="p-4 border-b border-slate-800 bg-slate-950/40">
+            <div className="p-3 border-b border-slate-800 bg-slate-950/50">
               <div className="relative">
                 <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
-                  placeholder="Search recipes by title or tag..."
+                  placeholder="Search recipes by name or tag..."
                   value={recipeSearch}
                   onChange={(e) => setRecipeSearch(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-9 pr-4 py-2 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/50"
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
                 />
               </div>
             </div>
 
             {/* Recipe List */}
-            <div className="p-4 overflow-y-auto space-y-2.5 flex-1">
+            <div className="p-3 overflow-y-auto space-y-2 flex-1 overscroll-contain">
               {filteredRecipes.length === 0 ? (
-                <div className="text-center py-10 text-slate-500 text-xs sm:text-sm">
+                <div className="text-center py-10 text-slate-500 text-xs">
                   No recipes found matching "{recipeSearch}"
                 </div>
               ) : (
                 filteredRecipes.map((r) => {
-                  const isAlreadyInWeekly = meals.some((m) => m.recipe_id === r.id);
+                  const isAlreadyOnDeck = meals.some((m) => m.recipe_id === r.id);
                   return (
                     <div
                       key={r.id}
-                      className="bg-slate-950/60 border border-slate-800 hover:border-slate-700/80 rounded-2xl p-3 flex items-center justify-between gap-3 transition-colors"
+                      className="bg-slate-950/70 border border-slate-800 rounded-2xl p-2.5 flex items-center justify-between gap-2.5"
                     >
-                      <div className="flex items-center gap-3 min-w-0">
+                      <div className="flex items-center gap-2.5 min-w-0">
                         {r.image_url ? (
                           <img
                             src={r.image_url}
                             alt={r.title}
-                            className="w-12 h-12 rounded-xl object-cover border border-slate-800 shrink-0"
+                            className="w-11 h-11 rounded-xl object-cover border border-slate-800 shrink-0"
                           />
                         ) : (
-                          <div className="w-12 h-12 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-emerald-400 shrink-0">
+                          <div className="w-11 h-11 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-emerald-400 shrink-0">
                             <ChefHat className="w-5 h-5 opacity-70" />
                           </div>
                         )}
                         <div className="min-w-0">
-                          <h4 className="text-sm font-bold text-white truncate">{r.title}</h4>
-                          <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-0.5">
-                            {r.cook_time_minutes && (
-                              <span>{r.cook_time_minutes} min</span>
-                            )}
+                          <h4 className="text-xs sm:text-sm font-bold text-white truncate">{r.title}</h4>
+                          <div className="flex items-center gap-2 text-[10px] text-slate-400 mt-0.5">
+                            {r.cook_time_minutes && <span>{r.cook_time_minutes} min</span>}
                             {r.servings && <span>· {r.servings} serv</span>}
                             <span>· {r.ingredients?.length || 0} ingr</span>
                           </div>
@@ -1209,18 +1065,18 @@ export const MealsPage: React.FC = () => {
 
                       <button
                         onClick={() => handleAddRecipeToShopped(r)}
-                        disabled={isAlreadyInWeekly}
-                        className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1 shrink-0 transition-all ${
-                          isAlreadyInWeekly
+                        disabled={isAlreadyOnDeck}
+                        className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1 shrink-0 transition-all active:scale-95 ${
+                          isAlreadyOnDeck
                             ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
                             : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-md shadow-emerald-500/20'
                         }`}
                       >
-                        {isAlreadyInWeekly ? (
-                          <span>In Weekly</span>
+                        {isAlreadyOnDeck ? (
+                          <span>On Deck</span>
                         ) : (
                           <>
-                            <Plus className="w-3.5 h-3.5" />
+                            <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
                             <span>Add</span>
                           </>
                         )}
@@ -1230,34 +1086,180 @@ export const MealsPage: React.FC = () => {
                 })
               )}
             </div>
+
+            {/* Quick custom dish entry at bottom of sheet */}
+            <div className="p-3 bg-slate-950 border-t border-slate-800 pb-safe">
+              <form onSubmit={handleQuickAddCustom} className="flex items-center gap-2">
+                <input
+                  type="text"
+                  placeholder="Or type a custom dish (e.g. Tacos)..."
+                  value={quickDishInput}
+                  onChange={(e) => setQuickDishInput(e.target.value)}
+                  className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                />
+                <button
+                  type="submit"
+                  disabled={!quickDishInput.trim() || isAddingQuick}
+                  className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs disabled:opacity-40 shrink-0"
+                >
+                  Add Custom
+                </button>
+              </form>
+            </div>
           </div>
         </div>
       )}
 
-      {/* ================= MODAL: MANUAL LOG A MEAL ================= */}
+      {/* ================= MOBILE BOTTOM SHEET: PICK DATE ================= */}
+      {quickDateMeal && (
+        <div className="fixed inset-0 z-50 flex flex-col justify-end bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div
+            className="fixed inset-0"
+            onClick={() => setQuickDateMeal(null)}
+          />
+          <div className="relative z-10 bg-slate-900 border-t border-slate-800 rounded-t-3xl p-4 shadow-2xl animate-in slide-in-from-bottom duration-300 pb-safe">
+            <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto my-1.5 shrink-0" />
+
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
+                <Calendar className="w-4 h-4 text-emerald-400" />
+                <span>Made on Which Day?</span>
+              </h3>
+              <button
+                onClick={() => setQuickDateMeal(null)}
+                className="p-1 rounded-xl text-slate-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs font-bold text-emerald-400 mb-1 truncate">{quickDateMeal.title}</p>
+            <p className="text-[11px] text-slate-400 mb-3">
+              Select the day this meal was prepared:
+            </p>
+
+            {/* Quick buttons */}
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              <button
+                onClick={() => setTargetDate(format(new Date(), 'yyyy-MM-dd'))}
+                className={`py-2.5 rounded-xl text-xs font-bold border transition-all ${
+                  targetDate === format(new Date(), 'yyyy-MM-dd')
+                    ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300'
+                    : 'bg-slate-950 border-slate-800 text-slate-300'
+                }`}
+              >
+                Today ({format(new Date(), 'MMM d')})
+              </button>
+              <button
+                onClick={() => setTargetDate(format(subDays(new Date(), 1), 'yyyy-MM-dd'))}
+                className={`py-2.5 rounded-xl text-xs font-bold border transition-all ${
+                  targetDate === format(subDays(new Date(), 1), 'yyyy-MM-dd')
+                    ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300'
+                    : 'bg-slate-950 border-slate-800 text-slate-300'
+                }`}
+              >
+                Yesterday ({format(subDays(new Date(), 1), 'MMM d')})
+              </button>
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                Or pick calendar date:
+              </label>
+              <input
+                type="date"
+                value={targetDate}
+                onChange={(e) => setTargetDate(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+              />
+            </div>
+
+            <button
+              onClick={() => handleMarkMealCooked(quickDateMeal, targetDate)}
+              className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 font-bold text-xs sm:text-sm shadow-md shadow-emerald-500/20 active:scale-95"
+            >
+              Add to Log & Remove from Shopped List
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MOBILE BOTTOM SHEET: PICK FOR LOG DATE ================= */}
+      {logDayPickerDate && (
+        <div className="fixed inset-0 z-50 flex flex-col justify-end bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div
+            className="fixed inset-0"
+            onClick={() => setLogDayPickerDate(null)}
+          />
+          <div className="relative z-10 bg-slate-900 border-t border-slate-800 rounded-t-3xl p-4 shadow-2xl max-h-[80vh] flex flex-col animate-in slide-in-from-bottom duration-300 pb-safe">
+            <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto my-1.5 shrink-0" />
+
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
+                  <Utensils className="w-4 h-4 text-emerald-400" />
+                  <span>Add to {isToday(parseISO(logDayPickerDate)) ? 'Today' : format(parseISO(logDayPickerDate), 'MMM d')}</span>
+                </h3>
+                <p className="text-[11px] text-slate-400">
+                  Select a shopped meal to log
+                </p>
+              </div>
+              <button
+                onClick={() => setLogDayPickerDate(null)}
+                className="p-1 rounded-xl text-slate-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2 overflow-y-auto flex-1 pr-1">
+              {meals.map((meal) => (
+                <button
+                  key={meal.id}
+                  onClick={() => handleMarkMealCooked(meal, logDayPickerDate)}
+                  className="w-full text-left bg-slate-950 border border-slate-800 rounded-xl p-3 flex items-center justify-between gap-2 active:bg-emerald-500/10 active:border-emerald-500/30 transition-colors"
+                >
+                  <span className="font-semibold text-xs text-white truncate">
+                    {meal.title}
+                  </span>
+                  <Plus className="w-4 h-4 text-emerald-400 shrink-0" />
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MOBILE BOTTOM SHEET: MANUAL LOG MEAL ================= */}
       {isLogModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between">
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
+        <div className="fixed inset-0 z-50 flex flex-col justify-end bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div
+            className="fixed inset-0"
+            onClick={() => setIsLogModalOpen(false)}
+          />
+          <div className="relative z-10 bg-slate-900 border-t border-slate-800 rounded-t-3xl p-4 shadow-2xl max-h-[90vh] flex flex-col animate-in slide-in-from-bottom duration-300 pb-safe">
+            <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto my-1.5 shrink-0" />
+
+            <div className="flex items-center justify-between mb-3 border-b border-slate-800 pb-2">
+              <h3 className="text-base font-bold text-white flex items-center gap-1.5">
                 <Utensils className="w-4 h-4 text-emerald-400" />
                 <span>Log a Meal Made</span>
               </h3>
               <button
                 onClick={() => setIsLogModalOpen(false)}
-                className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800"
+                className="p-1 rounded-xl text-slate-400 hover:text-white"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Quick-Pick from Weekly Meals if any */}
             {meals.length > 0 && (
-              <div className="p-4 bg-slate-950/50 border-b border-slate-800">
-                <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">
-                  Or pick from weekly meals (removes on save):
-                </label>
-                <div className="flex flex-wrap gap-1.5">
+              <div className="mb-3">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">
+                  Pick from shopped meals:
+                </span>
+                <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
                   {meals.map((m) => (
                     <button
                       key={m.id}
@@ -1273,7 +1275,7 @@ export const MealsPage: React.FC = () => {
                       className={`px-2.5 py-1 rounded-xl text-xs font-semibold border transition-all ${
                         logForm.title === m.title
                           ? 'bg-emerald-500 text-slate-950 border-transparent font-bold'
-                          : 'bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700'
+                          : 'bg-slate-950 border-slate-800 text-slate-300'
                       }`}
                     >
                       {m.title}
@@ -1283,42 +1285,42 @@ export const MealsPage: React.FC = () => {
               </div>
             )}
 
-            <form onSubmit={handleSubmitManualLog} className="p-4 sm:p-5 space-y-4">
+            <form onSubmit={handleSubmitManualLog} className="space-y-3 flex-1 overflow-y-auto">
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  Meal / Dish Name *
+                <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                  Dish Name *
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Spaghetti Bolognese, Chicken Salad..."
+                  placeholder="e.g. Homemade Pizza, Chicken Salad..."
                   value={logForm.title}
                   onChange={(e) => setLogForm({ ...logForm, title: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/60"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">
                     Date Cooked
                   </label>
                   <input
                     type="date"
                     value={logForm.date}
                     onChange={(e) => setLogForm({ ...logForm, date: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-emerald-500/60"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">
                     Cooked By
                   </label>
                   <select
                     value={logForm.cookedByUserId}
                     onChange={(e) => setLogForm({ ...logForm, cookedByUserId: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-emerald-500/60"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
                   >
                     <option value="">(Household)</option>
                     {users.map((u) => (
@@ -1331,15 +1333,15 @@ export const MealsPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  Notes / Rating (Optional)
+                <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                  Notes (Optional)
                 </label>
                 <textarea
-                  placeholder="e.g. Everyone loved the spice level, make again next week!"
+                  placeholder="e.g. Delicious with extra pepper..."
                   value={logForm.notes}
                   onChange={(e) => setLogForm({ ...logForm, notes: e.target.value })}
                   rows={2}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/60 resize-none"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 resize-none"
                 />
               </div>
 
@@ -1347,48 +1349,23 @@ export const MealsPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsLogModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white"
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-400"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 font-bold text-xs sm:text-sm shadow-md shadow-emerald-500/20"
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 font-bold text-xs shadow-md shadow-emerald-500/20 active:scale-95"
                 >
-                  Save Log
+                  Save to Log
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
-
-      {/* ================= FIXED QUICK INPUT DOCK ================= */}
-      <div className="fixed bottom-20 left-0 right-0 z-40 px-4 pointer-events-none">
-        <div className="max-w-md mx-auto pointer-events-auto">
-          <form
-            onSubmit={handleQuickAddDish}
-            className="flex items-center gap-2 bg-slate-900/90 border border-slate-800/90 rounded-3xl p-1.5 pl-3 shadow-2xl backdrop-blur-md"
-          >
-            <Plus className="w-4 h-4 text-emerald-400 shrink-0" />
-            <input
-              type="text"
-              placeholder="Quick add dish to weekly meals..."
-              value={quickDishInput}
-              onChange={(e) => setQuickDishInput(e.target.value)}
-              className="flex-1 min-w-0 bg-transparent text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none"
-            />
-            <button
-              type="submit"
-              disabled={!quickDishInput.trim() || isAddingQuick}
-              className="px-3.5 py-1.5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 text-slate-950 font-bold text-xs transition-all shrink-0"
-            >
-              {isAddingQuick ? 'Adding...' : 'Add'}
-            </button>
-          </form>
-        </div>
-      </div>
     </div>
   );
 };
+
 export default MealsPage;
