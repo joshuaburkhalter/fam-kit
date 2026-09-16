@@ -12,21 +12,63 @@ import { AuthPage } from './components/AuthPage';
 import { usePWA } from './context/PWAContext';
 import { Loader2 } from 'lucide-react';
 
+const VALID_TABS = ['assistant', 'grocery', 'meals', 'recipes', 'calendar', 'settings', 'family'];
+const LAST_TAB_KEY = 'homebase_last_active_tab';
+
+function resolveInitialTab(): string {
+  if (typeof window === 'undefined') return 'assistant';
+
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const pathname = window.location.pathname.toLowerCase();
+
+    // 1. Google OAuth return or explicit settings request
+    if (
+      params.has('google_sync') ||
+      params.get('tab') === 'settings' ||
+      pathname.startsWith('/settings')
+    ) {
+      return 'settings';
+    }
+
+    // 2. Explicit tab query parameter (e.g. /?tab=calendar)
+    const tabParam = params.get('tab');
+    if (tabParam && VALID_TABS.includes(tabParam)) {
+      return tabParam;
+    }
+
+    // 3. PWA recipe share target
+    const shared = params.get('shared');
+    const sharedUrl = params.get('url') || params.get('text');
+    if (shared || sharedUrl || pathname.startsWith('/recipes')) {
+      return 'recipes';
+    }
+
+    // 4. Specific known path shortcuts
+    if (pathname.startsWith('/grocery')) return 'grocery';
+    if (pathname.startsWith('/meals') || pathname.startsWith('/meal-planner')) return 'meals';
+    if (pathname.startsWith('/calendar')) return 'calendar';
+
+    // 5. Restore user's last visited tab from previous session
+    const saved = localStorage.getItem(LAST_TAB_KEY);
+    if (saved && VALID_TABS.includes(saved)) {
+      return saved;
+    }
+  } catch {}
+
+  return 'assistant';
+}
+
 export const AppContent: React.FC = () => {
   const { currentUser, isLoadingAuth } = usePWA();
-  const [activeTab, setActiveTab] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      if (
-        window.location.pathname.startsWith('/settings') ||
-        params.has('google_sync') ||
-        params.get('tab') === 'settings'
-      ) {
-        return 'settings';
-      }
-    }
-    return 'assistant';
-  });
+  const [activeTab, setActiveTabState] = useState<string>(resolveInitialTab);
+
+  const setActiveTab = (tab: string) => {
+    setActiveTabState(tab);
+    try {
+      localStorage.setItem(LAST_TAB_KEY, tab);
+    } catch {}
+  };
 
   // Handle URL parameters for PWA share_target and OAuth callbacks
   useEffect(() => {

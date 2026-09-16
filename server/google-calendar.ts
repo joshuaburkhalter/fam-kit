@@ -27,7 +27,7 @@ export interface GoogleCalendarEntry {
   assignedMemberId?: string | null;
 }
 
-function getGoogleCredentials() {
+export function getGoogleCredentials() {
   const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
   const defaultRedirectUri =

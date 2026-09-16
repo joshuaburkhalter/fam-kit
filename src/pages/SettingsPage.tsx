@@ -102,12 +102,18 @@ export const SettingsPage: React.FC = () => {
         `Google Calendar connected! ${email ? `(${email}) ` : ''}Your events are now syncing in the background.`
       );
       loadGoogleStatus();
-      window.history.replaceState({}, '', window.location.pathname);
+      try {
+        localStorage.setItem('homebase_last_active_tab', 'settings');
+      } catch {}
+      window.history.replaceState({}, '', '/?tab=settings');
       setTimeout(() => setStatusMessage(null), 6000);
     } else if (params.get('google_sync') === 'error') {
       const msg = params.get('message') || 'Connection failed';
       setErrorMessage(`Google Calendar connection failed: ${decodeURIComponent(msg)}`);
-      window.history.replaceState({}, '', window.location.pathname);
+      try {
+        localStorage.setItem('homebase_last_active_tab', 'settings');
+      } catch {}
+      window.history.replaceState({}, '', '/?tab=settings');
     }
   }, []);
 

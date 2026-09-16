@@ -17,6 +17,7 @@ import {
   disconnectUserGoogleCalendar,
   syncAllConnectedHouseholdCalendars,
   initBackgroundGoogleSync,
+  getGoogleCredentials,
 } from './google-calendar.js';
 
 dotenv.config();
@@ -1465,6 +1466,8 @@ app.get('/api/auth/google/url', (req, res) => {
   }
 });
 
+let lastGoogleCallbackInfo: any = null;
+
 app.get('/api/auth/google/callback', async (req, res) => {
   const code = req.query.code as string;
   const state = req.query.state as string;
@@ -1476,23 +1479,88 @@ app.get('/api/auth/google/callback', async (req, res) => {
     error: error || null,
   });
 
+  lastGoogleCallbackInfo = {
+    receivedAt: new Date().toISOString(),
+    hasCode: Boolean(code),
+    codePreview: code ? `${code.slice(0, 8)}...` : null,
+    hasState: Boolean(state),
+    rawError: error || null,
+  };
+
   if (error) {
     console.warn('Google OAuth error callback:', error);
-    return res.redirect('/settings?google_sync=error&message=' + encodeURIComponent(error));
+    lastGoogleCallbackInfo.failureReason = error;
+    return res.redirect('/?tab=settings&google_sync=error&message=' + encodeURIComponent(error));
   }
 
   if (!code || !state) {
-    return res.redirect('/settings?google_sync=error&message=' + encodeURIComponent('Missing code or state'));
+    lastGoogleCallbackInfo.failureReason = 'Missing code or state';
+    return res.redirect('/?tab=settings&google_sync=error&message=' + encodeURIComponent('Missing code or state'));
   }
 
   const result = await handleGoogleAuthCallback(code, state);
   console.log('⚡ Google Auth result:', result);
+  lastGoogleCallbackInfo.result = {
+    success: result.success,
+    email: result.email || null,
+    userId: result.userId || null,
+    householdId: result.householdId || null,
+    error: result.error || null,
+  };
 
   if (!result.success) {
-    return res.redirect('/settings?google_sync=error&message=' + encodeURIComponent(result.error || 'Sync failed'));
+    return res.redirect('/?tab=settings&google_sync=error&message=' + encodeURIComponent(result.error || 'Sync failed'));
   }
 
-  res.redirect('/settings?google_sync=success&email=' + encodeURIComponent(result.email || ''));
+  res.redirect('/?tab=settings&google_sync=success&email=' + encodeURIComponent(result.email || ''));
+});
+
+// Diagnostic Endpoint for Live Debugging
+app.get('/api/debug/google', (req, res) => {
+  try {
+    const { clientId, clientSecret, defaultRedirectUri } = getGoogleCredentials();
+    const records = queryAll<{
+      id: string;
+      userId: string;
+      householdId: string;
+      googleEmail: string;
+      hasAccessToken: number;
+      hasRefreshToken: number;
+      selectedCalendarIds: string;
+      calendarMemberMap: string;
+      lastSyncedAt: string;
+      createdAt: string;
+    }>(
+      `SELECT id, userId, householdId, googleEmail,
+              CASE WHEN accessToken IS NOT NULL AND LENGTH(accessToken) > 0 THEN 1 ELSE 0 END as hasAccessToken,
+              CASE WHEN refreshToken IS NOT NULL AND LENGTH(refreshToken) > 0 THEN 1 ELSE 0 END as hasRefreshToken,
+              selectedCalendarIds, calendarMemberMap, lastSyncedAt, createdAt
+       FROM user_google_sync`
+    );
+    const households = queryAll('SELECT id, name, inviteCode FROM households');
+    const users = queryAll('SELECT id, name, username, email, householdId FROM users');
+    const googleEvents = queryAll(
+      'SELECT id, title, isGoogleEvent, googleCalendarId, householdId, date, startTime FROM calendar_events WHERE isGoogleEvent = 1 LIMIT 10'
+    );
+
+    res.json({
+      hasClientId: Boolean(clientId),
+      clientIdPreview: clientId ? `${clientId.slice(0, 15)}...${clientId.slice(-15)}` : null,
+      hasClientSecret: Boolean(clientSecret),
+      clientSecretLength: clientSecret ? clientSecret.length : 0,
+      clientSecretPreview: clientSecret ? `${clientSecret.slice(0, 4)}...${clientSecret.slice(-4)}` : null,
+      defaultRedirectUri,
+      lastCallback: lastGoogleCallbackInfo,
+      syncRecords: records,
+      households,
+      users,
+      syncedEventsCount: googleEvents.length,
+      sampleEvents: googleEvents,
+      serverTime: new Date().toISOString(),
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.get('/api/auth/google/status', (req, res) => {
