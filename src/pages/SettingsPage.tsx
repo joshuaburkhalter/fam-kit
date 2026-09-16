@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Settings as SettingsIcon,
   Bell,
@@ -18,12 +18,13 @@ import {
   LogIn,
   UserCheck,
   Edit3,
+  Calendar,
 } from 'lucide-react';
 import { usePWA } from '../context/PWAContext';
 import { api } from '../lib/api';
 import { AisleManagerModal } from '../components/AisleManagerModal';
 import { EditProfileModal } from '../components/EditProfileModal';
-import type { User } from '../types';
+import type { User, GoogleSyncStatus } from '../types';
 
 const AVATAR_COLORS = [
   '#10b981', // Emerald
@@ -67,6 +68,77 @@ export const SettingsPage: React.FC = () => {
   const [isSendingTestPush, setIsSendingTestPush] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isDeletingMember, setIsDeletingMember] = useState(false);
+
+  // Google Calendar Sync States
+  const [googleSyncStatuses, setGoogleSyncStatuses] = useState<GoogleSyncStatus[]>([]);
+  const [isLoadingGoogleStatus, setIsLoadingGoogleStatus] = useState(false);
+  const [connectingUserId, setConnectingUserId] = useState<string | null>(null);
+  const [disconnectingUserId, setDisconnectingUserId] = useState<string | null>(null);
+
+  const loadGoogleStatus = async () => {
+    try {
+      setIsLoadingGoogleStatus(true);
+      const statuses = await api.getGoogleSyncStatus();
+      setGoogleSyncStatuses(statuses);
+    } catch (err) {
+      console.error('Failed to load Google sync status:', err);
+    } finally {
+      setIsLoadingGoogleStatus(false);
+    }
+  };
+
+  useEffect(() => {
+    loadGoogleStatus();
+
+    // Check URL parameters for OAuth return
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('google_sync') === 'success') {
+      const email = params.get('email');
+      setStatusMessage(
+        `Google Calendar connected! ${email ? `(${email}) ` : ''}Your events are now syncing in the background.`
+      );
+      window.history.replaceState({}, '', window.location.pathname);
+      setTimeout(() => setStatusMessage(null), 5000);
+    } else if (params.get('google_sync') === 'error') {
+      const msg = params.get('message') || 'Connection failed';
+      setStatusMessage(`Google Calendar connection failed: ${msg}`);
+      window.history.replaceState({}, '', window.location.pathname);
+      setTimeout(() => setStatusMessage(null), 6000);
+    }
+  }, []);
+
+  const handleConnectGoogle = async (userId: string) => {
+    try {
+      setConnectingUserId(userId);
+      const { url } = await api.getGoogleAuthUrl(userId);
+      window.location.href = url;
+    } catch (err: any) {
+      console.error('Failed to initiate Google OAuth:', err);
+      alert(err.message || 'Failed to connect to Google');
+      setConnectingUserId(null);
+    }
+  };
+
+  const handleDisconnectGoogle = async (userId: string) => {
+    if (
+      !confirm(
+        'Disconnect Google Calendar for this member? Synced Google events will be removed from Homebase.'
+      )
+    )
+      return;
+    try {
+      setDisconnectingUserId(userId);
+      await api.disconnectGoogleCalendar(userId);
+      await loadGoogleStatus();
+      setStatusMessage('Google Calendar disconnected.');
+      setTimeout(() => setStatusMessage(null), 3000);
+    } catch (err: any) {
+      console.error('Failed to disconnect Google Calendar:', err);
+      alert(err.message || 'Failed to disconnect');
+    } finally {
+      setDisconnectingUserId(null);
+    }
+  };
 
   // Form states for Add Member
   const [newMemberName, setNewMemberName] = useState('');
@@ -375,7 +447,138 @@ export const SettingsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* 3. Assistant Voice Responses (Radio Buttons) */}
+      {/* 3. Google Calendar Sync */}
+      <div className="glass-panel rounded-3xl p-5 border border-white/10 space-y-4">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20">
+              <Calendar className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-white">Google Calendar Sync</h3>
+              <p className="text-[11px] text-slate-400">
+                Automatically sync personal or shared Google calendars into the family timeline
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Member connection list */}
+        <div className="space-y-2.5 pt-1">
+          {users.map((u) => {
+            const syncStatus = googleSyncStatuses.find((s) => s.userId === u.id);
+            const isConnected = Boolean(syncStatus?.connected);
+            const isConnecting = connectingUserId === u.id;
+            const isDisconnecting = disconnectingUserId === u.id;
+
+            return (
+              <div
+                key={`gcal_${u.id}`}
+                className="p-3.5 rounded-2xl bg-slate-900/60 border border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  {u.avatar && (u.avatar.startsWith('data:image') || u.avatar.startsWith('http')) ? (
+                    <img
+                      src={u.avatar}
+                      alt={u.name}
+                      className="w-9 h-9 rounded-xl object-cover shadow shrink-0 ring-1 ring-white/10"
+                    />
+                  ) : (
+                    <div
+                      className="w-9 h-9 rounded-xl flex items-center justify-center text-xs font-bold text-white shadow shrink-0"
+                      style={{ backgroundColor: u.avatar_color }}
+                    >
+                      {u.name.charAt(0)}
+                    </div>
+                  )}
+
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-white truncate">{u.name}</span>
+                      {isConnected ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 rounded-full font-medium">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                          <span>Connected</span>
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-slate-500 bg-white/5 px-2 py-0.5 rounded-full font-medium">
+                          Not connected
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="text-[11px] text-slate-400 truncate pt-0.5">
+                      {isConnected && syncStatus?.googleEmail ? (
+                        <span className="font-mono text-slate-300">{syncStatus.googleEmail}</span>
+                      ) : (
+                        <span className="text-slate-500">Connect to sync Google events</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="shrink-0 flex items-center justify-end">
+                  {isConnected ? (
+                    <button
+                      type="button"
+                      disabled={isDisconnecting}
+                      onClick={() => handleDisconnectGoogle(u.id)}
+                      className="px-3 py-1.5 rounded-xl border border-red-500/20 hover:border-red-500/40 text-red-400 hover:bg-red-500/10 text-xs font-semibold transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                    >
+                      {isDisconnecting ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-3.5 h-3.5" />
+                      )}
+                      <span>Disconnect</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={isConnecting}
+                      onClick={() => handleConnectGoogle(u.id)}
+                      className="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-100 text-slate-950 text-xs font-bold transition-all shadow-md flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+                    >
+                      {isConnecting ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-950" />
+                      ) : (
+                        <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24">
+                          <path
+                            fill="#4285F4"
+                            d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                          />
+                          <path
+                            fill="#34A853"
+                            d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                          />
+                          <path
+                            fill="#FBBC05"
+                            d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                          />
+                          <path
+                            fill="#EA4335"
+                            d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                          />
+                        </svg>
+                      )}
+                      <span>Connect Google Calendar</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="p-3 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-300/90 text-xs flex items-center gap-2">
+          <Check className="w-4 h-4 shrink-0 text-blue-400" />
+          <span>
+            Once connected, events automatically sync to the family calendar in the background. No manual buttons needed.
+          </span>
+        </div>
+      </div>
+
+      {/* 4. Assistant Voice Responses (Radio Buttons) */}
       <div className="glass-panel rounded-3xl p-5 border border-white/10 space-y-3">
         <div className="flex items-center gap-2.5">
           <div className="p-2 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">

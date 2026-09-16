@@ -335,7 +335,7 @@ export const CalendarPage: React.FC = () => {
         });
 
         const calAction = res.actionsExecuted?.find(
-          (a) => a.tool === 'calendar_event_added' || a.tool === 'add_calendar_events'
+          (a: any) => a.tool === 'calendar_event_added' || a.tool === 'add_calendar_events'
         );
 
         if (calAction && calAction.data && calAction.data.length > 0) {
@@ -643,26 +643,40 @@ export const CalendarPage: React.FC = () => {
                             <div className="pl-1 space-y-1">
                               {/* Top row: Time & Member */}
                               <div className="flex items-center justify-between gap-2">
-                                <div className="inline-flex items-center gap-1 text-[11px] font-mono text-emerald-400 font-medium">
+                                <div className="inline-flex items-center gap-1.5 text-[11px] font-mono text-emerald-400 font-medium">
                                   <Clock className="w-3 h-3 text-emerald-400" />
                                   <span>{formatTimeRange(ev)}</span>
                                 </div>
 
-                                {assignedUser && (
-                                  <div className="flex items-center gap-1 shrink-0">
-                                    <div
-                                      className="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white"
-                                      style={{
-                                        backgroundColor: assignedUser.avatar_color || '#10b981',
-                                      }}
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  {ev.is_google_event && (
+                                    <span
+                                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-blue-500/10 border border-blue-500/20 text-[10px] text-blue-400 font-medium"
+                                      title="Synced from Google Calendar"
                                     >
-                                      {assignedUser.name.charAt(0).toUpperCase()}
-                                    </div>
-                                    <span className="text-[11px] text-slate-400 font-medium hidden sm:inline">
-                                      {assignedUser.name}
+                                      <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11zM9 11H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2zm-8 4H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2z" />
+                                      </svg>
+                                      <span className="hidden sm:inline">Google</span>
                                     </span>
-                                  </div>
-                                )}
+                                  )}
+
+                                  {assignedUser && (
+                                    <div className="flex items-center gap-1 shrink-0">
+                                      <div
+                                        className="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white"
+                                        style={{
+                                          backgroundColor: assignedUser.avatar_color || '#10b981',
+                                        }}
+                                      >
+                                        {assignedUser.name.charAt(0).toUpperCase()}
+                                      </div>
+                                      <span className="text-[11px] text-slate-400 font-medium hidden sm:inline">
+                                        {assignedUser.name}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
 
                               {/* Event Title */}

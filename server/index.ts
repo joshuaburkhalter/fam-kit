@@ -8,6 +8,14 @@ import { getGeminiModel } from './gemini.js';
 import { parseRecipeFromUrl, parseRecipeFromHtml, getCuratedFoodImage, findAccurateRecipePhoto, generateRecipeImageWithImagen } from './recipe-parser.js';
 import { sendPushNotificationToHousehold, vapidPublicKey } from './push.js';
 import { buildSelectiveAssistantContext } from './assistant-context.js';
+import {
+  getGoogleAuthUrl,
+  handleGoogleAuthCallback,
+  getHouseholdGoogleSyncStatus,
+  disconnectUserGoogleCalendar,
+  syncAllConnectedHouseholdCalendars,
+  initBackgroundGoogleSync,
+} from './google-calendar.js';
 
 dotenv.config();
 dotenv.config({ path: '.env.local' });
@@ -1322,6 +1330,16 @@ app.get('/api/calendar', (req, res) => {
   const householdId = getHouseholdId(req);
   const memberId = req.query.memberId as string;
 
+  // Background freshness check: if connected users haven't synced in 5 minutes, trigger sync asynchronously
+  try {
+    const statuses = getHouseholdGoogleSyncStatus(householdId);
+    const fiveMinsAgo = Date.now() - 5 * 60 * 1000;
+    const needsSync = statuses.some((s) => !s.lastSyncedAt || new Date(s.lastSyncedAt).getTime() < fiveMinsAgo);
+    if (needsSync) {
+      syncAllConnectedHouseholdCalendars(householdId).catch((e) => console.error('Auto freshness sync error:', e));
+    }
+  } catch {}
+
   const events = memberId && memberId !== 'all'
     ? queryAll('SELECT * FROM calendar_events WHERE householdId = ? AND assignedMemberId = ? ORDER BY date ASC, startTime ASC', [householdId, memberId])
     : queryAll('SELECT * FROM calendar_events WHERE householdId = ? ORDER BY date ASC, startTime ASC', [householdId]);
@@ -1428,6 +1446,74 @@ app.delete('/api/calendar', (req, res) => {
   const id = req.query.id as string;
   if (id) execute('DELETE FROM calendar_events WHERE id = ?', [id]);
   res.json({ success: true });
+});
+
+// Google Calendar OAuth & Sync Routes
+app.get('/api/auth/google/url', (req, res) => {
+  try {
+    const householdId = getHouseholdId(req);
+    const userId = (req.query.userId as string) || getAuthUser(req) || 'u1';
+    const host = req.get('host') || (req.headers.referer ? new URL(req.headers.referer).host : undefined);
+    const url = getGoogleAuthUrl(householdId, userId, host);
+    res.json({ url });
+  } catch (err: any) {
+    console.error('Failed to get Google Auth URL:', err);
+    res.status(500).json({ error: err.message || 'Failed to generate Google auth URL' });
+  }
+});
+
+app.get('/api/auth/google/callback', async (req, res) => {
+  const code = req.query.code as string;
+  const state = req.query.state as string;
+  const error = req.query.error as string;
+
+  if (error) {
+    console.warn('Google OAuth error callback:', error);
+    return res.redirect('/settings?google_sync=error&message=' + encodeURIComponent(error));
+  }
+
+  if (!code || !state) {
+    return res.redirect('/settings?google_sync=error&message=' + encodeURIComponent('Missing code or state'));
+  }
+
+  const result = await handleGoogleAuthCallback(code, state);
+  if (!result.success) {
+    return res.redirect('/settings?google_sync=error&message=' + encodeURIComponent(result.error || 'Sync failed'));
+  }
+
+  res.redirect('/settings?google_sync=success&email=' + encodeURIComponent(result.email || ''));
+});
+
+app.get('/api/auth/google/status', (req, res) => {
+  try {
+    const householdId = getHouseholdId(req);
+    const status = getHouseholdGoogleSyncStatus(householdId);
+    res.json(status);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to get sync status' });
+  }
+});
+
+app.post('/api/auth/google/disconnect', (req, res) => {
+  try {
+    const householdId = getHouseholdId(req);
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ error: 'userId is required' });
+    const result = disconnectUserGoogleCalendar(householdId, userId);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to disconnect Google Calendar' });
+  }
+});
+
+app.post('/api/calendar/sync/google', async (req, res) => {
+  try {
+    const householdId = getHouseholdId(req);
+    const result = await syncAllConnectedHouseholdCalendars(householdId);
+    res.json({ success: true, totalSynced: result.totalSynced });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to sync Google Calendar' });
+  }
 });
 
 // 7. Family API
@@ -1614,6 +1700,7 @@ getDb().then(() => {
 
   app.listen(Number(PORT), '0.0.0.0', () => {
     console.log(`⚡ Homebase server running on http://0.0.0.0:${PORT}`);
+    initBackgroundGoogleSync();
   });
 });
 

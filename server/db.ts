@@ -166,9 +166,51 @@ function initSchema(db: Database) {
       householdId TEXT NOT NULL,
       createdAt TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS user_google_sync (
+      id TEXT PRIMARY KEY,
+      userId TEXT NOT NULL,
+      householdId TEXT NOT NULL,
+      googleEmail TEXT,
+      accessToken TEXT,
+      refreshToken TEXT NOT NULL,
+      tokenExpiry INTEGER,
+      selectedCalendarId TEXT DEFAULT 'primary',
+      syncToken TEXT,
+      lastSyncedAt TEXT,
+      createdAt TEXT NOT NULL,
+      UNIQUE(userId, householdId)
+    );
   `);
 
   // Auto-migration for existing DBs: ensure tables and columns exist
+  try {
+    db.run(`
+      CREATE TABLE IF NOT EXISTS user_google_sync (
+        id TEXT PRIMARY KEY,
+        userId TEXT NOT NULL,
+        householdId TEXT NOT NULL,
+        googleEmail TEXT,
+        accessToken TEXT,
+        refreshToken TEXT NOT NULL,
+        tokenExpiry INTEGER,
+        selectedCalendarId TEXT DEFAULT 'primary',
+        syncToken TEXT,
+        lastSyncedAt TEXT,
+        createdAt TEXT NOT NULL,
+        UNIQUE(userId, householdId)
+      );
+    `);
+  } catch {}
+  try {
+    db.run(`ALTER TABLE calendar_events ADD COLUMN googleEventId TEXT`);
+  } catch {}
+  try {
+    db.run(`ALTER TABLE calendar_events ADD COLUMN isGoogleEvent INTEGER NOT NULL DEFAULT 0`);
+  } catch {}
+  try {
+    db.run(`CREATE INDEX IF NOT EXISTS idx_cal_google ON calendar_events (householdId, googleEventId)`);
+  } catch {}
   try {
     db.run(`
       CREATE TABLE IF NOT EXISTS weekly_meals (

@@ -117,7 +117,16 @@ export interface CalendarEvent {
   location?: string;
   assigned_user_id?: string;
   assigned_user_name?: string;
+  is_google_event?: boolean;
+  google_event_id?: string;
   created_at: string;
+}
+
+export interface GoogleSyncStatus {
+  userId: string;
+  connected: boolean;
+  googleEmail: string | null;
+  lastSyncedAt: string | null;
 }
 
 export interface AssistantMessage {

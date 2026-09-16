@@ -9,6 +9,7 @@ import type {
   WeeklyMeal,
   MealLog,
   CalendarEvent,
+  GoogleSyncStatus,
 } from '../types';
 
 const BASE_URL = '/api';
@@ -783,6 +784,8 @@ export const api = {
         is_all_day: isAllDay,
         location: ev.location,
         assigned_user_id: ev.assignedMemberId,
+        is_google_event: Boolean(ev.isGoogleEvent),
+        google_event_id: ev.googleEventId || undefined,
         created_at: ev.createdAt,
       };
     });
@@ -944,4 +947,24 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ action: 'test_notification', title, message: body }),
     }),
+
+  // Google Calendar Integration
+  getGoogleAuthUrl: (userId?: string) =>
+    fetchJson<{ url: string }>(userId ? `/auth/google/url?userId=${encodeURIComponent(userId)}` : '/auth/google/url'),
+
+  getGoogleSyncStatus: () => fetchJson<GoogleSyncStatus[]>('/auth/google/status'),
+
+  disconnectGoogleCalendar: (userId: string) =>
+    fetchJson<{ success: boolean }>('/auth/google/disconnect', {
+      method: 'POST',
+      body: JSON.stringify({ userId }),
+    }),
+
+  syncGoogleCalendar: () =>
+    fetchJson<{ success: boolean; totalSynced: number }>('/calendar/sync/google', {
+      method: 'POST',
+    }),
+
+  // Alias sendAssistantMessage to askAssistant
+  sendAssistantMessage: (data: Parameters<typeof api.askAssistant>[0]) => api.askAssistant(data),
 };

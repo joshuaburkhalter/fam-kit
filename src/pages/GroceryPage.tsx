@@ -325,7 +325,7 @@ export const GroceryPage: React.FC = () => {
       const aisleItems = activeItems.filter(
         (it) =>
           !placedItemIds.has(it.id) &&
-          (it.aisle_id === aisle.id || it.category?.toLowerCase() === aisle.name.toLowerCase())
+          (it.aisle_id === aisle.id || (it as any).category?.toLowerCase() === aisle.name.toLowerCase())
       );
       aisleItems.forEach((it) => placedItemIds.add(it.id));
       if (aisleItems.length > 0) {
