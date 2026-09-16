@@ -871,61 +871,66 @@ function guessAisleForGroceryItem(rawName: string, aisles: Array<{ id: string; n
 }
 
 app.post('/api/grocery', (req, res) => {
-  const householdId = getHouseholdId(req);
-  const { name, category, aisleId, quantity, unit, note, listId, addedById, createList, icon, type } = req.body;
+  try {
+    const householdId = getHouseholdId(req);
+    const { name, category, aisleId, quantity, unit, note, listId, addedById, createList, icon, type } = req.body;
 
-  // Create custom list
-  if (createList && name) {
-    const id = `list_${Date.now()}`;
-    const now = new Date().toISOString();
-    execute(
-      `INSERT INTO custom_lists (id, name, type, icon, color, householdId, createdAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [id, name, type || 'packing', icon || '📋', '#10b981', householdId, now]
-    );
-    return res.json({ id, name, icon: icon || '📋', type: type || 'packing' });
-  }
-
-  if (!name) return res.status(400).json({ error: 'Name is required' });
-
-  const id = `g_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-  const now = new Date().toISOString();
-
-  let finalAisleId = aisleId || null;
-  let finalCategory = category || 'Other';
-
-  // If no aisleId is specified and it's for the main grocery list, auto-categorize based on item name
-  if (!finalAisleId && (!listId || listId === 'grocery')) {
-    const aisles = queryAll<{ id: string; name: string }>(
-      'SELECT id, name FROM aisles WHERE householdId = ? ORDER BY display_order ASC',
-      [householdId]
-    );
-    const matched = guessAisleForGroceryItem(name, aisles);
-    if (matched) {
-      finalAisleId = matched.id;
-      finalCategory = matched.name;
+    // Create custom list
+    if (createList && name) {
+      const id = `list_${Date.now()}`;
+      const now = new Date().toISOString();
+      execute(
+        `INSERT INTO custom_lists (id, name, type, icon, color, householdId, createdAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [id, name, type || 'packing', icon || '📋', '#10b981', householdId, now]
+      );
+      return res.json({ id, name, icon: icon || '📋', type: type || 'packing' });
     }
+
+    if (!name) return res.status(400).json({ error: 'Name is required' });
+
+    const id = `g_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const now = new Date().toISOString();
+
+    let finalAisleId = aisleId || null;
+    let finalCategory = category || 'Other';
+
+    // If no aisleId is specified and it's for the main grocery list, auto-categorize based on item name
+    if (!finalAisleId && (!listId || listId === 'grocery')) {
+      const aisles = queryAll<{ id: string; name: string }>(
+        'SELECT id, name FROM aisles WHERE householdId = ? ORDER BY orderIndex ASC',
+        [householdId]
+      );
+      const matched = guessAisleForGroceryItem(name, aisles);
+      if (matched) {
+        finalAisleId = matched.id;
+        finalCategory = matched.name;
+      }
+    }
+
+    execute(
+      `INSERT INTO grocery_items (id, name, category, aisleId, quantity, unit, note, checked, listId, addedById, householdId, createdAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, name, finalCategory, finalAisleId, quantity || '1', unit || null, note || null, 0, listId || null, addedById || 'u1', householdId, now]
+    );
+
+    res.json({
+      id,
+      name,
+      category: finalCategory,
+      aisleId: finalAisleId,
+      quantity: quantity || '1',
+      unit,
+      note,
+      checked: false,
+      listId,
+      householdId,
+      createdAt: now,
+    });
+  } catch (err: any) {
+    console.error('Failed to add grocery item:', err);
+    res.status(500).json({ error: err.message || 'Failed to add grocery item' });
   }
-
-  execute(
-    `INSERT INTO grocery_items (id, name, category, aisleId, quantity, unit, note, checked, listId, addedById, householdId, createdAt)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, name, finalCategory, finalAisleId, quantity || '1', unit || null, note || null, 0, listId || null, addedById || 'u1', householdId, now]
-  );
-
-  res.json({
-    id,
-    name,
-    category: finalCategory,
-    aisleId: finalAisleId,
-    quantity: quantity || '1',
-    unit,
-    note,
-    checked: false,
-    listId,
-    householdId,
-    createdAt: now,
-  });
 });
 
 app.patch('/api/grocery', (req, res) => {
