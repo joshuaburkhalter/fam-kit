@@ -1454,7 +1454,8 @@ app.delete('/api/calendar', (req, res) => {
 app.get('/api/auth/google/url', (req, res) => {
   try {
     const householdId = getHouseholdId(req);
-    const userId = (req.query.userId as string) || getAuthUser(req) || 'u1';
+    const authUser = getAuthUser(req);
+    const userId = (req.query.userId as string) || authUser?.id || 'u1';
     const host = req.get('host') || (req.headers.referer ? new URL(req.headers.referer).host : undefined);
     const url = getGoogleAuthUrl(householdId, userId, host);
     res.json({ url });
@@ -1469,6 +1470,12 @@ app.get('/api/auth/google/callback', async (req, res) => {
   const state = req.query.state as string;
   const error = req.query.error as string;
 
+  console.log('⚡ Google OAuth Callback received:', {
+    hasCode: Boolean(code),
+    hasState: Boolean(state),
+    error: error || null,
+  });
+
   if (error) {
     console.warn('Google OAuth error callback:', error);
     return res.redirect('/settings?google_sync=error&message=' + encodeURIComponent(error));
@@ -1479,6 +1486,8 @@ app.get('/api/auth/google/callback', async (req, res) => {
   }
 
   const result = await handleGoogleAuthCallback(code, state);
+  console.log('⚡ Google Auth result:', result);
+
   if (!result.success) {
     return res.redirect('/settings?google_sync=error&message=' + encodeURIComponent(result.error || 'Sync failed'));
   }

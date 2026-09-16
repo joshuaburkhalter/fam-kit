@@ -82,7 +82,8 @@ export function getGoogleAuthUrl(householdId: string, userId: string, host?: str
     response_type: 'code',
     scope: scopes,
     access_type: 'offline',
-    prompt: 'consent',
+    prompt: 'consent select_account',
+    include_granted_scopes: 'true',
     state,
   });
 
@@ -130,7 +131,14 @@ export async function handleGoogleAuthCallback(
     if (!tokenRes.ok) {
       const errorText = await tokenRes.text();
       console.error('Google token exchange failed:', errorText);
-      throw new Error(`Google token exchange failed: ${tokenRes.statusText}`);
+      let errorDesc = tokenRes.statusText;
+      try {
+        const parsed = JSON.parse(errorText);
+        errorDesc = parsed.error_description || parsed.error || errorText;
+      } catch {
+        errorDesc = errorText || tokenRes.statusText;
+      }
+      throw new Error(`Google token exchange failed: ${errorDesc}`);
     }
 
     const tokenData = (await tokenRes.json()) as {
@@ -169,8 +177,9 @@ export async function handleGoogleAuthCallback(
       refreshToken = existing.refreshToken;
     }
 
-    if (!refreshToken) {
-      throw new Error('No refresh token received from Google. Please reconnect and grant permissions.');
+    const safeRefreshToken = refreshToken || existing?.refreshToken || '';
+    if (!safeRefreshToken) {
+      console.warn(`[GoogleSync] User ${userId} connected without a refresh token. Initial sync will proceed with accessToken.`);
     }
 
     if (existing) {
@@ -182,14 +191,14 @@ export async function handleGoogleAuthCallback(
              tokenExpiry = ?,
              lastSyncedAt = ?
          WHERE userId = ? AND householdId = ?`,
-        [userEmail || existing.googleEmail, accessToken, refreshToken, expiryMs, now, userId, householdId]
+        [userEmail || existing.googleEmail, accessToken, safeRefreshToken, expiryMs, now, userId, householdId]
       );
     } else {
       const id = `gsync_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
       execute(
         `INSERT INTO user_google_sync (id, userId, householdId, googleEmail, accessToken, refreshToken, tokenExpiry, selectedCalendarId, selectedCalendarIds, calendarMemberMap, syncToken, lastSyncedAt, createdAt)
          VALUES (?, ?, ?, ?, ?, ?, ?, 'primary', '["primary"]', null, null, ?, ?)`,
-        [id, userId, householdId, userEmail, accessToken, refreshToken, expiryMs, now, now]
+        [id, userId, householdId, userEmail, accessToken, safeRefreshToken, expiryMs, now, now]
       );
     }
     saveDb();

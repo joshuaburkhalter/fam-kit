@@ -21,6 +21,7 @@ import {
   Calendar,
   SlidersHorizontal,
   X,
+  AlertCircle,
 } from 'lucide-react';
 import { usePWA } from '../context/PWAContext';
 import { api } from '../lib/api';
@@ -69,6 +70,7 @@ export const SettingsPage: React.FC = () => {
   const [isSubscribingPush, setIsSubscribingPush] = useState(false);
   const [isSendingTestPush, setIsSendingTestPush] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isDeletingMember, setIsDeletingMember] = useState(false);
 
   // Google Calendar Sync States
@@ -99,13 +101,13 @@ export const SettingsPage: React.FC = () => {
       setStatusMessage(
         `Google Calendar connected! ${email ? `(${email}) ` : ''}Your events are now syncing in the background.`
       );
-      window.history.replaceState({}, '', window.location.pathname);
-      setTimeout(() => setStatusMessage(null), 5000);
-    } else if (params.get('google_sync') === 'error') {
-      const msg = params.get('message') || 'Connection failed';
-      setStatusMessage(`Google Calendar connection failed: ${msg}`);
+      loadGoogleStatus();
       window.history.replaceState({}, '', window.location.pathname);
       setTimeout(() => setStatusMessage(null), 6000);
+    } else if (params.get('google_sync') === 'error') {
+      const msg = params.get('message') || 'Connection failed';
+      setErrorMessage(`Google Calendar connection failed: ${decodeURIComponent(msg)}`);
+      window.history.replaceState({}, '', window.location.pathname);
     }
   }, []);
 
@@ -351,8 +353,25 @@ export const SettingsPage: React.FC = () => {
 
       {statusMessage && (
         <div className="p-3 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center gap-2 text-emerald-400 text-xs font-semibold animate-in fade-in">
-          <Check className="w-4 h-4" />
-          {statusMessage}
+          <Check className="w-4 h-4 shrink-0" />
+          <span>{statusMessage}</span>
+        </div>
+      )}
+
+      {errorMessage && (
+        <div className="p-3.5 rounded-2xl bg-red-500/15 border border-red-500/30 flex items-center justify-between gap-3 text-red-400 text-xs font-semibold animate-in fade-in">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
+            <span className="break-words">{errorMessage}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setErrorMessage(null)}
+            className="text-slate-400 hover:text-white p-1 cursor-pointer shrink-0"
+            title="Dismiss"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
 

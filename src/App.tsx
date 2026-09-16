@@ -14,11 +14,30 @@ import { Loader2 } from 'lucide-react';
 
 export const AppContent: React.FC = () => {
   const { currentUser, isLoadingAuth } = usePWA();
-  const [activeTab, setActiveTab] = useState<string>('assistant');
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (
+        window.location.pathname.startsWith('/settings') ||
+        params.has('google_sync') ||
+        params.get('tab') === 'settings'
+      ) {
+        return 'settings';
+      }
+    }
+    return 'assistant';
+  });
 
-  // Handle URL parameters for PWA share_target (when sharing a recipe link from mobile browser/Instagram/TikTok)
+  // Handle URL parameters for PWA share_target and OAuth callbacks
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    if (
+      window.location.pathname.startsWith('/settings') ||
+      params.has('google_sync') ||
+      params.get('tab') === 'settings'
+    ) {
+      setActiveTab('settings');
+    }
     const shared = params.get('shared');
     const sharedUrl = params.get('url') || params.get('text');
     if (shared || sharedUrl) {
