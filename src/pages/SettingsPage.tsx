@@ -146,13 +146,33 @@ export const SettingsPage: React.FC = () => {
   const [connectingUserId, setConnectingUserId] = useState<string | null>(null);
   const [disconnectingUserId, setDisconnectingUserId] = useState<string | null>(null);
 
+  // Sync Waiting/Processing Overlay State
+  const [isSyncProcessing, setIsSyncProcessing] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const syncMode = params.get('google_sync');
+      return syncMode === 'success' || syncMode === 'processing';
+    }
+    return false;
+  });
+  const [syncProcessingEmail, setSyncProcessingEmail] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return new URLSearchParams(window.location.search).get('email') || '';
+    }
+    return '';
+  });
+  const [syncProcessingDone, setSyncProcessingDone] = useState<boolean>(false);
+  const [syncProcessingStep, setSyncProcessingStep] = useState<string>('Connecting to Google Calendar...');
+
   const loadGoogleStatus = async () => {
     try {
       setIsLoadingGoogleStatus(true);
       const statuses = await api.getGoogleSyncStatus();
       setGoogleSyncStatuses(statuses);
+      return statuses;
     } catch (err) {
       console.error('Failed to load Google sync status:', err);
+      return [];
     } finally {
       setIsLoadingGoogleStatus(false);
     }
@@ -162,36 +182,78 @@ export const SettingsPage: React.FC = () => {
     loadGoogleStatus();
   }, [household?.id, users.length]);
 
+  // Handle OAuth Return & Polling Waiting Screen
   useEffect(() => {
-    // Check URL parameters for OAuth return
     const params = new URLSearchParams(window.location.search);
-    if (params.get('google_sync') === 'success') {
-      const email = params.get('email');
-      setStatusMessage(
-        `Google Calendar connected! ${email ? `(${email}) ` : ''}Your events are now syncing in the background.`
-      );
-      loadGoogleStatus();
-      const t1 = setTimeout(() => loadGoogleStatus(), 1500);
-      const t2 = setTimeout(() => loadGoogleStatus(), 3500);
-      try {
-        localStorage.setItem('homebase_last_active_tab', 'settings');
-      } catch {}
-      window.history.replaceState({}, '', '/?tab=settings');
-      const t3 = setTimeout(() => setStatusMessage(null), 6000);
-      return () => {
-        clearTimeout(t1);
-        clearTimeout(t2);
-        clearTimeout(t3);
-      };
-    } else if (params.get('google_sync') === 'error') {
+    const syncParam = params.get('google_sync');
+
+    if (syncParam === 'error') {
       const msg = params.get('message') || 'Connection failed';
       setErrorMessage(`Google Calendar connection failed: ${decodeURIComponent(msg)}`);
       try {
         localStorage.setItem('homebase_last_active_tab', 'settings');
       } catch {}
       window.history.replaceState({}, '', '/?tab=settings');
+      return;
     }
-  }, []);
+
+    if (!isSyncProcessing) return;
+
+    let isMounted = true;
+    let attempts = 0;
+    const maxAttempts = 15; // 15 * 800ms = 12 seconds max
+
+    setSyncProcessingStep('Securing connection and fetching calendars...');
+
+    const interval = setInterval(async () => {
+      attempts++;
+      try {
+        if (attempts === 3) {
+          setSyncProcessingStep('Syncing upcoming family events and dates...');
+        } else if (attempts === 6) {
+          setSyncProcessingStep('Finalizing your household schedule...');
+        }
+
+        const statuses = await loadGoogleStatus();
+        if (!isMounted) return;
+
+        // Check if user is connected and events/calendars have settled
+        const isReady = statuses.some(
+          (s) => s.connected && (Boolean(s.lastSyncedAt) || s.selectedCalendarCount > 0)
+        );
+
+        if (isReady || attempts >= maxAttempts) {
+          clearInterval(interval);
+          setSyncProcessingStep('All set! Connected successfully.');
+          setSyncProcessingDone(true);
+
+          setTimeout(() => {
+            if (!isMounted) return;
+            setIsSyncProcessing(false);
+            window.history.replaceState({}, '', '/?tab=settings');
+            setStatusMessage(
+              `Google Calendar connected! ${syncProcessingEmail ? `(${syncProcessingEmail}) ` : ''}Your events are ready.`
+            );
+            setTimeout(() => setStatusMessage(null), 5000);
+          }, 900);
+        }
+      } catch (err) {
+        console.error('Polling error during Google sync:', err);
+        if (attempts >= maxAttempts) {
+          clearInterval(interval);
+          if (isMounted) {
+            setIsSyncProcessing(false);
+            window.history.replaceState({}, '', '/?tab=settings');
+          }
+        }
+      }
+    }, 800);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [isSyncProcessing]);
 
   const handleConnectGoogle = async (userId: string) => {
     try {
@@ -467,6 +529,72 @@ export const SettingsPage: React.FC = () => {
 
   return (
     <div className="max-w-3xl mx-auto px-3 sm:px-6 pt-3 pb-36 md:pb-28 space-y-4">
+      {/* Google Sync Waiting / Processing Screen */}
+      {isSyncProcessing && (
+        <div className="fixed inset-0 z-50 bg-[#080b12]/95 backdrop-blur-xl flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-200">
+          <div className="max-w-md w-full p-8 rounded-3xl bg-slate-900/90 border border-white/10 shadow-2xl shadow-black/80 flex flex-col items-center space-y-6">
+            {/* Animated Logo Dock */}
+            <div className="relative flex items-center justify-center">
+              <div className={`w-20 h-20 rounded-3xl border flex items-center justify-center shadow-xl shadow-black/40 transition-all duration-300 ${
+                syncProcessingDone
+                  ? 'bg-emerald-500/15 border-emerald-500/40'
+                  : 'bg-slate-800/80 border-white/10'
+              }`}>
+                {syncProcessingDone ? (
+                  <Check className="w-10 h-10 text-emerald-400 animate-in zoom-in-50 duration-300" />
+                ) : (
+                  <Calendar className="w-10 h-10 text-blue-400 animate-pulse" />
+                )}
+              </div>
+              {!syncProcessingDone && (
+                <div className="absolute -bottom-2 -right-2 w-8 h-8 rounded-xl bg-emerald-500 text-slate-950 flex items-center justify-center shadow-lg shadow-emerald-500/30">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                </div>
+              )}
+            </div>
+
+            {/* Title & Email */}
+            <div className="space-y-2">
+              <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                {syncProcessingDone ? 'Connected Successfully!' : 'Connecting Google Calendar'}
+              </h2>
+              {syncProcessingEmail ? (
+                <p className="text-xs font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-full inline-block">
+                  {syncProcessingEmail}
+                </p>
+              ) : (
+                <p className="text-xs text-slate-400">Verifying account credentials</p>
+              )}
+            </div>
+
+            {/* Live Step Tracker */}
+            <div className="w-full space-y-3 pt-2">
+              <div className="flex items-center justify-center gap-2 text-xs font-medium text-slate-300">
+                {!syncProcessingDone ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400 shrink-0" />
+                ) : (
+                  <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                )}
+                <span>{syncProcessingStep}</span>
+              </div>
+
+              {/* Progress bar animation */}
+              <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                <div
+                  className={`h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-500 ${
+                    syncProcessingDone ? 'w-full' : 'w-2/3 animate-pulse'
+                  }`}
+                />
+              </div>
+
+              <p className="text-[11px] text-slate-500">
+                Synchronizing your family timeline. This will only take a moment...
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between pb-1">
         <div className="flex items-center gap-3">

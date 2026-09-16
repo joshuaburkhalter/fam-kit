@@ -1633,7 +1633,12 @@ app.get('/api/auth/google/callback', async (req, res) => {
     return res.redirect('/?tab=settings&google_sync=error&message=' + encodeURIComponent(result.error || 'Sync failed'));
   }
 
-  res.redirect('/?tab=settings&google_sync=success&email=' + encodeURIComponent(result.email || ''));
+  res.redirect(
+    '/?tab=settings&google_sync=processing&email=' +
+      encodeURIComponent(result.email || '') +
+      '&userId=' +
+      encodeURIComponent(result.userId || '')
+  );
 });
 
 // Diagnostic Endpoint for Live Debugging
