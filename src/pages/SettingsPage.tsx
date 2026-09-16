@@ -334,15 +334,57 @@ export const SettingsPage: React.FC = () => {
     if (!household) return;
     setIsSendingTestPush(true);
     try {
+      // 1. Ensure service worker & push subscription are active and registered in backend
+      if ('serviceWorker' in navigator && 'PushManager' in window) {
+        const swUrl = import.meta.env.DEV ? '/sw-push.js' : '/sw.js';
+        const reg = await navigator.serviceWorker.register(swUrl);
+        await navigator.serviceWorker.ready;
+
+        let sub = await reg.pushManager.getSubscription();
+        if (!sub) {
+          const success = await subscribeToPush();
+          if (!success) {
+            setErrorMessage('Please enable notifications on this device first.');
+            setTimeout(() => setErrorMessage(null), 4000);
+            return;
+          }
+          sub = await reg.pushManager.getSubscription();
+        }
+
+        if (sub) {
+          // Re-sync with backend to guarantee database contains this subscription
+          await api.subscribePush({
+            householdId: household.id,
+            userId: currentUser?.id,
+            subscription: sub.toJSON(),
+          });
+        }
+
+        // Direct browser notification verification if permission is granted
+        if (Notification.permission === 'granted') {
+          reg.showNotification('Homebase Alert 🛒', {
+            body: 'Push notifications are working smoothly on your device!',
+            icon: '/icons/icon-192.png',
+            badge: '/icons/icon-192.png',
+            data: { url: '/grocery' },
+            tag: 'fam-kit-test-' + Date.now(),
+          });
+        }
+      }
+
+      // 2. Dispatch push notification via backend server
       await api.sendTestPush(
         household.id,
         'Homebase Alert 🛒',
         'Push notifications are working smoothly on your device!'
       );
-      setStatusMessage('Test notification sent!');
+
+      setStatusMessage('Test notification sent successfully!');
       setTimeout(() => setStatusMessage(null), 3000);
     } catch (err: any) {
       console.error('Test push error:', err);
+      setErrorMessage(err.message || 'Failed to send test push notification.');
+      setTimeout(() => setErrorMessage(null), 4000);
     } finally {
       setIsSendingTestPush(false);
     }
@@ -836,125 +878,119 @@ export const SettingsPage: React.FC = () => {
       </div>
 
       {/* 4. Family Push Alerts & Notification Preferences */}
-      <div className="glass-panel rounded-3xl p-5 sm:p-6 border border-white/10 space-y-5">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
-              <Bell className="w-4 h-4" />
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                Push Notifications & Alerts
-                {isPushSubscribed && (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    Active on Device
-                  </span>
-                )}
-              </h3>
-              <p className="text-[11px] text-slate-400">
-                Manage alerts for this device and choose which family updates you want to receive
-              </p>
-            </div>
+      <div className="glass-panel rounded-3xl p-5 sm:p-6 border border-white/10 space-y-6">
+        {/* Header */}
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-2xl bg-amber-500/10 text-amber-400 border border-amber-500/20 shadow-inner">
+            <Bell className="w-5 h-5" />
           </div>
-
-          {isPushSubscribed && (
-            <button
-              type="button"
-              onClick={handleSendTestPush}
-              disabled={isSendingTestPush}
-              className="inline-flex items-center gap-1.5 text-xs bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 px-3 py-1.5 rounded-xl font-medium transition-colors cursor-pointer"
-            >
-              {isSendingTestPush ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <Send className="w-3.5 h-3.5" />
-              )}
-              <span>{isSendingTestPush ? 'Sending...' : 'Test Alert'}</span>
-            </button>
-          )}
+          <div>
+            <h3 className="text-sm font-bold text-white tracking-wide">
+              Push Notifications & Alerts
+            </h3>
+            <p className="text-[11px] text-slate-400">
+              Instant alerts delivered when family members update lists, calendar, or meals
+            </p>
+          </div>
         </div>
 
         {/* Browser Support / Permission Warnings */}
         {!isPushSupported ? (
-          <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-start gap-2.5">
+          <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/25 flex items-start gap-3">
             <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
             <div className="text-xs text-amber-300 leading-relaxed">
-              Push notifications are not supported by this browser. Try installing Homebase to your home screen or use Google Chrome, Microsoft Edge, or Safari (iOS 16.4+).
+              Push notifications are not supported in this browser environment. For alerts, use Google Chrome, Edge, Safari (iOS 16.4+), or install Homebase to your home screen.
             </div>
           </div>
         ) : pushPermission === 'denied' ? (
-          <div className="p-3.5 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-start gap-2.5">
+          <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/25 flex items-start gap-3">
             <BellOff className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
             <div className="text-xs text-red-300 leading-relaxed">
-              <strong>Notifications are blocked in your browser settings.</strong>
+              <strong className="text-red-200">Browser permissions are blocked.</strong>
               <div className="text-[11px] text-red-400/90 mt-1">
-                To receive alerts, click the site settings/padlock icon in your browser address bar and set Notifications to &quot;Allow&quot;.
+                To receive alerts, click the lock icon in your browser URL bar and change Notifications to &quot;Allow&quot;.
               </div>
             </div>
           </div>
         ) : (
-          /* Master Device Toggle */
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            {/* Enabled */}
-            <label
-              onClick={() => handlePushToggle(true)}
-              className={`p-3.5 rounded-2xl border cursor-pointer flex items-start gap-3 transition-all ${
+          /* Sleek Device Status & Action Card */
+          <div className="rounded-2xl bg-slate-900/80 border border-white/10 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-lg shadow-black/20">
+            <div className="flex items-start gap-3.5 min-w-0">
+              <div className={`p-2.5 rounded-2xl border shrink-0 transition-colors ${
                 isPushSubscribed
-                  ? 'bg-emerald-500/10 border-emerald-500/40 ring-1 ring-emerald-500/25'
-                  : 'bg-slate-900/60 border-white/5 hover:border-white/10'
-              }`}
-            >
-              <input
-                type="radio"
-                name="pushAlertsMasterOption"
-                checked={isPushSubscribed}
-                onChange={() => handlePushToggle(true)}
-                className="mt-0.5 h-4 w-4 text-emerald-500 accent-emerald-500 cursor-pointer"
-              />
-              <div className="flex-1 min-w-0">
-                <div className="text-xs font-bold text-white flex items-center justify-between gap-1">
-                  <span>Alerts Enabled</span>
-                  {isPushSubscribed && (
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                  )}
-                </div>
-                <div className="text-[11px] text-slate-400 mt-0.5">
-                  {isSubscribingPush
-                    ? 'Configuring device...'
-                    : 'This device will receive instant notifications for selected family events.'}
-                </div>
+                  ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+                  : 'bg-slate-800 border-white/10 text-slate-400'
+              }`}>
+                <Smartphone className="w-5 h-5" />
               </div>
-            </label>
 
-            {/* Disabled */}
-            <label
-              onClick={() => handlePushToggle(false)}
-              className={`p-3.5 rounded-2xl border cursor-pointer flex items-start gap-3 transition-all ${
-                !isPushSubscribed
-                  ? 'bg-amber-500/10 border-amber-500/40 ring-1 ring-amber-500/25'
-                  : 'bg-slate-900/60 border-white/5 hover:border-white/10'
-              }`}
-            >
-              <input
-                type="radio"
-                name="pushAlertsMasterOption"
-                checked={!isPushSubscribed}
-                onChange={() => handlePushToggle(false)}
-                className="mt-0.5 h-4 w-4 text-amber-500 accent-amber-500 cursor-pointer"
-              />
-              <div>
-                <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                  <span>Muted on this Device</span>
-                  {!isPushSubscribed && (
-                    <BellOff className="w-3.5 h-3.5 text-amber-400" />
+              <div className="min-w-0 space-y-1">
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <span className="text-xs font-bold text-white">This Device</span>
+                  {isPushSubscribed ? (
+                    <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-emerald-300 bg-emerald-500/20 border border-emerald-500/35 px-2.5 py-0.5 rounded-full shadow-sm">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      Active & Receiving Alerts
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 text-[10px] font-medium text-slate-400 bg-slate-800/80 border border-white/10 px-2.5 py-0.5 rounded-full">
+                      <BellOff className="w-3 h-3 text-slate-400" />
+                      Alerts Muted
+                    </span>
                   )}
                 </div>
-                <div className="text-[11px] text-slate-400 mt-0.5">
-                  Silence all push notifications on this specific phone or computer.
-                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  {isPushSubscribed
+                    ? 'Delivers native notifications when Homebase is running or in the background.'
+                    : 'Push notifications are silenced on this browser.'}
+                </p>
               </div>
-            </label>
+            </div>
+
+            {/* Actions: Test Button + Enable/Mute Toggle */}
+            <div className="flex items-center gap-2.5 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-white/5">
+              {isPushSubscribed && (
+                <button
+                  type="button"
+                  onClick={handleSendTestPush}
+                  disabled={isSendingTestPush}
+                  className="px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-200 bg-slate-800/90 hover:bg-slate-700/90 border border-white/10 hover:border-white/20 active:scale-[0.98] transition-all flex items-center gap-2 shadow-sm cursor-pointer disabled:opacity-50"
+                  title="Send a sample alert to verify delivery"
+                >
+                  {isSendingTestPush ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" />
+                  ) : (
+                    <Send className="w-3.5 h-3.5 text-emerald-400" />
+                  )}
+                  <span>{isSendingTestPush ? 'Sending...' : 'Test Alert'}</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => handlePushToggle(!isPushSubscribed)}
+                disabled={isSubscribingPush}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shadow-md ${
+                  isPushSubscribed
+                    ? 'bg-slate-800 text-slate-300 hover:bg-rose-500/20 hover:text-rose-300 hover:border-rose-500/30 border border-white/10'
+                    : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/20 font-extrabold'
+                }`}
+              >
+                {isSubscribingPush ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : isPushSubscribed ? (
+                  <>
+                    <BellOff className="w-3.5 h-3.5" />
+                    <span>Mute Alerts</span>
+                  </>
+                ) : (
+                  <>
+                    <Bell className="w-3.5 h-3.5" />
+                    <span>Enable Alerts</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         )}
 

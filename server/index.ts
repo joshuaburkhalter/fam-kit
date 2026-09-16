@@ -1953,33 +1953,45 @@ app.get('/privacy', (req, res) => {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Privacy Policy - Homebase</title>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; max-width: 720px; margin: 40px auto; padding: 0 20px; background: #090d16; color: #cbd5e1; }
-    h1 { color: #f8fafc; font-size: 28px; }
-    h2 { color: #34d399; font-size: 18px; margin-top: 28px; }
-    p { margin-bottom: 16px; }
-    a { color: #34d399; text-decoration: none; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; max-width: 760px; margin: 40px auto; padding: 0 20px; background: #080b12; color: #cbd5e1; }
+    h1 { color: #f8fafc; font-size: 28px; margin-bottom: 4px; }
+    h2 { color: #10b981; font-size: 18px; margin-top: 28px; margin-bottom: 8px; }
+    p { margin-bottom: 14px; }
+    a { color: #34d399; text-decoration: underline; }
+    ul { margin-bottom: 14px; padding-left: 24px; }
+    li { margin-bottom: 6px; }
+    .box { background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.2); padding: 18px; border-radius: 12px; margin: 18px 0; }
+    .back { display: inline-block; margin-bottom: 24px; color: #10b981; text-decoration: none; font-weight: 600; font-size: 14px; }
   </style>
 </head>
 <body>
+  <a href="/" class="back">&larr; Back to Homebase</a>
   <h1>Privacy Policy</h1>
   <p><em>Last updated: September 16, 2026</em></p>
   
   <h2>1. Overview</h2>
-  <p>Homebase is a private household management and family calendar application. Your privacy is paramount: we do not sell, rent, or monetize your personal data.</p>
+  <p>Homebase (<a href="https://homebase.skyy.studio">https://homebase.skyy.studio</a>) is a private household management and family calendar application. Your privacy is paramount: we do not sell, rent, or monetize your personal data.</p>
   
-  <h2>2. Google User Data & Calendar Sync</h2>
-  <p>When you choose to connect your Google account to Homebase, our application accesses your Google Calendar data strictly for the following purposes:</p>
-  <ul>
-    <li>Reading your primary calendar events to display them on your family's unified schedule timeline.</li>
-    <li>Allowing your household members to view family schedules in one synchronized place.</li>
-  </ul>
-  <p>Homebase does not share your Google Calendar data with any third parties, advertisers, or external services. Data is stored solely on your private household server instance.</p>
+  <div class="box">
+    <h2 style="margin-top:0;">2. Google User Data & Google Calendar Sync</h2>
+    <p>When you choose to connect your Google account to Homebase, our application accesses your Google Calendar data strictly for the following purposes:</p>
+    <ul>
+      <li>Reading metadata of your calendars to allow you to select which specific calendars are displayed.</li>
+      <li>Reading your calendar events to display them on your family's unified schedule timeline.</li>
+      <li>Allowing your household members to view family schedules in one synchronized place.</li>
+    </ul>
+    <p>Homebase does not share your Google Calendar data with any third parties, advertisers, or external services. Data is stored solely on your private household server instance.</p>
+    
+    <p><strong>Limited Use Policy:</strong> Homebase's use and transfer to any other app of information received from Google APIs will adhere to the <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener">Google API Services User Data Policy</a>, including the Limited Use requirements.</p>
+    
+    <p>We do NOT use Google Calendar data to train generalized AI/ML models.</p>
+  </div>
   
-  <h2>3. Revoking Access</h2>
-  <p>You can disconnect your Google Calendar integration at any time directly in Homebase under Settings, or by visiting your <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">Google Account Security Permissions</a>.</p>
+  <h2>3. Revoking Access & Data Deletion</h2>
+  <p>You can disconnect your Google Calendar integration at any time directly in Homebase under Settings, or by visiting your <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">Google Account Security Permissions</a>. Disconnecting immediately removes stored refresh tokens and deletes synced Google events from the schedule timeline.</p>
   
   <h2>4. Contact</h2>
-  <p>For questions regarding this policy, contact the Homebase team at <a href="mailto:joshua@redpointaudio.com">joshua@redpointaudio.com</a>.</p>
+  <p>For questions regarding this policy or data deletion requests, contact the Homebase team at <a href="mailto:joshua@redpointaudio.com">joshua@redpointaudio.com</a>.</p>
 </body>
 </html>`);
 });
@@ -1992,19 +2004,26 @@ app.get('/terms', (req, res) => {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Terms of Service - Homebase</title>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; max-width: 720px; margin: 40px auto; padding: 0 20px; background: #090d16; color: #cbd5e1; }
-    h1 { color: #f8fafc; font-size: 28px; }
-    h2 { color: #34d399; font-size: 18px; margin-top: 28px; }
-    p { margin-bottom: 16px; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; max-width: 760px; margin: 40px auto; padding: 0 20px; background: #080b12; color: #cbd5e1; }
+    h1 { color: #f8fafc; font-size: 28px; margin-bottom: 4px; }
+    h2 { color: #10b981; font-size: 18px; margin-top: 28px; margin-bottom: 8px; }
+    p { margin-bottom: 14px; }
+    a { color: #34d399; text-decoration: underline; }
+    .back { display: inline-block; margin-bottom: 24px; color: #10b981; text-decoration: none; font-weight: 600; font-size: 14px; }
   </style>
 </head>
 <body>
+  <a href="/" class="back">&larr; Back to Homebase</a>
   <h1>Terms of Service</h1>
   <p><em>Last updated: September 16, 2026</em></p>
   <h2>1. Use of Service</h2>
-  <p>Homebase is provided for personal, household use to coordinate family calendars, meals, and lists.</p>
+  <p>Homebase (<a href="https://homebase.skyy.studio">https://homebase.skyy.studio</a>) is provided for personal, household use to coordinate family calendars, meals, and lists.</p>
   <h2>2. Accounts & Security</h2>
   <p>Users are responsible for safeguarding their account credentials and controlling access to their private household invite codes.</p>
+  <h2>3. Third-Party Integrations</h2>
+  <p>When connecting external services like Google Calendar, you agree to comply with applicable third-party terms of service.</p>
+  <h2>4. Contact</h2>
+  <p>For questions regarding these terms, contact <a href="mailto:joshua@redpointaudio.com">joshua@redpointaudio.com</a>.</p>
 </body>
 </html>`);
 });

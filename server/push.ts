@@ -3,8 +3,10 @@ import { queryOne, queryAll, execute } from './db.js';
 
 export const vapidPublicKey =
   process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ||
-  'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U';
-const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY || 'UUxI2O4-Fb_s_bvyYl3TfQ14sJtH0k6sBw8-kLgqDQE';
+  'BDX4Zy77BkYbaYZWKavG_dGmHRHrKUANhbivPULmtaJZ7UMsS3GF5qM2KtBaVgKX3QrcS51M_jd_yFPSXxLOxFU';
+const vapidPrivateKey =
+  process.env.VAPID_PRIVATE_KEY ||
+  'Wu90DS3MV55JexGnDtXe3WtACmgmvg7td6CWjb86IgU';
 const vapidSubject = process.env.VAPID_SUBJECT || 'mailto:hello@famkit.app';
 
 try {
@@ -214,7 +216,8 @@ export async function sendPushNotificationToHousehold(
           })
         );
       } catch (err: any) {
-        if (err.statusCode === 404 || err.statusCode === 410) {
+        if (err.statusCode === 404 || err.statusCode === 410 || err.statusCode === 401 || err.statusCode === 403) {
+          // Prune dead, expired, or invalid key subscriptions
           execute('DELETE FROM push_subscriptions WHERE id = ?', [sub.id]);
         } else {
           console.error('Failed to send push to subscription:', sub.id, err?.message || err);

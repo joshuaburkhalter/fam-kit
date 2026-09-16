@@ -1,6 +1,14 @@
 // Service Worker Push & Notification Click Handlers
 // This script is imported by the main Workbox service worker
 
+self.addEventListener('install', () => {
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(self.clients.claim());
+});
+
 self.addEventListener('push', (event) => {
   if (!event.data) return;
 

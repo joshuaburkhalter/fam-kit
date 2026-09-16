@@ -9,12 +9,26 @@ import { RecipesPage } from './pages/RecipesPage';
 import { CalendarPage } from './pages/CalendarPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { LandingPage } from './pages/LandingPage';
+import { LegalPage } from './pages/LegalPage';
 import { AuthPage } from './components/AuthPage';
 import { usePWA } from './context/PWAContext';
 import { Loader2, ArrowRight } from 'lucide-react';
 
 const VALID_TABS = ['assistant', 'grocery', 'meals', 'recipes', 'calendar', 'settings', 'family'];
 const LAST_TAB_KEY = 'homebase_last_active_tab';
+
+function resolveInitialLegalView(): 'privacy' | 'terms' | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const p = window.location.pathname.toLowerCase();
+    if (p === '/privacy' || p.startsWith('/privacy')) return 'privacy';
+    if (p === '/terms' || p.startsWith('/terms')) return 'terms';
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('view') === 'privacy') return 'privacy';
+    if (params.get('view') === 'terms') return 'terms';
+  } catch {}
+  return null;
+}
 
 function resolveInitialTab(): string {
   if (typeof window === 'undefined') return 'assistant';
@@ -63,6 +77,7 @@ function resolveInitialTab(): string {
 export const AppContent: React.FC = () => {
   const { currentUser, isLoadingAuth } = usePWA();
   const [activeTab, setActiveTabState] = useState<string>(resolveInitialTab);
+  const [legalView, setLegalView] = useState<'privacy' | 'terms' | null>(resolveInitialLegalView);
   const [showAuthModal, setShowAuthModal] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
@@ -97,6 +112,36 @@ export const AppContent: React.FC = () => {
     } catch {}
   };
 
+  // Intercept global link clicks to /privacy and /terms and handle browser back/forward
+  useEffect(() => {
+    const handleLocationChange = () => {
+      setLegalView(resolveInitialLegalView());
+    };
+
+    const handleLinkClick = (e: MouseEvent) => {
+      const target = (e.target as HTMLElement).closest('a');
+      if (!target) return;
+      const href = target.getAttribute('href');
+      if (href === '/privacy' || href?.startsWith('/privacy')) {
+        e.preventDefault();
+        window.history.pushState({}, '', '/privacy');
+        setLegalView('privacy');
+      } else if (href === '/terms' || href?.startsWith('/terms')) {
+        e.preventDefault();
+        window.history.pushState({}, '', '/terms');
+        setLegalView('terms');
+      }
+    };
+
+    window.addEventListener('popstate', handleLocationChange);
+    document.addEventListener('click', handleLinkClick);
+
+    return () => {
+      window.removeEventListener('popstate', handleLocationChange);
+      document.removeEventListener('click', handleLinkClick);
+    };
+  }, []);
+
   // Handle URL parameters for PWA share_target and OAuth callbacks
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -113,6 +158,23 @@ export const AppContent: React.FC = () => {
       setActiveTab('recipes');
     }
   }, []);
+
+  // Top priority: If user navigated to Privacy Policy or Terms of Service
+  if (legalView) {
+    return (
+      <LegalPage
+        type={legalView}
+        onBack={() => {
+          setLegalView(null);
+          if (window.history.length > 1) {
+            window.history.back();
+          } else {
+            window.history.pushState({}, '', '/');
+          }
+        }}
+      />
+    );
+  }
 
   if (isLoadingAuth) {
     return (

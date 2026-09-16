@@ -366,10 +366,16 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsPWAInstalled(isStandalone);
 
     // Push notification capability check
+    const swUrl = import.meta.env.DEV ? '/sw-push.js' : '/sw.js';
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch((e) => {
-        // Debug fallback
-      });
+      navigator.serviceWorker
+        .register(swUrl)
+        .then((reg) => {
+          reg.update().catch(() => {});
+        })
+        .catch((e) => {
+          console.debug('Service worker registration note:', e);
+        });
     }
 
     if ('serviceWorker' in navigator && 'PushManager' in window) {
@@ -380,6 +386,14 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       navigator.serviceWorker.ready.then(async (reg) => {
         const sub = await reg.pushManager.getSubscription();
         setIsPushSubscribed(!!sub);
+        // If device has a subscription and user is in a household, ensure backend has it recorded
+        if (sub && household?.id) {
+          api.subscribePush({
+            householdId: household.id,
+            userId: currentUser?.id,
+            subscription: sub.toJSON(),
+          }).catch(() => {});
+        }
       });
     }
 
@@ -411,7 +425,17 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       const { publicKey } = await api.getVapidPublicKey();
+      const swUrl = import.meta.env.DEV ? '/sw-push.js' : '/sw.js';
+      await navigator.serviceWorker.register(swUrl);
       const reg = await navigator.serviceWorker.ready;
+
+      // Cleanly replace any previous subscription so new VAPID keys take effect
+      const existingSub = await reg.pushManager.getSubscription();
+      if (existingSub) {
+        try {
+          await existingSub.unsubscribe();
+        } catch {}
+      }
 
       // Convert VAPID key to Uint8Array
       const padding = '='.repeat((4 - (publicKey.length % 4)) % 4);
