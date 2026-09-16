@@ -244,10 +244,12 @@ export const CalendarPage: React.FC = () => {
     setEditingEventId(ev.id);
     setFormTitle(ev.title);
     setFormDescription(ev.description || '');
-    setFormDate(ev.start_time.split('T')[0]);
+    const startParts = ev.start_time.split('T');
+    const endParts = (ev.end_time || '').split('T');
+    setFormDate(startParts[0]);
     setFormIsAllDay(Boolean(ev.is_all_day));
-    setFormStartTime(ev.start_time.split('T')[1]?.substring(0, 5) || '09:00');
-    setFormEndTime(ev.end_time?.split('T')[1]?.substring(0, 5) || '10:00');
+    setFormStartTime(startParts[1]?.substring(0, 5) || '09:00');
+    setFormEndTime(endParts[1]?.substring(0, 5) || '10:00');
     setFormLocation(ev.location || '');
     setFormAssignedUser(ev.assigned_user_id || '');
     setIsModalOpen(true);
@@ -260,17 +262,17 @@ export const CalendarPage: React.FC = () => {
     setIsSaving(true);
 
     try {
-      const startTimeVal = formIsAllDay ? '00:00' : formStartTime;
-      const endTimeVal = formIsAllDay ? '23:59' : formEndTime;
-      const startIso = new Date(`${formDate}T${startTimeVal}:00`).toISOString();
-      const endIso = new Date(`${formDate}T${endTimeVal}:00`).toISOString();
+      const startTimeVal = formIsAllDay ? '' : formStartTime;
+      const endTimeVal = formIsAllDay ? '' : formEndTime;
+      const startStr = formIsAllDay ? `${formDate}T00:00:00` : `${formDate}T${startTimeVal || '09:00'}:00`;
+      const endStr = formIsAllDay ? `${formDate}T23:59:59` : `${formDate}T${endTimeVal || '10:00'}:00`;
 
       if (editingEventId) {
         const updated = await api.updateCalendarEvent(household.id, editingEventId, {
           title: formTitle.trim(),
           description: formDescription.trim() || undefined,
-          start_time: startIso,
-          end_time: endIso,
+          start_time: startStr,
+          end_time: endStr,
           is_all_day: formIsAllDay,
           location: formLocation.trim() || undefined,
           assigned_user_id: formAssignedUser || undefined,
@@ -280,8 +282,8 @@ export const CalendarPage: React.FC = () => {
         const created = await api.createCalendarEvent(household.id, {
           title: formTitle.trim(),
           description: formDescription.trim() || undefined,
-          start_time: startIso,
-          end_time: endIso,
+          start_time: startStr,
+          end_time: endStr,
           is_all_day: formIsAllDay,
           location: formLocation.trim() || undefined,
           assigned_user_id: formAssignedUser || undefined,
@@ -347,13 +349,13 @@ export const CalendarPage: React.FC = () => {
       // 2. If Gemini didn't execute action, use local natural language parser
       if (!scheduledTitle) {
         const parsed = parseNaturalLanguageEvent(raw, users);
-        const startIso = new Date(`${parsed.date}T${parsed.startTime}:00`).toISOString();
-        const endIso = new Date(`${parsed.date}T${parsed.endTime}:00`).toISOString();
+        const startStr = parsed.isAllDay ? `${parsed.date}T00:00:00` : `${parsed.date}T${parsed.startTime}:00`;
+        const endStr = parsed.isAllDay ? `${parsed.date}T23:59:59` : `${parsed.date}T${parsed.endTime}:00`;
 
         await api.createCalendarEvent(household.id, {
           title: parsed.title,
-          start_time: startIso,
-          end_time: endIso,
+          start_time: startStr,
+          end_time: endStr,
           is_all_day: parsed.isAllDay,
           assigned_user_id: parsed.assignedUserId || currentUser?.id,
         });

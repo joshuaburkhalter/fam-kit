@@ -1324,10 +1324,30 @@ app.get('/api/calendar', (req, res) => {
   res.json(events);
 });
 
+function cleanDateStr(d: any): string {
+  if (!d || typeof d !== 'string') return '';
+  return d.split('T')[0].trim();
+}
+
+function cleanTimeStr(t: any): string | null {
+  if (!t || typeof t !== 'string') return null;
+  const trimmed = t.trim();
+  if (!trimmed) return null;
+  if (trimmed.includes('T')) {
+    const afterT = trimmed.split('T')[1];
+    return afterT ? afterT.substring(0, 5) : null;
+  }
+  return trimmed.substring(0, 5);
+}
+
 app.post('/api/calendar', (req, res) => {
   const householdId = getHouseholdId(req);
   const { title, description, date, startTime, endTime, category, location, assignedMemberId } = req.body;
-  if (!title || !date) return res.status(400).json({ error: 'Title and Date are required' });
+  const finalDate = cleanDateStr(date);
+  const finalStart = cleanTimeStr(startTime);
+  const finalEnd = cleanTimeStr(endTime);
+
+  if (!title || !finalDate) return res.status(400).json({ error: 'Title and Date are required' });
 
   const id = `ev_${Date.now()}`;
   const now = new Date().toISOString();
@@ -1335,12 +1355,12 @@ app.post('/api/calendar', (req, res) => {
   execute(
     `INSERT INTO calendar_events (id, title, description, date, startTime, endTime, category, location, assignedMemberId, householdId, createdAt)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, title, description || null, date, startTime || null, endTime || null, category || 'Family', location || null, assignedMemberId || null, householdId, now]
+    [id, title, description || null, finalDate, finalStart || null, finalEnd || null, category || 'Family', location || null, assignedMemberId || null, householdId, now]
   );
 
   sendPushNotificationToHousehold(householdId, {
     title: `📅 Event: ${title}`,
-    body: `Scheduled for ${date}${startTime ? ` at ${startTime}` : ''}`,
+    body: `Scheduled for ${finalDate}${finalStart ? ` at ${finalStart}` : ''}`,
     url: '/calendar',
   });
 
@@ -1359,9 +1379,9 @@ app.patch('/api/calendar', (req, res) => {
 
     const newTitle = title !== undefined ? title : existing.title;
     const newDesc = description !== undefined ? description : existing.description;
-    const newDate = date !== undefined ? date : existing.date;
-    const newStart = startTime !== undefined ? startTime : existing.startTime;
-    const newEnd = endTime !== undefined ? endTime : existing.endTime;
+    const newDate = date !== undefined ? cleanDateStr(date) : existing.date;
+    const newStart = startTime !== undefined ? cleanTimeStr(startTime) : existing.startTime;
+    const newEnd = endTime !== undefined ? cleanTimeStr(endTime) : existing.endTime;
     const newCategory = category !== undefined ? category : existing.category;
     const newLocation = location !== undefined ? location : existing.location;
     const newMember = assignedMemberId !== undefined ? assignedMemberId : existing.assignedMemberId;

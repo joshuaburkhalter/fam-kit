@@ -771,18 +771,21 @@ export const api = {
   // Calendar
   getCalendarEvents: async (householdId: string, startDate?: string, endDate?: string): Promise<CalendarEvent[]> => {
     const list = await fetchJson<any[]>('/calendar');
-    return list.map((ev) => ({
-      id: ev.id,
-      household_id: ev.householdId,
-      title: ev.title,
-      description: ev.description,
-      start_time: ev.startTime ? `${ev.date}T${ev.startTime}:00` : `${ev.date}T09:00:00`,
-      end_time: ev.endTime ? `${ev.date}T${ev.endTime}:00` : `${ev.date}T10:00:00`,
-      is_all_day: !ev.startTime,
-      location: ev.location,
-      assigned_user_id: ev.assignedMemberId,
-      created_at: ev.createdAt,
-    }));
+    return list.map((ev) => {
+      const isAllDay = !ev.startTime || (ev.startTime === '00:00' && ev.endTime === '23:59');
+      return {
+        id: ev.id,
+        household_id: ev.householdId,
+        title: ev.title,
+        description: ev.description,
+        start_time: ev.startTime ? `${ev.date}T${ev.startTime}:00` : `${ev.date}T00:00:00`,
+        end_time: ev.endTime ? `${ev.date}T${ev.endTime}:00` : `${ev.date}T23:59:59`,
+        is_all_day: isAllDay,
+        location: ev.location,
+        assigned_user_id: ev.assignedMemberId,
+        created_at: ev.createdAt,
+      };
+    });
   },
 
   createCalendarEvent: async (
@@ -798,8 +801,8 @@ export const api = {
     }
   ): Promise<CalendarEvent> => {
     const date = data.start_time.split('T')[0];
-    const startTime = data.start_time.split('T')[1]?.substring(0, 5);
-    const endTime = data.end_time.split('T')[1]?.substring(0, 5);
+    const startTime = data.is_all_day ? null : (data.start_time.split('T')[1]?.substring(0, 5) || null);
+    const endTime = data.is_all_day ? null : (data.end_time.split('T')[1]?.substring(0, 5) || null);
 
     const res = await fetchJson<any>('/calendar', {
       method: 'POST',
@@ -814,14 +817,15 @@ export const api = {
       }),
     });
 
+    const isAllDay = Boolean(data.is_all_day) || !res.startTime || (res.startTime === '00:00' && res.endTime === '23:59');
     return {
       id: res.id,
       household_id: householdId,
       title: res.title,
       description: res.description,
-      start_time: data.start_time,
-      end_time: data.end_time,
-      is_all_day: Boolean(data.is_all_day),
+      start_time: res.startTime ? `${res.date}T${res.startTime}:00` : `${res.date}T00:00:00`,
+      end_time: res.endTime ? `${res.date}T${res.endTime}:00` : `${res.date}T23:59:59`,
+      is_all_day: isAllDay,
       location: res.location,
       assigned_user_id: res.assignedMemberId,
       created_at: res.createdAt,
@@ -842,8 +846,8 @@ export const api = {
     }
   ): Promise<CalendarEvent> => {
     const date = data.start_time ? data.start_time.split('T')[0] : undefined;
-    const startTime = data.start_time ? data.start_time.split('T')[1]?.substring(0, 5) : undefined;
-    const endTime = data.end_time ? data.end_time.split('T')[1]?.substring(0, 5) : undefined;
+    const startTime = data.is_all_day ? null : (data.start_time ? data.start_time.split('T')[1]?.substring(0, 5) : undefined);
+    const endTime = data.is_all_day ? null : (data.end_time ? data.end_time.split('T')[1]?.substring(0, 5) : undefined);
 
     const res = await fetchJson<any>('/calendar', {
       method: 'PATCH',
@@ -859,14 +863,15 @@ export const api = {
       }),
     });
 
+    const isAllDay = Boolean(data.is_all_day) || !res.startTime || (res.startTime === '00:00' && res.endTime === '23:59');
     return {
       id: res.id,
       household_id: householdId,
       title: res.title,
       description: res.description,
-      start_time: data.start_time || `${res.date}T${res.startTime || '09:00'}:00`,
-      end_time: data.end_time || `${res.date}T${res.endTime || '10:00'}:00`,
-      is_all_day: Boolean(data.is_all_day),
+      start_time: res.startTime ? `${res.date}T${res.startTime}:00` : `${res.date}T00:00:00`,
+      end_time: res.endTime ? `${res.date}T${res.endTime}:00` : `${res.date}T23:59:59`,
+      is_all_day: isAllDay,
       location: res.location,
       assigned_user_id: res.assignedMemberId,
       created_at: res.createdAt,
