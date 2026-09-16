@@ -11,6 +11,7 @@ import type {
   CalendarEvent,
   GoogleSyncStatus,
   GoogleCalendarEntry,
+  NotificationPreferences,
 } from '../types';
 
 const BASE_URL = '/api';
@@ -947,6 +948,21 @@ export const api = {
     fetchJson<{ success: boolean }>('/push', {
       method: 'POST',
       body: JSON.stringify({ action: 'test_notification', title, message: body }),
+    }),
+  unsubscribePush: (endpoint?: string, userId?: string) =>
+    fetchJson<{ success: boolean }>('/push/unsubscribe', {
+      method: 'POST',
+      body: JSON.stringify({ endpoint, userId }),
+    }),
+
+  // Notification Preferences
+  getNotificationPreferences: (userId?: string) =>
+    fetchJson<NotificationPreferences>(userId ? `/notifications/preferences?userId=${encodeURIComponent(userId)}` : '/notifications/preferences'),
+
+  updateNotificationPreferences: (data: Partial<NotificationPreferences> & { userId?: string }) =>
+    fetchJson<NotificationPreferences>('/notifications/preferences', {
+      method: 'PUT',
+      body: JSON.stringify(data),
     }),
 
   // Google Calendar Integration

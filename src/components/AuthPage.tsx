@@ -13,6 +13,7 @@ import {
   Eye,
   EyeOff,
   Home,
+  ArrowLeft,
 } from 'lucide-react';
 import { usePWA } from '../context/PWAContext';
 import { HomebaseLogo } from './HomebaseLogo';
@@ -27,9 +28,17 @@ const AVATAR_COLORS = [
   '#ef4444', // Red
 ];
 
-export const AuthPage: React.FC = () => {
+interface AuthPageProps {
+  initialTab?: 'login' | 'register';
+  onBackToLanding?: () => void;
+}
+
+export const AuthPage: React.FC<AuthPageProps> = ({
+  initialTab = 'login',
+  onBackToLanding,
+}) => {
   const { login, register } = usePWA();
-  const [tab, setTab] = useState<'login' | 'register'>('login');
+  const [tab, setTab] = useState<'login' | 'register'>(initialTab);
 
   // Sign in state
   const [savedProfiles] = useState<Array<{
@@ -158,6 +167,19 @@ export const AuthPage: React.FC = () => {
       </div>
 
       <div className="w-full max-w-md relative z-10 space-y-6">
+        {onBackToLanding && (
+          <div>
+            <button
+              type="button"
+              onClick={onBackToLanding}
+              className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-emerald-400 transition-colors cursor-pointer"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Back to Overview</span>
+            </button>
+          </div>
+        )}
+
         {/* App Branding */}
         <div className="text-center space-y-2">
           <div className="inline-flex items-center justify-center mb-1">
@@ -543,6 +565,17 @@ export const AuthPage: React.FC = () => {
               </button>
             </form>
           )}
+        </div>
+
+        {/* Footer legal links */}
+        <div className="flex items-center justify-center gap-4 text-[11px] text-slate-500 pt-1">
+          <a href="/privacy" className="hover:text-emerald-400 transition-colors">
+            Privacy Policy
+          </a>
+          <span>•</span>
+          <a href="/terms" className="hover:text-emerald-400 transition-colors">
+            Terms of Service
+          </a>
         </div>
       </div>
     </div>

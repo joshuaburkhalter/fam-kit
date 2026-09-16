@@ -167,6 +167,22 @@ function initSchema(db: Database) {
       createdAt TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS notification_preferences (
+      userId TEXT PRIMARY KEY,
+      householdId TEXT NOT NULL,
+      groceryAdded INTEGER NOT NULL DEFAULT 1,
+      groceryCompleted INTEGER NOT NULL DEFAULT 1,
+      calendarEvents INTEGER NOT NULL DEFAULT 1,
+      mealPlans INTEGER NOT NULL DEFAULT 1,
+      recipesAdded INTEGER NOT NULL DEFAULT 1,
+      assistantActions INTEGER NOT NULL DEFAULT 1,
+      notifyOwnActions INTEGER NOT NULL DEFAULT 0,
+      quietHoursEnabled INTEGER NOT NULL DEFAULT 0,
+      quietHoursStart TEXT NOT NULL DEFAULT '22:00',
+      quietHoursEnd TEXT NOT NULL DEFAULT '07:00',
+      updatedAt TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS user_google_sync (
       id TEXT PRIMARY KEY,
       userId TEXT NOT NULL,
@@ -219,6 +235,25 @@ function initSchema(db: Database) {
   } catch {}
   try {
     db.run(`CREATE INDEX IF NOT EXISTS idx_cal_google ON calendar_events (householdId, googleEventId)`);
+  } catch {}
+  try {
+    db.run(`
+      CREATE TABLE IF NOT EXISTS notification_preferences (
+        userId TEXT PRIMARY KEY,
+        householdId TEXT NOT NULL,
+        groceryAdded INTEGER NOT NULL DEFAULT 1,
+        groceryCompleted INTEGER NOT NULL DEFAULT 1,
+        calendarEvents INTEGER NOT NULL DEFAULT 1,
+        mealPlans INTEGER NOT NULL DEFAULT 1,
+        recipesAdded INTEGER NOT NULL DEFAULT 1,
+        assistantActions INTEGER NOT NULL DEFAULT 1,
+        notifyOwnActions INTEGER NOT NULL DEFAULT 0,
+        quietHoursEnabled INTEGER NOT NULL DEFAULT 0,
+        quietHoursStart TEXT NOT NULL DEFAULT '22:00',
+        quietHoursEnd TEXT NOT NULL DEFAULT '07:00',
+        updatedAt TEXT NOT NULL
+      );
+    `);
   } catch {}
   try {
     db.run(`

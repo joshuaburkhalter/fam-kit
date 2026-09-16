@@ -6,7 +6,12 @@ import dotenv from 'dotenv';
 import { getDb, queryAll, queryOne, execute, saveDb, createDefaultAisles } from './db.js';
 import { getGeminiModel } from './gemini.js';
 import { parseRecipeFromUrl, parseRecipeFromHtml, getCuratedFoodImage, findAccurateRecipePhoto, generateRecipeImageWithImagen } from './recipe-parser.js';
-import { sendPushNotificationToHousehold, vapidPublicKey } from './push.js';
+import {
+  sendPushNotificationToHousehold,
+  vapidPublicKey,
+  getNotificationPreferences,
+  saveNotificationPreferences,
+} from './push.js';
 import { buildSelectiveAssistantContext } from './assistant-context.js';
 import {
   getGoogleAuthUrl,
@@ -418,11 +423,18 @@ ${contextString}
             data: createdItems,
           });
 
-          sendPushNotificationToHousehold(householdId, {
-            title: '🛒 Grocery List Updated',
-            body: `Added: ${createdItems.map((i) => i.name).join(', ')}`,
-            url: '/grocery',
-          });
+          sendPushNotificationToHousehold(
+            householdId,
+            {
+              title: '🛒 Grocery List Updated',
+              body: `Added: ${createdItems.map((i) => i.name).join(', ')}`,
+              url: '/grocery',
+            },
+            {
+              category: 'grocery_added',
+              actorUserId: activeMemberId || getAuthUser(req)?.id,
+            }
+          );
         }
 
         // Tool: add_calendar_events
@@ -462,11 +474,18 @@ ${contextString}
             data: createdEvents,
           });
 
-          sendPushNotificationToHousehold(householdId, {
-            title: '📅 New Calendar Event',
-            body: createdEvents.map((e) => `${e.title} (${e.date})`).join(', '),
-            url: '/calendar',
-          });
+          sendPushNotificationToHousehold(
+            householdId,
+            {
+              title: '📅 New Calendar Event',
+              body: createdEvents.map((e) => `${e.title} (${e.date})`).join(', '),
+              url: '/calendar',
+            },
+            {
+              category: 'calendar_events',
+              actorUserId: activeMemberId || getAuthUser(req)?.id,
+            }
+          );
         }
 
         // Tool: delete_calendar_events
@@ -516,11 +535,18 @@ ${contextString}
           });
 
           if (deletedEvents.length > 0) {
-            sendPushNotificationToHousehold(householdId, {
-              title: '📅 Calendar Event Removed',
-              body: `Removed: ${deletedEvents.map((e) => e.title).join(', ')}`,
-              url: '/calendar',
-            });
+            sendPushNotificationToHousehold(
+              householdId,
+              {
+                title: '📅 Calendar Event Removed',
+                body: `Removed: ${deletedEvents.map((e) => e.title).join(', ')}`,
+                url: '/calendar',
+              },
+              {
+                category: 'calendar_events',
+                actorUserId: activeMemberId || getAuthUser(req)?.id,
+              }
+            );
           }
         }
 
@@ -573,6 +599,19 @@ ${contextString}
             summary: `Added ${createdMeals.length} meal(s) to this week's meals`,
             data: createdMeals,
           });
+
+          sendPushNotificationToHousehold(
+            householdId,
+            {
+              title: '🍳 Meals Planned',
+              body: createdMeals.map((m) => `${m.title} (${m.date})`).join(', '),
+              url: '/meal-planner',
+            },
+            {
+              category: 'meal_plans',
+              actorUserId: activeMemberId || getAuthUser(req)?.id,
+            }
+          );
         }
 
         // Tool: create_custom_list
@@ -728,11 +767,18 @@ ${contextString}
             data: { id: recipeId, title: toolArgs.title.trim(), tags: Array.from(tagSet), imageUrl },
           });
 
-          sendPushNotificationToHousehold(householdId, {
-            title: '🍳 New Recipe Created',
-            body: `"${toolArgs.title.trim()}" was added to your recipe box with #ai tag`,
-            url: '/recipes',
-          });
+          sendPushNotificationToHousehold(
+            householdId,
+            {
+              title: '🍳 New Recipe Created',
+              body: `"${toolArgs.title.trim()}" was added to your recipe box with #ai tag`,
+              url: '/recipes',
+            },
+            {
+              category: 'recipes_added',
+              actorUserId: activeMemberId || getAuthUser(req)?.id,
+            }
+          );
         }
       }
     }
@@ -925,6 +971,20 @@ app.post('/api/grocery', (req, res) => {
       [id, name, finalCategory, finalAisleId, quantity || '1', unit || null, note || null, 0, listId || null, addedById || 'u1', householdId, now]
     );
 
+    const actor = getAuthUser(req);
+    sendPushNotificationToHousehold(
+      householdId,
+      {
+        title: '🛒 Added to Grocery List',
+        body: `${name}${quantity && quantity !== '1' ? ` (${quantity})` : ''}`,
+        url: '/grocery',
+      },
+      {
+        category: 'grocery_added',
+        actorUserId: addedById || actor?.id,
+      }
+    );
+
     res.json({
       id,
       name,
@@ -955,7 +1015,25 @@ app.patch('/api/grocery', (req, res) => {
   if (quantity !== undefined) execute('UPDATE grocery_items SET quantity = ? WHERE id = ?', [quantity, id]);
   if (aisleId !== undefined) execute('UPDATE grocery_items SET aisleId = ? WHERE id = ?', [aisleId, id]);
 
-  const updated = queryOne('SELECT * FROM grocery_items WHERE id = ?', [id]);
+  const updated = queryOne<any>('SELECT * FROM grocery_items WHERE id = ?', [id]);
+
+  if (checked === true && updated) {
+    const householdId = getHouseholdId(req);
+    const actor = getAuthUser(req);
+    sendPushNotificationToHousehold(
+      householdId,
+      {
+        title: '🛒 Item Checked Off',
+        body: `${updated.name || name} was checked off${actor ? ` by ${actor.name}` : ''}`,
+        url: '/grocery',
+      },
+      {
+        category: 'grocery_completed',
+        actorUserId: actor?.id,
+      }
+    );
+  }
+
   res.json(updated ? { ...updated, checked: Boolean(updated.checked) } : {});
 });
 
@@ -1196,6 +1274,20 @@ app.post('/api/meal-planner', (req, res) => {
     [id, date, mealType, title, notes || null, recipeId || null, householdId]
   );
 
+  const actor = getAuthUser(req);
+  sendPushNotificationToHousehold(
+    householdId,
+    {
+      title: `🍳 Planned: ${title}`,
+      body: `Scheduled for ${date} (${mealType})`,
+      url: '/meal-planner',
+    },
+    {
+      category: 'meal_plans',
+      actorUserId: actor?.id,
+    }
+  );
+
   const saved = queryOne('SELECT * FROM meal_plans WHERE id = ?', [id]);
   res.json(saved);
 });
@@ -1246,6 +1338,20 @@ app.post('/api/meals/week', (req, res) => {
     `INSERT INTO weekly_meals (id, title, recipeId, notes, isMade, madeDate, weekStartDate, householdId, createdAt)
      VALUES (?, ?, ?, ?, 0, NULL, ?, ?, ?)`,
     [id, title, recipeId || null, notes || null, weekStart, householdId, now]
+  );
+
+  const actor = getAuthUser(req);
+  sendPushNotificationToHousehold(
+    householdId,
+    {
+      title: '🍳 Planned Dinner Added',
+      body: `${title}${actor ? ` (by ${actor.name})` : ''}`,
+      url: '/meal-planner',
+    },
+    {
+      category: 'meal_plans',
+      actorUserId: actor?.id,
+    }
   );
 
   const saved = queryOne('SELECT * FROM weekly_meals WHERE id = ?', [id]);
@@ -1384,11 +1490,19 @@ app.post('/api/calendar', (req, res) => {
     [id, title, description || null, finalDate, finalStart || null, finalEnd || null, category || 'Family', location || null, assignedMemberId || null, householdId, now]
   );
 
-  sendPushNotificationToHousehold(householdId, {
-    title: `📅 Event: ${title}`,
-    body: `Scheduled for ${finalDate}${finalStart ? ` at ${finalStart}` : ''}`,
-    url: '/calendar',
-  });
+  const actor = getAuthUser(req);
+  sendPushNotificationToHousehold(
+    householdId,
+    {
+      title: `📅 Event: ${title}`,
+      body: `Scheduled for ${finalDate}${finalStart ? ` at ${finalStart}` : ''}`,
+      url: '/calendar',
+    },
+    {
+      category: 'calendar_events',
+      actorUserId: actor?.id,
+    }
+  );
 
   const created = queryOne('SELECT * FROM calendar_events WHERE id = ?', [id]);
   res.json(created);
@@ -1751,36 +1865,83 @@ app.put('/api/users/profile', (req, res) => {
   });
 });
 
-// 8. Push API
+// 8. Push API & Notification Preferences
 app.get('/api/push', (req, res) => {
   res.json({ publicKey: vapidPublicKey });
 });
 
 app.post('/api/push', async (req, res) => {
   const householdId = getHouseholdId(req);
+  const authUser = getAuthUser(req);
   const { action, subscription, userId, title, message } = req.body;
 
   if (action === 'test_notification') {
-    await sendPushNotificationToHousehold(householdId, {
-      title: title || '✨ Homebase Notification',
-      body: message || 'Push notifications are live on your device!',
-      url: '/',
-    });
+    await sendPushNotificationToHousehold(
+      householdId,
+      {
+        title: title || '✨ Homebase Notification',
+        body: message || 'Push notifications are live on your device!',
+        url: '/',
+      },
+      {
+        category: 'test',
+        actorUserId: undefined,
+      }
+    );
     return res.json({ success: true });
   }
 
   if (subscription && subscription.endpoint) {
     const id = `sub_${Date.now()}`;
     const now = new Date().toISOString();
+    const effectiveUserId = userId || authUser?.id || null;
     execute(
       `INSERT OR REPLACE INTO push_subscriptions (id, endpoint, keys, userId, householdId, createdAt)
        VALUES (?, ?, ?, ?, ?, ?)`,
-      [id, subscription.endpoint, JSON.stringify(subscription.keys), userId || null, householdId, now]
+      [id, subscription.endpoint, JSON.stringify(subscription.keys), effectiveUserId, householdId, now]
     );
     return res.json({ success: true });
   }
 
   res.status(400).json({ error: 'Invalid payload' });
+});
+
+app.post('/api/push/unsubscribe', (req, res) => {
+  const householdId = getHouseholdId(req);
+  const authUser = getAuthUser(req);
+  const { endpoint, userId } = req.body;
+
+  if (endpoint) {
+    execute('DELETE FROM push_subscriptions WHERE endpoint = ?', [endpoint]);
+    return res.json({ success: true });
+  }
+
+  const targetUserId = userId || authUser?.id;
+  if (targetUserId) {
+    execute('DELETE FROM push_subscriptions WHERE userId = ? AND householdId = ?', [targetUserId, householdId]);
+    return res.json({ success: true });
+  }
+
+  res.status(400).json({ error: 'Endpoint or userId required to unsubscribe' });
+});
+
+// Notification Preferences
+app.get('/api/notifications/preferences', (req, res) => {
+  const householdId = getHouseholdId(req);
+  const authUser = getAuthUser(req);
+  const userId = (req.query.userId as string) || authUser?.id || 'u1';
+
+  const prefs = getNotificationPreferences(userId, householdId);
+  res.json(prefs);
+});
+
+app.put('/api/notifications/preferences', (req, res) => {
+  const householdId = getHouseholdId(req);
+  const authUser = getAuthUser(req);
+  const userId = req.body.userId || authUser?.id || 'u1';
+
+  const saved = saveNotificationPreferences(userId, householdId, req.body);
+  res.json(saved);
 });
 
 // Public Privacy Policy & Terms (for Google OAuth verification & branding)

@@ -152,3 +152,29 @@ export interface AssistantMessage {
     data?: any;
   }[];
 }
+
+export type NotificationCategory =
+  | 'grocery_added'
+  | 'grocery_completed'
+  | 'calendar_events'
+  | 'meal_plans'
+  | 'recipes_added'
+  | 'assistant_actions'
+  | 'test';
+
+export interface NotificationPreferences {
+  userId: string;
+  householdId: string;
+  groceryAdded: boolean;
+  groceryCompleted: boolean;
+  calendarEvents: boolean;
+  mealPlans: boolean;
+  recipesAdded: boolean;
+  assistantActions: boolean;
+  notifyOwnActions: boolean;
+  quietHoursEnabled: boolean;
+  quietHoursStart: string;
+  quietHoursEnd: string;
+  updatedAt?: string;
+}
+

@@ -8,9 +8,10 @@ import { MealsPage } from './pages/MealsPage';
 import { RecipesPage } from './pages/RecipesPage';
 import { CalendarPage } from './pages/CalendarPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { LandingPage } from './pages/LandingPage';
 import { AuthPage } from './components/AuthPage';
 import { usePWA } from './context/PWAContext';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ArrowRight } from 'lucide-react';
 
 const VALID_TABS = ['assistant', 'grocery', 'meals', 'recipes', 'calendar', 'settings', 'family'];
 const LAST_TAB_KEY = 'homebase_last_active_tab';
@@ -62,6 +63,32 @@ function resolveInitialTab(): string {
 export const AppContent: React.FC = () => {
   const { currentUser, isLoadingAuth } = usePWA();
   const [activeTab, setActiveTabState] = useState<string>(resolveInitialTab);
+  const [showAuthModal, setShowAuthModal] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      return (
+        params.has('auth') ||
+        params.has('login') ||
+        params.has('register') ||
+        params.has('join')
+      );
+    }
+    return false;
+  });
+  const [authInitialTab, setAuthInitialTab] = useState<'login' | 'register'>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      return params.has('register') || params.has('join') ? 'register' : 'login';
+    }
+    return 'login';
+  });
+  const [showLandingForUser, setShowLandingForUser] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('landing') === 'true' || params.get('view') === 'about';
+    }
+    return false;
+  });
 
   const setActiveTab = (tab: string) => {
     setActiveTabState(tab);
@@ -96,8 +123,42 @@ export const AppContent: React.FC = () => {
     );
   }
 
+  // If user is not logged in: Show the public Landing Page by default
   if (!currentUser) {
-    return <AuthPage />;
+    if (showAuthModal) {
+      return (
+        <AuthPage
+          initialTab={authInitialTab}
+          onBackToLanding={() => setShowAuthModal(false)}
+        />
+      );
+    }
+    return (
+      <LandingPage
+        onOpenAuth={(mode) => {
+          setAuthInitialTab(mode || 'login');
+          setShowAuthModal(true);
+        }}
+      />
+    );
+  }
+
+  // If logged in, but specifically requested to see the Landing Page / Install guide
+  if (showLandingForUser) {
+    return (
+      <div className="relative">
+        <LandingPage onOpenAuth={() => setShowLandingForUser(false)} />
+        <div className="fixed bottom-6 right-6 z-50">
+          <button
+            onClick={() => setShowLandingForUser(false)}
+            className="px-5 py-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 text-xs font-bold shadow-xl shadow-emerald-500/25 flex items-center gap-2 transition-all hover:scale-105 cursor-pointer"
+          >
+            <span>Return to App</span>
+            <ArrowRight className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (

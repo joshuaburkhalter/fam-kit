@@ -22,12 +22,20 @@ import {
   SlidersHorizontal,
   X,
   AlertCircle,
+  ShoppingCart,
+  Utensils,
+  BookOpen,
+  Bot,
+  Moon,
+  Clock,
+  CheckCircle2,
+  BellOff,
 } from 'lucide-react';
 import { usePWA } from '../context/PWAContext';
 import { api } from '../lib/api';
 import { AisleManagerModal } from '../components/AisleManagerModal';
 import { EditProfileModal } from '../components/EditProfileModal';
-import type { User, GoogleSyncStatus, GoogleCalendarEntry } from '../types';
+import type { User, GoogleSyncStatus, GoogleCalendarEntry, NotificationPreferences } from '../types';
 
 const AVATAR_COLORS = [
   '#10b981', // Emerald
@@ -50,7 +58,9 @@ export const SettingsPage: React.FC = () => {
     installPWA,
     isPushSupported,
     isPushSubscribed,
+    pushPermission,
     subscribeToPush,
+    unsubscribeFromPush,
     autoAudioResponses,
     setAutoAudioResponses,
     aisles,
@@ -72,6 +82,62 @@ export const SettingsPage: React.FC = () => {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isDeletingMember, setIsDeletingMember] = useState(false);
+
+  // Notification Preferences States
+  const [notificationPrefs, setNotificationPrefs] = useState<NotificationPreferences>({
+    userId: currentUser?.id || 'u1',
+    householdId: household?.id || '',
+    groceryAdded: true,
+    groceryCompleted: true,
+    calendarEvents: true,
+    mealPlans: true,
+    recipesAdded: true,
+    assistantActions: true,
+    notifyOwnActions: false,
+    quietHoursEnabled: false,
+    quietHoursStart: '22:00',
+    quietHoursEnd: '07:00',
+  });
+  const [isLoadingPrefs, setIsLoadingPrefs] = useState(false);
+  const [isSavingPref, setIsSavingPref] = useState(false);
+
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    let isMounted = true;
+    setIsLoadingPrefs(true);
+    api.getNotificationPreferences(currentUser.id)
+      .then((prefs) => {
+        if (isMounted && prefs) {
+          setNotificationPrefs(prefs);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to load notification preferences:', err);
+      })
+      .finally(() => {
+        if (isMounted) setIsLoadingPrefs(false);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [currentUser?.id]);
+
+  const handleTogglePreference = async (key: keyof NotificationPreferences, value: any) => {
+    const updated = { ...notificationPrefs, [key]: value };
+    setNotificationPrefs(updated);
+    setIsSavingPref(true);
+    try {
+      await api.updateNotificationPreferences({
+        ...updated,
+        userId: currentUser?.id,
+      });
+    } catch (err: any) {
+      console.error('Failed to save notification preference:', err);
+      setNotificationPrefs(notificationPrefs);
+    } finally {
+      setIsSavingPref(false);
+    }
+  };
 
   // Google Calendar Sync States
   const [googleSyncStatuses, setGoogleSyncStatuses] = useState<GoogleSyncStatus[]>([]);
@@ -237,16 +303,28 @@ export const SettingsPage: React.FC = () => {
   };
 
   const handlePushToggle = async (enable: boolean) => {
-    if (!enable) return;
     setIsSubscribingPush(true);
     try {
-      const success = await subscribeToPush();
-      if (success) {
-        setStatusMessage('Push notifications enabled for this device!');
-        setTimeout(() => setStatusMessage(null), 3500);
+      if (enable) {
+        const success = await subscribeToPush();
+        if (success) {
+          setStatusMessage('Push notifications enabled for this device!');
+          setTimeout(() => setStatusMessage(null), 3500);
+        } else {
+          setErrorMessage('Notification permission was not granted. Please enable notifications in your browser settings.');
+          setTimeout(() => setErrorMessage(null), 4500);
+        }
+      } else {
+        const success = await unsubscribeFromPush();
+        if (success) {
+          setStatusMessage('Push notifications disabled on this device.');
+          setTimeout(() => setStatusMessage(null), 3500);
+        }
       }
     } catch (err: any) {
       console.error('Push error:', err);
+      setErrorMessage('Failed to update push notification settings.');
+      setTimeout(() => setErrorMessage(null), 3500);
     } finally {
       setIsSubscribingPush(false);
     }
@@ -757,27 +835,68 @@ export const SettingsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* 4. Family Push Alerts (Radio Buttons) */}
-      <div className="glass-panel rounded-3xl p-5 border border-white/10 space-y-3">
-        <div className="flex items-center gap-2.5">
-          <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
-            <Bell className="w-4 h-4" />
+      {/* 4. Family Push Alerts & Notification Preferences */}
+      <div className="glass-panel rounded-3xl p-5 sm:p-6 border border-white/10 space-y-5">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
+              <Bell className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                Push Notifications & Alerts
+                {isPushSubscribed && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    Active on Device
+                  </span>
+                )}
+              </h3>
+              <p className="text-[11px] text-slate-400">
+                Manage alerts for this device and choose which family updates you want to receive
+              </p>
+            </div>
           </div>
-          <div>
-            <h3 className="text-sm font-bold text-white">Family Push Notifications</h3>
-            <p className="text-[11px] text-slate-400">
-              Receive alerts on this device when family updates groceries or events
-            </p>
-          </div>
+
+          {isPushSubscribed && (
+            <button
+              type="button"
+              onClick={handleSendTestPush}
+              disabled={isSendingTestPush}
+              className="inline-flex items-center gap-1.5 text-xs bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 px-3 py-1.5 rounded-xl font-medium transition-colors cursor-pointer"
+            >
+              {isSendingTestPush ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Send className="w-3.5 h-3.5" />
+              )}
+              <span>{isSendingTestPush ? 'Sending...' : 'Test Alert'}</span>
+            </button>
+          )}
         </div>
 
+        {/* Browser Support / Permission Warnings */}
         {!isPushSupported ? (
-          <p className="text-xs text-amber-400 bg-amber-500/10 p-3 rounded-2xl border border-amber-500/20">
-            Push notifications are not supported by this browser environment.
-          </p>
+          <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-start gap-2.5">
+            <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <div className="text-xs text-amber-300 leading-relaxed">
+              Push notifications are not supported by this browser. Try installing Homebase to your home screen or use Google Chrome, Microsoft Edge, or Safari (iOS 16.4+).
+            </div>
+          </div>
+        ) : pushPermission === 'denied' ? (
+          <div className="p-3.5 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-start gap-2.5">
+            <BellOff className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+            <div className="text-xs text-red-300 leading-relaxed">
+              <strong>Notifications are blocked in your browser settings.</strong>
+              <div className="text-[11px] text-red-400/90 mt-1">
+                To receive alerts, click the site settings/padlock icon in your browser address bar and set Notifications to &quot;Allow&quot;.
+              </div>
+            </div>
+          </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-            {/* Radio 1: Enabled */}
+          /* Master Device Toggle */
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            {/* Enabled */}
             <label
               onClick={() => handlePushToggle(true)}
               className={`p-3.5 rounded-2xl border cursor-pointer flex items-start gap-3 transition-all ${
@@ -788,60 +907,257 @@ export const SettingsPage: React.FC = () => {
             >
               <input
                 type="radio"
-                name="pushAlertsOption"
+                name="pushAlertsMasterOption"
                 checked={isPushSubscribed}
                 onChange={() => handlePushToggle(true)}
                 className="mt-0.5 h-4 w-4 text-emerald-500 accent-emerald-500 cursor-pointer"
               />
               <div className="flex-1 min-w-0">
                 <div className="text-xs font-bold text-white flex items-center justify-between gap-1">
-                  <span>Enabled</span>
+                  <span>Alerts Enabled</span>
                   {isPushSubscribed && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleSendTestPush();
-                      }}
-                      disabled={isSendingTestPush}
-                      className="text-[10px] bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 px-2 py-0.5 rounded-md font-semibold transition-colors cursor-pointer"
-                    >
-                      {isSendingTestPush ? 'Sending...' : 'Test Alert'}
-                    </button>
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
                   )}
                 </div>
                 <div className="text-[11px] text-slate-400 mt-0.5">
                   {isSubscribingPush
-                    ? 'Subscribing device...'
-                    : 'Active on this device for instant list and calendar changes.'}
+                    ? 'Configuring device...'
+                    : 'This device will receive instant notifications for selected family events.'}
                 </div>
               </div>
             </label>
 
-            {/* Radio 2: Disabled */}
+            {/* Disabled */}
             <label
+              onClick={() => handlePushToggle(false)}
               className={`p-3.5 rounded-2xl border cursor-pointer flex items-start gap-3 transition-all ${
                 !isPushSubscribed
-                  ? 'bg-emerald-500/10 border-emerald-500/40 ring-1 ring-emerald-500/25'
+                  ? 'bg-amber-500/10 border-amber-500/40 ring-1 ring-amber-500/25'
                   : 'bg-slate-900/60 border-white/5 hover:border-white/10'
               }`}
             >
               <input
                 type="radio"
-                name="pushAlertsOption"
+                name="pushAlertsMasterOption"
                 checked={!isPushSubscribed}
-                onChange={() => {}}
-                className="mt-0.5 h-4 w-4 text-emerald-500 accent-emerald-500 cursor-pointer"
+                onChange={() => handlePushToggle(false)}
+                className="mt-0.5 h-4 w-4 text-amber-500 accent-amber-500 cursor-pointer"
               />
               <div>
-                <div className="text-xs font-bold text-white">Disabled</div>
+                <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <span>Muted on this Device</span>
+                  {!isPushSubscribed && (
+                    <BellOff className="w-3.5 h-3.5 text-amber-400" />
+                  )}
+                </div>
                 <div className="text-[11px] text-slate-400 mt-0.5">
-                  Push notifications are muted on this device.
+                  Silence all push notifications on this specific phone or computer.
                 </div>
               </div>
             </label>
           </div>
         )}
+
+        {/* Category Settings: Which Notifications to Receive */}
+        <div className="pt-2 border-t border-white/5 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h4 className="text-xs font-bold text-white">Alert Categories</h4>
+              <p className="text-[11px] text-slate-400">
+                Choose which types of activities send push notifications for {currentUser?.name || 'you'}
+              </p>
+            </div>
+            {isSavingPref && (
+              <span className="text-[10px] text-emerald-400 flex items-center gap-1 font-medium">
+                <Loader2 className="w-3 h-3 animate-spin" /> Saving...
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            {/* Category 1: Grocery Added */}
+            <label className="p-3 rounded-2xl bg-slate-900/60 border border-white/5 hover:border-white/10 flex items-start gap-3 cursor-pointer transition-all">
+              <input
+                type="checkbox"
+                checked={notificationPrefs.groceryAdded}
+                onChange={(e) => handleTogglePreference('groceryAdded', e.target.checked)}
+                className="mt-1 h-4 w-4 text-emerald-500 accent-emerald-500 rounded cursor-pointer"
+              />
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <ShoppingCart className="w-3.5 h-3.5 text-emerald-400" />
+                  Grocery: Items Added
+                </div>
+                <div className="text-[11px] text-slate-400 mt-0.5">
+                  When items are added to the grocery shopping list by family or AI.
+                </div>
+              </div>
+            </label>
+
+            {/* Category 2: Grocery Completed */}
+            <label className="p-3 rounded-2xl bg-slate-900/60 border border-white/5 hover:border-white/10 flex items-start gap-3 cursor-pointer transition-all">
+              <input
+                type="checkbox"
+                checked={notificationPrefs.groceryCompleted}
+                onChange={(e) => handleTogglePreference('groceryCompleted', e.target.checked)}
+                className="mt-1 h-4 w-4 text-emerald-500 accent-emerald-500 rounded cursor-pointer"
+              />
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                  Grocery: Items Checked Off
+                </div>
+                <div className="text-[11px] text-slate-400 mt-0.5">
+                  When someone checks off groceries while shopping in the store.
+                </div>
+              </div>
+            </label>
+
+            {/* Category 3: Calendar Events */}
+            <label className="p-3 rounded-2xl bg-slate-900/60 border border-white/5 hover:border-white/10 flex items-start gap-3 cursor-pointer transition-all">
+              <input
+                type="checkbox"
+                checked={notificationPrefs.calendarEvents}
+                onChange={(e) => handleTogglePreference('calendarEvents', e.target.checked)}
+                className="mt-1 h-4 w-4 text-emerald-500 accent-emerald-500 rounded cursor-pointer"
+              />
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-blue-400" />
+                  Calendar Events
+                </div>
+                <div className="text-[11px] text-slate-400 mt-0.5">
+                  When new events are scheduled, rescheduled, or cancelled.
+                </div>
+              </div>
+            </label>
+
+            {/* Category 4: Meal Planner */}
+            <label className="p-3 rounded-2xl bg-slate-900/60 border border-white/5 hover:border-white/10 flex items-start gap-3 cursor-pointer transition-all">
+              <input
+                type="checkbox"
+                checked={notificationPrefs.mealPlans}
+                onChange={(e) => handleTogglePreference('mealPlans', e.target.checked)}
+                className="mt-1 h-4 w-4 text-emerald-500 accent-emerald-500 rounded cursor-pointer"
+              />
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <Utensils className="w-3.5 h-3.5 text-amber-400" />
+                  Meal Planner
+                </div>
+                <div className="text-[11px] text-slate-400 mt-0.5">
+                  When weekly dinners and family meal plans are scheduled.
+                </div>
+              </div>
+            </label>
+
+            {/* Category 5: Recipes */}
+            <label className="p-3 rounded-2xl bg-slate-900/60 border border-white/5 hover:border-white/10 flex items-start gap-3 cursor-pointer transition-all">
+              <input
+                type="checkbox"
+                checked={notificationPrefs.recipesAdded}
+                onChange={(e) => handleTogglePreference('recipesAdded', e.target.checked)}
+                className="mt-1 h-4 w-4 text-emerald-500 accent-emerald-500 rounded cursor-pointer"
+              />
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <BookOpen className="w-3.5 h-3.5 text-purple-400" />
+                  New Recipes
+                </div>
+                <div className="text-[11px] text-slate-400 mt-0.5">
+                  When new recipes are saved, imported, or created by AI.
+                </div>
+              </div>
+            </label>
+
+            {/* Category 6: AI Assistant */}
+            <label className="p-3 rounded-2xl bg-slate-900/60 border border-white/5 hover:border-white/10 flex items-start gap-3 cursor-pointer transition-all">
+              <input
+                type="checkbox"
+                checked={notificationPrefs.assistantActions}
+                onChange={(e) => handleTogglePreference('assistantActions', e.target.checked)}
+                className="mt-1 h-4 w-4 text-emerald-500 accent-emerald-500 rounded cursor-pointer"
+              />
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <Bot className="w-3.5 h-3.5 text-teal-400" />
+                  AI Assistant Actions
+                </div>
+                <div className="text-[11px] text-slate-400 mt-0.5">
+                  When Gemini takes automated actions or updates family lists.
+                </div>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        {/* Delivery & Schedule Preferences */}
+        <div className="pt-2 border-t border-white/5 space-y-3">
+          <h4 className="text-xs font-bold text-white">Delivery Preferences</h4>
+
+          <div className="space-y-2.5">
+            {/* Self-Action Filtering */}
+            <label className="p-3 rounded-2xl bg-slate-900/60 border border-white/5 hover:border-white/10 flex items-center justify-between gap-3 cursor-pointer transition-all">
+              <div>
+                <div className="text-xs font-bold text-white">Notify Me of My Own Actions</div>
+                <div className="text-[11px] text-slate-400 mt-0.5">
+                  Receive notifications even when you are the person who added or checked off an item
+                </div>
+              </div>
+              <input
+                type="checkbox"
+                checked={notificationPrefs.notifyOwnActions}
+                onChange={(e) => handleTogglePreference('notifyOwnActions', e.target.checked)}
+                className="h-4 w-4 text-emerald-500 accent-emerald-500 rounded cursor-pointer shrink-0"
+              />
+            </label>
+
+            {/* Quiet Hours */}
+            <div className="p-3 rounded-2xl bg-slate-900/60 border border-white/5 space-y-2.5">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Moon className="w-3.5 h-3.5 text-indigo-400" />
+                  <div>
+                    <div className="text-xs font-bold text-white">Quiet Hours (Do Not Disturb)</div>
+                    <div className="text-[11px] text-slate-400">
+                      Silence push notifications during nighttime hours
+                    </div>
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={notificationPrefs.quietHoursEnabled}
+                  onChange={(e) => handleTogglePreference('quietHoursEnabled', e.target.checked)}
+                  className="h-4 w-4 text-emerald-500 accent-emerald-500 rounded cursor-pointer shrink-0"
+                />
+              </div>
+
+              {notificationPrefs.quietHoursEnabled && (
+                <div className="pt-2 border-t border-white/5 flex flex-wrap items-center gap-3 text-xs">
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-3.5 h-3.5 text-slate-400" />
+                    <span className="text-slate-300 text-[11px]">Start:</span>
+                    <input
+                      type="time"
+                      value={notificationPrefs.quietHoursStart}
+                      onChange={(e) => handleTogglePreference('quietHoursStart', e.target.value)}
+                      className="bg-slate-800 text-white text-xs px-2.5 py-1 rounded-lg border border-white/10 focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-300 text-[11px]">End:</span>
+                    <input
+                      type="time"
+                      value={notificationPrefs.quietHoursEnd}
+                      onChange={(e) => handleTogglePreference('quietHoursEnd', e.target.value)}
+                      className="bg-slate-800 text-white text-xs px-2.5 py-1 rounded-lg border border-white/10 focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* 5. Grocery Store Aisles */}
@@ -906,6 +1222,34 @@ export const SettingsPage: React.FC = () => {
             </span>
           )}
         </div>
+      </div>
+
+      {/* 9. About & Legal Links */}
+      <div className="pt-2 pb-4 flex flex-wrap items-center justify-center gap-4 text-xs text-slate-400">
+        <a
+          href="/?landing=true"
+          className="hover:text-emerald-400 transition-colors font-medium"
+        >
+          App Overview & Phone Install Guide
+        </a>
+        <span className="text-slate-600">•</span>
+        <a
+          href="/privacy"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="hover:text-emerald-400 transition-colors"
+        >
+          Privacy Policy
+        </a>
+        <span className="text-slate-600">•</span>
+        <a
+          href="/terms"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="hover:text-emerald-400 transition-colors"
+        >
+          Terms of Service
+        </a>
       </div>
 
       {/* Add Member Modal */}

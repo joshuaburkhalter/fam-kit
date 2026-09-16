@@ -10,6 +10,7 @@ interface PWAContextType {
   isOnline: boolean;
   canInstallPWA: boolean;
   isPWAInstalled: boolean;
+  installPWA: () => Promise<void>;
   isPushSupported: boolean;
   isPushSubscribed: boolean;
   apiKey: string;
@@ -28,8 +29,11 @@ interface PWAContextType {
     inviteCode?: string;
   }) => Promise<void>;
   logout: () => void;
-  installPWA: () => Promise<void>;
+  isPushSupported: boolean;
+  isPushSubscribed: boolean;
+  pushPermission: NotificationPermission | 'unsupported';
   subscribeToPush: () => Promise<boolean>;
+  unsubscribeFromPush: () => Promise<boolean>;
   setHousehold: (household: Household) => void;
   refreshHouseholdsAndUsers: () => Promise<void>;
   refreshAisles: () => Promise<void>;
@@ -144,6 +148,9 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isPWAInstalled, setIsPWAInstalled] = useState<boolean>(false);
   const [isPushSupported, setIsPushSupported] = useState<boolean>(false);
   const [isPushSubscribed, setIsPushSubscribed] = useState<boolean>(false);
+  const [pushPermission, setPushPermission] = useState<NotificationPermission | 'unsupported'>(() =>
+    typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'unsupported'
+  );
   const [apiKey, setApiKeyState] = useState<string>(() => {
     return localStorage.getItem('famkit_gemini_api_key') || '';
   });
@@ -359,8 +366,17 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsPWAInstalled(isStandalone);
 
     // Push notification capability check
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch((e) => {
+        // Debug fallback
+      });
+    }
+
     if ('serviceWorker' in navigator && 'PushManager' in window) {
       setIsPushSupported(true);
+      if (typeof Notification !== 'undefined') {
+        setPushPermission(Notification.permission);
+      }
       navigator.serviceWorker.ready.then(async (reg) => {
         const sub = await reg.pushManager.getSubscription();
         setIsPushSubscribed(!!sub);
@@ -389,8 +405,8 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!isPushSupported || !household) return false;
     try {
       const permission = await Notification.requestPermission();
+      setPushPermission(permission);
       if (permission !== 'granted') {
-        alert('Notification permission was denied.');
         return false;
       }
 
@@ -421,6 +437,28 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return true;
     } catch (err) {
       console.error('Push subscription failed:', err);
+      return false;
+    }
+  };
+
+  const unsubscribeFromPush = async (): Promise<boolean> => {
+    if (!isPushSupported) return false;
+    try {
+      if ('serviceWorker' in navigator) {
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.getSubscription();
+        if (sub) {
+          const endpoint = sub.endpoint;
+          await sub.unsubscribe();
+          await api.unsubscribePush(endpoint, currentUser?.id);
+        } else if (currentUser?.id) {
+          await api.unsubscribePush(undefined, currentUser.id);
+        }
+      }
+      setIsPushSubscribed(false);
+      return true;
+    } catch (err) {
+      console.error('Push unsubscription failed:', err);
       return false;
     }
   };
@@ -474,6 +512,7 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isPWAInstalled,
         isPushSupported,
         isPushSubscribed,
+        pushPermission,
         apiKey,
         setApiKey,
         isLoadingAuth,
@@ -482,6 +521,7 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         logout,
         installPWA,
         subscribeToPush,
+        unsubscribeFromPush,
         setHousehold,
         refreshHouseholdsAndUsers,
         refreshAisles,
