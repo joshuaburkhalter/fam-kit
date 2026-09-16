@@ -10,6 +10,7 @@ import type {
   MealLog,
   CalendarEvent,
   GoogleSyncStatus,
+  GoogleCalendarEntry,
 } from '../types';
 
 const BASE_URL = '/api';
@@ -953,6 +954,15 @@ export const api = {
     fetchJson<{ url: string }>(userId ? `/auth/google/url?userId=${encodeURIComponent(userId)}` : '/auth/google/url'),
 
   getGoogleSyncStatus: () => fetchJson<GoogleSyncStatus[]>('/auth/google/status'),
+
+  getGoogleCalendars: (userId: string) =>
+    fetchJson<GoogleCalendarEntry[]>(`/auth/google/calendars?userId=${encodeURIComponent(userId)}`),
+
+  updateSelectedGoogleCalendars: (userId: string, calendarIds: string[]) =>
+    fetchJson<{ success: boolean; syncedCount: number }>('/auth/google/calendars', {
+      method: 'PUT',
+      body: JSON.stringify({ userId, calendarIds }),
+    }),
 
   disconnectGoogleCalendar: (userId: string) =>
     fetchJson<{ success: boolean }>('/auth/google/disconnect', {

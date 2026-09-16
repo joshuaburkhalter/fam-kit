@@ -206,7 +206,13 @@ function initSchema(db: Database) {
     db.run(`ALTER TABLE calendar_events ADD COLUMN googleEventId TEXT`);
   } catch {}
   try {
+    db.run(`ALTER TABLE calendar_events ADD COLUMN googleCalendarId TEXT`);
+  } catch {}
+  try {
     db.run(`ALTER TABLE calendar_events ADD COLUMN isGoogleEvent INTEGER NOT NULL DEFAULT 0`);
+  } catch {}
+  try {
+    db.run(`ALTER TABLE user_google_sync ADD COLUMN selectedCalendarIds TEXT DEFAULT '["primary"]'`);
   } catch {}
   try {
     db.run(`CREATE INDEX IF NOT EXISTS idx_cal_google ON calendar_events (householdId, googleEventId)`);

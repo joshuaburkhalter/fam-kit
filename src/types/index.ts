@@ -126,7 +126,18 @@ export interface GoogleSyncStatus {
   userId: string;
   connected: boolean;
   googleEmail: string | null;
+  selectedCalendarCount?: number;
   lastSyncedAt: string | null;
+}
+
+export interface GoogleCalendarEntry {
+  id: string;
+  summary: string;
+  description?: string;
+  primary?: boolean;
+  backgroundColor?: string;
+  foregroundColor?: string;
+  selected: boolean;
 }
 
 export interface AssistantMessage {

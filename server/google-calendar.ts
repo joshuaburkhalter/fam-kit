@@ -9,9 +9,20 @@ export interface GoogleSyncRecord {
   refreshToken: string;
   tokenExpiry: number | null;
   selectedCalendarId: string | null;
+  selectedCalendarIds: string | null;
   syncToken: string | null;
   lastSyncedAt: string | null;
   createdAt: string;
+}
+
+export interface GoogleCalendarEntry {
+  id: string;
+  summary: string;
+  description?: string;
+  primary?: boolean;
+  backgroundColor?: string;
+  foregroundColor?: string;
+  selected: boolean;
 }
 
 function getGoogleCredentials() {
@@ -176,8 +187,8 @@ export async function handleGoogleAuthCallback(
     } else {
       const id = `gsync_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
       execute(
-        `INSERT INTO user_google_sync (id, userId, householdId, googleEmail, accessToken, refreshToken, tokenExpiry, selectedCalendarId, syncToken, lastSyncedAt, createdAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 'primary', null, ?, ?)`,
+        `INSERT INTO user_google_sync (id, userId, householdId, googleEmail, accessToken, refreshToken, tokenExpiry, selectedCalendarId, selectedCalendarIds, syncToken, lastSyncedAt, createdAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'primary', '["primary"]', null, ?, ?)`,
         [id, userId, householdId, userEmail, accessToken, refreshToken, expiryMs, now, now]
       );
     }
@@ -205,7 +216,6 @@ async function getValidAccessToken(record: GoogleSyncRecord): Promise<string | n
   if (!clientId || !clientSecret) return null;
 
   const now = Date.now();
-  // If accessToken exists and has at least 3 minutes before expiration, use it
   if (record.accessToken && record.tokenExpiry && record.tokenExpiry - now > 180000) {
     return record.accessToken;
   }
@@ -247,7 +257,137 @@ async function getValidAccessToken(record: GoogleSyncRecord): Promise<string | n
 }
 
 /**
- * Sync events for a specific user from their primary Google Calendar
+ * Get all available Google Calendars for a user, indicating which ones are selected
+ */
+export async function getUserGoogleCalendars(
+  householdId: string,
+  userId: string
+): Promise<{ calendars: GoogleCalendarEntry[]; error?: string }> {
+  const record = queryOne<GoogleSyncRecord>(
+    'SELECT * FROM user_google_sync WHERE userId = ? AND householdId = ?',
+    [userId, householdId]
+  );
+
+  if (!record) {
+    return { calendars: [], error: 'User is not connected to Google Calendar' };
+  }
+
+  const accessToken = await getValidAccessToken(record);
+  if (!accessToken) {
+    return { calendars: [], error: 'Could not acquire valid Google access token' };
+  }
+
+  try {
+    const res = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      console.error('Failed to fetch calendarList from Google:', err);
+      return { calendars: [], error: 'Failed to retrieve calendars from Google' };
+    }
+
+    const data = (await res.json()) as {
+      items?: Array<{
+        id: string;
+        summary: string;
+        description?: string;
+        primary?: boolean;
+        backgroundColor?: string;
+        foregroundColor?: string;
+      }>;
+    };
+
+    let selectedIds: string[] = ['primary'];
+    if (record.selectedCalendarIds) {
+      try {
+        selectedIds = JSON.parse(record.selectedCalendarIds);
+      } catch {}
+    } else if (record.selectedCalendarId) {
+      selectedIds = [record.selectedCalendarId];
+    }
+
+    const selectedSet = new Set(selectedIds);
+
+    const calendars: GoogleCalendarEntry[] = (data.items || []).map((cal) => {
+      const isSelected = selectedSet.has(cal.id) || (Boolean(cal.primary) && selectedSet.has('primary'));
+      return {
+        id: cal.id,
+        summary: cal.summary || '(Untitled Calendar)',
+        description: cal.description,
+        primary: Boolean(cal.primary),
+        backgroundColor: cal.backgroundColor || '#10b981',
+        foregroundColor: cal.foregroundColor || '#ffffff',
+        selected: isSelected,
+      };
+    });
+
+    return { calendars };
+  } catch (err: any) {
+    console.error('getUserGoogleCalendars error:', err);
+    return { calendars: [], error: err.message || 'Failed to get calendars' };
+  }
+}
+
+/**
+ * Update which Google Calendars should sync for a user and re-sync
+ */
+export async function updateUserSelectedCalendars(
+  householdId: string,
+  userId: string,
+  calendarIds: string[]
+): Promise<{ success: boolean; syncedCount: number; error?: string }> {
+  try {
+    const record = queryOne<GoogleSyncRecord>(
+      'SELECT * FROM user_google_sync WHERE userId = ? AND householdId = ?',
+      [userId, householdId]
+    );
+
+    if (!record) {
+      return { success: false, syncedCount: 0, error: 'User is not connected' };
+    }
+
+    const cleanIds = Array.from(new Set(calendarIds.map((id) => id.trim()).filter(Boolean)));
+    const idsJson = JSON.stringify(cleanIds);
+
+    execute(
+      'UPDATE user_google_sync SET selectedCalendarIds = ? WHERE id = ?',
+      [idsJson, record.id]
+    );
+    saveDb();
+
+    // Purge events from unselected calendars for this user
+    if (cleanIds.length === 0) {
+      execute(
+        'DELETE FROM calendar_events WHERE householdId = ? AND assignedMemberId = ? AND isGoogleEvent = 1',
+        [householdId, userId]
+      );
+    } else {
+      const existingEvents = queryAll<{ id: string; googleCalendarId: string | null }>(
+        'SELECT id, googleCalendarId FROM calendar_events WHERE householdId = ? AND assignedMemberId = ? AND isGoogleEvent = 1',
+        [householdId, userId]
+      );
+      const keepSet = new Set(cleanIds);
+      for (const ev of existingEvents) {
+        if (ev.googleCalendarId && !keepSet.has(ev.googleCalendarId)) {
+          execute('DELETE FROM calendar_events WHERE id = ?', [ev.id]);
+        }
+      }
+    }
+    saveDb();
+
+    // Trigger sync for the newly selected calendars
+    const syncRes = await syncUserGoogleCalendar(householdId, userId);
+    return { success: true, syncedCount: syncRes.syncedCount };
+  } catch (err: any) {
+    console.error('updateUserSelectedCalendars error:', err);
+    return { success: false, syncedCount: 0, error: err.message || 'Failed to update calendars' };
+  }
+}
+
+/**
+ * Sync events for a specific user from their selected Google Calendars
  * Window: 30 days in the past to 90 days in the future
  */
 export async function syncUserGoogleCalendar(
@@ -268,122 +408,137 @@ export async function syncUserGoogleCalendar(
     return { syncedCount: 0, error: 'Could not acquire valid Google access token' };
   }
 
+  // Parse selected calendars
+  let calendarIds: string[] = ['primary'];
+  if (record.selectedCalendarIds) {
+    try {
+      calendarIds = JSON.parse(record.selectedCalendarIds);
+    } catch {}
+  } else if (record.selectedCalendarId) {
+    calendarIds = [record.selectedCalendarId];
+  }
+
+  if (calendarIds.length === 0) {
+    return { syncedCount: 0 };
+  }
+
   const now = new Date();
   const past30 = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
   const future90 = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
 
   const timeMin = past30.toISOString();
   const timeMax = future90.toISOString();
+  let totalSynced = 0;
+  const nowIso = new Date().toISOString();
 
-  const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(
-    timeMin
-  )}&timeMax=${encodeURIComponent(timeMax)}&singleEvents=true&orderBy=startTime&maxResults=250`;
+  for (const calId of calendarIds) {
+    const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(
+      calId
+    )}/events?timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(
+      timeMax
+    )}&singleEvents=true&orderBy=startTime&maxResults=250`;
 
-  try {
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
+    try {
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
 
-    if (!res.ok) {
-      const errText = await res.text();
-      console.error('Google Calendar events API returned error:', res.status, errText);
-      return { syncedCount: 0, error: `Google API error: ${res.statusText}` };
-    }
-
-    const data = (await res.json()) as {
-      items?: Array<{
-        id: string;
-        status?: string;
-        summary?: string;
-        description?: string;
-        location?: string;
-        start?: { date?: string; dateTime?: string };
-        end?: { date?: string; dateTime?: string };
-      }>;
-    };
-
-    const items = data.items || [];
-    let syncedCount = 0;
-    const nowIso = new Date().toISOString();
-
-    for (const item of items) {
-      if (!item.id) continue;
-
-      // Cleanly remove cancelled/deleted events
-      if (item.status === 'cancelled') {
-        execute(
-          'DELETE FROM calendar_events WHERE householdId = ? AND googleEventId = ?',
-          [householdId, item.id]
-        );
+      if (!res.ok) {
+        const errText = await res.text();
+        console.warn(`Google Calendar ${calId} error (${res.status}):`, errText);
         continue;
       }
 
-      const title = item.summary?.trim() || '(Untitled Event)';
-      const description = item.description?.trim() || null;
-      const location = item.location?.trim() || null;
+      const data = (await res.json()) as {
+        items?: Array<{
+          id: string;
+          status?: string;
+          summary?: string;
+          description?: string;
+          location?: string;
+          start?: { date?: string; dateTime?: string };
+          end?: { date?: string; dateTime?: string };
+        }>;
+      };
 
-      let date = '';
-      let startTime: string | null = null;
-      let endTime: string | null = null;
+      const items = data.items || [];
 
-      if (item.start?.date) {
-        // All-day event
-        date = item.start.date;
-        startTime = null;
-        endTime = null;
-      } else if (item.start?.dateTime) {
-        // Timed event
-        date = item.start.dateTime.split('T')[0];
-        startTime = item.start.dateTime.split('T')[1]?.substring(0, 5) || null;
-        if (item.end?.dateTime) {
-          endTime = item.end.dateTime.split('T')[1]?.substring(0, 5) || null;
+      for (const item of items) {
+        if (!item.id) continue;
+
+        if (item.status === 'cancelled') {
+          execute(
+            'DELETE FROM calendar_events WHERE householdId = ? AND googleEventId = ?',
+            [householdId, item.id]
+          );
+          continue;
         }
-      }
 
-      if (!date) continue;
+        const title = item.summary?.trim() || '(Untitled Event)';
+        const description = item.description?.trim() || null;
+        const location = item.location?.trim() || null;
 
-      const existingEvent = queryOne<{ id: string }>(
-        'SELECT id FROM calendar_events WHERE householdId = ? AND googleEventId = ?',
-        [householdId, item.id]
-      );
+        let date = '';
+        let startTime: string | null = null;
+        let endTime: string | null = null;
 
-      if (existingEvent) {
-        execute(
-          `UPDATE calendar_events
-           SET title = ?,
-               description = ?,
-               date = ?,
-               startTime = ?,
-               endTime = ?,
-               location = ?,
-               assignedMemberId = ?,
-               isGoogleEvent = 1
-           WHERE id = ? AND householdId = ?`,
-          [title, description, date, startTime, endTime, location, userId, existingEvent.id, householdId]
+        if (item.start?.date) {
+          date = item.start.date;
+          startTime = null;
+          endTime = null;
+        } else if (item.start?.dateTime) {
+          date = item.start.dateTime.split('T')[0];
+          startTime = item.start.dateTime.split('T')[1]?.substring(0, 5) || null;
+          if (item.end?.dateTime) {
+            endTime = item.end.dateTime.split('T')[1]?.substring(0, 5) || null;
+          }
+        }
+
+        if (!date) continue;
+
+        const existingEvent = queryOne<{ id: string }>(
+          'SELECT id FROM calendar_events WHERE householdId = ? AND googleEventId = ?',
+          [householdId, item.id]
         );
-      } else {
-        const id = `gcal_${item.id.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 60)}`;
-        execute(
-          `INSERT INTO calendar_events (id, title, description, date, startTime, endTime, category, location, assignedMemberId, householdId, isGoogleEvent, googleEventId, createdAt)
-           VALUES (?, ?, ?, ?, ?, ?, 'Google Calendar', ?, ?, ?, 1, ?, ?)`,
-          [id, title, description, date, startTime, endTime, location, userId, householdId, item.id, nowIso]
-        );
+
+        if (existingEvent) {
+          execute(
+            `UPDATE calendar_events
+             SET title = ?,
+                 description = ?,
+                 date = ?,
+                 startTime = ?,
+                 endTime = ?,
+                 location = ?,
+                 assignedMemberId = ?,
+                 googleCalendarId = ?,
+                 isGoogleEvent = 1
+             WHERE id = ? AND householdId = ?`,
+            [title, description, date, startTime, endTime, location, userId, calId, existingEvent.id, householdId]
+          );
+        } else {
+          const id = `gcal_${item.id.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 60)}`;
+          execute(
+            `INSERT INTO calendar_events (id, title, description, date, startTime, endTime, category, location, assignedMemberId, householdId, isGoogleEvent, googleEventId, googleCalendarId, createdAt)
+             VALUES (?, ?, ?, ?, ?, ?, 'Google Calendar', ?, ?, ?, 1, ?, ?, ?)`,
+            [id, title, description, date, startTime, endTime, location, userId, householdId, item.id, calId, nowIso]
+          );
+        }
+        totalSynced++;
       }
-      syncedCount++;
+    } catch (calErr) {
+      console.warn(`Error syncing calendar ${calId}:`, calErr);
     }
-
-    // Update lastSyncedAt on the sync record
-    execute(
-      'UPDATE user_google_sync SET lastSyncedAt = ? WHERE id = ?',
-      [nowIso, record.id]
-    );
-    saveDb();
-
-    return { syncedCount };
-  } catch (err: any) {
-    console.error('syncUserGoogleCalendar error:', err);
-    return { syncedCount: 0, error: err.message || 'Sync failed' };
   }
+
+  // Update lastSyncedAt on the sync record
+  execute(
+    'UPDATE user_google_sync SET lastSyncedAt = ? WHERE id = ?',
+    [nowIso, record.id]
+  );
+  saveDb();
+
+  return { syncedCount: totalSynced };
 }
 
 /**
@@ -438,19 +593,29 @@ export function getHouseholdGoogleSyncStatus(householdId: string): Array<{
   userId: string;
   connected: boolean;
   googleEmail: string | null;
+  selectedCalendarCount: number;
   lastSyncedAt: string | null;
 }> {
   const records = queryAll<GoogleSyncRecord>(
-    'SELECT userId, googleEmail, lastSyncedAt FROM user_google_sync WHERE householdId = ?',
+    'SELECT userId, googleEmail, selectedCalendarIds, selectedCalendarId, lastSyncedAt FROM user_google_sync WHERE householdId = ?',
     [householdId]
   );
 
-  return records.map((r) => ({
-    userId: r.userId,
-    connected: true,
-    googleEmail: r.googleEmail,
-    lastSyncedAt: r.lastSyncedAt,
-  }));
+  return records.map((r) => {
+    let count = 1;
+    if (r.selectedCalendarIds) {
+      try {
+        count = JSON.parse(r.selectedCalendarIds).length;
+      } catch {}
+    }
+    return {
+      userId: r.userId,
+      connected: true,
+      googleEmail: r.googleEmail,
+      selectedCalendarCount: count,
+      lastSyncedAt: r.lastSyncedAt,
+    };
+  });
 }
 
 /**

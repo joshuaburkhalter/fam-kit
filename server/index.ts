@@ -12,6 +12,8 @@ import {
   getGoogleAuthUrl,
   handleGoogleAuthCallback,
   getHouseholdGoogleSyncStatus,
+  getUserGoogleCalendars,
+  updateUserSelectedCalendars,
   disconnectUserGoogleCalendar,
   syncAllConnectedHouseholdCalendars,
   initBackgroundGoogleSync,
@@ -1491,6 +1493,37 @@ app.get('/api/auth/google/status', (req, res) => {
     res.json(status);
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Failed to get sync status' });
+  }
+});
+
+app.get('/api/auth/google/calendars', async (req, res) => {
+  try {
+    const householdId = getHouseholdId(req);
+    const userId = (req.query.userId as string) || getAuthUser(req) || 'u1';
+    const result = await getUserGoogleCalendars(householdId, userId);
+    if (result.error) {
+      return res.status(400).json({ error: result.error });
+    }
+    res.json(result.calendars);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to fetch calendars' });
+  }
+});
+
+app.put('/api/auth/google/calendars', async (req, res) => {
+  try {
+    const householdId = getHouseholdId(req);
+    const { userId, calendarIds } = req.body;
+    if (!userId || !Array.isArray(calendarIds)) {
+      return res.status(400).json({ error: 'userId and calendarIds array are required' });
+    }
+    const result = await updateUserSelectedCalendars(householdId, userId, calendarIds);
+    if (!result.success) {
+      return res.status(400).json({ error: result.error });
+    }
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to update calendars' });
   }
 });
 
