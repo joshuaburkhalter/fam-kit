@@ -1568,9 +1568,16 @@ app.delete('/api/calendar', (req, res) => {
 // Google Calendar OAuth & Sync Routes
 app.get('/api/auth/google/url', (req, res) => {
   try {
-    const householdId = getHouseholdId(req);
+    let householdId = (req.query.householdId as string) || getHouseholdId(req);
     const authUser = getAuthUser(req);
     const userId = (req.query.userId as string) || authUser?.id || 'u1';
+    
+    // Always bind to the target user's true household if known in DB
+    const userRow = queryOne<{ householdId: string }>('SELECT householdId FROM users WHERE id = ?', [userId]);
+    if (userRow?.householdId) {
+      householdId = userRow.householdId;
+    }
+
     const host = req.get('host') || (req.headers.referer ? new URL(req.headers.referer).host : undefined);
     const url = getGoogleAuthUrl(householdId, userId, host);
     res.json({ url });

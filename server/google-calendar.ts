@@ -110,10 +110,14 @@ export async function handleGoogleAuthCallback(
       throw new Error('Invalid state parameter in Google callback.');
     }
 
-    const { householdId, userId, redirectUri } = state;
-    if (!householdId || !userId) {
+    const { householdId: rawHouseholdId, userId, redirectUri } = state;
+    if (!rawHouseholdId || !userId) {
       throw new Error('Missing householdId or userId in OAuth state.');
     }
+
+    // Resolve householdId from the user's primary record if exists
+    const userRow = queryOne<{ householdId: string }>('SELECT householdId FROM users WHERE id = ?', [userId]);
+    const householdId = userRow?.householdId || rawHouseholdId;
 
     // Exchange auth code for tokens
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
@@ -169,8 +173,8 @@ export async function handleGoogleAuthCallback(
     const now = new Date().toISOString();
 
     const existing = queryOne<GoogleSyncRecord>(
-      'SELECT * FROM user_google_sync WHERE userId = ? AND householdId = ?',
-      [userId, householdId]
+      'SELECT * FROM user_google_sync WHERE userId = ? OR (userId = ? AND householdId = ?)',
+      [userId, userId, householdId]
     );
 
     if (!refreshToken && existing?.refreshToken) {
@@ -185,13 +189,14 @@ export async function handleGoogleAuthCallback(
     if (existing) {
       execute(
         `UPDATE user_google_sync
-         SET googleEmail = ?,
+         SET householdId = ?,
+             googleEmail = ?,
              accessToken = ?,
              refreshToken = ?,
              tokenExpiry = ?,
              lastSyncedAt = ?
-         WHERE userId = ? AND householdId = ?`,
-        [userEmail || existing.googleEmail, accessToken, safeRefreshToken, expiryMs, now, userId, householdId]
+         WHERE id = ?`,
+        [householdId, userEmail || existing.googleEmail, accessToken, safeRefreshToken, expiryMs, now, existing.id]
       );
     } else {
       const id = `gsync_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
@@ -271,10 +276,21 @@ export async function getUserGoogleCalendars(
   householdId: string,
   userId: string
 ): Promise<{ calendars: GoogleCalendarEntry[]; error?: string }> {
-  const record = queryOne<GoogleSyncRecord>(
+  let record = queryOne<GoogleSyncRecord>(
     'SELECT * FROM user_google_sync WHERE userId = ? AND householdId = ?',
     [userId, householdId]
   );
+
+  if (!record) {
+    record = queryOne<GoogleSyncRecord>(
+      'SELECT * FROM user_google_sync WHERE userId = ?',
+      [userId]
+    );
+    if (record) {
+      execute('UPDATE user_google_sync SET householdId = ? WHERE id = ?', [householdId, record.id]);
+      saveDb();
+    }
+  }
 
   if (!record) {
     return { calendars: [], error: 'User is not connected to Google Calendar' };
@@ -358,10 +374,21 @@ export async function updateUserSelectedCalendars(
   memberMapParam?: Record<string, string | null>
 ): Promise<{ success: boolean; syncedCount: number; error?: string }> {
   try {
-    const record = queryOne<GoogleSyncRecord>(
+    let record = queryOne<GoogleSyncRecord>(
       'SELECT * FROM user_google_sync WHERE userId = ? AND householdId = ?',
       [userId, householdId]
     );
+
+    if (!record) {
+      record = queryOne<GoogleSyncRecord>(
+        'SELECT * FROM user_google_sync WHERE userId = ?',
+        [userId]
+      );
+      if (record) {
+        execute('UPDATE user_google_sync SET householdId = ? WHERE id = ?', [householdId, record.id]);
+        saveDb();
+      }
+    }
 
     if (!record) {
       return { success: false, syncedCount: 0, error: 'User is not connected' };
@@ -427,10 +454,21 @@ export async function syncUserGoogleCalendar(
   householdId: string,
   userId: string
 ): Promise<{ syncedCount: number; error?: string }> {
-  const record = queryOne<GoogleSyncRecord>(
+  let record = queryOne<GoogleSyncRecord>(
     'SELECT * FROM user_google_sync WHERE userId = ? AND householdId = ?',
     [userId, householdId]
   );
+
+  if (!record) {
+    record = queryOne<GoogleSyncRecord>(
+      'SELECT * FROM user_google_sync WHERE userId = ?',
+      [userId]
+    );
+    if (record) {
+      execute('UPDATE user_google_sync SET householdId = ? WHERE id = ?', [householdId, record.id]);
+      saveDb();
+    }
+  }
 
   if (!record) {
     return { syncedCount: 0, error: 'User is not connected to Google Calendar' };
@@ -624,10 +662,10 @@ export async function syncAllConnectedHouseholdCalendars(
  */
 export function disconnectUserGoogleCalendar(householdId: string, userId: string): { success: boolean } {
   try {
-    execute('DELETE FROM user_google_sync WHERE householdId = ? AND userId = ?', [householdId, userId]);
+    execute('DELETE FROM user_google_sync WHERE userId = ?', [userId]);
     execute(
-      'DELETE FROM calendar_events WHERE householdId = ? AND isGoogleEvent = 1',
-      [householdId]
+      'DELETE FROM calendar_events WHERE (householdId = ? OR 1=1) AND assignedMemberId = ? AND isGoogleEvent = 1',
+      [householdId, userId]
     );
     saveDb();
     return { success: true };
@@ -647,9 +685,24 @@ export function getHouseholdGoogleSyncStatus(householdId: string): Array<{
   selectedCalendarCount: number;
   lastSyncedAt: string | null;
 }> {
+  // Auto-heal any records where userId belongs to this household
+  try {
+    execute(
+      `UPDATE user_google_sync 
+       SET householdId = ? 
+       WHERE userId IN (SELECT id FROM users WHERE householdId = ?) 
+         AND householdId != ?`,
+      [householdId, householdId, householdId]
+    );
+    saveDb();
+  } catch {}
+
   const records = queryAll<GoogleSyncRecord>(
-    'SELECT userId, googleEmail, selectedCalendarIds, selectedCalendarId, lastSyncedAt FROM user_google_sync WHERE householdId = ?',
-    [householdId]
+    `SELECT userId, googleEmail, selectedCalendarIds, selectedCalendarId, lastSyncedAt 
+     FROM user_google_sync 
+     WHERE householdId = ? 
+        OR userId IN (SELECT id FROM users WHERE householdId = ?)`,
+    [householdId, householdId]
   );
 
   return records.map((r) => {

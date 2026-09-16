@@ -966,8 +966,13 @@ export const api = {
     }),
 
   // Google Calendar Integration
-  getGoogleAuthUrl: (userId?: string) =>
-    fetchJson<{ url: string }>(userId ? `/auth/google/url?userId=${encodeURIComponent(userId)}` : '/auth/google/url'),
+  getGoogleAuthUrl: (userId?: string, householdId?: string) => {
+    const params = new URLSearchParams();
+    if (userId) params.set('userId', userId);
+    if (householdId) params.set('householdId', householdId);
+    const qs = params.toString();
+    return fetchJson<{ url: string }>(qs ? `/auth/google/url?${qs}` : '/auth/google/url');
+  },
 
   getGoogleSyncStatus: () => fetchJson<GoogleSyncStatus[]>('/auth/google/status'),
 

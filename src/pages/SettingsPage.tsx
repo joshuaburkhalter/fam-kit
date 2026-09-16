@@ -30,6 +30,7 @@ import {
   Clock,
   CheckCircle2,
   BellOff,
+  RefreshCw,
 } from 'lucide-react';
 import { usePWA } from '../context/PWAContext';
 import { api } from '../lib/api';
@@ -159,7 +160,9 @@ export const SettingsPage: React.FC = () => {
 
   useEffect(() => {
     loadGoogleStatus();
+  }, [household?.id, users.length]);
 
+  useEffect(() => {
     // Check URL parameters for OAuth return
     const params = new URLSearchParams(window.location.search);
     if (params.get('google_sync') === 'success') {
@@ -168,11 +171,18 @@ export const SettingsPage: React.FC = () => {
         `Google Calendar connected! ${email ? `(${email}) ` : ''}Your events are now syncing in the background.`
       );
       loadGoogleStatus();
+      const t1 = setTimeout(() => loadGoogleStatus(), 1500);
+      const t2 = setTimeout(() => loadGoogleStatus(), 3500);
       try {
         localStorage.setItem('homebase_last_active_tab', 'settings');
       } catch {}
       window.history.replaceState({}, '', '/?tab=settings');
-      setTimeout(() => setStatusMessage(null), 6000);
+      const t3 = setTimeout(() => setStatusMessage(null), 6000);
+      return () => {
+        clearTimeout(t1);
+        clearTimeout(t2);
+        clearTimeout(t3);
+      };
     } else if (params.get('google_sync') === 'error') {
       const msg = params.get('message') || 'Connection failed';
       setErrorMessage(`Google Calendar connection failed: ${decodeURIComponent(msg)}`);
@@ -186,7 +196,7 @@ export const SettingsPage: React.FC = () => {
   const handleConnectGoogle = async (userId: string) => {
     try {
       setConnectingUserId(userId);
-      const { url } = await api.getGoogleAuthUrl(userId);
+      const { url } = await api.getGoogleAuthUrl(userId, household?.id);
       window.location.href = url;
     } catch (err: any) {
       console.error('Failed to initiate Google OAuth:', err);
@@ -672,6 +682,16 @@ export const SettingsPage: React.FC = () => {
               </p>
             </div>
           </div>
+
+          <button
+            type="button"
+            onClick={() => loadGoogleStatus()}
+            disabled={isLoadingGoogleStatus}
+            className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all cursor-pointer"
+            title="Refresh Google Calendar sync status"
+          >
+            <RefreshCw className={`w-4 h-4 ${isLoadingGoogleStatus ? 'animate-spin text-emerald-400' : ''}`} />
+          </button>
         </div>
 
         {/* Member connection list */}
