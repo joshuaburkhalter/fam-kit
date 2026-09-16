@@ -147,17 +147,36 @@ export const SettingsPage: React.FC = () => {
   const [disconnectingUserId, setDisconnectingUserId] = useState<string | null>(null);
 
   // Sync Waiting/Processing Overlay State
+  // Sync Waiting/Processing Overlay State
   const [isSyncProcessing, setIsSyncProcessing] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const syncMode = params.get('google_sync');
-      return syncMode === 'success' || syncMode === 'processing';
+      if (syncMode === 'success' || syncMode === 'processing') return true;
+
+      try {
+        const raw = localStorage.getItem('homebase_pending_google_sync');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Date.now() - parsed.timestamp < 90 * 1000) {
+            return true;
+          }
+        }
+      } catch {}
     }
     return false;
   });
   const [syncProcessingEmail, setSyncProcessingEmail] = useState<string>(() => {
     if (typeof window !== 'undefined') {
-      return new URLSearchParams(window.location.search).get('email') || '';
+      const email = new URLSearchParams(window.location.search).get('email');
+      if (email) return email;
+      try {
+        const raw = localStorage.getItem('homebase_pending_google_sync');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          return parsed.email || '';
+        }
+      } catch {}
     }
     return '';
   });
@@ -168,6 +187,10 @@ export const SettingsPage: React.FC = () => {
   const [pendingSyncUserId, setPendingSyncUserId] = useState<string | null>(() => {
     if (typeof window === 'undefined') return null;
     try {
+      const params = new URLSearchParams(window.location.search);
+      const urlUserId = params.get('userId');
+      if (urlUserId) return urlUserId;
+
       const raw = localStorage.getItem('homebase_pending_google_sync');
       if (raw) {
         const parsed = JSON.parse(raw);
@@ -201,6 +224,27 @@ export const SettingsPage: React.FC = () => {
   useEffect(() => {
     const handleCheckOnFocus = () => {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        const params = new URLSearchParams(window.location.search);
+        const syncParam = params.get('google_sync');
+        if (syncParam === 'processing' || syncParam === 'success') {
+          setIsSyncProcessing(true);
+          const email = params.get('email');
+          if (email) setSyncProcessingEmail(email);
+          const uid = params.get('userId');
+          if (uid) setPendingSyncUserId(uid);
+        } else {
+          try {
+            const raw = localStorage.getItem('homebase_pending_google_sync');
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              if (Date.now() - parsed.timestamp < 90 * 1000) {
+                setPendingSyncUserId(parsed.userId);
+                if (parsed.email) setSyncProcessingEmail(parsed.email);
+                setIsSyncProcessing(true);
+              }
+            }
+          } catch {}
+        }
         loadGoogleStatus();
       }
     };
@@ -214,9 +258,9 @@ export const SettingsPage: React.FC = () => {
     };
   }, []);
 
-  // When pendingSyncUserId is active, actively poll until connection is confirmed
+  // When pendingSyncUserId is active without full overlay, actively poll until confirmed
   useEffect(() => {
-    if (!pendingSyncUserId) return;
+    if (!pendingSyncUserId || isSyncProcessing) return;
 
     let count = 0;
     const interval = setInterval(async () => {
@@ -240,7 +284,7 @@ export const SettingsPage: React.FC = () => {
     }, 1500);
 
     return () => clearInterval(interval);
-  }, [pendingSyncUserId]);
+  }, [pendingSyncUserId, isSyncProcessing]);
 
   // Handle OAuth Return & Polling Waiting Screen
   useEffect(() => {
@@ -261,7 +305,7 @@ export const SettingsPage: React.FC = () => {
 
     let isMounted = true;
     let attempts = 0;
-    const maxAttempts = 15; // 15 * 800ms = 12 seconds max
+    const maxAttempts = 18; // 18 * 800ms = ~14.4 seconds max
 
     setSyncProcessingStep('Securing connection and fetching calendars...');
 
@@ -278,9 +322,14 @@ export const SettingsPage: React.FC = () => {
         if (!isMounted) return;
 
         // Check if user is connected and events/calendars have settled
-        const isReady = statuses.some(
-          (s) => s.connected && (Boolean(s.lastSyncedAt) || s.selectedCalendarCount > 0)
-        );
+        const targetRecord = pendingSyncUserId
+          ? statuses.find((s) => s.userId === pendingSyncUserId)
+          : null;
+        const isReady = targetRecord
+          ? Boolean(targetRecord.connected)
+          : statuses.some(
+              (s) => s.connected && (Boolean(s.lastSyncedAt) || s.selectedCalendarCount > 0)
+            );
 
         if (isReady || attempts >= maxAttempts) {
           clearInterval(interval);
@@ -305,6 +354,8 @@ export const SettingsPage: React.FC = () => {
           clearInterval(interval);
           if (isMounted) {
             setIsSyncProcessing(false);
+            localStorage.removeItem('homebase_pending_google_sync');
+            setPendingSyncUserId(null);
             window.history.replaceState({}, '', '/?tab=settings');
           }
         }
@@ -315,15 +366,21 @@ export const SettingsPage: React.FC = () => {
       isMounted = false;
       clearInterval(interval);
     };
-  }, [isSyncProcessing]);
+  }, [isSyncProcessing, pendingSyncUserId]);
 
   const handleConnectGoogle = async (userId: string) => {
     try {
       setConnectingUserId(userId);
       setPendingSyncUserId(userId);
+      setIsSyncProcessing(true);
+      setSyncProcessingDone(false);
+      setSyncProcessingStep('Connecting to Google Calendar...');
+      const targetUser = users.find((u) => u.id === userId);
+      const email = targetUser?.email || '';
+      if (email) setSyncProcessingEmail(email);
       localStorage.setItem(
         'homebase_pending_google_sync',
-        JSON.stringify({ userId, timestamp: Date.now() })
+        JSON.stringify({ userId, email, timestamp: Date.now() })
       );
       const { url } = await api.getGoogleAuthUrl(userId, household?.id);
       window.location.href = url;
@@ -332,6 +389,7 @@ export const SettingsPage: React.FC = () => {
       alert(err.message || 'Failed to connect to Google');
       setConnectingUserId(null);
       setPendingSyncUserId(null);
+      setIsSyncProcessing(false);
       localStorage.removeItem('homebase_pending_google_sync');
     }
   };
@@ -659,6 +717,21 @@ export const SettingsPage: React.FC = () => {
               <p className="text-[11px] text-slate-500">
                 Synchronizing your family timeline. This will only take a moment...
               </p>
+
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSyncProcessing(false);
+                    localStorage.removeItem('homebase_pending_google_sync');
+                    setPendingSyncUserId(null);
+                    window.history.replaceState({}, '', '/?tab=settings');
+                  }}
+                  className="px-4 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white text-xs font-semibold cursor-pointer transition-colors"
+                >
+                  Dismiss
+                </button>
+              </div>
             </div>
           </div>
         </div>

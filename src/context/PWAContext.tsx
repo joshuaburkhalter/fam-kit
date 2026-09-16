@@ -365,17 +365,42 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       (window.navigator as any).standalone === true;
     setIsPWAInstalled(isStandalone);
 
-    // Push notification capability check
-    const swUrl = import.meta.env.DEV ? '/sw-push.js' : '/sw.js';
+    // Service worker & update management
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker
-        .register(swUrl)
-        .then((reg) => {
-          reg.update().catch(() => {});
-        })
-        .catch((e) => {
-          console.debug('Service worker registration note:', e);
+      if (import.meta.env.DEV) {
+        // In local development, unregister any lingering service workers and clear caches
+        navigator.serviceWorker.getRegistrations().then((regs) => {
+          regs.forEach((r) => r.unregister());
         });
+        if ('caches' in window) {
+          caches.keys().then((names) => {
+            names.forEach((name) => caches.delete(name));
+          });
+        }
+      } else {
+        // In production, register sw.js and automatically activate updates
+        navigator.serviceWorker
+          .register('/sw.js')
+          .then((reg) => {
+            reg.update().catch(() => {});
+            if (reg.waiting) {
+              reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+            }
+            reg.addEventListener('updatefound', () => {
+              const installing = reg.installing;
+              if (installing) {
+                installing.addEventListener('statechange', () => {
+                  if (installing.state === 'installed' && navigator.serviceWorker.controller) {
+                    installing.postMessage({ type: 'SKIP_WAITING' });
+                  }
+                });
+              }
+            });
+          })
+          .catch((e) => {
+            console.debug('Service worker registration note:', e);
+          });
+      }
     }
 
     if ('serviceWorker' in navigator && 'PushManager' in window) {

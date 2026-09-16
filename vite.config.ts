@@ -64,7 +64,15 @@ export default defineConfig({
       workbox: {
         importScripts: ['/sw-push.js'],
         globPatterns: ['**/*.{js,css,html,ico,png,svg,json}'],
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
+        navigateFallbackDenylist: [/^\/api/, /^\/auth/],
         runtimeCaching: [
+          {
+            urlPattern: /^\/api\/auth\/.*/i,
+            handler: 'NetworkOnly'
+          },
           {
             urlPattern: /^\/api\/.*/i,
             handler: 'NetworkFirst',
@@ -80,7 +88,7 @@ export default defineConfig({
         ]
       },
       devOptions: {
-        enabled: true
+        enabled: false
       }
     })
   ],
