@@ -10,6 +10,7 @@ import {
   ShoppingCart,
   ListChecks,
   X,
+  Loader2,
 } from 'lucide-react';
 import type { GroceryItem, Aisle, CustomList } from '../types';
 import { usePWA } from '../context/PWAContext';
@@ -27,7 +28,12 @@ let groceryDataCache: GroceryDataCache | null = null;
 
 export const GroceryPage: React.FC = () => {
   const { household, currentUser, aisles } = usePWA();
-  const householdId = household?.id;
+  const effectiveHouseholdId =
+    household?.id ||
+    currentUser?.household_id ||
+    localStorage.getItem('famkit_household_id') ||
+    'fam_default_1';
+  const householdId = effectiveHouseholdId;
   const isMountedRef = useRef(true);
 
   const [activeListType, setActiveListType] = useState<string>('grocery');
@@ -158,27 +164,42 @@ export const GroceryPage: React.FC = () => {
     loadData(activeListType, !hasCache);
   }, [householdId, activeListType]);
 
-  const handleAddItem = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newItemName.trim() || !household) return;
+  const [isAddingItem, setIsAddingItem] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const toastTimeoutRef = useRef<any>(null);
+
+  const showToast = (msg: string) => {
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    setToastMessage(msg);
+    toastTimeoutRef.current = setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  const handleAddItem = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const nameToAdd = newItemName.trim();
+    if (!nameToAdd) return;
 
     try {
-      const item = await api.addGroceryItem(household.id, {
-        name: newItemName.trim(),
+      setIsAddingItem(true);
+      const item = await api.addGroceryItem(effectiveHouseholdId, {
+        name: nameToAdd,
         list_type: activeListType,
         added_by_user_id: currentUser?.id,
         added_by_user_name: currentUser?.name,
       });
       setItems((prev) => {
         const next = [...prev, item];
-        if (groceryDataCache && groceryDataCache.householdId === household.id) {
+        if (groceryDataCache && groceryDataCache.householdId === effectiveHouseholdId) {
           groceryDataCache.itemsByList[activeListType] = next;
         }
         return next;
       });
       setNewItemName('');
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to add item:', err);
+      showToast(err?.message || 'Error adding item. Please check connection.');
+    } finally {
+      setIsAddingItem(false);
     }
   };
 
@@ -791,6 +812,15 @@ export const GroceryPage: React.FC = () => {
           </div>
         </div>
       )}
+      {/* Floating Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-[calc(76px+4.5rem+env(safe-area-inset-bottom,0px))] md:bottom-20 left-4 right-4 z-50 flex justify-center pointer-events-none animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <div className="px-4 py-2 rounded-2xl bg-slate-900/95 border border-emerald-500/40 text-emerald-300 text-xs font-semibold shadow-xl shadow-emerald-500/20 pointer-events-auto backdrop-blur-xl">
+            {toastMessage}
+          </div>
+        </div>
+      )}
+
       {/* Animated Expanding Quick Add Dock & FAB */}
       <div className="fixed bottom-[calc(76px+1rem+env(safe-area-inset-bottom,0px))] md:bottom-8 left-0 right-0 z-40 px-4 pointer-events-none">
         <div className="max-w-3xl mx-auto pointer-events-none flex justify-end">
@@ -798,7 +828,7 @@ export const GroceryPage: React.FC = () => {
             ref={dockRef}
             className={`fab-dock-transition pointer-events-auto h-[50px] border shadow-2xl flex items-center overflow-hidden ${
               isInputExpanded
-                ? 'w-full rounded-3xl border-white/25 bg-slate-900/95 backdrop-blur-xl shadow-emerald-500/10 px-2'
+                ? 'w-full rounded-3xl border-white/25 bg-slate-900/95 backdrop-blur-xl shadow-emerald-500/10 px-2.5'
                 : 'w-[50px] rounded-full border-emerald-400/40 bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 cursor-pointer shadow-xl shadow-emerald-500/30 hover:scale-105 active:scale-95 justify-center'
             }`}
           >
@@ -812,38 +842,48 @@ export const GroceryPage: React.FC = () => {
                 <Plus className="w-6 h-6 stroke-[2.5]" />
               </button>
             ) : (
-              <form onSubmit={handleAddItem} className="w-full flex items-center gap-2">
-                {/* Far left: Close button */}
+              <div className="w-full flex items-center gap-2">
+                {/* Far left: Close button outside of form so Enter never triggers it */}
                 <button
                   type="button"
                   onClick={() => setIsInputExpanded(false)}
-                  className="p-2 rounded-2xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white shrink-0"
+                  className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center shrink-0 transition-colors"
                   title="Close"
                 >
                   <X className="w-4 h-4" />
                 </button>
 
-                {/* Middle: Input */}
-                <input
-                  autoFocus
-                  type="text"
-                  placeholder={`Add item to ${currentListName}...`}
-                  value={newItemName}
-                  onChange={(e) => setNewItemName(e.target.value)}
-                  className="flex-1 min-w-0 bg-transparent border-none text-sm text-white placeholder-slate-500 focus:outline-none py-2 px-1"
-                />
-
-                {/* Far right: Main action button (Add) */}
-                <button
-                  type="submit"
-                  disabled={!newItemName.trim()}
-                  className="p-2 sm:px-3.5 sm:py-2 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 disabled:opacity-40 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20 shrink-0"
-                  title="Add item"
+                {/* Form wrapping input and submit button */}
+                <form
+                  onSubmit={handleAddItem}
+                  className="flex-1 min-w-0 flex items-center gap-2"
                 >
-                  <Plus className="w-4 h-4" />
-                  <span className="hidden sm:inline">Add</span>
-                </button>
-              </form>
+                  <input
+                    autoFocus
+                    type="text"
+                    placeholder={`Add to ${currentListName}...`}
+                    value={newItemName}
+                    onChange={(e) => setNewItemName(e.target.value)}
+                    disabled={isAddingItem}
+                    className="flex-1 min-w-0 bg-transparent border-none text-sm text-white placeholder-slate-500 focus:outline-none py-2 px-1"
+                  />
+
+                  {/* Far right: Main action button (Add) */}
+                  <button
+                    type="submit"
+                    disabled={!newItemName.trim() || isAddingItem}
+                    className="min-h-[36px] px-3.5 py-1.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 disabled:opacity-40 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20 shrink-0 active:scale-95"
+                    title="Add item"
+                  >
+                    {isAddingItem ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                    )}
+                    <span>{isAddingItem ? 'Adding...' : 'Add'}</span>
+                  </button>
+                </form>
+              </div>
             )}
           </div>
         </div>

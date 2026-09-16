@@ -102,10 +102,32 @@ function saveDeviceProfile(user: User, householdName?: string) {
   }
 }
 
+const normalizeHousehold = (h: any): Household | null => {
+  if (!h) return null;
+  const code = h.invite_code || h.inviteCode || '';
+  return {
+    id: h.id,
+    name: h.name,
+    invite_code: code,
+    inviteCode: code,
+    created_at: h.created_at || h.createdAt || '',
+  };
+};
+
 const PWAContext = createContext<PWAContextType | undefined>(undefined);
 
 export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [household, setHouseholdState] = useState<Household | null>(null);
+  const [household, setHouseholdState] = useState<Household | null>(() => {
+    try {
+      const cached = localStorage.getItem('famkit_household');
+      if (cached) return normalizeHousehold(JSON.parse(cached));
+    } catch {}
+    const cachedId = localStorage.getItem('famkit_household_id');
+    if (cachedId) {
+      return { id: cachedId, name: 'My Family', invite_code: '', created_at: '' };
+    }
+    return null;
+  });
   const [users, setUsers] = useState<User[]>([]);
   const [currentUser, setCurrentUserState] = useState<User | null>(() => {
     try {
@@ -173,22 +195,13 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const normalizeHousehold = (h: any): Household | null => {
-    if (!h) return null;
-    const code = h.invite_code || h.inviteCode || '';
-    return {
-      id: h.id,
-      name: h.name,
-      invite_code: code,
-      inviteCode: code,
-      created_at: h.created_at || h.createdAt || '',
-    };
-  };
-
   const setHousehold = (h: Household) => {
     const normalized = normalizeHousehold(h);
     setHouseholdState(normalized);
-    if (normalized) localStorage.setItem('famkit_household_id', normalized.id);
+    if (normalized) {
+      localStorage.setItem('famkit_household_id', normalized.id);
+      localStorage.setItem('famkit_household', JSON.stringify(normalized));
+    }
     refreshHouseholdsAndUsers();
   };
 
@@ -199,8 +212,13 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('famkit_household_id', res.household.id);
 
     const normUser = normalizeUser(res.user);
+    const normH = normalizeHousehold(res.household);
     setCurrentUserState(normUser);
-    setHouseholdState(normalizeHousehold(res.household));
+    setHouseholdState(normH);
+
+    if (normH) {
+      localStorage.setItem('famkit_household', JSON.stringify(normH));
+    }
 
     if (normUser) {
       localStorage.setItem('famkit_current_user', JSON.stringify(normUser));
@@ -237,8 +255,13 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('famkit_household_id', res.household.id);
 
     const normUser = normalizeUser(res.user);
+    const normH = normalizeHousehold(res.household);
     setCurrentUserState(normUser);
-    setHouseholdState(normalizeHousehold(res.household));
+    setHouseholdState(normH);
+
+    if (normH) {
+      localStorage.setItem('famkit_household', JSON.stringify(normH));
+    }
 
     if (normUser) {
       localStorage.setItem('famkit_current_user', JSON.stringify(normUser));
@@ -262,6 +285,7 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.removeItem('famkit_auth_token');
     localStorage.removeItem('famkit_user_id');
     localStorage.removeItem('famkit_household_id');
+    localStorage.removeItem('famkit_household');
     localStorage.removeItem('famkit_current_user');
     setCurrentUserState(null);
     setHouseholdState(null);
@@ -278,15 +302,19 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const { user, household: h } = await api.getMe();
           if (user && h) {
             const normUser = normalizeUser(user);
+            const normH = normalizeHousehold(h);
             setCurrentUserState(normUser);
-            setHouseholdState(normalizeHousehold(h));
+            setHouseholdState(normH);
+            if (normH) {
+              localStorage.setItem('famkit_household', JSON.stringify(normH));
+              localStorage.setItem('famkit_household_id', normH.id);
+            }
             if (normUser) {
               localStorage.setItem('famkit_user_id', normUser.id);
               localStorage.setItem('famkit_current_user', JSON.stringify(normUser));
               localStorage.setItem('famkit_last_username', normUser.username || normUser.name);
               saveDeviceProfile(normUser, h.name);
             }
-            localStorage.setItem('famkit_household_id', h.id);
 
             const [householdUsers, householdAisles] = await Promise.all([
               api.getUsers(h.id),
@@ -297,8 +325,12 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           } else {
             logout();
           }
-        } catch {
-          logout();
+        } catch (err: any) {
+          console.warn('Auth check network warning:', err);
+          // Only log out if the server explicitly rejected the token with 401
+          if (String(err?.message || err).includes('401')) {
+            logout();
+          }
         }
       }
       setIsLoadingAuth(false);

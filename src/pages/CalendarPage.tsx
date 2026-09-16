@@ -946,7 +946,7 @@ export const CalendarPage: React.FC = () => {
                 <Plus className="w-6 h-6 stroke-[2.5]" />
               </button>
             ) : (
-              <form onSubmit={handleAssistantSchedule} className="w-full flex items-center gap-2">
+              <div className="w-full flex items-center gap-2">
                 {/* Close button */}
                 <button
                   type="button"
@@ -971,31 +971,34 @@ export const CalendarPage: React.FC = () => {
                   <span className="hidden sm:inline">Details</span>
                 </button>
 
-                {/* Single Smart Input: Just type what you want to add */}
-                <input
-                  autoFocus
-                  type="text"
-                  placeholder="Add event (e.g. Board game night on monday 6-9pm)..."
-                  value={quickInput}
-                  onChange={(e) => setQuickInput(e.target.value)}
-                  disabled={isAssistantSubmitting}
-                  className="flex-1 min-w-0 bg-transparent border-none text-xs text-white placeholder-slate-500 focus:outline-none py-1.5 px-1"
-                />
+                {/* Form for input and submit button */}
+                <form onSubmit={handleAssistantSchedule} className="flex-1 min-w-0 flex items-center gap-2">
+                  {/* Single Smart Input: Just type what you want to add */}
+                  <input
+                    autoFocus
+                    type="text"
+                    placeholder="Add event (e.g. Board game night on monday 6-9pm)..."
+                    value={quickInput}
+                    onChange={(e) => setQuickInput(e.target.value)}
+                    disabled={isAssistantSubmitting}
+                    className="flex-1 min-w-0 bg-transparent border-none text-xs text-white placeholder-slate-500 focus:outline-none py-1.5 px-1"
+                  />
 
-                {/* Add Button */}
-                <button
-                  type="submit"
-                  disabled={!quickInput.trim() || isAssistantSubmitting}
-                  className="px-3.5 py-1.5 rounded-xl text-slate-950 font-bold text-xs flex items-center gap-1 transition-all shadow-md shrink-0 disabled:opacity-40 bg-emerald-500 hover:bg-emerald-400 shadow-emerald-500/25 active:scale-95"
-                >
-                  {isAssistantSubmitting ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-                  )}
-                  <span>{isAssistantSubmitting ? 'Adding...' : 'Add'}</span>
-                </button>
-              </form>
+                  {/* Add Button */}
+                  <button
+                    type="submit"
+                    disabled={!quickInput.trim() || isAssistantSubmitting}
+                    className="px-3.5 py-1.5 rounded-xl text-slate-950 font-bold text-xs flex items-center gap-1 transition-all shadow-md shrink-0 disabled:opacity-40 bg-emerald-500 hover:bg-emerald-400 shadow-emerald-500/25 active:scale-95"
+                  >
+                    {isAssistantSubmitting ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                    )}
+                    <span>{isAssistantSubmitting ? 'Adding...' : 'Add'}</span>
+                  </button>
+                </form>
+              </div>
             )}
           </div>
         </div>
