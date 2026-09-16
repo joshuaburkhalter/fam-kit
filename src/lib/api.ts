@@ -974,7 +974,7 @@ export const api = {
     return fetchJson<{ url: string }>(qs ? `/auth/google/url?${qs}` : '/auth/google/url');
   },
 
-  getGoogleSyncStatus: () => fetchJson<GoogleSyncStatus[]>('/auth/google/status'),
+  getGoogleSyncStatus: () => fetchJson<GoogleSyncStatus[]>(`/auth/google/status?t=${Date.now()}`),
 
   getGoogleCalendars: (userId: string) =>
     fetchJson<GoogleCalendarEntry[]>(`/auth/google/calendars?userId=${encodeURIComponent(userId)}`),
