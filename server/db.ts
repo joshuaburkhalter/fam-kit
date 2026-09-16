@@ -215,6 +215,9 @@ function initSchema(db: Database) {
     db.run(`ALTER TABLE user_google_sync ADD COLUMN selectedCalendarIds TEXT DEFAULT '["primary"]'`);
   } catch {}
   try {
+    db.run(`ALTER TABLE user_google_sync ADD COLUMN calendarMemberMap TEXT`);
+  } catch {}
+  try {
     db.run(`CREATE INDEX IF NOT EXISTS idx_cal_google ON calendar_events (householdId, googleEventId)`);
   } catch {}
   try {

@@ -169,17 +169,31 @@ export const SettingsPage: React.FC = () => {
     );
   };
 
+  const handleChangeCalendarMember = (calendarId: string, memberId: string) => {
+    setUserCalendars((prev) =>
+      prev.map((c) =>
+        c.id === calendarId ? { ...c, assignedMemberId: memberId || null } : c
+      )
+    );
+  };
+
   const handleSaveCalendarSelection = async () => {
     if (!calendarModalUser) return;
-    const selectedIds = userCalendars.filter((c) => c.selected).map((c) => c.id);
-    if (selectedIds.length === 0) {
+    const selections = userCalendars
+      .filter((c) => c.selected)
+      .map((c) => ({
+        calendarId: c.id,
+        assignedMemberId: c.assignedMemberId || null,
+      }));
+
+    if (selections.length === 0) {
       alert('Please select at least one calendar to sync, or disconnect if you no longer wish to sync.');
       return;
     }
 
     try {
       setIsSavingCalendars(true);
-      await api.updateSelectedGoogleCalendars(calendarModalUser.id, selectedIds);
+      await api.updateSelectedGoogleCalendars(calendarModalUser.id, selections);
       await loadGoogleStatus();
       setStatusMessage(`Updated calendar sync preferences for ${calendarModalUser.name}.`);
       setCalendarModalUser(null);
@@ -1114,45 +1128,68 @@ export const SettingsPage: React.FC = () => {
                 </div>
               ) : (
                 userCalendars.map((cal) => (
-                  <label
+                  <div
                     key={cal.id}
-                    onClick={() => handleToggleCalendar(cal.id)}
-                    className={`p-3 rounded-2xl border flex items-center justify-between gap-3 cursor-pointer transition-all ${
+                    className={`p-3 rounded-2xl border transition-all space-y-2.5 ${
                       cal.selected
                         ? 'bg-emerald-500/10 border-emerald-500/35 ring-1 ring-emerald-500/20'
-                        : 'bg-slate-950/40 border-white/5 hover:border-white/10'
+                        : 'bg-slate-950/40 border-white/5 opacity-70 hover:opacity-100'
                     }`}
                   >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div
-                        className="w-3.5 h-3.5 rounded-full shrink-0 ring-2 ring-white/20"
-                        style={{ backgroundColor: cal.backgroundColor || '#10b981' }}
-                      />
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs font-semibold text-white truncate">{cal.summary}</span>
-                          {cal.primary && (
-                            <span className="text-[9px] bg-blue-500/20 text-blue-300 px-1.5 py-0.2 rounded-full font-semibold shrink-0">
-                              Primary
-                            </span>
+                    <div
+                      onClick={() => handleToggleCalendar(cal.id)}
+                      className="flex items-center justify-between gap-3 cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div
+                          className="w-3.5 h-3.5 rounded-full shrink-0 ring-2 ring-white/20"
+                          style={{ backgroundColor: cal.backgroundColor || '#10b981' }}
+                        />
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-semibold text-white truncate">{cal.summary}</span>
+                            {cal.primary && (
+                              <span className="text-[9px] bg-blue-500/20 text-blue-300 px-1.5 py-0.2 rounded-full font-semibold shrink-0">
+                                Primary
+                              </span>
+                            )}
+                          </div>
+                          {cal.description && (
+                            <p className="text-[11px] text-slate-400 truncate">{cal.description}</p>
                           )}
                         </div>
-                        {cal.description && (
-                          <p className="text-[11px] text-slate-400 truncate">{cal.description}</p>
-                        )}
+                      </div>
+
+                      <div
+                        className={`w-5 h-5 rounded-lg border flex items-center justify-center shrink-0 transition-colors ${
+                          cal.selected
+                            ? 'bg-emerald-500 border-emerald-500 text-slate-950 font-black'
+                            : 'border-white/20 bg-white/5'
+                        }`}
+                      >
+                        {cal.selected && <Check className="w-3 h-3 stroke-[3]" />}
                       </div>
                     </div>
 
-                    <div
-                      className={`w-5 h-5 rounded-lg border flex items-center justify-center shrink-0 transition-colors ${
-                        cal.selected
-                          ? 'bg-emerald-500 border-emerald-500 text-slate-950 font-black'
-                          : 'border-white/20 bg-white/5'
-                      }`}
-                    >
-                      {cal.selected && <Check className="w-3 h-3 stroke-[3]" />}
-                    </div>
-                  </label>
+                    {/* Member Assignment Dropdown (shown when calendar is selected) */}
+                    {cal.selected && (
+                      <div className="pt-2 border-t border-white/5 flex items-center justify-between gap-2">
+                        <span className="text-[11px] text-slate-400 font-medium">Assign events to:</span>
+                        <select
+                          value={cal.assignedMemberId || ''}
+                          onChange={(e) => handleChangeCalendarMember(cal.id, e.target.value)}
+                          className="bg-slate-900 border border-white/10 rounded-xl px-2.5 py-1 text-xs text-emerald-300 font-semibold focus:outline-none focus:border-emerald-500/50 cursor-pointer"
+                        >
+                          <option value="">Whole Family / Shared</option>
+                          {users.map((mem) => (
+                            <option key={mem.id} value={mem.id}>
+                              {mem.name} {mem.id === calendarModalUser.id ? '(You)' : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
                 ))
               )}
             </div>

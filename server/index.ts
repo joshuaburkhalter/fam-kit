@@ -1513,11 +1513,15 @@ app.get('/api/auth/google/calendars', async (req, res) => {
 app.put('/api/auth/google/calendars', async (req, res) => {
   try {
     const householdId = getHouseholdId(req);
-    const { userId, calendarIds } = req.body;
-    if (!userId || !Array.isArray(calendarIds)) {
-      return res.status(400).json({ error: 'userId and calendarIds array are required' });
+    const { userId, calendarIds, calendarSelections, memberMap } = req.body;
+    if (!userId) {
+      return res.status(400).json({ error: 'userId is required' });
     }
-    const result = await updateUserSelectedCalendars(householdId, userId, calendarIds);
+    const selections = calendarSelections || calendarIds;
+    if (!Array.isArray(selections)) {
+      return res.status(400).json({ error: 'calendarSelections or calendarIds array is required' });
+    }
+    const result = await updateUserSelectedCalendars(householdId, userId, selections, memberMap);
     if (!result.success) {
       return res.status(400).json({ error: result.error });
     }

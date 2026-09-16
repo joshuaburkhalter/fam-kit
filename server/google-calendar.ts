@@ -10,6 +10,7 @@ export interface GoogleSyncRecord {
   tokenExpiry: number | null;
   selectedCalendarId: string | null;
   selectedCalendarIds: string | null;
+  calendarMemberMap: string | null;
   syncToken: string | null;
   lastSyncedAt: string | null;
   createdAt: string;
@@ -23,6 +24,7 @@ export interface GoogleCalendarEntry {
   backgroundColor?: string;
   foregroundColor?: string;
   selected: boolean;
+  assignedMemberId?: string | null;
 }
 
 function getGoogleCredentials() {
@@ -80,7 +82,7 @@ export function getGoogleAuthUrl(householdId: string, userId: string, host?: str
     response_type: 'code',
     scope: scopes,
     access_type: 'offline',
-    prompt: 'consent', // Ensure refresh token is always returned
+    prompt: 'consent',
     state,
   });
 
@@ -158,13 +160,11 @@ export async function handleGoogleAuthCallback(
     const expiryMs = Date.now() + tokenData.expires_in * 1000;
     const now = new Date().toISOString();
 
-    // Check if record already exists for this user in this household
     const existing = queryOne<GoogleSyncRecord>(
       'SELECT * FROM user_google_sync WHERE userId = ? AND householdId = ?',
       [userId, householdId]
     );
 
-    // If Google didn't supply a new refresh token (already authorized), preserve the previous one
     if (!refreshToken && existing?.refreshToken) {
       refreshToken = existing.refreshToken;
     }
@@ -187,14 +187,13 @@ export async function handleGoogleAuthCallback(
     } else {
       const id = `gsync_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
       execute(
-        `INSERT INTO user_google_sync (id, userId, householdId, googleEmail, accessToken, refreshToken, tokenExpiry, selectedCalendarId, selectedCalendarIds, syncToken, lastSyncedAt, createdAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 'primary', '["primary"]', null, ?, ?)`,
+        `INSERT INTO user_google_sync (id, userId, householdId, googleEmail, accessToken, refreshToken, tokenExpiry, selectedCalendarId, selectedCalendarIds, calendarMemberMap, syncToken, lastSyncedAt, createdAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'primary', '["primary"]', null, null, ?, ?)`,
         [id, userId, householdId, userEmail, accessToken, refreshToken, expiryMs, now, now]
       );
     }
     saveDb();
 
-    // Trigger initial automatic sync immediately
     try {
       await syncUserGoogleCalendar(householdId, userId);
     } catch (syncErr) {
@@ -257,7 +256,7 @@ async function getValidAccessToken(record: GoogleSyncRecord): Promise<string | n
 }
 
 /**
- * Get all available Google Calendars for a user, indicating which ones are selected
+ * Get all available Google Calendars for a user, indicating which ones are selected and who they are assigned to
  */
 export async function getUserGoogleCalendars(
   householdId: string,
@@ -308,10 +307,19 @@ export async function getUserGoogleCalendars(
       selectedIds = [record.selectedCalendarId];
     }
 
+    let memberMap: Record<string, string | null> = {};
+    if (record.calendarMemberMap) {
+      try {
+        memberMap = JSON.parse(record.calendarMemberMap);
+      } catch {}
+    }
+
     const selectedSet = new Set(selectedIds);
 
     const calendars: GoogleCalendarEntry[] = (data.items || []).map((cal) => {
       const isSelected = selectedSet.has(cal.id) || (Boolean(cal.primary) && selectedSet.has('primary'));
+      const assigned = memberMap[cal.id] !== undefined ? memberMap[cal.id] : userId;
+
       return {
         id: cal.id,
         summary: cal.summary || '(Untitled Calendar)',
@@ -320,6 +328,7 @@ export async function getUserGoogleCalendars(
         backgroundColor: cal.backgroundColor || '#10b981',
         foregroundColor: cal.foregroundColor || '#ffffff',
         selected: isSelected,
+        assignedMemberId: assigned,
       };
     });
 
@@ -331,12 +340,13 @@ export async function getUserGoogleCalendars(
 }
 
 /**
- * Update which Google Calendars should sync for a user and re-sync
+ * Update which Google Calendars should sync for a user, their member assignments, and re-sync
  */
 export async function updateUserSelectedCalendars(
   householdId: string,
   userId: string,
-  calendarIds: string[]
+  calendarSelections: Array<{ calendarId: string; assignedMemberId?: string | null }> | string[],
+  memberMapParam?: Record<string, string | null>
 ): Promise<{ success: boolean; syncedCount: number; error?: string }> {
   try {
     const record = queryOne<GoogleSyncRecord>(
@@ -348,12 +358,26 @@ export async function updateUserSelectedCalendars(
       return { success: false, syncedCount: 0, error: 'User is not connected' };
     }
 
-    const cleanIds = Array.from(new Set(calendarIds.map((id) => id.trim()).filter(Boolean)));
+    let cleanIds: string[] = [];
+    let memberMap: Record<string, string | null> = {};
+
+    if (Array.isArray(calendarSelections) && calendarSelections.length > 0 && typeof calendarSelections[0] === 'object') {
+      const typedSelections = calendarSelections as Array<{ calendarId: string; assignedMemberId?: string | null }>;
+      cleanIds = Array.from(new Set(typedSelections.map((s) => s.calendarId.trim()).filter(Boolean)));
+      for (const s of typedSelections) {
+        memberMap[s.calendarId] = s.assignedMemberId ?? null;
+      }
+    } else {
+      cleanIds = Array.from(new Set((calendarSelections as string[]).map((id) => id.trim()).filter(Boolean)));
+      if (memberMapParam) memberMap = memberMapParam;
+    }
+
     const idsJson = JSON.stringify(cleanIds);
+    const mapJson = JSON.stringify(memberMap);
 
     execute(
-      'UPDATE user_google_sync SET selectedCalendarIds = ? WHERE id = ?',
-      [idsJson, record.id]
+      'UPDATE user_google_sync SET selectedCalendarIds = ?, calendarMemberMap = ? WHERE id = ?',
+      [idsJson, mapJson, record.id]
     );
     saveDb();
 
@@ -365,8 +389,8 @@ export async function updateUserSelectedCalendars(
       );
     } else {
       const existingEvents = queryAll<{ id: string; googleCalendarId: string | null }>(
-        'SELECT id, googleCalendarId FROM calendar_events WHERE householdId = ? AND assignedMemberId = ? AND isGoogleEvent = 1',
-        [householdId, userId]
+        'SELECT id, googleCalendarId FROM calendar_events WHERE householdId = ? AND isGoogleEvent = 1',
+        [householdId]
       );
       const keepSet = new Set(cleanIds);
       for (const ev of existingEvents) {
@@ -387,7 +411,7 @@ export async function updateUserSelectedCalendars(
 }
 
 /**
- * Sync events for a specific user from their selected Google Calendars
+ * Sync events for a specific user from their selected Google Calendars, applying member assignments
  * Window: 30 days in the past to 90 days in the future
  */
 export async function syncUserGoogleCalendar(
@@ -408,7 +432,6 @@ export async function syncUserGoogleCalendar(
     return { syncedCount: 0, error: 'Could not acquire valid Google access token' };
   }
 
-  // Parse selected calendars
   let calendarIds: string[] = ['primary'];
   if (record.selectedCalendarIds) {
     try {
@@ -416,6 +439,13 @@ export async function syncUserGoogleCalendar(
     } catch {}
   } else if (record.selectedCalendarId) {
     calendarIds = [record.selectedCalendarId];
+  }
+
+  let memberMap: Record<string, string | null> = {};
+  if (record.calendarMemberMap) {
+    try {
+      memberMap = JSON.parse(record.calendarMemberMap);
+    } catch {}
   }
 
   if (calendarIds.length === 0) {
@@ -432,6 +462,12 @@ export async function syncUserGoogleCalendar(
   const nowIso = new Date().toISOString();
 
   for (const calId of calendarIds) {
+    // Determine which member this calendar belongs to
+    let assignedMemberId: string | null = userId;
+    if (memberMap[calId] !== undefined) {
+      assignedMemberId = memberMap[calId] && memberMap[calId] !== 'family' ? memberMap[calId] : null;
+    }
+
     const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(
       calId
     )}/events?timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(
@@ -514,14 +550,14 @@ export async function syncUserGoogleCalendar(
                  googleCalendarId = ?,
                  isGoogleEvent = 1
              WHERE id = ? AND householdId = ?`,
-            [title, description, date, startTime, endTime, location, userId, calId, existingEvent.id, householdId]
+            [title, description, date, startTime, endTime, location, assignedMemberId, calId, existingEvent.id, householdId]
           );
         } else {
           const id = `gcal_${item.id.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 60)}`;
           execute(
             `INSERT INTO calendar_events (id, title, description, date, startTime, endTime, category, location, assignedMemberId, householdId, isGoogleEvent, googleEventId, googleCalendarId, createdAt)
              VALUES (?, ?, ?, ?, ?, ?, 'Google Calendar', ?, ?, ?, 1, ?, ?, ?)`,
-            [id, title, description, date, startTime, endTime, location, userId, householdId, item.id, calId, nowIso]
+            [id, title, description, date, startTime, endTime, location, assignedMemberId, householdId, item.id, calId, nowIso]
           );
         }
         totalSynced++;
@@ -531,7 +567,6 @@ export async function syncUserGoogleCalendar(
     }
   }
 
-  // Update lastSyncedAt on the sync record
   execute(
     'UPDATE user_google_sync SET lastSyncedAt = ? WHERE id = ?',
     [nowIso, record.id]
@@ -575,8 +610,8 @@ export function disconnectUserGoogleCalendar(householdId: string, userId: string
   try {
     execute('DELETE FROM user_google_sync WHERE householdId = ? AND userId = ?', [householdId, userId]);
     execute(
-      'DELETE FROM calendar_events WHERE householdId = ? AND assignedMemberId = ? AND isGoogleEvent = 1',
-      [householdId, userId]
+      'DELETE FROM calendar_events WHERE householdId = ? AND isGoogleEvent = 1',
+      [householdId]
     );
     saveDb();
     return { success: true };
@@ -626,12 +661,10 @@ let syncIntervalTimer: NodeJS.Timeout | null = null;
 export function initBackgroundGoogleSync(): void {
   if (syncIntervalTimer) return;
 
-  // Run initial pass after 10 seconds of server boot
   setTimeout(() => {
     syncAllConnectedHouseholdCalendars().catch((e) => console.error('Initial background sync error:', e));
   }, 10000);
 
-  // Repeat every 10 minutes
   syncIntervalTimer = setInterval(() => {
     syncAllConnectedHouseholdCalendars().catch((e) => console.error('Periodic background sync error:', e));
   }, 10 * 60 * 1000);

@@ -958,10 +958,14 @@ export const api = {
   getGoogleCalendars: (userId: string) =>
     fetchJson<GoogleCalendarEntry[]>(`/auth/google/calendars?userId=${encodeURIComponent(userId)}`),
 
-  updateSelectedGoogleCalendars: (userId: string, calendarIds: string[]) =>
+  updateSelectedGoogleCalendars: (
+    userId: string,
+    calendarSelections: Array<{ calendarId: string; assignedMemberId?: string | null }> | string[],
+    memberMap?: Record<string, string | null>
+  ) =>
     fetchJson<{ success: boolean; syncedCount: number }>('/auth/google/calendars', {
       method: 'PUT',
-      body: JSON.stringify({ userId, calendarIds }),
+      body: JSON.stringify({ userId, calendarSelections, memberMap }),
     }),
 
   disconnectGoogleCalendar: (userId: string) =>
