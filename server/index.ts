@@ -1589,12 +1589,13 @@ app.get('/api/auth/google/url', (req, res) => {
 
 let lastGoogleCallbackInfo: any = null;
 
-app.get('/api/auth/google/callback', async (req, res) => {
+const googleCallbackHandler: express.RequestHandler = async (req, res) => {
   const code = req.query.code as string;
   const state = req.query.state as string;
   const error = req.query.error as string;
 
   console.log('⚡ Google OAuth Callback received:', {
+    path: req.path,
     hasCode: Boolean(code),
     hasState: Boolean(state),
     error: error || null,
@@ -1602,6 +1603,7 @@ app.get('/api/auth/google/callback', async (req, res) => {
 
   lastGoogleCallbackInfo = {
     receivedAt: new Date().toISOString(),
+    path: req.path,
     hasCode: Boolean(code),
     codePreview: code ? `${code.slice(0, 8)}...` : null,
     hasState: Boolean(state),
@@ -1639,7 +1641,12 @@ app.get('/api/auth/google/callback', async (req, res) => {
       '&userId=' +
       encodeURIComponent(result.userId || '')
   );
-});
+};
+
+app.get('/api/auth/google/callback', googleCallbackHandler);
+app.get('/auth/google/callback', googleCallbackHandler);
+app.get('/api/google/callback', googleCallbackHandler);
+app.get('/auth/callback', googleCallbackHandler);
 
 // Diagnostic Endpoint for Live Debugging
 app.get('/api/debug/google', (req, res) => {

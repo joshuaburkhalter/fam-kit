@@ -164,6 +164,21 @@ export const SettingsPage: React.FC = () => {
   const [syncProcessingDone, setSyncProcessingDone] = useState<boolean>(false);
   const [syncProcessingStep, setSyncProcessingStep] = useState<string>('Connecting to Google Calendar...');
 
+  // Optimistic UI for pending connection
+  const [pendingSyncUserId, setPendingSyncUserId] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const raw = localStorage.getItem('homebase_pending_google_sync');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Date.now() - parsed.timestamp < 10 * 60 * 1000) {
+          return parsed.userId;
+        }
+      }
+    } catch {}
+    return null;
+  });
+
   const loadGoogleStatus = async () => {
     try {
       setIsLoadingGoogleStatus(true);
@@ -181,6 +196,51 @@ export const SettingsPage: React.FC = () => {
   useEffect(() => {
     loadGoogleStatus();
   }, [household?.id, users.length]);
+
+  // Check Google connection on window focus or app resume (e.g. returning from Chrome on mobile)
+  useEffect(() => {
+    const handleCheckOnFocus = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        loadGoogleStatus();
+      }
+    };
+
+    window.addEventListener('focus', handleCheckOnFocus);
+    document.addEventListener('visibilitychange', handleCheckOnFocus);
+
+    return () => {
+      window.removeEventListener('focus', handleCheckOnFocus);
+      document.removeEventListener('visibilitychange', handleCheckOnFocus);
+    };
+  }, []);
+
+  // When pendingSyncUserId is active, actively poll until connection is confirmed
+  useEffect(() => {
+    if (!pendingSyncUserId) return;
+
+    let count = 0;
+    const interval = setInterval(async () => {
+      count++;
+      const statuses = await loadGoogleStatus();
+      const connectedRecord = statuses.find(
+        (s) => s.userId === pendingSyncUserId && s.connected
+      );
+      if (connectedRecord) {
+        clearInterval(interval);
+        localStorage.removeItem('homebase_pending_google_sync');
+        setPendingSyncUserId(null);
+        setStatusMessage('Google Calendar connected successfully!');
+        setTimeout(() => setStatusMessage(null), 5000);
+      } else if (count >= 30) {
+        // Stop after 45 seconds
+        clearInterval(interval);
+        localStorage.removeItem('homebase_pending_google_sync');
+        setPendingSyncUserId(null);
+      }
+    }, 1500);
+
+    return () => clearInterval(interval);
+  }, [pendingSyncUserId]);
 
   // Handle OAuth Return & Polling Waiting Screen
   useEffect(() => {
@@ -230,6 +290,8 @@ export const SettingsPage: React.FC = () => {
           setTimeout(() => {
             if (!isMounted) return;
             setIsSyncProcessing(false);
+            localStorage.removeItem('homebase_pending_google_sync');
+            setPendingSyncUserId(null);
             window.history.replaceState({}, '', '/?tab=settings');
             setStatusMessage(
               `Google Calendar connected! ${syncProcessingEmail ? `(${syncProcessingEmail}) ` : ''}Your events are ready.`
@@ -258,12 +320,19 @@ export const SettingsPage: React.FC = () => {
   const handleConnectGoogle = async (userId: string) => {
     try {
       setConnectingUserId(userId);
+      setPendingSyncUserId(userId);
+      localStorage.setItem(
+        'homebase_pending_google_sync',
+        JSON.stringify({ userId, timestamp: Date.now() })
+      );
       const { url } = await api.getGoogleAuthUrl(userId, household?.id);
       window.location.href = url;
     } catch (err: any) {
       console.error('Failed to initiate Google OAuth:', err);
       alert(err.message || 'Failed to connect to Google');
       setConnectingUserId(null);
+      setPendingSyncUserId(null);
+      localStorage.removeItem('homebase_pending_google_sync');
     }
   };
 
@@ -822,6 +891,38 @@ export const SettingsPage: React.FC = () => {
           </button>
         </div>
 
+        {/* Optimistic Active Connecting Banner */}
+        {pendingSyncUserId && (
+          <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between gap-3 text-xs text-amber-300 animate-in fade-in">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <Loader2 className="w-4 h-4 animate-spin text-amber-400 shrink-0" />
+              <span className="truncate">
+                Connecting Google Calendar. If you just approved access in Google, your schedule is syncing now...
+              </span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => loadGoogleStatus()}
+                className="px-2.5 py-1 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 font-bold text-[11px] cursor-pointer transition-colors"
+              >
+                Check Now
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  localStorage.removeItem('homebase_pending_google_sync');
+                  setPendingSyncUserId(null);
+                }}
+                className="text-slate-400 hover:text-white text-xs px-1.5 py-1 cursor-pointer"
+                title="Dismiss"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Member connection list */}
         <div className="space-y-2.5 pt-1">
           {users.map((u) => {
@@ -829,11 +930,18 @@ export const SettingsPage: React.FC = () => {
             const isConnected = Boolean(syncStatus?.connected);
             const isConnecting = connectingUserId === u.id;
             const isDisconnecting = disconnectingUserId === u.id;
+            const isPending = (pendingSyncUserId === u.id || isConnecting) && !isConnected;
 
             return (
               <div
                 key={`gcal_${u.id}`}
-                className="p-3.5 rounded-2xl bg-slate-900/60 border border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                className={`p-3.5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all ${
+                  isPending
+                    ? 'bg-amber-500/10 border-amber-500/30 ring-1 ring-amber-500/20'
+                    : isConnected
+                    ? 'bg-slate-900/60 border-white/5'
+                    : 'bg-slate-900/60 border-white/5'
+                }`}
               >
                 <div className="flex items-center gap-3 min-w-0">
                   {u.avatar && (u.avatar.startsWith('data:image') || u.avatar.startsWith('http')) ? (
@@ -859,6 +967,11 @@ export const SettingsPage: React.FC = () => {
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                           <span>Connected</span>
                         </span>
+                      ) : isPending ? (
+                        <span className="inline-flex items-center gap-1.5 text-[10px] text-amber-300 bg-amber-500/20 border border-amber-500/35 px-2.5 py-0.5 rounded-full font-semibold shadow-sm">
+                          <Loader2 className="w-2.5 h-2.5 animate-spin text-amber-400" />
+                          <span>Syncing & Connecting...</span>
+                        </span>
                       ) : (
                         <span className="text-[10px] text-slate-500 bg-white/5 px-2 py-0.5 rounded-full font-medium">
                           Not connected
@@ -869,6 +982,11 @@ export const SettingsPage: React.FC = () => {
                     <div className="text-[11px] text-slate-400 truncate pt-0.5">
                       {isConnected && syncStatus?.googleEmail ? (
                         <span className="font-mono text-slate-300">{syncStatus.googleEmail}</span>
+                      ) : isPending ? (
+                        <span className="text-amber-400/90 flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                          Authorizing with Google & syncing events...
+                        </span>
                       ) : (
                         <span className="text-slate-500">Connect to sync Google events</span>
                       )}
@@ -908,6 +1026,28 @@ export const SettingsPage: React.FC = () => {
                         <span className="hidden sm:inline">Disconnect</span>
                       </button>
                     </>
+                  ) : isPending ? (
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled
+                        className="px-3.5 py-2 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-bold flex items-center gap-2 shadow-sm"
+                      >
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
+                        <span>Connecting...</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          localStorage.removeItem('homebase_pending_google_sync');
+                          setPendingSyncUserId(null);
+                        }}
+                        className="text-[11px] text-slate-400 hover:text-white px-2 py-1 cursor-pointer transition-colors"
+                        title="Cancel pending state"
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   ) : (
                     <button
                       type="button"
