@@ -292,26 +292,28 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
                     Settings
                   </button>
 
-                  {/* Bug & Feature Requests */}
+                  {/* Feature Requests */}
                   <button
                     onClick={() => {
                       setShowUserDropdown(false);
                       setShowBugFeatureModal(true);
                     }}
-                    className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-amber-300 hover:text-white hover:bg-amber-500/20 bg-amber-500/10 border border-amber-500/30 transition-all cursor-pointer mt-0.5 group"
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-slate-200 hover:text-white hover:bg-white/10 transition-colors cursor-pointer group"
                   >
                     <div className="flex items-center gap-2.5">
-                      <Bug className="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform" />
-                      <span>Bug & Feature Tracker</span>
+                      <Sparkles className="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform" />
+                      <span>Feature Requests</span>
                     </div>
                     {openFeedbackCount > 0 ? (
-                      <span className="bg-amber-500 text-slate-950 font-black text-[10px] px-1.5 py-0.5 rounded-full shadow-sm">
+                      <span className="bg-emerald-500 text-slate-950 font-black text-[10px] px-1.5 py-0.5 rounded-full shadow-sm">
                         {openFeedbackCount}
                       </span>
                     ) : (
-                      <span className="text-[10px] text-amber-400/70 font-mono">
-                        {isAdmin ? 'Admin' : 'Feedback'}
-                      </span>
+                      isAdmin && (
+                        <span className="text-[10px] text-slate-400 group-hover:text-slate-300 font-mono">
+                          Admin
+                        </span>
+                      )
                     )}
                   </button>
                 </div>
