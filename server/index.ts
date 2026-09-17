@@ -480,8 +480,8 @@ app.post('/api/subscription/create-checkout-session', async (req, res) => {
   }
 
   const stripe = getStripe();
-  const monthlyPriceId = process.env.STRIPE_PRICE_MONTHLY || 'price_1UGQDGCzQPmA3BBxQKWSqlSm';
-  const annualPriceId = process.env.STRIPE_PRICE_ANNUAL || 'price_1UGQDxCzQPmA3BBxgb9WhM8G';
+  const monthlyPriceId = process.env.STRIPE_PRICE_MONTHLY || 'price_1UGUN3ENC8h8A0IWVonYj7bF';
+  const annualPriceId = process.env.STRIPE_PRICE_ANNUAL || 'price_1UGUN3ENC8h8A0IWfTmFAHMM';
   const priceId = plan === 'annual' ? annualPriceId : monthlyPriceId;
 
   if (!stripe) {
