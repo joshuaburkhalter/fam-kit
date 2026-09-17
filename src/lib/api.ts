@@ -14,6 +14,7 @@ import type {
   NotificationPreferences,
   SubscriptionStatus,
   PromoCode,
+  FeedbackRequest,
 } from '../types';
 
 const BASE_URL = '/api';
@@ -1094,6 +1095,97 @@ export const api = {
     return fetchJson<{ success: boolean; household: any }>('/subscription/test-set-state', {
       method: 'POST',
       body: JSON.stringify(data),
+    });
+  },
+
+  // Feedback & Bug / Feature Requests
+  getFeedbackRequests: async (): Promise<FeedbackRequest[]> => {
+    const list = await fetchJson<any[]>('/feedback');
+    return list.map((r) => ({
+      id: r.id,
+      type: r.type,
+      title: r.title,
+      description: r.description,
+      priority: r.priority || 'medium',
+      status: r.status || 'open',
+      submitted_by_user_id: r.submittedByUserId,
+      submitted_by_user_name: r.submittedByUserName,
+      submitted_by_user_email: r.submittedByUserEmail,
+      household_id: r.householdId,
+      household_name: r.householdName,
+      admin_response: r.adminResponse,
+      admin_responded_at: r.adminRespondedAt,
+      admin_responded_by: r.adminRespondedBy,
+      created_at: r.createdAt,
+      updated_at: r.updatedAt,
+    }));
+  },
+
+  createFeedbackRequest: async (data: {
+    type: 'bug' | 'feature';
+    title: string;
+    description: string;
+    priority?: 'low' | 'medium' | 'high' | 'critical';
+  }): Promise<FeedbackRequest> => {
+    const r = await fetchJson<any>('/feedback', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return {
+      id: r.id,
+      type: r.type,
+      title: r.title,
+      description: r.description,
+      priority: r.priority || 'medium',
+      status: r.status || 'open',
+      submitted_by_user_id: r.submittedByUserId,
+      submitted_by_user_name: r.submittedByUserName,
+      submitted_by_user_email: r.submittedByUserEmail,
+      household_id: r.householdId,
+      household_name: r.householdName,
+      admin_response: r.adminResponse,
+      admin_responded_at: r.adminRespondedAt,
+      admin_responded_by: r.adminRespondedBy,
+      created_at: r.createdAt,
+      updated_at: r.updatedAt,
+    };
+  },
+
+  updateFeedbackRequest: async (
+    id: string,
+    data: {
+      status?: 'open' | 'in_progress' | 'planned' | 'resolved' | 'closed';
+      adminResponse?: string;
+      priority?: 'low' | 'medium' | 'high' | 'critical';
+    }
+  ): Promise<FeedbackRequest> => {
+    const r = await fetchJson<any>('/feedback', {
+      method: 'PATCH',
+      body: JSON.stringify({ id, ...data }),
+    });
+    return {
+      id: r.id,
+      type: r.type,
+      title: r.title,
+      description: r.description,
+      priority: r.priority || 'medium',
+      status: r.status || 'open',
+      submitted_by_user_id: r.submittedByUserId,
+      submitted_by_user_name: r.submittedByUserName,
+      submitted_by_user_email: r.submittedByUserEmail,
+      household_id: r.householdId,
+      household_name: r.householdName,
+      admin_response: r.adminResponse,
+      admin_responded_at: r.adminRespondedAt,
+      admin_responded_by: r.adminRespondedBy,
+      created_at: r.createdAt,
+      updated_at: r.updatedAt,
+    };
+  },
+
+  deleteFeedbackRequest: async (id: string): Promise<{ success: boolean; id: string }> => {
+    return fetchJson<{ success: boolean; id: string }>(`/feedback?id=${encodeURIComponent(id)}`, {
+      method: 'DELETE',
     });
   },
 };

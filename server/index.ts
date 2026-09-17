@@ -2592,6 +2592,128 @@ app.put('/api/notifications/preferences', (req, res) => {
   res.json(saved);
 });
 
+// ---------------- FEEDBACK & BUG / FEATURE REQUESTS ----------------
+
+function isServerAdmin(user: any): boolean {
+  if (!user) return false;
+  const role = (user.role || '').toLowerCase();
+  const username = (user.username || '').toLowerCase();
+  const email = (user.email || '').toLowerCase();
+  return (
+    role === 'admin' ||
+    username === 'joshua' ||
+    email === 'joshua@redpointaudio.com' ||
+    email === 'joshuaburkhalter@gmail.com'
+  );
+}
+
+app.get('/api/feedback', (req, res) => {
+  const user = getAuthUser(req);
+  if (!user) return res.status(401).json({ error: 'Authentication required' });
+
+  const isAdmin = isServerAdmin(user);
+  let rows: any[];
+  if (isAdmin) {
+    rows = queryAll('SELECT * FROM feedback_requests ORDER BY createdAt DESC');
+  } else {
+    rows = queryAll('SELECT * FROM feedback_requests WHERE submittedByUserId = ? ORDER BY createdAt DESC', [user.id]);
+  }
+
+  res.json(rows);
+});
+
+app.post('/api/feedback', (req, res) => {
+  const user = getAuthUser(req);
+  const { type, title, description, priority } = req.body;
+
+  if (!title || !description) {
+    return res.status(400).json({ error: 'Title and description are required' });
+  }
+
+  const id = `req_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const now = new Date().toISOString();
+  const household = user?.householdId
+    ? queryOne<{ name: string }>('SELECT name FROM households WHERE id = ?', [user.householdId])
+    : null;
+
+  execute(
+    `INSERT INTO feedback_requests (
+      id, type, title, description, priority, status,
+      submittedByUserId, submittedByUserName, submittedByUserEmail,
+      householdId, householdName, adminResponse, adminRespondedAt, adminRespondedBy,
+      createdAt, updatedAt
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      id,
+      type === 'feature' ? 'feature' : 'bug',
+      title.trim(),
+      description.trim(),
+      priority || 'medium',
+      'open',
+      user?.id || 'anonymous',
+      user?.name || 'Anonymous User',
+      user?.email || null,
+      user?.householdId || null,
+      household?.name || null,
+      null,
+      null,
+      null,
+      now,
+      now,
+    ]
+  );
+  saveDb();
+
+  const created = queryOne('SELECT * FROM feedback_requests WHERE id = ?', [id]);
+  res.json(created);
+});
+
+app.patch('/api/feedback', (req, res) => {
+  const user = getAuthUser(req);
+  if (!user || !isServerAdmin(user)) {
+    return res.status(403).json({ error: 'Admin access required to respond to or update requests' });
+  }
+
+  const { id, status, adminResponse, priority } = req.body;
+  if (!id) return res.status(400).json({ error: 'ID is required' });
+
+  const existing = queryOne<any>('SELECT * FROM feedback_requests WHERE id = ?', [id]);
+  if (!existing) return res.status(404).json({ error: 'Request not found' });
+
+  const now = new Date().toISOString();
+  const nextStatus = status || existing.status;
+  const nextPriority = priority || existing.priority;
+  const nextResponse = adminResponse !== undefined ? adminResponse : existing.adminResponse;
+  const respondedAt = adminResponse !== undefined ? now : existing.adminRespondedAt;
+  const respondedBy = adminResponse !== undefined ? user.name : existing.adminRespondedBy;
+
+  execute(
+    `UPDATE feedback_requests 
+     SET status = ?, priority = ?, adminResponse = ?, adminRespondedAt = ?, adminRespondedBy = ?, updatedAt = ?
+     WHERE id = ?`,
+    [nextStatus, nextPriority, nextResponse, respondedAt, respondedBy, now, id]
+  );
+  saveDb();
+
+  const updated = queryOne('SELECT * FROM feedback_requests WHERE id = ?', [id]);
+  res.json(updated);
+});
+
+app.delete('/api/feedback', (req, res) => {
+  const user = getAuthUser(req);
+  if (!user || !isServerAdmin(user)) {
+    return res.status(403).json({ error: 'Admin access required to delete requests' });
+  }
+
+  const id = req.query.id as string;
+  if (!id) return res.status(400).json({ error: 'ID is required' });
+
+  execute('DELETE FROM feedback_requests WHERE id = ?', [id]);
+  saveDb();
+
+  res.json({ success: true, id });
+});
+
 // Public Privacy Policy & Terms (for Google OAuth verification & branding)
 app.get('/privacy', (req, res) => {
   res.send(`<!DOCTYPE html>

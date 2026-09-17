@@ -13,6 +13,7 @@ import {
   Upload,
 } from 'lucide-react';
 import { usePWA } from '../context/PWAContext';
+import { isUserAdmin } from '../types';
 
 interface EditProfileModalProps {
   isOpen: boolean;
@@ -88,7 +89,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState<'parent' | 'child' | 'member'>('member');
+  const [role, setRole] = useState<'parent' | 'child' | 'member' | 'admin'>('member');
   const [color, setColor] = useState(AVATAR_COLORS[0]);
   const [avatarImage, setAvatarImage] = useState<string>('');
   const [newPassword, setNewPassword] = useState('');
@@ -386,6 +387,9 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                   <option value="parent">Parent</option>
                   <option value="child">Child</option>
                   <option value="member">Family Member</option>
+                  {(isUserAdmin(currentUser) || isUserAdmin(activeUser) || role === 'admin') && (
+                    <option value="admin">Admin / Developer</option>
+                  )}
                 </select>
               </div>
             </div>

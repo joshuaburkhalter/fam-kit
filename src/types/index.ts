@@ -44,7 +44,7 @@ export interface User {
   email?: string;
   avatar?: string;
   avatar_color: string;
-  role: 'parent' | 'child' | 'member';
+  role: 'parent' | 'child' | 'member' | 'admin';
   created_at: string;
 }
 
@@ -208,4 +208,46 @@ export interface NotificationPreferences {
   quietHoursEnd: string;
   updatedAt?: string;
 }
+
+export interface FeedbackRequest {
+  id: string;
+  type: 'bug' | 'feature';
+  title: string;
+  description: string;
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  status: 'open' | 'in_progress' | 'planned' | 'resolved' | 'closed';
+  submitted_by_user_id?: string;
+  submittedByUserId?: string;
+  submitted_by_user_name: string;
+  submittedByUserName?: string;
+  submitted_by_user_email?: string;
+  submittedByUserEmail?: string;
+  household_id?: string;
+  householdId?: string;
+  household_name?: string;
+  householdName?: string;
+  admin_response?: string;
+  adminResponse?: string;
+  admin_responded_at?: string;
+  adminRespondedAt?: string;
+  admin_responded_by?: string;
+  adminRespondedBy?: string;
+  created_at: string;
+  createdAt?: string;
+  updated_at: string;
+  updatedAt?: string;
+}
+
+export const isUserAdmin = (user?: { role?: string; username?: string; email?: string } | null): boolean => {
+  if (!user) return false;
+  const role = (user.role || '').toLowerCase();
+  const username = (user.username || '').toLowerCase();
+  const email = (user.email || '').toLowerCase();
+  return (
+    role === 'admin' ||
+    username === 'joshua' ||
+    email === 'joshua@redpointaudio.com' ||
+    email === 'joshuaburkhalter@gmail.com'
+  );
+};
 

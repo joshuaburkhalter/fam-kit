@@ -197,6 +197,25 @@ function initSchema(db: Database) {
       createdAt TEXT NOT NULL,
       UNIQUE(userId, householdId)
     );
+
+    CREATE TABLE IF NOT EXISTS feedback_requests (
+      id TEXT PRIMARY KEY,
+      type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL,
+      priority TEXT NOT NULL DEFAULT 'medium',
+      status TEXT NOT NULL DEFAULT 'open',
+      submittedByUserId TEXT,
+      submittedByUserName TEXT NOT NULL,
+      submittedByUserEmail TEXT,
+      householdId TEXT,
+      householdName TEXT,
+      adminResponse TEXT,
+      adminRespondedAt TEXT,
+      adminRespondedBy TEXT,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL
+    );
   `);
 
   // Auto-migration for existing DBs: ensure tables and columns exist
@@ -390,6 +409,38 @@ function initSchema(db: Database) {
         createdByUserId TEXT,
         createdAt TEXT NOT NULL
       );
+    `);
+  } catch {}
+  try {
+    db.run(`
+      CREATE TABLE IF NOT EXISTS feedback_requests (
+        id TEXT PRIMARY KEY,
+        type TEXT NOT NULL,
+        title TEXT NOT NULL,
+        description TEXT NOT NULL,
+        priority TEXT NOT NULL DEFAULT 'medium',
+        status TEXT NOT NULL DEFAULT 'open',
+        submittedByUserId TEXT,
+        submittedByUserName TEXT NOT NULL,
+        submittedByUserEmail TEXT,
+        householdId TEXT,
+        householdName TEXT,
+        adminResponse TEXT,
+        adminRespondedAt TEXT,
+        adminRespondedBy TEXT,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      );
+    `);
+  } catch {}
+  try {
+    // Ensure Joshua is set as Admin role
+    db.run(`
+      UPDATE users 
+      SET role = 'Admin' 
+      WHERE LOWER(username) = 'joshua' 
+         OR LOWER(email) = 'joshua@redpointaudio.com'
+         OR LOWER(email) = 'joshuaburkhalter@gmail.com'
     `);
   } catch {}
 
