@@ -232,6 +232,10 @@ export interface FeedbackRequest {
   adminRespondedAt?: string;
   admin_responded_by?: string;
   adminRespondedBy?: string;
+  upvotes?: number;
+  upvoters?: string[];
+  has_upvoted?: boolean;
+  hasUpvoted?: boolean;
   created_at: string;
   createdAt?: string;
   updated_at: string;

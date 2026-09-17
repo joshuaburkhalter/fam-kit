@@ -213,6 +213,8 @@ function initSchema(db: Database) {
       adminResponse TEXT,
       adminRespondedAt TEXT,
       adminRespondedBy TEXT,
+      upvotes INTEGER NOT NULL DEFAULT 0,
+      upvoters TEXT NOT NULL DEFAULT '[]',
       createdAt TEXT NOT NULL,
       updatedAt TEXT NOT NULL
     );
@@ -428,10 +430,18 @@ function initSchema(db: Database) {
         adminResponse TEXT,
         adminRespondedAt TEXT,
         adminRespondedBy TEXT,
+        upvotes INTEGER NOT NULL DEFAULT 0,
+        upvoters TEXT NOT NULL DEFAULT '[]',
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL
       );
     `);
+  } catch {}
+  try {
+    db.run(`ALTER TABLE feedback_requests ADD COLUMN upvotes INTEGER NOT NULL DEFAULT 0;`);
+  } catch {}
+  try {
+    db.run(`ALTER TABLE feedback_requests ADD COLUMN upvoters TEXT NOT NULL DEFAULT '[]';`);
   } catch {}
   try {
     // Ensure Joshua is set as Admin role

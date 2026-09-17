@@ -51,7 +51,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
   const isAdmin = isUserAdmin(currentUser);
 
   useEffect(() => {
-    if (isAdmin) {
+    if (currentUser) {
       api.getFeedbackRequests()
         .then((items) => {
           const openCount = items.filter((r) => r.status === 'open' || r.status === 'in_progress').length;
@@ -59,7 +59,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
         })
         .catch(() => {});
     }
-  }, [isAdmin, currentUser]);
+  }, [currentUser]);
 
   const handleCopyInvite = () => {
     const code = household?.invite_code || (household as any)?.inviteCode;
@@ -292,30 +292,28 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
                     Settings
                   </button>
 
-                  {/* Bug & Feature Requests (Admin Only) */}
-                  {isAdmin && (
-                    <button
-                      onClick={() => {
-                        setShowUserDropdown(false);
-                        setShowBugFeatureModal(true);
-                      }}
-                      className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-amber-300 hover:text-white hover:bg-amber-500/20 bg-amber-500/10 border border-amber-500/30 transition-all cursor-pointer mt-0.5 group"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <Bug className="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform" />
-                        <span>Bug & Feature Tracker</span>
-                      </div>
-                      {openFeedbackCount > 0 ? (
-                        <span className="bg-amber-500 text-slate-950 font-black text-[10px] px-1.5 py-0.5 rounded-full shadow-sm">
-                          {openFeedbackCount}
-                        </span>
-                      ) : (
-                        <span className="text-[10px] text-amber-400/70 font-mono">
-                          Admin
-                        </span>
-                      )}
-                    </button>
-                  )}
+                  {/* Bug & Feature Requests */}
+                  <button
+                    onClick={() => {
+                      setShowUserDropdown(false);
+                      setShowBugFeatureModal(true);
+                    }}
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-amber-300 hover:text-white hover:bg-amber-500/20 bg-amber-500/10 border border-amber-500/30 transition-all cursor-pointer mt-0.5 group"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Bug className="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform" />
+                      <span>Bug & Feature Tracker</span>
+                    </div>
+                    {openFeedbackCount > 0 ? (
+                      <span className="bg-amber-500 text-slate-950 font-black text-[10px] px-1.5 py-0.5 rounded-full shadow-sm">
+                        {openFeedbackCount}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-amber-400/70 font-mono">
+                        {isAdmin ? 'Admin' : 'Feedback'}
+                      </span>
+                    )}
+                  </button>
                 </div>
 
                 {/* Quick Profile Switcher for other family members */}
@@ -392,14 +390,12 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
         onClose={() => setShowEditProfileModal(false)}
       />
 
-      {/* Admin Bug & Feature Request Modal */}
-      {isAdmin && (
-        <BugFeatureAdminModal
-          isOpen={showBugFeatureModal}
-          onClose={() => setShowBugFeatureModal(false)}
-          onCountChange={setOpenFeedbackCount}
-        />
-      )}
+      {/* Bug & Feature Request Modal */}
+      <BugFeatureAdminModal
+        isOpen={showBugFeatureModal}
+        onClose={() => setShowBugFeatureModal(false)}
+        onCountChange={setOpenFeedbackCount}
+      />
     </header>
   );
 };

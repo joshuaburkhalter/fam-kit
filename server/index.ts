@@ -2611,15 +2611,79 @@ app.get('/api/feedback', (req, res) => {
   const user = getAuthUser(req);
   if (!user) return res.status(401).json({ error: 'Authentication required' });
 
-  const isAdmin = isServerAdmin(user);
-  let rows: any[];
-  if (isAdmin) {
-    rows = queryAll('SELECT * FROM feedback_requests ORDER BY createdAt DESC');
-  } else {
-    rows = queryAll('SELECT * FROM feedback_requests WHERE submittedByUserId = ? ORDER BY createdAt DESC', [user.id]);
+  // Everyone can see all bug and feature requests
+  const rows = queryAll('SELECT * FROM feedback_requests ORDER BY upvotes DESC, createdAt DESC');
+  
+  // Augment with parsed upvoters and hasUpvoted flag for current user
+  const sanitized = rows.map((r) => {
+    let voters: string[] = [];
+    try {
+      voters = r.upvoters ? JSON.parse(r.upvoters) : [];
+      if (!Array.isArray(voters)) voters = [];
+    } catch {
+      voters = [];
+    }
+    return {
+      ...r,
+      upvotes: typeof r.upvotes === 'number' ? r.upvotes : (voters.length || 0),
+      upvoters: voters,
+      hasUpvoted: voters.includes(user.id),
+    };
+  });
+
+  res.json(sanitized);
+});
+
+app.post('/api/feedback/vote', (req, res) => {
+  const user = getAuthUser(req);
+  if (!user) return res.status(401).json({ error: 'Authentication required to vote' });
+
+  const { id } = req.body;
+  if (!id) return res.status(400).json({ error: 'Request ID is required' });
+
+  const existing = queryOne<any>('SELECT * FROM feedback_requests WHERE id = ?', [id]);
+  if (!existing) return res.status(404).json({ error: 'Request not found' });
+
+  let voters: string[] = [];
+  try {
+    voters = existing.upvoters ? JSON.parse(existing.upvoters) : [];
+    if (!Array.isArray(voters)) voters = [];
+  } catch {
+    voters = [];
   }
 
-  res.json(rows);
+  const alreadyVotedIndex = voters.indexOf(user.id);
+  let hasUpvoted = false;
+
+  if (alreadyVotedIndex >= 0) {
+    // Toggle vote off if clicked again (undo vote)
+    voters.splice(alreadyVotedIndex, 1);
+    hasUpvoted = false;
+  } else {
+    // Add vote (strictly once per person)
+    voters.push(user.id);
+    hasUpvoted = true;
+  }
+
+  const nextUpvotes = voters.length;
+  const nextVotersJson = JSON.stringify(voters);
+  const now = new Date().toISOString();
+
+  execute(
+    `UPDATE feedback_requests 
+     SET upvotes = ?, upvoters = ?, updatedAt = ?
+     WHERE id = ?`,
+    [nextUpvotes, nextVotersJson, now, id]
+  );
+  saveDb();
+
+  const updated = queryOne<any>('SELECT * FROM feedback_requests WHERE id = ?', [id]);
+  res.json({
+    ...updated,
+    upvotes: nextUpvotes,
+    upvoters: voters,
+    hasUpvoted,
+  });
 });
 
 app.post('/api/feedback', (req, res) => {
@@ -2641,8 +2705,9 @@ app.post('/api/feedback', (req, res) => {
       id, type, title, description, priority, status,
       submittedByUserId, submittedByUserName, submittedByUserEmail,
       householdId, householdName, adminResponse, adminRespondedAt, adminRespondedBy,
+      upvotes, upvoters,
       createdAt, updatedAt
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       type === 'feature' ? 'feature' : 'bug',
@@ -2658,6 +2723,8 @@ app.post('/api/feedback', (req, res) => {
       null,
       null,
       null,
+      1, // Creator starts with 1 upvote
+      JSON.stringify(user?.id ? [user.id] : []),
       now,
       now,
     ]
@@ -2665,13 +2732,18 @@ app.post('/api/feedback', (req, res) => {
   saveDb();
 
   const created = queryOne('SELECT * FROM feedback_requests WHERE id = ?', [id]);
-  res.json(created);
+  res.json({
+    ...created,
+    upvotes: 1,
+    upvoters: user?.id ? [user.id] : [],
+    hasUpvoted: true,
+  });
 });
 
 app.patch('/api/feedback', (req, res) => {
   const user = getAuthUser(req);
   if (!user || !isServerAdmin(user)) {
-    return res.status(403).json({ error: 'Admin access required to respond to or update requests' });
+    return res.status(403).json({ error: 'Admin access required to respond to or update status of requests' });
   }
 
   const { id, status, adminResponse, priority } = req.body;
@@ -2695,8 +2767,17 @@ app.patch('/api/feedback', (req, res) => {
   );
   saveDb();
 
-  const updated = queryOne('SELECT * FROM feedback_requests WHERE id = ?', [id]);
-  res.json(updated);
+  const updated = queryOne<any>('SELECT * FROM feedback_requests WHERE id = ?', [id]);
+  let voters: string[] = [];
+  try {
+    voters = updated.upvoters ? JSON.parse(updated.upvoters) : [];
+  } catch {}
+  res.json({
+    ...updated,
+    upvotes: typeof updated.upvotes === 'number' ? updated.upvotes : voters.length,
+    upvoters: voters,
+    hasUpvoted: voters.includes(user.id),
+  });
 });
 
 app.delete('/api/feedback', (req, res) => {

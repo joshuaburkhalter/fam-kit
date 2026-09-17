@@ -16,8 +16,11 @@ import {
   Flame,
   Check,
   Filter,
+  ChevronUp,
+  ArrowUpDown,
 } from 'lucide-react';
 import type { FeedbackRequest } from '../types';
+import { isUserAdmin } from '../types';
 import { api } from '../lib/api';
 import { usePWA } from '../context/PWAContext';
 
@@ -40,7 +43,11 @@ export const BugFeatureAdminModal: React.FC<BugFeatureAdminModalProps> = ({
   // Filters & Search
   const [typeFilter, setTypeFilter] = useState<'all' | 'bug' | 'feature'>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<'votes' | 'newest'>('votes');
   const [searchQuery, setSearchQuery] = useState('');
+  const [votingId, setVotingId] = useState<string | null>(null);
+
+  const isAdmin = isUserAdmin(currentUser);
 
   // Active Response Editor
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -164,20 +171,60 @@ export const BugFeatureAdminModal: React.FC<BugFeatureAdminModalProps> = ({
     }
   };
 
-  // Filter & Search Logic
-  const filteredRequests = requests.filter((r) => {
-    if (typeFilter !== 'all' && r.type !== typeFilter) return false;
-    if (statusFilter !== 'all' && r.status !== statusFilter) return false;
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const matchesTitle = r.title.toLowerCase().includes(q);
-      const matchesDesc = r.description.toLowerCase().includes(q);
-      const matchesUser = (r.submitted_by_user_name || '').toLowerCase().includes(q);
-      const matchesHousehold = (r.household_name || '').toLowerCase().includes(q);
-      return matchesTitle || matchesDesc || matchesUser || matchesHousehold;
+  const handleVote = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (votingId) return;
+    setVotingId(id);
+
+    // Optimistic UI update
+    setRequests((prev) =>
+      prev.map((r) => {
+        if (r.id !== id) return r;
+        const currentVoted = Boolean(r.hasUpvoted || r.has_upvoted);
+        const currentVotes = typeof r.upvotes === 'number' ? r.upvotes : 0;
+        return {
+          ...r,
+          hasUpvoted: !currentVoted,
+          has_upvoted: !currentVoted,
+          upvotes: currentVoted ? Math.max(0, currentVotes - 1) : currentVotes + 1,
+        };
+      })
+    );
+
+    try {
+      const updated = await api.upvoteFeedbackRequest(id);
+      setRequests((prev) => prev.map((r) => (r.id === id ? updated : r)));
+    } catch (err: any) {
+      console.error('Failed to vote:', err);
+      loadRequests();
+    } finally {
+      setVotingId(null);
     }
-    return true;
-  });
+  };
+
+  // Filter & Search Logic
+  const filteredRequests = requests
+    .filter((r) => {
+      if (typeFilter !== 'all' && r.type !== typeFilter) return false;
+      if (statusFilter !== 'all' && r.status !== statusFilter) return false;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchesTitle = r.title.toLowerCase().includes(q);
+        const matchesDesc = r.description.toLowerCase().includes(q);
+        const matchesUser = (r.submitted_by_user_name || '').toLowerCase().includes(q);
+        const matchesHousehold = (r.household_name || '').toLowerCase().includes(q);
+        return matchesTitle || matchesDesc || matchesUser || matchesHousehold;
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      if (sortBy === 'votes') {
+        const diff = (b.upvotes || 0) - (a.upvotes || 0);
+        if (diff !== 0) return diff;
+        return new Date(b.created_at || b.createdAt || 0).getTime() - new Date(a.created_at || a.createdAt || 0).getTime();
+      }
+      return new Date(b.created_at || b.createdAt || 0).getTime() - new Date(a.created_at || a.createdAt || 0).getTime();
+    });
 
   const getPriorityBadge = (priority: string) => {
     switch (priority) {
@@ -265,12 +312,20 @@ export const BugFeatureAdminModal: React.FC<BugFeatureAdminModalProps> = ({
                 <h2 className="text-base sm:text-lg font-black text-white tracking-tight truncate">
                   Bug & Feature Tracker
                 </h2>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30 uppercase tracking-wider shrink-0">
-                  Admin Only
-                </span>
+                {isAdmin ? (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 uppercase tracking-wider shrink-0">
+                    Admin
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 uppercase tracking-wider shrink-0">
+                    Community
+                  </span>
+                )}
               </div>
               <p className="text-[11px] text-slate-400 truncate">
-                Review submitted feedback, set statuses, and post official responses
+                {isAdmin
+                  ? 'Manage community feedback, update statuses, and post official replies'
+                  : 'Upvote family requests, track progress, and submit new ideas'}
               </p>
             </div>
           </div>
@@ -487,21 +542,36 @@ export const BugFeatureAdminModal: React.FC<BugFeatureAdminModalProps> = ({
                   </button>
                 </div>
 
-                {/* Status Dropdown */}
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <Filter className="w-3.5 h-3.5 text-slate-500" />
-                  <select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                    className="bg-slate-900 border border-white/10 rounded-xl px-2.5 py-1 text-xs text-slate-300 focus:outline-none focus:border-emerald-500"
-                  >
-                    <option value="all">All Statuses</option>
-                    <option value="open">Open</option>
-                    <option value="in_progress">In Progress</option>
-                    <option value="planned">Planned</option>
-                    <option value="resolved">Resolved</option>
-                    <option value="closed">Closed</option>
-                  </select>
+                <div className="flex items-center gap-2 flex-wrap shrink-0">
+                  {/* Status Dropdown */}
+                  <div className="flex items-center gap-1.5">
+                    <Filter className="w-3.5 h-3.5 text-slate-500" />
+                    <select
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
+                      className="bg-slate-900 border border-white/10 rounded-xl px-2.5 py-1 text-xs text-slate-300 focus:outline-none focus:border-emerald-500 cursor-pointer"
+                    >
+                      <option value="all">All Statuses</option>
+                      <option value="open">Open</option>
+                      <option value="in_progress">In Progress</option>
+                      <option value="planned">Planned</option>
+                      <option value="resolved">Resolved</option>
+                      <option value="closed">Closed</option>
+                    </select>
+                  </div>
+
+                  {/* Sort Dropdown */}
+                  <div className="flex items-center gap-1.5">
+                    <ArrowUpDown className="w-3.5 h-3.5 text-slate-500" />
+                    <select
+                      value={sortBy}
+                      onChange={(e) => setSortBy(e.target.value as any)}
+                      className="bg-slate-900 border border-white/10 rounded-xl px-2.5 py-1 text-xs text-slate-300 focus:outline-none focus:border-emerald-500 cursor-pointer"
+                    >
+                      <option value="votes">Most Upvoted</option>
+                      <option value="newest">Newest First</option>
+                    </select>
+                  </div>
                 </div>
               </div>
 
@@ -566,38 +636,73 @@ export const BugFeatureAdminModal: React.FC<BugFeatureAdminModalProps> = ({
                       key={req.id}
                       className="glass-panel rounded-2xl border border-white/10 p-4 space-y-3 hover:border-white/20 transition-all shadow-sm"
                     >
-                      {/* Top Meta Line */}
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-center gap-2 flex-wrap">
+                      <div className="flex items-start gap-3">
+                        {/* Upvote Pill Button (Only once per person per request) */}
+                        <button
+                          type="button"
+                          onClick={(e) => handleVote(req.id, e)}
+                          disabled={votingId === req.id}
+                          title={req.hasUpvoted || req.has_upvoted ? 'You upvoted this (click to undo)' : 'Upvote this request'}
+                          className={`flex flex-col items-center justify-center py-2 px-2.5 rounded-2xl border transition-all cursor-pointer shrink-0 min-w-[48px] active:scale-95 ${
+                            req.hasUpvoted || req.has_upvoted
+                              ? 'bg-amber-500/20 border-amber-500/50 text-amber-300 shadow-sm shadow-amber-500/20'
+                              : 'bg-slate-900/80 hover:bg-slate-800 border-white/10 text-slate-400 hover:text-white hover:border-white/20'
+                          }`}
+                        >
+                          <ChevronUp
+                            className={`w-5 h-5 transition-transform ${
+                              req.hasUpvoted || req.has_upvoted
+                                ? 'stroke-[3] text-amber-400 -translate-y-0.5'
+                                : 'stroke-[2]'
+                            }`}
+                          />
                           <span
-                            className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider flex items-center gap-1 ${
-                              isBug
-                                ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
-                                : 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                            className={`text-xs font-black font-mono mt-0.5 ${
+                              req.hasUpvoted || req.has_upvoted ? 'text-amber-300' : 'text-slate-300'
                             }`}
                           >
-                            {isBug ? <Bug className="w-3 h-3 text-rose-400" /> : <Sparkles className="w-3 h-3 text-purple-400" />}
-                            {isBug ? 'Bug' : 'Feature'}
+                            {typeof req.upvotes === 'number' ? req.upvotes : 0}
                           </span>
-                          {getStatusBadge(req.status)}
-                          {getPriorityBadge(req.priority)}
-                        </div>
-
-                        <button
-                          onClick={() => handleDeleteRequest(req.id, req.title)}
-                          title="Delete Request"
-                          className="p-1 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
-                      </div>
 
-                      {/* Title & Description */}
-                      <div>
-                        <h4 className="text-sm font-bold text-white tracking-tight">{req.title}</h4>
-                        <p className="text-xs text-slate-300 mt-1.5 leading-relaxed whitespace-pre-wrap selectable-text">
-                          {req.description}
-                        </p>
+                        <div className="flex-1 min-w-0 space-y-2.5">
+                          {/* Top Meta Line */}
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span
+                                className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider flex items-center gap-1 ${
+                                  isBug
+                                    ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                                    : 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                                }`}
+                              >
+                                {isBug ? <Bug className="w-3 h-3 text-rose-400" /> : <Sparkles className="w-3 h-3 text-purple-400" />}
+                                {isBug ? 'Bug' : 'Feature'}
+                              </span>
+                              {getStatusBadge(req.status)}
+                              {getPriorityBadge(req.priority)}
+                            </div>
+
+                            {/* Only admin can delete */}
+                            {isAdmin && (
+                              <button
+                                onClick={() => handleDeleteRequest(req.id, req.title)}
+                                title="Delete Request (Admin Only)"
+                                className="p-1 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer shrink-0"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Title & Description */}
+                          <div>
+                            <h4 className="text-sm font-bold text-white tracking-tight">{req.title}</h4>
+                            <p className="text-xs text-slate-300 mt-1 leading-relaxed whitespace-pre-wrap selectable-text">
+                              {req.description}
+                            </p>
+                          </div>
+                        </div>
                       </div>
 
                       {/* Submitter & Date info */}
@@ -641,67 +746,69 @@ export const BugFeatureAdminModal: React.FC<BugFeatureAdminModalProps> = ({
                         </div>
                       )}
 
-                      {/* Action Bar / Inline Reply Editor */}
-                      {isEditing ? (
-                        <div className="p-3 rounded-2xl bg-slate-900 border border-white/10 space-y-3 animate-in fade-in duration-100">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                              <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
-                              Admin Response & Status
-                            </span>
-                            <div className="flex items-center gap-2">
-                              <label className="text-[11px] font-semibold text-slate-400">Status:</label>
-                              <select
-                                value={replyStatus}
-                                onChange={(e) => setReplyStatus(e.target.value as any)}
-                                className="bg-slate-950 border border-white/15 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-emerald-500"
+                      {/* Action Bar / Inline Reply Editor - ADMIN ONLY */}
+                      {isAdmin && (
+                        isEditing ? (
+                          <div className="p-3 rounded-2xl bg-slate-900 border border-white/10 space-y-3 animate-in fade-in duration-100">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                                <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
+                                Admin Response & Status
+                              </span>
+                              <div className="flex items-center gap-2">
+                                <label className="text-[11px] font-semibold text-slate-400">Status:</label>
+                                <select
+                                  value={replyStatus}
+                                  onChange={(e) => setReplyStatus(e.target.value as any)}
+                                  className="bg-slate-950 border border-white/15 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-emerald-500 cursor-pointer"
+                                >
+                                  <option value="open">Open</option>
+                                  <option value="in_progress">In Progress</option>
+                                  <option value="planned">Planned</option>
+                                  <option value="resolved">Resolved</option>
+                                  <option value="closed">Closed</option>
+                                </select>
+                              </div>
+                            </div>
+
+                            <textarea
+                              rows={3}
+                              placeholder="Type your response to the user or team..."
+                              value={replyText}
+                              onChange={(e) => setReplyText(e.target.value)}
+                              className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 resize-none"
+                            />
+
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setEditingId(null)}
+                                className="px-3 py-1.5 rounded-lg text-xs text-slate-400 hover:text-white cursor-pointer"
                               >
-                                <option value="open">Open</option>
-                                <option value="in_progress">In Progress</option>
-                                <option value="planned">Planned</option>
-                                <option value="resolved">Resolved</option>
-                                <option value="closed">Closed</option>
-                              </select>
+                                Cancel
+                              </button>
+                              <button
+                                type="button"
+                                disabled={isSubmittingReply || !replyText.trim()}
+                                onClick={() => handleSaveReply(req.id)}
+                                className="bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 px-4 py-1.5 rounded-xl text-xs font-bold shadow-md shadow-emerald-500/20 flex items-center gap-1.5 cursor-pointer"
+                              >
+                                {isSubmittingReply ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3 h-3" />}
+                                <span>Save & Publish</span>
+                              </button>
                             </div>
                           </div>
-
-                          <textarea
-                            rows={3}
-                            placeholder="Type your response to the user or team..."
-                            value={replyText}
-                            onChange={(e) => setReplyText(e.target.value)}
-                            className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 resize-none"
-                          />
-
-                          <div className="flex items-center justify-end gap-2">
+                        ) : (
+                          <div className="flex items-center justify-end pt-1">
                             <button
-                              type="button"
-                              onClick={() => setEditingId(null)}
-                              className="px-3 py-1.5 rounded-lg text-xs text-slate-400 hover:text-white cursor-pointer"
+                              onClick={() => handleStartReply(req)}
+                              className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-colors border border-white/5 hover:border-white/15 cursor-pointer"
                             >
-                              Cancel
-                            </button>
-                            <button
-                              type="button"
-                              disabled={isSubmittingReply || !replyText.trim()}
-                              onClick={() => handleSaveReply(req.id)}
-                              className="bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 px-4 py-1.5 rounded-xl text-xs font-bold shadow-md shadow-emerald-500/20 flex items-center gap-1.5 cursor-pointer"
-                            >
-                              {isSubmittingReply ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3 h-3" />}
-                              <span>Save & Publish</span>
+                              <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
+                              <span>{req.admin_response ? 'Edit Response / Status' : 'Respond / Update Status'}</span>
                             </button>
                           </div>
-                        </div>
-                      ) : (
-                        <div className="flex items-center justify-end pt-1">
-                          <button
-                            onClick={() => handleStartReply(req)}
-                            className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-colors border border-white/5 hover:border-white/15 cursor-pointer"
-                          >
-                            <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
-                            <span>{req.admin_response ? 'Edit Response' : 'Respond / Update Status'}</span>
-                          </button>
-                        </div>
+                        )
                       )}
                     </div>
                   );
