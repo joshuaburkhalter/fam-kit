@@ -92,6 +92,61 @@ export async function parseRecipeFromUrl(url: string, geminiApiKey?: string): Pr
   return parseRecipeFromHtml(html, url, geminiApiKey);
 }
 
+export interface DishFamily {
+  name: string;
+  keywords: string[];
+}
+
+export const DISH_FAMILIES: DishFamily[] = [
+  {
+    name: 'soup',
+    keywords: ['soup', 'soups', 'chowder', 'chowders', 'stew', 'stews', 'chili', 'chilis', 'bisque', 'gumbo', 'broth', 'pozole', 'menudo'],
+  },
+  {
+    name: 'salad',
+    keywords: ['salad', 'salads', 'slaw', 'coleslaw'],
+  },
+  {
+    name: 'pizza',
+    keywords: ['pizza', 'pizzas', 'calzone', 'calzones', 'flatbread', 'flatbreads'],
+  },
+  {
+    name: 'sandwich',
+    keywords: ['sandwich', 'sandwiches', 'burger', 'burgers', 'panini', 'wrap', 'wraps', 'sub', 'subs', 'hoagie', 'slider', 'sliders'],
+  },
+  {
+    name: 'taco',
+    keywords: ['taco', 'tacos', 'taquito', 'taquitos', 'fajita', 'fajitas', 'burrito', 'burritos', 'quesadilla', 'quesadillas', 'enchilada', 'enchiladas'],
+  },
+  {
+    name: 'pasta',
+    keywords: ['pasta', 'spaghetti', 'fettuccine', 'linguine', 'penne', 'lasagna', 'ravioli', 'macaroni', 'ziti', 'tortellini', 'rotini', 'rigatoni'],
+  },
+  {
+    name: 'dessert',
+    keywords: ['cake', 'cakes', 'cookie', 'cookies', 'pie', 'pies', 'cupcake', 'cupcakes', 'brownie', 'brownies', 'pudding', 'ice cream', 'muffin', 'muffins', 'cheesecake'],
+  },
+];
+
+/**
+ * Returns the primary dish family for a dish title.
+ * In English culinary naming, modifier words precede head nouns (e.g. "Taco Soup" -> soup, "Taco Salad" -> salad).
+ * We track the last matched family to honor the head noun.
+ */
+export function getDishFamily(text: string): DishFamily | null {
+  const words = text.toLowerCase().split(/[^a-z0-9]+/);
+  let lastFound: DishFamily | null = null;
+  for (let i = 0; i < words.length; i++) {
+    const word = words[i];
+    for (const family of DISH_FAMILIES) {
+      if (family.keywords.includes(word)) {
+        lastFound = family;
+      }
+    }
+  }
+  return lastFound;
+}
+
 const CURATED_FOOD_IMAGES: Record<string, string> = {
   // Specific dishes (checked first via length sorting)
   'chicken parmesan': 'https://images.unsplash.com/photo-1632778149955-e80f8ceca2e8?w=800&auto=format&fit=crop&q=80',
@@ -131,9 +186,9 @@ const CURATED_FOOD_IMAGES: Record<string, string> = {
   pork: 'https://images.unsplash.com/photo-1544025162-d76694265947?w=800&auto=format&fit=crop&q=80',
   ribs: 'https://images.unsplash.com/photo-1544025162-d76694265947?w=800&auto=format&fit=crop&q=80',
   bacon: 'https://images.unsplash.com/photo-1528607929212-2636ec44253e?w=800&auto=format&fit=crop&q=80',
-  soup: 'https://images.unsplash.com/photo-1547592166-23ac45744acd?w=800&auto=format&fit=crop&q=80',
-  stew: 'https://images.unsplash.com/photo-1547592166-23ac45744acd?w=800&auto=format&fit=crop&q=80',
-  chili: 'https://images.unsplash.com/photo-1547592166-23ac45744acd?w=800&auto=format&fit=crop&q=80',
+  soup: 'https://images.unsplash.com/photo-1547592180-85f173990554?w=800&auto=format&fit=crop&q=80',
+  stew: 'https://images.unsplash.com/photo-1547592180-85f173990554?w=800&auto=format&fit=crop&q=80',
+  chili: 'https://images.unsplash.com/photo-1541832676-9b763b0239ab?w=800&auto=format&fit=crop&q=80',
   pizza: 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=800&auto=format&fit=crop&q=80',
   burger: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=800&auto=format&fit=crop&q=80',
   sandwich: 'https://images.unsplash.com/photo-1528735602780-2552fd46c7af?w=800&auto=format&fit=crop&q=80',
@@ -167,21 +222,121 @@ const CURATED_FOOD_IMAGES: Record<string, string> = {
   default: 'https://images.unsplash.com/photo-1498837167922-ddd27525d352?w=800&auto=format&fit=crop&q=80',
 };
 
-export function getCuratedFoodImage(title: string = '', tags: string[] = []): string {
-  const query = `${title} ${tags.join(' ')}`.toLowerCase();
-  const sortedKeys = Object.keys(CURATED_FOOD_IMAGES)
-    .filter((k) => k !== 'default')
-    .sort((a, b) => b.length - a.length);
-
-  for (const key of sortedKeys) {
-    if (query.includes(key)) {
-      return CURATED_FOOD_IMAGES[key];
-    }
-  }
-  return CURATED_FOOD_IMAGES.default;
-}
-
 export const SIGNATURE_DISH_IMAGES: Record<string, string[]> = {
+  // Soups, Stews & Chilis
+  'taco soup': [
+    'https://images.unsplash.com/photo-1527976746453-f363eac4d889?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1695088220737-9a6d901db8f1?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1695088223408-cd5ae3b2b7fa?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1603355736640-34a2bee52da3?w=800&auto=format&fit=crop&q=80',
+  ],
+  'tortilla soup': [
+    'https://images.unsplash.com/photo-1695088220737-9a6d901db8f1?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1527976746453-f363eac4d889?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1695088223408-cd5ae3b2b7fa?w=800&auto=format&fit=crop&q=80',
+  ],
+  'chicken tortilla soup': [
+    'https://images.unsplash.com/photo-1695088220737-9a6d901db8f1?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1527976746453-f363eac4d889?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1695088223408-cd5ae3b2b7fa?w=800&auto=format&fit=crop&q=80',
+  ],
+  'chicken noodle soup': [
+    'https://images.unsplash.com/photo-1547592180-85f173990554?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1582878826629-29b7ad1cdc43?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1608897013039-887f21d8c804?w=800&auto=format&fit=crop&q=80',
+  ],
+  'white chicken chili': [
+    'https://images.unsplash.com/photo-1547592180-85f173990554?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1527976746453-f363eac4d889?w=800&auto=format&fit=crop&q=80',
+  ],
+  'beef chili': [
+    'https://images.unsplash.com/photo-1541832676-9b763b0239ab?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1695088223408-cd5ae3b2b7fa?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1603355736640-34a2bee52da3?w=800&auto=format&fit=crop&q=80',
+  ],
+  'chili con carne': [
+    'https://images.unsplash.com/photo-1541832676-9b763b0239ab?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1695088223408-cd5ae3b2b7fa?w=800&auto=format&fit=crop&q=80',
+  ],
+  'chili': [
+    'https://images.unsplash.com/photo-1541832676-9b763b0239ab?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1695088223408-cd5ae3b2b7fa?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1603355736640-34a2bee52da3?w=800&auto=format&fit=crop&q=80',
+  ],
+  'french onion soup': [
+    'https://images.unsplash.com/photo-1547592180-85f173990554?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1608897013039-887f21d8c804?w=800&auto=format&fit=crop&q=80',
+  ],
+  'potato soup': [
+    'https://images.unsplash.com/photo-1547592180-85f173990554?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1608897013039-887f21d8c804?w=800&auto=format&fit=crop&q=80',
+  ],
+  'broccoli cheddar soup': [
+    'https://images.unsplash.com/photo-1547592180-85f173990554?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1574484284002-952d92456975?w=800&auto=format&fit=crop&q=80',
+  ],
+  'tomato soup': [
+    'https://images.unsplash.com/photo-1547592166-23ac45744acd?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1594756202469-9ff9799b2e4e?w=800&auto=format&fit=crop&q=80',
+  ],
+  'beef stew': [
+    'https://images.unsplash.com/photo-1547592180-85f173990554?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1541832676-9b763b0239ab?w=800&auto=format&fit=crop&q=80',
+  ],
+
+  // Salads
+  'taco salad': [
+    'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1551248429-40975aa4de74?w=800&auto=format&fit=crop&q=80',
+  ],
+  'caesar salad': [
+    'https://images.unsplash.com/photo-1550304943-4f24f54ddde9?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=800&auto=format&fit=crop&q=80',
+  ],
+  'greek salad': [
+    'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=800&auto=format&fit=crop&q=80',
+  ],
+
+  // Tacos & Mexican
+  'birria tacos': [
+    'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1599974579688-8dbdd335c77f?w=800&auto=format&fit=crop&q=80',
+  ],
+  'fish tacos': [
+    'https://images.unsplash.com/photo-1551504734-5ee1c4a1479b?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?w=800&auto=format&fit=crop&q=80',
+  ],
+  'shrimp tacos': [
+    'https://images.unsplash.com/photo-1551504734-5ee1c4a1479b?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?w=800&auto=format&fit=crop&q=80',
+  ],
+  'tacos': [
+    'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1551504734-5ee1c4a1479b?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1599974579688-8dbdd335c77f?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1615870216519-2f9fa575fa5c?w=800&auto=format&fit=crop&q=80',
+  ],
+  'taco': [
+    'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1551504734-5ee1c4a1479b?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1599974579688-8dbdd335c77f?w=800&auto=format&fit=crop&q=80',
+  ],
+  'fajitas': [
+    'https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1618040996337-56904b7850b9?w=800&auto=format&fit=crop&q=80',
+  ],
+  'enchiladas': [
+    'https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?w=800&auto=format&fit=crop&q=80',
+  ],
+  'quesadilla': [
+    'https://images.unsplash.com/photo-1618040996337-56904b7850b9?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?w=800&auto=format&fit=crop&q=80',
+  ],
+
+  // Italian & Pasta
   'chicken parmesan': [
     'https://images.unsplash.com/photo-1632778149955-e80f8ceca2e8?w=800&auto=format&fit=crop&q=80',
     'https://images.unsplash.com/photo-1598515214211-89d3c73ae83b?w=800&auto=format&fit=crop&q=80',
@@ -198,10 +353,6 @@ export const SIGNATURE_DISH_IMAGES: Record<string, string[]> = {
     'https://images.unsplash.com/photo-1632778149955-e80f8ceca2e8?w=800&auto=format&fit=crop&q=80',
     'https://images.unsplash.com/photo-1598515214211-89d3c73ae83b?w=800&auto=format&fit=crop&q=80',
   ],
-  'parm chicken': [
-    'https://images.unsplash.com/photo-1632778149955-e80f8ceca2e8?w=800&auto=format&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1598515214211-89d3c73ae83b?w=800&auto=format&fit=crop&q=80',
-  ],
   'chicken alfredo': [
     'https://images.unsplash.com/photo-1645112411341-6c4fd023714a?w=800&auto=format&fit=crop&q=80',
     'https://images.unsplash.com/photo-1555949258-eb67b1ef0ceb?w=800&auto=format&fit=crop&q=80',
@@ -212,6 +363,17 @@ export const SIGNATURE_DISH_IMAGES: Record<string, string[]> = {
   'chicken piccata': [
     'https://images.unsplash.com/photo-1532550907401-a500c9a57435?w=800&auto=format&fit=crop&q=80',
   ],
+  'lasagna': [
+    'https://images.unsplash.com/photo-1574894709920-11b28e7367e3?w=800&auto=format&fit=crop&q=80',
+  ],
+  'mac and cheese': [
+    'https://images.unsplash.com/photo-1543339308-43e59d6b73a6?w=800&auto=format&fit=crop&q=80',
+  ],
+  'macaroni and cheese': [
+    'https://images.unsplash.com/photo-1543339308-43e59d6b73a6?w=800&auto=format&fit=crop&q=80',
+  ],
+
+  // Poultry & Meats
   'chicken tenders': [
     'https://images.unsplash.com/photo-1562967914-608f82629710?w=800&auto=format&fit=crop&q=80',
   ],
@@ -247,19 +409,56 @@ export const SIGNATURE_DISH_IMAGES: Record<string, string[]> = {
   'shrimp scampi': [
     'https://images.unsplash.com/photo-1559742811-822873691df8?w=800&auto=format&fit=crop&q=80',
   ],
-  'mac and cheese': [
-    'https://images.unsplash.com/photo-1543339308-43e59d6b73a6?w=800&auto=format&fit=crop&q=80',
+
+  // Pizza & Burgers
+  'pizza': [
+    'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1574071318508-1cdbab80d002?w=800&auto=format&fit=crop&q=80',
   ],
-  'macaroni and cheese': [
-    'https://images.unsplash.com/photo-1543339308-43e59d6b73a6?w=800&auto=format&fit=crop&q=80',
+  'burger': [
+    'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1550547660-d9450f859349?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1586190848861-99aa4a171e90?w=800&auto=format&fit=crop&q=80',
   ],
-  'lasagna': [
-    'https://images.unsplash.com/photo-1574894709920-11b28e7367e3?w=800&auto=format&fit=crop&q=80',
-  ],
+
+  // Baking & Desserts
   'chocolate chip cookie': [
     'https://images.unsplash.com/photo-1499636136210-6f4ee915583e?w=800&auto=format&fit=crop&q=80',
   ],
 };
+
+export function getCuratedFoodImage(title: string = '', tags: string[] = []): string {
+  const query = `${title} ${tags.join(' ')}`.toLowerCase();
+  const primaryDishFamily = getDishFamily(title);
+
+  // Check specialized signature dishes first
+  const signatureKeys = Object.keys(SIGNATURE_DISH_IMAGES).sort((a, b) => b.length - a.length);
+  for (const dish of signatureKeys) {
+    if (query.includes(dish)) {
+      if (primaryDishFamily) {
+        const dishFam = getDishFamily(dish);
+        if (dishFam && dishFam.name !== primaryDishFamily.name) continue;
+      }
+      return SIGNATURE_DISH_IMAGES[dish][0];
+    }
+  }
+
+  const sortedKeys = Object.keys(CURATED_FOOD_IMAGES)
+    .filter((k) => k !== 'default')
+    .sort((a, b) => b.length - a.length);
+
+  for (const key of sortedKeys) {
+    if (query.includes(key)) {
+      if (primaryDishFamily) {
+        const keyFam = getDishFamily(key);
+        if (keyFam && keyFam.name !== primaryDishFamily.name) continue;
+      }
+      return CURATED_FOOD_IMAGES[key];
+    }
+  }
+  return CURATED_FOOD_IMAGES.default;
+}
 
 export async function findAccurateRecipePhoto(
   title: string = '',
@@ -270,16 +469,30 @@ export async function findAccurateRecipePhoto(
   ingredients: Array<any> = []
 ): Promise<string> {
   const queryText = `${title} ${imageQuery || ''} ${tags.join(' ')}`.toLowerCase();
+  const primaryDishFamily = getDishFamily(title) || (imageQuery ? getDishFamily(imageQuery) : null);
 
   // 1. Check specialized signature dishes first (sorted by dish name length descending)
   const signatureKeys = Object.keys(SIGNATURE_DISH_IMAGES).sort((a, b) => b.length - a.length);
   for (const dish of signatureKeys) {
     if (queryText.includes(dish)) {
+      // Dish family anti-confusion protection (e.g. skip 'taco' when primary dish is 'soup')
+      if (primaryDishFamily) {
+        const dishFamily = getDishFamily(dish);
+        if (dishFamily && dishFamily.name !== primaryDishFamily.name) {
+          continue;
+        }
+      }
+
       const candidates = SIGNATURE_DISH_IMAGES[dish];
       const unused = candidates.find((url) => !usedImages.has(url));
       if (unused) {
         usedImages.add(unused);
         return unused;
+      } else if (candidates.length > 0) {
+        // If user is cycling through all available photos of this dish, stay within this dish
+        const lastUsed = Array.from(usedImages).slice(-1)[0];
+        const nextCandidate = candidates.find((c) => c !== lastUsed) || candidates[0];
+        return nextCandidate;
       }
     }
   }
@@ -290,28 +503,28 @@ export async function findAccurateRecipePhoto(
     .replace(/\s+(recipe|dish|style)$/gi, '')
     .trim();
 
-  // Culinary stop words that should NEVER be used as the sole basis for matching a photo
-  const CULINARY_STOP_WORDS = new Set([
-    'soup', 'soups', 'salad', 'salads', 'dish', 'dishes', 'food', 'recipe',
-    'style', 'creamy', 'crispy', 'easy', 'best', 'homemade', 'quick', 'simple', 'ultimate', 'classic',
-    'baked', 'pan', 'instant', 'pot', 'slow', 'cooker', 'casserole', 'skillet', 'sauce', 'stew', 'bowl',
-    'dip', 'pie', 'pasta', 'dinner', 'lunch', 'breakfast'
+  // Filler words that should not be used as unique keyword filters
+  const FILLER_WORDS = new Set([
+    'recipe', 'recipes', 'dish', 'dishes', 'food', 'style', 'easy', 'best',
+    'homemade', 'quick', 'simple', 'ultimate', 'classic', 'how', 'make', 'cook',
+    'cooking', 'delicious', 'perfect', 'favorite', 'instant', 'pot', 'slow', 'cooker',
+    'dinner', 'lunch', 'breakfast'
   ]);
 
   const distinctKeywords = cleanTitle
     .toLowerCase()
     .split(/[^a-z0-9]+/)
-    .filter((w) => w.length >= 3 && !CULINARY_STOP_WORDS.has(w));
+    .filter((w) => w.length >= 3 && !FILLER_WORDS.has(w));
 
   if (cleanTitle && distinctKeywords.length > 0) {
-    // 2A. Search Wikimedia Commons File Library (actual user & chef photography)
+    // 2A. Search Wikimedia Commons File Library (actual chef & home photography)
     try {
       const commonsUrl = `https://commons.wikimedia.org/w/api.php?action=query&format=json&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(
         cleanTitle
       )}&gsrlimit=8&prop=imageinfo&iiprop=url&iiurlwidth=1200`;
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2500);
+      const timeoutId = setTimeout(() => controller.abort(), 4500);
 
       const res = await fetch(commonsUrl, {
         headers: { 'User-Agent': 'FamKitApp/1.0 (contact@famkit.app)' },
@@ -331,6 +544,19 @@ export async function findAccurateRecipePhoto(
           if (!imgUrl || usedImages.has(imgUrl)) return false;
           if (imgUrl.toLowerCase().endsWith('.svg') || p.title.toLowerCase().endsWith('.svg')) return false;
           const lowerTitle = p.title.toLowerCase();
+
+          // Anti-confusion check: if recipe has a primary dish family, candidate must belong to it
+          if (primaryDishFamily) {
+            const candFamily = getDishFamily(lowerTitle);
+            if (candFamily && candFamily.name !== primaryDishFamily.name) {
+              return false; // e.g. reject tacos for soup
+            }
+            const hasFamilyKeyword = primaryDishFamily.keywords.some((k) => lowerTitle.includes(k));
+            if (!hasFamilyKeyword) {
+              return false;
+            }
+          }
+
           const matchCount = distinctKeywords.filter((w) => lowerTitle.includes(w)).length;
           return matchCount >= Math.min(2, distinctKeywords.length);
         });
@@ -352,7 +578,7 @@ export async function findAccurateRecipePhoto(
       )}&gsrlimit=4&prop=pageimages&piprop=thumbnail&pithumbsize=960`;
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2500);
+      const timeoutId = setTimeout(() => controller.abort(), 4500);
 
       const res = await fetch(searchUrl, {
         headers: { 'User-Agent': 'FamKitApp/1.0 (contact@famkit.app)' },
@@ -367,12 +593,19 @@ export async function findAccurateRecipePhoto(
           thumbnail?: { source: string };
         }>;
 
-        const match = pages.find(
-          (p) =>
-            p.thumbnail?.source &&
-            !usedImages.has(p.thumbnail.source) &&
-            distinctKeywords.every((w) => p.title.toLowerCase().includes(w))
-        );
+        const match = pages.find((p) => {
+          if (!p.thumbnail?.source || usedImages.has(p.thumbnail.source)) return false;
+          const lowerTitle = p.title.toLowerCase();
+
+          if (primaryDishFamily) {
+            const candFamily = getDishFamily(lowerTitle);
+            if (candFamily && candFamily.name !== primaryDishFamily.name) return false;
+            const hasFamilyKeyword = primaryDishFamily.keywords.some((k) => lowerTitle.includes(k));
+            if (!hasFamilyKeyword) return false;
+          }
+
+          return distinctKeywords.every((w) => lowerTitle.includes(w));
+        });
 
         if (match?.thumbnail?.source) {
           usedImages.add(match.thumbnail.source);
@@ -391,6 +624,12 @@ export async function findAccurateRecipePhoto(
 
   for (const key of allCuratedKeys) {
     if (queryText.includes(key)) {
+      if (primaryDishFamily) {
+        const keyFamily = getDishFamily(key);
+        if (keyFamily && keyFamily.name !== primaryDishFamily.name) {
+          continue; // e.g. never pick tacos or chicken wings for soup
+        }
+      }
       const url = CURATED_FOOD_IMAGES[key];
       if (!usedImages.has(url)) {
         usedImages.add(url);
