@@ -11,8 +11,6 @@ interface PWAContextType {
   canInstallPWA: boolean;
   isPWAInstalled: boolean;
   installPWA: () => Promise<void>;
-  isPushSupported: boolean;
-  isPushSubscribed: boolean;
   apiKey: string;
   setApiKey: (key: string) => void;
   isLoadingAuth: boolean;

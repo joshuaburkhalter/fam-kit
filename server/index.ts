@@ -23,6 +23,10 @@ import {
   syncAllConnectedHouseholdCalendars,
   initBackgroundGoogleSync,
   getGoogleCredentials,
+  pushEventToGoogleCalendar,
+  updateEventInGoogleCalendar,
+  deleteEventFromGoogleCalendar,
+  pushUnsyncedLocalEventsToGoogle,
 } from './google-calendar.js';
 
 dotenv.config();
@@ -960,6 +964,14 @@ ${contextString}
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
               [id, ev.title, ev.description || null, ev.date, ev.startTime || null, ev.endTime || null, ev.category || 'Family', ev.location || null, matchedMember?.id || null, householdId, now]
             );
+            saveDb();
+
+            const createdEv = queryOne('SELECT * FROM calendar_events WHERE id = ?', [id]);
+            try {
+              await pushEventToGoogleCalendar(createdEv, activeMemberId || getAuthUser(req)?.id);
+            } catch (pushErr) {
+              console.warn('Failed to push AI-scheduled event to Google Calendar:', pushErr);
+            }
 
             createdEvents.push({ id, title: ev.title, date: ev.date });
           }
@@ -1016,7 +1028,13 @@ ${contextString}
             }
 
             if (matchedRow) {
+              try {
+                await deleteEventFromGoogleCalendar(matchedRow.id, householdId);
+              } catch (gcalErr) {
+                console.warn('Failed to delete event from Google Calendar (AI tool):', gcalErr);
+              }
               execute('DELETE FROM calendar_events WHERE id = ? AND householdId = ?', [matchedRow.id, householdId]);
+              saveDb();
               deletedEvents.push(matchedRow);
             }
           }
@@ -1968,7 +1986,7 @@ function cleanTimeStr(t: any): string | null {
   return trimmed.substring(0, 5);
 }
 
-app.post('/api/calendar', (req, res) => {
+app.post('/api/calendar', async (req, res) => {
   const householdId = getHouseholdId(req);
   const { title, description, date, startTime, endTime, category, location, assignedMemberId } = req.body;
   const finalDate = cleanDateStr(date);
@@ -1985,6 +2003,7 @@ app.post('/api/calendar', (req, res) => {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [id, title, description || null, finalDate, finalStart || null, finalEnd || null, category || 'Family', location || null, assignedMemberId || null, householdId, now]
   );
+  saveDb();
 
   const actor = getAuthUser(req);
   sendPushNotificationToHousehold(
@@ -2001,10 +2020,22 @@ app.post('/api/calendar', (req, res) => {
   );
 
   const created = queryOne('SELECT * FROM calendar_events WHERE id = ?', [id]);
+
+  // Immediately push event to Google Calendar if connected
+  try {
+    const pushed = await pushEventToGoogleCalendar(created, actor?.id);
+    if (pushed) {
+      const refreshed = queryOne('SELECT * FROM calendar_events WHERE id = ?', [id]);
+      return res.json(refreshed || created);
+    }
+  } catch (pushErr) {
+    console.warn('Failed to immediately push event to Google Calendar:', pushErr);
+  }
+
   res.json(created);
 });
 
-app.patch('/api/calendar', (req, res) => {
+app.patch('/api/calendar', async (req, res) => {
   try {
     const householdId = getHouseholdId(req);
     const { id, title, description, date, startTime, endTime, category, location, assignedMemberId } = req.body;
@@ -2046,18 +2077,39 @@ app.patch('/api/calendar', (req, res) => {
         householdId,
       ]
     );
+    saveDb();
 
     const updated = queryOne('SELECT * FROM calendar_events WHERE id = ?', [id]);
-    res.json(updated);
+
+    // Immediately update in Google Calendar if connected
+    try {
+      if (updated) {
+        await updateEventInGoogleCalendar(updated);
+      }
+    } catch (pushErr) {
+      console.warn('Failed to immediately update event in Google Calendar:', pushErr);
+    }
+
+    const finalEvent = queryOne('SELECT * FROM calendar_events WHERE id = ?', [id]);
+    res.json(finalEvent || updated);
   } catch (err: any) {
     console.error('Failed to update calendar event:', err);
     res.status(500).json({ error: err.message || 'Failed to update calendar event' });
   }
 });
 
-app.delete('/api/calendar', (req, res) => {
+app.delete('/api/calendar', async (req, res) => {
+  const householdId = getHouseholdId(req);
   const id = req.query.id as string;
-  if (id) execute('DELETE FROM calendar_events WHERE id = ?', [id]);
+  if (id) {
+    try {
+      await deleteEventFromGoogleCalendar(id, householdId);
+    } catch (gcalErr) {
+      console.warn('Failed to delete event from Google Calendar:', gcalErr);
+    }
+    execute('DELETE FROM calendar_events WHERE id = ?', [id]);
+    saveDb();
+  }
   res.json({ success: true });
 });
 
@@ -2253,7 +2305,8 @@ app.post('/api/calendar/sync/google', async (req, res) => {
   try {
     const householdId = getHouseholdId(req);
     const result = await syncAllConnectedHouseholdCalendars(householdId);
-    res.json({ success: true, totalSynced: result.totalSynced });
+    const pushResult = await pushUnsyncedLocalEventsToGoogle(householdId);
+    res.json({ success: true, totalSynced: result.totalSynced, totalPushed: pushResult.pushedCount });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Failed to sync Google Calendar' });
   }

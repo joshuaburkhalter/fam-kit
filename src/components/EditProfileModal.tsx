@@ -17,6 +17,7 @@ import { usePWA } from '../context/PWAContext';
 interface EditProfileModalProps {
   isOpen: boolean;
   onClose: () => void;
+  targetUser?: any;
 }
 
 const AVATAR_COLORS = [

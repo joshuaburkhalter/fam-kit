@@ -650,6 +650,14 @@ export async function syncAllConnectedHouseholdCalendars(
         console.error(`Failed to sync calendar for user ${rec.userId}:`, err);
       }
     }
+
+    // Bidirectional sync: push any local events that haven't been pushed to Google yet
+    try {
+      await pushUnsyncedLocalEventsToGoogle(targetHouseholdId);
+    } catch (pushErr) {
+      console.warn('Failed to push unsynced local events in syncAllConnectedHouseholdCalendars:', pushErr);
+    }
+
     return { totalSynced };
   } catch (err) {
     console.error('syncAllConnectedHouseholdCalendars error:', err);
@@ -738,3 +746,374 @@ export function initBackgroundGoogleSync(): void {
     syncAllConnectedHouseholdCalendars().catch((e) => console.error('Periodic background sync error:', e));
   }, 10 * 60 * 1000);
 }
+
+/**
+ * Helper to pick the first selected calendar ID from a sync record
+ */
+function pickFirstCalendarId(rec: GoogleSyncRecord): string {
+  if (rec.selectedCalendarIds) {
+    try {
+      const ids = JSON.parse(rec.selectedCalendarIds);
+      if (Array.isArray(ids) && ids.length > 0 && ids[0]) return ids[0];
+    } catch {}
+  }
+  if (rec.selectedCalendarId) {
+    return rec.selectedCalendarId;
+  }
+  return 'primary';
+}
+
+/**
+ * Resolve target Google Calendar account and calendar ID for an event
+ */
+export function resolveTargetGoogleCalendar(
+  event: any,
+  creatorUserId?: string
+): { record: GoogleSyncRecord; calendarId: string } | null {
+  const householdId = event.householdId;
+  if (!householdId) return null;
+
+  const records = queryAll<GoogleSyncRecord>(
+    `SELECT * FROM user_google_sync 
+     WHERE householdId = ? 
+        OR userId IN (SELECT id FROM users WHERE householdId = ?)`,
+    [householdId, householdId]
+  );
+
+  if (records.length === 0) return null;
+
+  // 1. If assigned to a specific member, check if any calendar is mapped to them
+  if (event.assignedMemberId) {
+    for (const rec of records) {
+      if (rec.calendarMemberMap) {
+        try {
+          const map = JSON.parse(rec.calendarMemberMap);
+          for (const [calId, mappedMemberId] of Object.entries(map)) {
+            if (mappedMemberId === event.assignedMemberId) {
+              return { record: rec, calendarId: calId };
+            }
+          }
+        } catch {}
+      }
+    }
+
+    // Check if the assigned member has their own connected Google account
+    const memberRec = records.find((r) => r.userId === event.assignedMemberId);
+    if (memberRec) {
+      return { record: memberRec, calendarId: pickFirstCalendarId(memberRec) };
+    }
+  }
+
+  // 2. If creator has a connected Google account, check if they have a mapped family calendar or default
+  if (creatorUserId) {
+    const creatorRec = records.find((r) => r.userId === creatorUserId);
+    if (creatorRec) {
+      if (creatorRec.calendarMemberMap) {
+        try {
+          const map = JSON.parse(creatorRec.calendarMemberMap);
+          for (const [calId, mapped] of Object.entries(map)) {
+            if (mapped === 'family' || mapped === null) {
+              return { record: creatorRec, calendarId: calId };
+            }
+          }
+        } catch {}
+      }
+      return { record: creatorRec, calendarId: pickFirstCalendarId(creatorRec) };
+    }
+  }
+
+  // 3. Fallback: check if any connected account has a calendar mapped to "family"
+  for (const rec of records) {
+    if (rec.calendarMemberMap) {
+      try {
+        const map = JSON.parse(rec.calendarMemberMap);
+        for (const [calId, mapped] of Object.entries(map)) {
+          if (mapped === 'family') {
+            return { record: rec, calendarId: calId };
+          }
+        }
+      } catch {}
+    }
+  }
+
+  // 4. Fallback to first connected Google account
+  return { record: records[0], calendarId: pickFirstCalendarId(records[0]) };
+}
+
+/**
+ * Format a Homebase event into a Google Calendar API resource
+ */
+function buildGoogleEventResource(event: any) {
+  const summary = event.title?.trim() || '(No Title)';
+  const description = event.description?.trim() || undefined;
+  const location = event.location?.trim() || undefined;
+
+  const isAllDay =
+    !event.startTime ||
+    (event.startTime === '00:00' && (event.endTime === '23:59' || !event.endTime));
+
+  if (isAllDay) {
+    const [y, m, d] = event.date.split('-').map(Number);
+    const nextDate = new Date(Date.UTC(y, m - 1, d + 1));
+    const endDateStr = nextDate.toISOString().split('T')[0];
+
+    return {
+      summary,
+      description,
+      location,
+      start: { date: event.date },
+      end: { date: endDateStr },
+    };
+  }
+
+  const startTime = event.startTime.length === 5 ? `${event.startTime}:00` : event.startTime;
+  let endTime = event.endTime ? (event.endTime.length === 5 ? `${event.endTime}:00` : event.endTime) : null;
+
+  if (!endTime) {
+    const [h, min] = startTime.split(':').map(Number);
+    const endH = (h + 1) % 24;
+    endTime = `${String(endH).padStart(2, '0')}:${String(min || 0).padStart(2, '0')}:00`;
+  }
+
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Chicago';
+
+  return {
+    summary,
+    description,
+    location,
+    start: {
+      dateTime: `${event.date}T${startTime}`,
+      timeZone: tz,
+    },
+    end: {
+      dateTime: `${event.date}T${endTime}`,
+      timeZone: tz,
+    },
+  };
+}
+
+/**
+ * Push a new Homebase event immediately to Google Calendar
+ */
+export async function pushEventToGoogleCalendar(
+  event: any,
+  creatorUserId?: string
+): Promise<{ googleEventId: string; googleCalendarId: string } | null> {
+  if (!event || !event.id || !event.householdId) return null;
+
+  // If already pushed, update it instead
+  if (event.googleEventId && event.googleCalendarId) {
+    await updateEventInGoogleCalendar(event);
+    return { googleEventId: event.googleEventId, googleCalendarId: event.googleCalendarId };
+  }
+
+  const target = resolveTargetGoogleCalendar(event, creatorUserId);
+  if (!target) {
+    return null;
+  }
+
+  const accessToken = await getValidAccessToken(target.record);
+  if (!accessToken) {
+    console.warn(`[pushEventToGoogleCalendar] Unable to acquire valid access token for user ${target.record.userId}`);
+    return null;
+  }
+
+  const resource = buildGoogleEventResource(event);
+  const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(target.calendarId)}/events`;
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(resource),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      console.warn(`[pushEventToGoogleCalendar] Google API error (${res.status}):`, errText);
+      return null;
+    }
+
+    const gcalEvent = (await res.json()) as { id?: string };
+    if (!gcalEvent || !gcalEvent.id) return null;
+
+    execute(
+      `UPDATE calendar_events
+       SET googleEventId = ?,
+           googleCalendarId = ?,
+           isGoogleEvent = 1
+       WHERE id = ?`,
+      [gcalEvent.id, target.calendarId, event.id]
+    );
+    saveDb();
+
+    return { googleEventId: gcalEvent.id, googleCalendarId: target.calendarId };
+  } catch (err) {
+    console.warn('[pushEventToGoogleCalendar] Network or unexpected error:', err);
+    return null;
+  }
+}
+
+/**
+ * Update an existing event in Google Calendar
+ */
+export async function updateEventInGoogleCalendar(event: any): Promise<boolean> {
+  if (!event || !event.id) return false;
+
+  const dbEvent = queryOne<any>('SELECT * FROM calendar_events WHERE id = ?', [event.id]);
+  const fullEvent = { ...dbEvent, ...event };
+
+  const googleEventId = fullEvent.googleEventId;
+  const googleCalendarId = fullEvent.googleCalendarId;
+
+  // If not yet pushed to Google, push now
+  if (!googleEventId || !googleCalendarId) {
+    const pushed = await pushEventToGoogleCalendar(fullEvent, fullEvent.assignedMemberId);
+    return Boolean(pushed);
+  }
+
+  // Find the sync record that has access to this calendar or in this household
+  let record = queryOne<GoogleSyncRecord>(
+    `SELECT * FROM user_google_sync 
+     WHERE (householdId = ? OR userId IN (SELECT id FROM users WHERE householdId = ?))
+       AND (selectedCalendarIds LIKE ? OR selectedCalendarId = ? OR calendarMemberMap LIKE ?)
+     LIMIT 1`,
+    [fullEvent.householdId, fullEvent.householdId, `%${googleCalendarId}%`, googleCalendarId, `%${googleCalendarId}%`]
+  );
+
+  if (!record) {
+    record = queryOne<GoogleSyncRecord>(
+      `SELECT * FROM user_google_sync 
+       WHERE householdId = ? OR userId IN (SELECT id FROM users WHERE householdId = ?)
+       LIMIT 1`,
+      [fullEvent.householdId, fullEvent.householdId]
+    );
+  }
+
+  if (!record) return false;
+
+  const accessToken = await getValidAccessToken(record);
+  if (!accessToken) return false;
+
+  const resource = buildGoogleEventResource(fullEvent);
+  const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(
+    googleCalendarId
+  )}/events/${encodeURIComponent(googleEventId)}`;
+
+  try {
+    const res = await fetch(url, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(resource),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      console.warn(`[updateEventInGoogleCalendar] Google API error (${res.status}):`, errText);
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    console.warn('[updateEventInGoogleCalendar] Network or unexpected error:', err);
+    return false;
+  }
+}
+
+/**
+ * Delete an event from Google Calendar
+ */
+export async function deleteEventFromGoogleCalendar(eventId: string, householdId?: string): Promise<boolean> {
+  if (!eventId) return false;
+
+  const event = queryOne<any>('SELECT * FROM calendar_events WHERE id = ?', [eventId]);
+  if (!event || !event.googleEventId || !event.googleCalendarId) {
+    return false;
+  }
+
+  const hId = householdId || event.householdId;
+  const googleCalendarId = event.googleCalendarId;
+  const googleEventId = event.googleEventId;
+
+  let record = queryOne<GoogleSyncRecord>(
+    `SELECT * FROM user_google_sync 
+     WHERE (householdId = ? OR userId IN (SELECT id FROM users WHERE householdId = ?))
+       AND (selectedCalendarIds LIKE ? OR selectedCalendarId = ? OR calendarMemberMap LIKE ?)
+     LIMIT 1`,
+    [hId, hId, `%${googleCalendarId}%`, googleCalendarId, `%${googleCalendarId}%`]
+  );
+
+  if (!record) {
+    record = queryOne<GoogleSyncRecord>(
+      `SELECT * FROM user_google_sync 
+       WHERE householdId = ? OR userId IN (SELECT id FROM users WHERE householdId = ?)
+       LIMIT 1`,
+      [hId, hId]
+    );
+  }
+
+  if (!record) return false;
+
+  const accessToken = await getValidAccessToken(record);
+  if (!accessToken) return false;
+
+  const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(
+    googleCalendarId
+  )}/events/${encodeURIComponent(googleEventId)}`;
+
+  try {
+    const res = await fetch(url, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!res.ok && res.status !== 404 && res.status !== 410) {
+      const errText = await res.text();
+      console.warn(`[deleteEventFromGoogleCalendar] Google API error (${res.status}):`, errText);
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    console.warn('[deleteEventFromGoogleCalendar] Network or unexpected error:', err);
+    return false;
+  }
+}
+
+/**
+ * Push all local events that have not been synced to Google yet
+ */
+export async function pushUnsyncedLocalEventsToGoogle(householdId?: string): Promise<{ pushedCount: number }> {
+  try {
+    let query = 'SELECT * FROM calendar_events WHERE (googleEventId IS NULL OR googleEventId = "")';
+    const params: any[] = [];
+    if (householdId) {
+      query += ' AND householdId = ?';
+      params.push(householdId);
+    }
+    const unsynced = queryAll<any>(query, params);
+    let pushedCount = 0;
+
+    for (const ev of unsynced) {
+      try {
+        const res = await pushEventToGoogleCalendar(ev, ev.assignedMemberId);
+        if (res) pushedCount++;
+      } catch (e) {
+        console.warn(`[pushUnsyncedLocalEventsToGoogle] Error pushing event ${ev.id}:`, e);
+      }
+    }
+    return { pushedCount };
+  } catch (err) {
+    console.error('pushUnsyncedLocalEventsToGoogle error:', err);
+    return { pushedCount: 0 };
+  }
+}
+

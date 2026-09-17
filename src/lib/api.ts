@@ -449,10 +449,24 @@ export const api = {
   },
 
   getRecipe: async (id: string): Promise<Recipe> => {
-    const recipes = await api.getRecipes('');
-    const rec = recipes.find((r) => r.id === id);
-    if (!rec) throw new Error('Recipe not found');
-    return rec;
+    const list = await fetchJson<any[]>('/recipes');
+    const r = list.find((item: any) => item.id === id);
+    if (!r) throw new Error('Recipe not found');
+    return {
+      id: r.id,
+      household_id: r.householdId,
+      title: r.title,
+      description: r.description,
+      prep_time_minutes: parsePositiveInt(r.prepTimeMinutes),
+      cook_time_minutes: parsePositiveInt(r.cookTimeMinutes),
+      servings: parsePositiveInt(r.servings),
+      source_url: r.sourceUrl,
+      image_url: r.imageUrl,
+      tags: typeof r.tags === 'string' ? JSON.parse(r.tags) : (r.tags || []),
+      ingredients: typeof r.ingredients === 'string' ? JSON.parse(r.ingredients) : (r.ingredients || []),
+      instructions: typeof r.instructions === 'string' ? JSON.parse(r.instructions) : (r.instructions || []),
+      created_at: r.createdAt,
+    };
   },
 
   createRecipe: (householdId: string, data: Partial<Recipe>) =>
@@ -835,6 +849,8 @@ export const api = {
       is_all_day: isAllDay,
       location: res.location,
       assigned_user_id: res.assignedMemberId,
+      is_google_event: Boolean(res.isGoogleEvent || res.googleEventId),
+      google_event_id: res.googleEventId || undefined,
       created_at: res.createdAt,
     };
   },
@@ -881,6 +897,8 @@ export const api = {
       is_all_day: isAllDay,
       location: res.location,
       assigned_user_id: res.assignedMemberId,
+      is_google_event: Boolean(res.isGoogleEvent || res.googleEventId),
+      google_event_id: res.googleEventId || undefined,
       created_at: res.createdAt,
     };
   },
@@ -1002,8 +1020,8 @@ export const api = {
       method: 'POST',
     }),
 
-  // Alias sendAssistantMessage to askAssistant
-  sendAssistantMessage: (data: Parameters<typeof api.askAssistant>[0]) => api.askAssistant(data),
+  // Alias sendAssistantMessage to askGemini
+  sendAssistantMessage: async (data: any) => api.askGemini(data),
 
   // Subscription & Promo Code API
   getSubscriptionStatus: async () => {

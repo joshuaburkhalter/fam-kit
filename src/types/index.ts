@@ -168,6 +168,7 @@ export interface GoogleCalendarEntry {
   backgroundColor?: string;
   foregroundColor?: string;
   selected: boolean;
+  assignedMemberId?: string | null;
 }
 
 export interface AssistantMessage {
