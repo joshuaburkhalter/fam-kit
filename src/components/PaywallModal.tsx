@@ -65,24 +65,26 @@ export const PaywallModal: React.FC<PaywallModalProps> = ({ onOpenPricingDetails
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-xl overflow-y-auto flex flex-col items-center justify-center p-4 sm:p-6 selection:bg-emerald-500/30 selection:text-emerald-300">
-      <div className="w-full max-w-3xl my-auto py-8">
+    <div className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-xl overflow-y-auto overscroll-contain flex flex-col items-center p-4 sm:p-6 pt-12 pb-20 sm:pt-16 sm:pb-24 selection:bg-emerald-500/30 selection:text-emerald-300">
+      <div className="w-full max-w-3xl my-auto py-2">
         {/* Header Branding & Household Info */}
-        <div className="text-center space-y-3 mb-8">
+        <div className="text-center space-y-2.5 mb-6 sm:mb-8">
           <div className="inline-flex items-center justify-center">
-            <HomebaseLogo size={46} showWordmark={true} />
+            <HomebaseLogo size={42} showWordmark={true} />
           </div>
 
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-300 text-xs font-semibold shadow-inner">
-            <ShieldAlert className="w-3.5 h-3.5" />
-            <span>{isExpired ? 'Free Period Concluded' : 'Membership Required'}</span>
+          <div>
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-300 text-xs font-semibold shadow-inner mb-2">
+              <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
+              <span>{isExpired ? 'Free Period Concluded' : 'Membership Required'}</span>
+            </div>
+
+            <h1 className="text-xl sm:text-3xl md:text-4xl font-black text-white tracking-tight leading-tight">
+              {isExpired ? 'Your Free Access Has Ended' : 'Choose a Plan for Your Household'}
+            </h1>
           </div>
 
-          <h1 className="text-2xl sm:text-4xl font-black text-white tracking-tight">
-            {isExpired ? 'Your Free Access Has Ended' : 'Choose a Plan for Your Household'}
-          </h1>
-
-          <p className="max-w-xl mx-auto text-xs sm:text-sm text-slate-400 leading-relaxed">
+          <p className="max-w-xl mx-auto text-xs sm:text-sm text-slate-400 leading-relaxed px-2">
             {isExpired ? (
               <>
                 Your trial or voucher period has concluded for{' '}
