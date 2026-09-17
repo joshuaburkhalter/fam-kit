@@ -106,7 +106,7 @@ export const RecipesPage: React.FC = () => {
   const handleAddAllToGrocery = async (recipe: Recipe) => {
     if (!household) return;
     try {
-      const res = await api.addRecipeToGrocery(recipe.id, household.id);
+      const res = await api.addRecipeToGrocery(recipe, household.id);
       // Also add to Shopped Recipes list
       await api.addWeeklyMeal(household.id, {
         title: recipe.title,

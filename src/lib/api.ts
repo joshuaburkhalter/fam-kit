@@ -51,6 +51,52 @@ const parsePositiveInt = (val: any): number | undefined => {
   return !isNaN(num) && num > 0 ? num : undefined;
 };
 
+function parseRecipeTags(raw: any): string[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) return parsed.map(String);
+      } catch {}
+    }
+    return trimmed.split(',').map((t: string) => t.trim()).filter(Boolean);
+  }
+  return [];
+}
+
+function parseRecipeJsonArray(raw: any): any[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    } catch {}
+  }
+  return [];
+}
+
+function normalizeDbRecipe(r: any): Recipe {
+  return {
+    id: r.id,
+    household_id: r.householdId || r.household_id,
+    title: r.title,
+    description: r.description,
+    prep_time_minutes: parsePositiveInt(r.prepTime ?? r.prepTimeMinutes ?? r.prep_time_minutes),
+    cook_time_minutes: parsePositiveInt(r.cookTime ?? r.cookTimeMinutes ?? r.cook_time_minutes),
+    servings: parsePositiveInt(r.servings),
+    source_url: r.sourceUrl || r.source_url,
+    image_url: r.imageUrl || r.image_url,
+    tags: parseRecipeTags(r.tags),
+    ingredients: parseRecipeJsonArray(r.ingredients),
+    instructions: parseRecipeJsonArray(r.instructions),
+    created_at: r.createdAt || r.created_at,
+  };
+}
+
 export const api = {
   // Authentication API
   login: async (identifier: string, password: string) => {
@@ -431,42 +477,14 @@ export const api = {
   // Recipes
   getRecipes: async (householdId: string): Promise<Recipe[]> => {
     const list = await fetchJson<any[]>('/recipes');
-    return list.map((r) => ({
-      id: r.id,
-      household_id: r.householdId,
-      title: r.title,
-      description: r.description,
-      prep_time_minutes: parsePositiveInt(r.prepTime),
-      cook_time_minutes: parsePositiveInt(r.cookTime),
-      servings: parsePositiveInt(r.servings),
-      source_url: r.sourceUrl,
-      image_url: r.imageUrl,
-      tags: typeof r.tags === 'string' ? r.tags.split(',').map((t: string) => t.trim()).filter(Boolean) : (r.tags || []),
-      ingredients: typeof r.ingredients === 'string' ? JSON.parse(r.ingredients) : (r.ingredients || []),
-      instructions: typeof r.instructions === 'string' ? JSON.parse(r.instructions) : (r.instructions || []),
-      created_at: r.createdAt,
-    }));
+    return list.map(normalizeDbRecipe);
   },
 
   getRecipe: async (id: string): Promise<Recipe> => {
     const list = await fetchJson<any[]>('/recipes');
     const r = list.find((item: any) => item.id === id);
     if (!r) throw new Error('Recipe not found');
-    return {
-      id: r.id,
-      household_id: r.householdId,
-      title: r.title,
-      description: r.description,
-      prep_time_minutes: parsePositiveInt(r.prepTimeMinutes),
-      cook_time_minutes: parsePositiveInt(r.cookTimeMinutes),
-      servings: parsePositiveInt(r.servings),
-      source_url: r.sourceUrl,
-      image_url: r.imageUrl,
-      tags: typeof r.tags === 'string' ? JSON.parse(r.tags) : (r.tags || []),
-      ingredients: typeof r.ingredients === 'string' ? JSON.parse(r.ingredients) : (r.ingredients || []),
-      instructions: typeof r.instructions === 'string' ? JSON.parse(r.instructions) : (r.instructions || []),
-      created_at: r.createdAt,
-    };
+    return normalizeDbRecipe(r);
   },
 
   createRecipe: (householdId: string, data: Partial<Recipe>) =>
@@ -498,22 +516,7 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ url, apiKey }),
     });
-    const r = res.recipe;
-    return {
-      id: r.id,
-      household_id: r.householdId,
-      title: r.title,
-      description: r.description,
-      prep_time_minutes: parsePositiveInt(r.prepTime),
-      cook_time_minutes: parsePositiveInt(r.cookTime),
-      servings: parsePositiveInt(r.servings),
-      source_url: r.sourceUrl,
-      image_url: r.imageUrl,
-      tags: typeof r.tags === 'string' ? r.tags.split(',').map((t: string) => t.trim()).filter(Boolean) : (r.tags || []),
-      ingredients: typeof r.ingredients === 'string' ? JSON.parse(r.ingredients) : (r.ingredients || []),
-      instructions: typeof r.instructions === 'string' ? JSON.parse(r.instructions) : (r.instructions || []),
-      created_at: r.createdAt,
-    };
+    return normalizeDbRecipe(res.recipe);
   },
 
   importRecipeFromTextOrHtml: async (
@@ -529,28 +532,13 @@ export const api = {
         apiKey: data.apiKey,
       }),
     });
-    const r = res.recipe;
-    return {
-      id: r.id,
-      household_id: r.householdId,
-      title: r.title,
-      description: r.description,
-      prep_time_minutes: parsePositiveInt(r.prepTime),
-      cook_time_minutes: parsePositiveInt(r.cookTime),
-      servings: parsePositiveInt(r.servings),
-      source_url: r.sourceUrl,
-      image_url: r.imageUrl,
-      tags: typeof r.tags === 'string' ? r.tags.split(',').map((t: string) => t.trim()).filter(Boolean) : (r.tags || []),
-      ingredients: typeof r.ingredients === 'string' ? JSON.parse(r.ingredients) : (r.ingredients || []),
-      instructions: typeof r.instructions === 'string' ? JSON.parse(r.instructions) : (r.instructions || []),
-      created_at: r.createdAt,
-    };
+    return normalizeDbRecipe(res.recipe);
   },
 
-  addRecipeToGrocery: async (recipeId: string, householdId: string) => {
-    const recipe = await api.getRecipe(recipeId);
+  addRecipeToGrocery: async (recipeOrId: string | Recipe, householdId: string) => {
+    const recipe = typeof recipeOrId === 'string' ? await api.getRecipe(recipeOrId) : recipeOrId;
     let count = 0;
-    for (const ing of recipe.ingredients) {
+    for (const ing of (recipe.ingredients || [])) {
       await api.addGroceryItem(householdId, {
         name: ing.item,
         quantity: ing.amount,
