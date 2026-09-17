@@ -221,6 +221,22 @@ export const CalendarPage: React.FC = () => {
     }
   };
 
+  const isEventPast = (ev: CalendarEvent) => {
+    try {
+      const now = new Date();
+      if (ev.is_all_day) {
+        const start = parseISO(ev.start_time);
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const eventStart = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+        return eventStart < todayStart;
+      }
+      const endTime = ev.end_time ? parseISO(ev.end_time) : parseISO(ev.start_time);
+      return endTime < now;
+    } catch {
+      return false;
+    }
+  };
+
   // Filter events by assigned member
   const filteredEvents = events.filter((ev) => {
     if (selectedMemberId === 'all') return true;
@@ -627,11 +643,16 @@ export const CalendarPage: React.FC = () => {
                     <div className="space-y-1.5">
                       {dayEvents.map((ev) => {
                         const assignedUser = users.find((u) => u.id === ev.assigned_user_id);
+                        const isPast = isEventPast(ev);
                         return (
                           <div
                             key={ev.id}
                             onClick={() => handleOpenEditModal(ev)}
-                            className="relative overflow-hidden p-2.5 sm:p-3 rounded-xl bg-slate-900 border border-white/10 hover:border-emerald-500/40 transition-all cursor-pointer group active:scale-[0.99] shadow-xs"
+                            className={`relative overflow-hidden p-2.5 sm:p-3 rounded-xl transition-all cursor-pointer group active:scale-[0.99] shadow-xs ${
+                              isPast
+                                ? 'bg-slate-900/60 border border-white/5 grayscale opacity-60 hover:grayscale-0 hover:opacity-100 hover:border-emerald-500/30'
+                                : 'bg-slate-900 border border-white/10 hover:border-emerald-500/40'
+                            }`}
                           >
                             {/* Member Color Stripe */}
                             <div
@@ -644,8 +665,12 @@ export const CalendarPage: React.FC = () => {
                             <div className="pl-1 space-y-1">
                               {/* Top row: Time & Member */}
                               <div className="flex items-center justify-between gap-2">
-                                <div className="inline-flex items-center gap-1.5 text-[11px] font-mono text-emerald-400 font-medium">
-                                  <Clock className="w-3 h-3 text-emerald-400" />
+                                <div
+                                  className={`inline-flex items-center gap-1.5 text-[11px] font-mono font-medium ${
+                                    isPast ? 'text-slate-400' : 'text-emerald-400'
+                                  }`}
+                                >
+                                  <Clock className={`w-3 h-3 ${isPast ? 'text-slate-400' : 'text-emerald-400'}`} />
                                   <span>{formatTimeRange(ev)}</span>
                                 </div>
 
@@ -681,7 +706,13 @@ export const CalendarPage: React.FC = () => {
                               </div>
 
                               {/* Event Title */}
-                              <h3 className="text-sm font-semibold text-white group-hover:text-emerald-200 transition-colors">
+                              <h3
+                                className={`text-sm font-semibold transition-colors ${
+                                  isPast
+                                    ? 'text-slate-300 group-hover:text-white'
+                                    : 'text-white group-hover:text-emerald-200'
+                                }`}
+                              >
                                 {ev.title}
                               </h3>
 
