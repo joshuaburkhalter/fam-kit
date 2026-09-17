@@ -334,7 +334,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Joshua Burkhalter"
+                  placeholder="e.g. Alex Morgan"
                   className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
                 />
               </div>
@@ -351,7 +351,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                     type="text"
                     value={username}
                     onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/\s+/g, ''))}
-                    placeholder="e.g. joshua"
+                    placeholder="e.g. alex"
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl pl-6 pr-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
                   />
                 </div>
@@ -368,7 +368,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="e.g. joshua@example.com"
+                  placeholder="e.g. alex@famkit.app"
                   className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
                 />
               </div>

@@ -640,7 +640,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onOpenPric
             >
               Sign In
             </button>
-            <a href="mailto:joshua@redpointaudio.com" className="hover:text-emerald-400 transition-colors">
+            <a href="mailto:support@famkit.app" className="hover:text-emerald-400 transition-colors">
               Contact Support
             </a>
           </div>

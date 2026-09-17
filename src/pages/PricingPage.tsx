@@ -537,7 +537,7 @@ export const PricingPage: React.FC<PricingPageProps> = ({ onBack, onOpenAuth }) 
             <a href="/terms" className="hover:text-emerald-400 transition-colors">
               Terms of Service
             </a>
-            <a href="mailto:joshua@redpointaudio.com" className="hover:text-emerald-400 transition-colors">
+            <a href="mailto:support@famkit.app" className="hover:text-emerald-400 transition-colors">
               Support
             </a>
           </div>

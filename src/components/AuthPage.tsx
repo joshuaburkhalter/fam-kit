@@ -308,7 +308,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                     required
                     value={loginIdentifier}
                     onChange={(e) => setLoginIdentifier(e.target.value)}
-                    placeholder="e.g. joshuaburkhalter or alex@family.com"
+                    placeholder="e.g. alex or alex@family.com"
                     className="w-full bg-slate-900/90 border border-white/10 rounded-2xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
                   />
                 </div>
@@ -373,7 +373,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                     required
                     value={registerUsername}
                     onChange={(e) => setRegisterUsername(e.target.value.toLowerCase().replace(/\s+/g, ''))}
-                    placeholder="e.g. joshuaburkhalter"
+                    placeholder="e.g. alex_miller"
                     className="w-full bg-slate-900/90 border border-white/10 rounded-2xl pl-8 pr-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono"
                   />
                 </div>

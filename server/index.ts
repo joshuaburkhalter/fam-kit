@@ -2842,7 +2842,7 @@ app.get('/privacy', (req, res) => {
   <p>You can disconnect your Google Calendar integration at any time directly in Homebase under Settings, or by visiting your <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">Google Account Security Permissions</a>. Disconnecting immediately removes stored refresh tokens and deletes synced Google events from the schedule timeline.</p>
   
   <h2>4. Contact</h2>
-  <p>For questions regarding this policy or data deletion requests, contact the Homebase team at <a href="mailto:joshua@redpointaudio.com">joshua@redpointaudio.com</a>.</p>
+  <p>For questions regarding this policy or data deletion requests, contact the Homebase team at <a href="mailto:support@famkit.app">support@famkit.app</a>.</p>
 </body>
 </html>`);
 });
@@ -2874,7 +2874,7 @@ app.get('/terms', (req, res) => {
   <h2>3. Third-Party Integrations</h2>
   <p>When connecting external services like Google Calendar, you agree to comply with applicable third-party terms of service.</p>
   <h2>4. Contact</h2>
-  <p>For questions regarding these terms, contact <a href="mailto:joshua@redpointaudio.com">joshua@redpointaudio.com</a>.</p>
+  <p>For questions regarding these terms, contact <a href="mailto:support@famkit.app">support@famkit.app</a>.</p>
 </body>
 </html>`);
 });

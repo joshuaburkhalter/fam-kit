@@ -556,9 +556,9 @@ function seedDemoData(db: Database) {
     demoInviteCode += chars.charAt(Math.floor(Math.random() * chars.length));
   }
 
-  db.run(`INSERT INTO households (id, name, inviteCode, createdAt, subscriptionStatus, subscriptionPlan) VALUES (?, ?, ?, ?, ?, ?)`, [householdId, 'The Burkhalter Family', demoInviteCode, now, 'active', 'lifetime_founder']);
+  db.run(`INSERT INTO households (id, name, inviteCode, createdAt, subscriptionStatus, subscriptionPlan) VALUES (?, ?, ?, ?, ?, ?)`, [householdId, 'The Miller Family', demoInviteCode, now, 'active', 'lifetime_founder']);
 
-  db.run(`INSERT INTO users (id, name, username, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, ['u1', 'Joshua', 'joshua', 'joshua@redpointaudio.com', '👨‍💻', '#10b981', 'Parent', householdId, 'password123']);
+  db.run(`INSERT INTO users (id, name, username, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, ['u1', 'Alex', 'alex', 'alex@famkit.app', '👨‍💻', '#10b981', 'Parent', householdId, 'password123']);
   db.run(`INSERT INTO users (id, name, username, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, ['u2', 'Sarah', 'sarah', 'sarah@famkit.app', '👩‍🏫', '#ec4899', 'Parent', householdId, 'password123']);
   db.run(`INSERT INTO users (id, name, username, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, ['u3', 'Leo', 'leo', 'leo@famkit.app', '👦', '#f59e0b', 'Kid', householdId, 'password123']);
   db.run(`INSERT INTO users (id, name, username, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, ['u4', 'Emma', 'emma', 'emma@famkit.app', '👧', '#06b6d4', 'Kid', householdId, 'password123']);

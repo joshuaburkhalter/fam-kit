@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { ArrowLeft, ShieldCheck, FileText, Sparkles, ExternalLink, Calendar, Lock } from 'lucide-react';
 
 interface LegalPageProps {
@@ -208,8 +208,8 @@ export const LegalPage: React.FC<LegalPageProps> = ({ type, onBack }) => {
               <div className="p-4 rounded-xl bg-slate-900/60 border border-white/5 text-xs sm:text-sm text-slate-300 space-y-1">
                 <div className="text-white font-bold">Homebase Support</div>
                 <div>Email:{' '}
-                  <a href="mailto:joshua@redpointaudio.com" className="text-emerald-400 underline font-medium">
-                    joshua@redpointaudio.com
+                  <a href="mailto:support@famkit.app" className="text-emerald-400 underline font-medium">
+                    support@famkit.app
                   </a>
                 </div>
                 <div>Website:{' '}
@@ -288,8 +288,8 @@ export const LegalPage: React.FC<LegalPageProps> = ({ type, onBack }) => {
               <div className="p-4 rounded-xl bg-slate-900/60 border border-white/5 text-xs sm:text-sm text-slate-300 space-y-1">
                 <div className="text-white font-bold">Homebase Support</div>
                 <div>Email:{' '}
-                  <a href="mailto:joshua@redpointaudio.com" className="text-emerald-400 underline font-medium">
-                    joshua@redpointaudio.com
+                  <a href="mailto:support@famkit.app" className="text-emerald-400 underline font-medium">
+                    support@famkit.app
                   </a>
                 </div>
               </div>
