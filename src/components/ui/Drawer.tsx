@@ -1,0 +1,158 @@
+import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { X } from 'lucide-react';
+
+export interface DrawerProps {
+  isOpen: boolean;
+  onClose: () => void;
+  title?: React.ReactNode;
+  subtitle?: React.ReactNode;
+  icon?: React.ReactNode;
+  badge?: React.ReactNode;
+  headerRight?: React.ReactNode;
+  customHeader?: React.ReactNode;
+  footer?: React.ReactNode;
+  children: React.ReactNode;
+  width?: string; // e.g. "max-w-md", "max-w-xl"
+  maxWidth?: string; // e.g. "max-w-md", "max-w-lg", "max-w-xl", "max-w-2xl" (default: "max-w-full sm:max-w-xl md:max-w-2xl")
+  contentClassName?: string;
+}
+
+export const Drawer: React.FC<DrawerProps> = ({
+  isOpen,
+  onClose,
+  title,
+  subtitle,
+  icon,
+  badge,
+  headerRight,
+  customHeader,
+  footer,
+  children,
+  width,
+  maxWidth,
+  contentClassName = 'p-4 sm:p-6 space-y-4',
+}) => {
+  const panelWidth = width || maxWidth || 'w-full max-w-full sm:max-w-xl md:max-w-2xl';
+  const [isRendered, setIsRendered] = useState(isOpen);
+  const [isClosing, setIsClosing] = useState(false);
+
+  // Sync render state immediately when isOpen becomes true
+  if (isOpen && !isRendered) {
+    setIsRendered(true);
+    setIsClosing(false);
+  }
+
+  const handleClose = () => {
+    if (isClosing) return;
+    setIsClosing(true);
+    setTimeout(() => {
+      onClose();
+      setIsRendered(false);
+      setIsClosing(false);
+    }, 260);
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') handleClose();
+      };
+      window.addEventListener('keydown', handleKeyDown);
+
+      return () => {
+        window.removeEventListener('keydown', handleKeyDown);
+        document.body.style.overflow = '';
+      };
+    } else if (isRendered && !isClosing) {
+      setIsClosing(true);
+      const timer = setTimeout(() => {
+        setIsRendered(false);
+        setIsClosing(false);
+        document.body.style.overflow = '';
+      }, 260);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen]);
+
+  if (!isRendered) return null;
+
+  const drawerContent = (
+    <div className="fixed inset-0 z-[9999] flex justify-end">
+      {/* Semi-transparent backdrop with smooth fade animation */}
+      <div
+        className={`fixed inset-0 bg-black/65 backdrop-blur-xs cursor-pointer ${
+          isClosing ? 'animate-backdrop-out pointer-events-none' : 'animate-backdrop-in'
+        }`}
+        onClick={handleClose}
+      />
+
+      {/* Slide-out Drawer Panel with fluid hardware-accelerated spring slide */}
+      <div
+        className={`relative z-10 ${panelWidth} h-full bg-[#0a0f1d] border-l border-white/10 shadow-2xl shadow-black flex flex-col overflow-hidden ${
+          isClosing ? 'animate-drawer-out' : 'animate-drawer-in'
+        }`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        {customHeader ? (
+          customHeader
+        ) : (
+          <div className="p-4 sm:p-5 border-b border-white/10 flex items-center justify-between gap-3 bg-gradient-to-r from-slate-900 via-[#0a0f1d] to-slate-900 shrink-0">
+            <div className="flex items-center gap-3 min-w-0">
+              {icon && (
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 font-black shadow-lg shadow-emerald-500/20 shrink-0">
+                  {icon}
+                </div>
+              )}
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-base sm:text-lg font-black text-white tracking-tight truncate">
+                    {title}
+                  </h2>
+                  {badge}
+                </div>
+                {subtitle && (
+                  <p className="text-[11px] text-slate-400 truncate">
+                    {subtitle}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              {headerRight}
+              <button
+                type="button"
+                onClick={handleClose}
+                aria-label="Close drawer"
+                className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Scrollable Content Body */}
+        <div className={`flex-1 overflow-y-auto ${contentClassName}`}>
+          {children}
+        </div>
+
+        {/* Optional Footer */}
+        {footer && (
+          <div className="p-3.5 sm:p-4 border-t border-white/10 bg-slate-950/80 flex items-center justify-end gap-2 text-xs shrink-0">
+            {footer}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  if (typeof document !== 'undefined') {
+    return createPortal(drawerContent, document.body);
+  }
+  return drawerContent;
+};

@@ -26,6 +26,7 @@ import type { CalendarEvent } from '../types';
 import { usePWA } from '../context/PWAContext';
 import { api } from '../lib/api';
 import { useFabAutoClose } from '../hooks/useFabAutoClose';
+import { Drawer } from '../components/ui/Drawer';
 
 /**
  * Natural language parser for calendar events (fallback when Gemini is offline or unconfigured)
@@ -733,197 +734,173 @@ export const CalendarPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Unified Add / Edit Event Bottom Sheet */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="w-full max-w-lg bg-slate-900 border-t border-white/15 rounded-t-3xl p-5 pb-8 shadow-2xl animate-in slide-in-from-bottom duration-200 max-h-[90vh] overflow-y-auto space-y-4">
-            {/* Top Drag Handle */}
-            <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto" />
-
-            {/* Bottom Sheet Header */}
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
-                  <CalendarIcon className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-white">
-                    {editingEventId ? 'Edit Event' : 'Schedule Event'}
-                  </h3>
-                  <p className="text-xs text-slate-400">
-                    {editingEventId ? 'Update event details' : 'Add to family calendar'}
-                  </p>
-                </div>
-              </div>
-
+      {/* Unified Add / Edit Event Drawer */}
+      <Drawer
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        title={editingEventId ? 'Edit Event' : 'Schedule Event'}
+        subtitle={editingEventId ? 'Update event details' : 'Add to family calendar'}
+        icon={<CalendarIcon className="w-5 h-5 text-emerald-400" />}
+        footer={
+          <div className="w-full flex items-center justify-between gap-3">
+            {editingEventId ? (
               <button
-                onClick={() => setIsModalOpen(false)}
-                className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+                type="button"
+                onClick={async () => {
+                  await handleDeleteEvent(editingEventId);
+                  setIsModalOpen(false);
+                }}
+                className="min-h-[40px] px-3.5 py-2 rounded-xl text-xs font-semibold text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 transition-colors flex items-center gap-1.5 cursor-pointer"
               >
-                <X className="w-5 h-5" />
+                <Trash2 className="w-4 h-4" />
+                <span>Delete</span>
+              </button>
+            ) : (
+              <div />
+            )}
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="min-h-[40px] px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                form="event-form"
+                disabled={!formTitle.trim() || isSaving}
+                className="min-h-[40px] px-5 py-2 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 shadow-md shadow-emerald-500/20 flex items-center gap-1.5 transition-all cursor-pointer"
+              >
+                {isSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                <span>{editingEventId ? 'Save' : 'Add Event'}</span>
               </button>
             </div>
-
-            {/* EVENT FORM */}
-            <form onSubmit={handleSaveModal} className="space-y-3.5">
-              {/* Title */}
-              <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-1">
-                  Event Title *
-                </label>
-                <input
-                  type="text"
-                  required
-                  autoFocus
-                  placeholder="e.g. Soccer game, Dentist, Family Dinner..."
-                  value={formTitle}
-                  onChange={(e) => setFormTitle(e.target.value)}
-                  className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
-                />
-              </div>
-
-              {/* Date & Member */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-semibold text-slate-300 block mb-1">
-                    Date *
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={formDate}
-                    onChange={(e) => setFormDate(e.target.value)}
-                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-slate-300 block mb-1">
-                    Assign Member
-                  </label>
-                  <select
-                    value={formAssignedUser}
-                    onChange={(e) => setFormAssignedUser(e.target.value)}
-                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
-                  >
-                    <option value="">Whole Family</option>
-                    {users.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* All Day Toggle */}
-              <div className="flex items-center justify-between py-0.5 px-0.5">
-                <label className="text-xs font-semibold text-slate-300 cursor-pointer select-none">
-                  All Day Event
-                </label>
-                <input
-                  type="checkbox"
-                  checked={formIsAllDay}
-                  onChange={(e) => setFormIsAllDay(e.target.checked)}
-                  className="w-4 h-4 rounded text-emerald-500 bg-slate-950 border-white/20 focus:ring-emerald-500"
-                />
-              </div>
-
-              {/* Times */}
-              {!formIsAllDay && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs font-semibold text-slate-300 block mb-1">
-                      Start Time
-                    </label>
-                    <input
-                      type="time"
-                      value={formStartTime}
-                      onChange={(e) => setFormStartTime(e.target.value)}
-                      className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-slate-300 block mb-1">
-                      End Time
-                    </label>
-                    <input
-                      type="time"
-                      value={formEndTime}
-                      onChange={(e) => setFormEndTime(e.target.value)}
-                      className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Location */}
-              <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-1">
-                  Location (Optional)
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Park, School, Dr. Smith Office..."
-                  value={formLocation}
-                  onChange={(e) => setFormLocation(e.target.value)}
-                  className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
-                />
-              </div>
-
-              {/* Notes / Description */}
-              <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-1">
-                  Notes (Optional)
-                </label>
-                <textarea
-                  rows={2}
-                  placeholder="Additional notes or details..."
-                  value={formDescription}
-                  onChange={(e) => setFormDescription(e.target.value)}
-                  className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 resize-none"
-                />
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex items-center justify-between gap-3 pt-3 border-t border-white/10">
-                {editingEventId ? (
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      await handleDeleteEvent(editingEventId);
-                      setIsModalOpen(false);
-                    }}
-                    className="min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-semibold text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 transition-colors flex items-center gap-1.5"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    <span>Delete</span>
-                  </button>
-                ) : (
-                  <div />
-                )}
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsModalOpen(false)}
-                    className="min-h-[44px] px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={!formTitle.trim() || isSaving}
-                    className="min-h-[44px] px-5 py-2 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 shadow-md shadow-emerald-500/20 flex items-center gap-1.5 transition-all"
-                  >
-                    {isSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                    <span>{editingEventId ? 'Save' : 'Add Event'}</span>
-                  </button>
-                </div>
-              </div>
-            </form>
           </div>
-        </div>
-      )}
+        }
+      >
+        {/* EVENT FORM */}
+        <form id="event-form" onSubmit={handleSaveModal} className="space-y-3.5">
+          {/* Title */}
+          <div>
+            <label className="text-xs font-semibold text-slate-300 block mb-1">
+              Event Title *
+            </label>
+            <input
+              type="text"
+              required
+              autoFocus
+              placeholder="e.g. Soccer game, Dentist, Family Dinner..."
+              value={formTitle}
+              onChange={(e) => setFormTitle(e.target.value)}
+              className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+            />
+          </div>
+
+          {/* Date & Member */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-semibold text-slate-300 block mb-1">
+                Date *
+              </label>
+              <input
+                type="date"
+                required
+                value={formDate}
+                onChange={(e) => setFormDate(e.target.value)}
+                className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-slate-300 block mb-1">
+                Assign Member
+              </label>
+              <select
+                value={formAssignedUser}
+                onChange={(e) => setFormAssignedUser(e.target.value)}
+                className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
+              >
+                <option value="">Whole Family</option>
+                {users.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* All Day Toggle */}
+          <div className="flex items-center justify-between py-0.5 px-0.5">
+            <label className="text-xs font-semibold text-slate-300 cursor-pointer select-none">
+              All Day Event
+            </label>
+            <input
+              type="checkbox"
+              checked={formIsAllDay}
+              onChange={(e) => setFormIsAllDay(e.target.checked)}
+              className="w-4 h-4 rounded text-emerald-500 bg-slate-950 border-white/20 focus:ring-emerald-500"
+            />
+          </div>
+
+          {/* Times */}
+          {!formIsAllDay && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1">
+                  Start Time
+                </label>
+                <input
+                  type="time"
+                  value={formStartTime}
+                  onChange={(e) => setFormStartTime(e.target.value)}
+                  className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1">
+                  End Time
+                </label>
+                <input
+                  type="time"
+                  value={formEndTime}
+                  onChange={(e) => setFormEndTime(e.target.value)}
+                  className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Location */}
+          <div>
+            <label className="text-xs font-semibold text-slate-300 block mb-1">
+              Location (Optional)
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. Park, School, Dr. Smith Office..."
+              value={formLocation}
+              onChange={(e) => setFormLocation(e.target.value)}
+              className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+            />
+          </div>
+
+          {/* Notes / Description */}
+          <div>
+            <label className="text-xs font-semibold text-slate-300 block mb-1">
+              Notes (Optional)
+            </label>
+            <textarea
+              rows={2}
+              placeholder="Additional notes or details..."
+              value={formDescription}
+              onChange={(e) => setFormDescription(e.target.value)}
+              className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 resize-none"
+            />
+          </div>
+        </form>
+      </Drawer>
 
       {/* Floating Feedback Toast */}
       {assistantFeedback && (

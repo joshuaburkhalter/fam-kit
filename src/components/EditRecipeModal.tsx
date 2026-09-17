@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
-import { X, Plus, Trash2, Loader2, ChefHat, Check } from 'lucide-react';
+import { Drawer } from './ui/Drawer';
+import { Plus, Trash2, Loader2, ChefHat, Check } from 'lucide-react';
 import type { Recipe } from '../types';
 import { api } from '../lib/api';
 
@@ -53,8 +53,6 @@ export const EditRecipeModal: React.FC<EditRecipeModalProps> = ({
     setInstructions((recipe.instructions || []).slice());
     setError(null);
   }, [recipe]);
-
-  if (!isOpen) return null;
 
   const handleAddIngredient = () => {
     setIngredients((prev) => [...prev, { item: '', amount: '', unit: '' }]);
@@ -131,35 +129,50 @@ export const EditRecipeModal: React.FC<EditRecipeModalProps> = ({
     }
   };
 
-  const modalContent = (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/75 backdrop-blur-md overflow-y-auto animate-in fade-in">
-      <div className="glass-panel w-full max-w-2xl rounded-3xl p-6 border border-white/10 shadow-2xl space-y-6 my-8">
-        {/* Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-white/10">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center border border-emerald-500/20 shadow-inner">
-              <ChefHat className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="text-lg font-black text-white">Edit Recipe</h2>
-              <p className="text-xs text-slate-400">Update title, ingredients, notes, or instructions</p>
-            </div>
-          </div>
+  return (
+    <Drawer
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Edit Recipe"
+      subtitle="Update title, ingredients, notes, or instructions"
+      icon={<ChefHat className="w-5 h-5 text-emerald-400" />}
+      footer={
+        <div className="flex items-center gap-3">
           <button
+            type="button"
             onClick={onClose}
-            className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
+            className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 transition-colors cursor-pointer"
           >
-            <X className="w-4 h-4" />
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form="edit-recipe-form"
+            disabled={isSaving || !title.trim()}
+            className="px-5 py-2 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 flex items-center gap-1.5 shadow-md shadow-emerald-500/20 disabled:opacity-50 transition-all cursor-pointer"
+          >
+            {isSaving ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>Saving...</span>
+              </>
+            ) : (
+              <>
+                <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                <span>Save Recipe</span>
+              </>
+            )}
           </button>
         </div>
+      }
+    >
+      {error && (
+        <div className="p-3 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-medium">
+          {error}
+        </div>
+      )}
 
-        {error && (
-          <div className="p-3 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-medium">
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-6">
+      <form id="edit-recipe-form" onSubmit={handleSubmit} className="space-y-6">
           {/* Title & Description */}
           <div className="space-y-3.5">
             <div>
@@ -340,37 +353,7 @@ export const EditRecipeModal: React.FC<EditRecipeModalProps> = ({
             </div>
           </div>
 
-          {/* Actions */}
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/10">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 transition-colors cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isSaving || !title.trim()}
-              className="px-5 py-2 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 flex items-center gap-1.5 shadow-md shadow-emerald-500/20 disabled:opacity-50 transition-all cursor-pointer"
-            >
-              {isSaving ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Saving...</span>
-                </>
-              ) : (
-                <>
-                  <Check className="w-3.5 h-3.5 stroke-[2.5]" />
-                  <span>Save Recipe</span>
-                </>
-              )}
-            </button>
-          </div>
         </form>
-      </div>
-    </div>
+    </Drawer>
   );
-
-  return createPortal(modalContent, document.body);
 };

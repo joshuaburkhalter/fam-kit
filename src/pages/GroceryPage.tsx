@@ -18,6 +18,7 @@ import { usePWA } from '../context/PWAContext';
 import { api } from '../lib/api';
 import { useFabAutoClose } from '../hooks/useFabAutoClose';
 import { CheckSparkle, triggerHapticCheck } from '../components/CheckSparkle';
+import { Drawer } from '../components/ui/Drawer';
 
 interface GroceryDataCache {
   householdId: string;
@@ -1005,161 +1006,154 @@ export const GroceryPage: React.FC = () => {
         )}
       </div>
 
-      {/* Edit Grocery Item Modal */}
-      {editingItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="w-full max-w-md bg-slate-900 border border-white/15 rounded-3xl p-5 shadow-2xl animate-in zoom-in-95 duration-150 space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-white/10">
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <Pencil className="w-4 h-4 text-emerald-400" />
-                Edit Item
-              </h3>
-              <button
-                type="button"
-                onClick={() => setEditingItem(null)}
-                className="p-1 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveEdit} className="space-y-3.5">
-              <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                  Item Name
-                </label>
-                <input
-                  type="text"
-                  required
-                  autoFocus
-                  placeholder="e.g. Egg white protein powder"
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-medium"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                    Quantity
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. 1, 2, 0.5"
-                    value={editQuantity}
-                    onChange={(e) => setEditQuantity(e.target.value)}
-                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                    Unit
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. scoop, bag, oz, lbs"
-                    value={editUnit}
-                    onChange={(e) => setEditUnit(e.target.value)}
-                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
-                  />
-                </div>
-              </div>
-
-              {isGroceryList && localAisles.length > 0 && (
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                    Store Aisle / Category
-                  </label>
-                  <select
-                    value={editAisleId}
-                    onChange={(e) => setEditAisleId(e.target.value)}
-                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500"
-                  >
-                    <option value="">Uncategorized / Other</option>
-                    {localAisles.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                  Notes / Details
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. chocolate flavor, unsweetened"
-                  value={editNotes}
-                  onChange={(e) => setEditNotes(e.target.value)}
-                  className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
-                <button
-                  type="button"
-                  onClick={() => setEditingItem(null)}
-                  className="min-h-[42px] px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={!editName.trim() || isSavingEdit}
-                  className="min-h-[42px] bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-bold px-5 py-2 rounded-xl text-xs shadow-md shadow-emerald-500/20 flex items-center gap-1.5"
-                >
-                  {isSavingEdit && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                  <span>Save Changes</span>
-                </button>
-              </div>
-            </form>
+      {/* Edit Grocery Item Drawer */}
+      <Drawer
+        isOpen={Boolean(editingItem)}
+        onClose={() => setEditingItem(null)}
+        title="Edit Item"
+        subtitle="Update item name, quantity, unit, aisle, or notes"
+        icon={<Pencil className="w-5 h-5 text-emerald-400" />}
+        footer={
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setEditingItem(null)}
+              className="min-h-[40px] px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              form="edit-grocery-item-form"
+              disabled={!editName.trim() || isSavingEdit}
+              className="min-h-[40px] bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-bold px-5 py-2 rounded-xl text-xs shadow-md shadow-emerald-500/20 flex items-center gap-1.5 cursor-pointer"
+            >
+              {isSavingEdit && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              <span>Save Changes</span>
+            </button>
           </div>
-        </div>
-      )}
+        }
+      >
+        <form id="edit-grocery-item-form" onSubmit={handleSaveEdit} className="space-y-3.5">
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+              Item Name
+            </label>
+            <input
+              type="text"
+              required
+              autoFocus
+              placeholder="e.g. Egg white protein powder"
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-medium"
+            />
+          </div>
 
-      {/* New Custom List Bottom Sheet */}
-      {isNewListModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="w-full max-w-lg bg-slate-900 border-t border-white/15 rounded-t-3xl p-5 pb-8 shadow-2xl animate-in slide-in-from-bottom duration-200 space-y-4">
-            <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto" />
-            <h3 className="text-base font-bold text-white flex items-center gap-2">
-              <ListPlus className="w-5 h-5 text-emerald-400" />
-              Create Custom List
-            </h3>
-            <form onSubmit={handleCreateCustomList} className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                Quantity
+              </label>
               <input
                 type="text"
-                required
-                autoFocus
-                placeholder="e.g. Costco, Home Depot, Camping Gear..."
-                value={newListTitle}
-                onChange={(e) => setNewListTitle(e.target.value)}
+                placeholder="e.g. 1, 2, 0.5"
+                value={editQuantity}
+                onChange={(e) => setEditQuantity(e.target.value)}
                 className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
               />
-              <div className="flex items-center justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsNewListModalOpen(false)}
-                  className="min-h-[44px] px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={!newListTitle.trim()}
-                  className="min-h-[44px] bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-bold px-5 py-2 rounded-xl text-xs shadow-md shadow-emerald-500/20"
-                >
-                  Create List
-                </button>
-              </div>
-            </form>
+            </div>
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                Unit
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. scoop, bag, oz, lbs"
+                value={editUnit}
+                onChange={(e) => setEditUnit(e.target.value)}
+                className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+              />
+            </div>
           </div>
-        </div>
-      )}
+
+          {isGroceryList && localAisles.length > 0 && (
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                Store Aisle / Category
+              </label>
+              <select
+                value={editAisleId}
+                onChange={(e) => setEditAisleId(e.target.value)}
+                className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500"
+              >
+                <option value="">Uncategorized / Other</option>
+                {localAisles.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+              Notes / Details
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. chocolate flavor, unsweetened"
+              value={editNotes}
+              onChange={(e) => setEditNotes(e.target.value)}
+              className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+            />
+          </div>
+        </form>
+      </Drawer>
+
+      {/* New Custom List Drawer */}
+      <Drawer
+        isOpen={isNewListModalOpen}
+        onClose={() => setIsNewListModalOpen(false)}
+        title="Create Custom List"
+        subtitle="Add a specialized list for another store or activity"
+        icon={<ListPlus className="w-5 h-5 text-emerald-400" />}
+        footer={
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsNewListModalOpen(false)}
+              className="min-h-[40px] px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              form="create-list-form"
+              disabled={!newListTitle.trim()}
+              className="min-h-[40px] bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-bold px-5 py-2 rounded-xl text-xs shadow-md shadow-emerald-500/20 cursor-pointer"
+            >
+              Create List
+            </button>
+          </div>
+        }
+      >
+        <form id="create-list-form" onSubmit={handleCreateCustomList} className="space-y-3">
+          <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+            List Name
+          </label>
+          <input
+            type="text"
+            required
+            autoFocus
+            placeholder="e.g. Costco, Home Depot, Camping Gear..."
+            value={newListTitle}
+            onChange={(e) => setNewListTitle(e.target.value)}
+            className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+          />
+        </form>
+      </Drawer>
       {/* Floating Toast Notification */}
       {toastMessage && (
         <div className="fixed bottom-[calc(76px+4.5rem+env(safe-area-inset-bottom,0px))] md:bottom-20 left-4 right-4 z-50 flex justify-center pointer-events-none animate-in fade-in slide-in-from-bottom-2 duration-200">

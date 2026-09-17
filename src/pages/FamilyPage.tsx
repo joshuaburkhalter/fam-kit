@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { usePWA } from '../context/PWAContext';
 import { api } from '../lib/api';
+import { Drawer } from '../components/ui/Drawer';
 
 const AVATAR_COLORS = [
   '#10b981', // Emerald
@@ -391,33 +392,39 @@ export const FamilyPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Confirmation Modal for Removing a Member */}
-      {memberToDelete && (
-        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="glass-panel w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl border-t sm:border border-white/10 space-y-4 my-0 sm:my-auto">
-            {/* Mobile drag handle */}
-            <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mb-2 sm:hidden shrink-0" />
-
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-red-500/15 text-red-400 flex items-center justify-center border border-red-500/30 shrink-0">
-                <Trash2 className="w-5 h-5" />
+      {/* Confirmation Drawer for Removing a Member */}
+      <Drawer
+        isOpen={Boolean(memberToDelete)}
+        onClose={() => setMemberToDelete(null)}
+        width="max-w-md"
+        title="Remove Member"
+      >
+        {memberToDelete && (
+          <div className="p-5 flex flex-col justify-between h-full">
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-red-500/15 text-red-400 flex items-center justify-center border border-red-500/30 shrink-0">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Remove Family Member</h3>
+                  <p className="text-xs text-slate-400">Confirm removal of this profile</p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-base font-bold text-white">Remove Family Member</h3>
-                <p className="text-xs text-slate-400">Confirm removal of this profile</p>
+
+              <div className="text-xs text-slate-300 leading-relaxed bg-slate-950/80 p-4 rounded-2xl border border-white/5 space-y-2">
+                <p>
+                  Are you sure you want to remove <span className="text-white font-bold">{memberToDelete.name}</span> from the household?
+                </p>
+                {memberToDelete.id === currentUser?.id && (
+                  <p className="text-amber-400 font-medium">
+                    ⚠️ This is your currently active profile. After removal, your active profile will switch to another household member.
+                  </p>
+                )}
               </div>
             </div>
 
-            <p className="text-xs text-slate-300 leading-relaxed bg-slate-900/80 p-3.5 rounded-2xl border border-white/5">
-              Are you sure you want to remove <span className="text-white font-bold">{memberToDelete.name}</span> from the household?
-              {memberToDelete.id === currentUser?.id && (
-                <span className="block mt-2 text-amber-400 font-medium">
-                  ⚠️ This is your currently active profile. After removal, your active profile will switch to another household member.
-                </span>
-              )}
-            </p>
-
-            <div className="flex items-center justify-end gap-2 pt-1">
+            <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-800">
               <button
                 type="button"
                 onClick={() => setMemberToDelete(null)}
@@ -437,8 +444,8 @@ export const FamilyPage: React.FC = () => {
               </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </Drawer>
     </div>
   );
 };

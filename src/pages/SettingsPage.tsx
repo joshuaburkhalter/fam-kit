@@ -40,6 +40,7 @@ import { usePWA } from '../context/PWAContext';
 import { api } from '../lib/api';
 import { AisleManagerModal } from '../components/AisleManagerModal';
 import { EditProfileModal } from '../components/EditProfileModal';
+import { Drawer } from '../components/ui/Drawer';
 import type { User, GoogleSyncStatus, GoogleCalendarEntry, NotificationPreferences } from '../types';
 
 const AVATAR_COLORS = [
@@ -1704,339 +1705,300 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
         </a>
       </div>
 
-      {/* Add Member Modal */}
-      {showAddMemberModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="glass-panel w-full max-w-md rounded-3xl p-5 sm:p-6 shadow-2xl border border-white/10 space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-white/10">
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <Users className="w-4 h-4 text-emerald-400" />
-                Add Family Member
-              </h3>
-              <button
-                onClick={() => setShowAddMemberModal(false)}
-                className="text-slate-400 hover:text-white p-1"
+      {/* Add Member Drawer */}
+      <Drawer
+        isOpen={showAddMemberModal}
+        onClose={() => setShowAddMemberModal(false)}
+        title="Add Family Member"
+        subtitle="Invite a new member to join your household"
+        icon={<Users className="w-5 h-5 text-emerald-400" />}
+        footer={
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowAddMemberModal(false)}
+              className="px-4 py-2 rounded-xl text-xs text-slate-300 hover:bg-white/5 cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              form="add-member-form"
+              disabled={!newMemberName.trim() || isAddingMember}
+              className="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold disabled:opacity-50 cursor-pointer"
+            >
+              {isAddingMember ? 'Adding...' : 'Add Member'}
+            </button>
+          </div>
+        }
+      >
+        <form id="add-member-form" onSubmit={handleAddMember} className="space-y-3">
+          <div>
+            <label className="text-xs font-semibold text-slate-300 block mb-1">Name</label>
+            <input
+              type="text"
+              required
+              placeholder="e.g. Maya"
+              value={newMemberName}
+              onChange={(e) => setNewMemberName(e.target.value)}
+              className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-slate-300 block mb-1">
+              Username <span className="text-[10px] text-slate-500">(Optional)</span>
+            </label>
+            <div className="relative">
+              <span className="text-xs font-bold text-emerald-400 absolute left-2.5 top-1/2 -translate-y-1/2 select-none">
+                @
+              </span>
+              <input
+                type="text"
+                placeholder={newMemberName ? newMemberName.toLowerCase().replace(/\s+/g, '') : 'username'}
+                value={newMemberUsername}
+                onChange={(e) => setNewMemberUsername(e.target.value.toLowerCase().replace(/\s+/g, ''))}
+                className="w-full bg-slate-900 border border-white/10 rounded-xl pl-6 pr-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs font-semibold text-slate-300 block mb-1">Role</label>
+              <select
+                value={newMemberRole}
+                onChange={(e) => setNewMemberRole(e.target.value as any)}
+                className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
               >
-                ✕
-              </button>
+                <option value="parent">Parent</option>
+                <option value="child">Child</option>
+                <option value="member">Member</option>
+              </select>
             </div>
 
-            <form onSubmit={handleAddMember} className="space-y-3">
-              <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-1">Name</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Maya"
-                  value={newMemberName}
-                  onChange={(e) => setNewMemberName(e.target.value)}
-                  className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-1">
-                  Username <span className="text-[10px] text-slate-500">(Optional)</span>
-                </label>
-                <div className="relative">
-                  <span className="text-xs font-bold text-emerald-400 absolute left-2.5 top-1/2 -translate-y-1/2 select-none">
-                    @
-                  </span>
-                  <input
-                    type="text"
-                    placeholder={newMemberName ? newMemberName.toLowerCase().replace(/\s+/g, '') : 'username'}
-                    value={newMemberUsername}
-                    onChange={(e) => setNewMemberUsername(e.target.value.toLowerCase().replace(/\s+/g, ''))}
-                    className="w-full bg-slate-900 border border-white/10 rounded-xl pl-6 pr-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
+            <div>
+              <label className="text-xs font-semibold text-slate-300 block mb-1">Color</label>
+              <div className="flex items-center gap-1.5 pt-1.5">
+                {AVATAR_COLORS.map((c) => (
+                  <button
+                    type="button"
+                    key={c}
+                    onClick={() => setNewMemberColor(c)}
+                    style={{ backgroundColor: c }}
+                    className={`w-5 h-5 rounded-full transition-transform cursor-pointer ${
+                      newMemberColor === c ? 'scale-125 ring-2 ring-white' : 'opacity-70'
+                    }`}
                   />
-                </div>
+                ))}
               </div>
+            </div>
+          </div>
+        </form>
+      </Drawer>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-xs font-semibold text-slate-300 block mb-1">Role</label>
-                  <select
-                    value={newMemberRole}
-                    onChange={(e) => setNewMemberRole(e.target.value as any)}
-                    className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
-                  >
-                    <option value="parent">Parent</option>
-                    <option value="child">Child</option>
-                    <option value="member">Member</option>
-                  </select>
-                </div>
+      {/* Join Household Drawer */}
+      <Drawer
+        isOpen={showJoinModal}
+        onClose={() => setShowJoinModal(false)}
+        title="Join Existing Household"
+        subtitle="Enter an invite code provided by a family member"
+        icon={<LogIn className="w-5 h-5 text-indigo-400" />}
+        footer={
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowJoinModal(false)}
+              className="px-4 py-2 rounded-xl text-xs text-slate-300 hover:bg-white/5 cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              form="join-household-form"
+              disabled={!joinCode.trim() || !joinName.trim() || isJoining}
+              className="px-5 py-2 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white text-xs font-bold disabled:opacity-50 cursor-pointer"
+            >
+              {isJoining ? 'Joining...' : 'Join Household'}
+            </button>
+          </div>
+        }
+      >
+        <form id="join-household-form" onSubmit={handleJoinHousehold} className="space-y-3">
+          <div>
+            <label className="text-xs font-semibold text-slate-300 block mb-1">
+              6-Character Invite Code
+            </label>
+            <input
+              type="text"
+              required
+              maxLength={8}
+              placeholder="e.g. H5XWAE"
+              value={joinCode}
+              onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+              className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm font-mono tracking-widest uppercase text-white focus:outline-none focus:border-indigo-500"
+            />
+          </div>
 
-                <div>
-                  <label className="text-xs font-semibold text-slate-300 block mb-1">Color</label>
-                  <div className="flex items-center gap-1.5 pt-1.5">
-                    {AVATAR_COLORS.map((c) => (
-                      <button
-                        type="button"
-                        key={c}
-                        onClick={() => setNewMemberColor(c)}
-                        style={{ backgroundColor: c }}
-                        className={`w-5 h-5 rounded-full transition-transform cursor-pointer ${
-                          newMemberColor === c ? 'scale-125 ring-2 ring-white' : 'opacity-70'
-                        }`}
-                      />
-                    ))}
+          <div>
+            <label className="text-xs font-semibold text-slate-300 block mb-1">Your Name</label>
+            <input
+              type="text"
+              required
+              placeholder="Your first name"
+              value={joinName}
+              onChange={(e) => setJoinName(e.target.value)}
+              className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+            />
+          </div>
+        </form>
+      </Drawer>
+
+      {/* Delete Member Confirmation Drawer */}
+      <Drawer
+        isOpen={Boolean(memberToDelete)}
+        onClose={() => setMemberToDelete(null)}
+        title="Remove Family Member"
+        subtitle="Remove this member from your household"
+        icon={<Trash2 className="w-5 h-5 text-red-400" />}
+        footer={
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setMemberToDelete(null)}
+              disabled={isDeletingMember}
+              className="px-4 py-2 rounded-xl text-xs text-slate-300 hover:bg-white/5 cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmDeleteMember}
+              disabled={isDeletingMember}
+              className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+            >
+              {isDeletingMember ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+              <span>Remove</span>
+            </button>
+          </div>
+        }
+      >
+        <div className="space-y-3">
+          <p className="text-xs text-slate-300 leading-relaxed bg-slate-900/80 p-3.5 rounded-2xl border border-white/5">
+            Are you sure you want to remove <span className="text-white font-bold">{memberToDelete?.name}</span> from {household?.name || 'this household'}?
+          </p>
+          <p className="text-[11px] text-slate-400">
+            Their assigned tasks and events will remain in the family schedule, but they will no longer have access to this household.
+          </p>
+        </div>
+      </Drawer>
+
+      {/* Choose Google Calendars Drawer */}
+      <Drawer
+        isOpen={Boolean(calendarModalUser)}
+        onClose={() => setCalendarModalUser(null)}
+        title="Choose Calendars"
+        subtitle={calendarModalUser ? `Select which Google calendars sync for ${calendarModalUser.name}` : ''}
+        icon={<Calendar className="w-5 h-5 text-blue-400" />}
+        footer={
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setCalendarModalUser(null)}
+              className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={isSavingCalendars || isLoadingCalendars}
+              onClick={handleSaveCalendarSelection}
+              className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition-all shadow-md shadow-emerald-500/20 flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+            >
+              {isSavingCalendars && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              <span>Save & Sync</span>
+            </button>
+          </div>
+        }
+      >
+        <div className="space-y-2">
+          {isLoadingCalendars ? (
+            <div className="py-12 flex flex-col items-center justify-center gap-2 text-slate-400">
+              <Loader2 className="w-6 h-6 animate-spin text-emerald-400" />
+              <span className="text-xs">Loading your Google calendars...</span>
+            </div>
+          ) : userCalendars.length === 0 ? (
+            <div className="py-8 text-center text-xs text-slate-500">
+              No calendars found for this Google account.
+            </div>
+          ) : (
+            userCalendars.map((cal) => (
+              <div
+                key={cal.id}
+                className={`p-3 rounded-2xl border transition-all space-y-2.5 ${
+                  cal.selected
+                    ? 'bg-emerald-500/10 border-emerald-500/35 ring-1 ring-emerald-500/20'
+                    : 'bg-slate-950/40 border-white/5 opacity-70 hover:opacity-100'
+                }`}
+              >
+                <div
+                  onClick={() => handleToggleCalendar(cal.id)}
+                  className="flex items-center justify-between gap-3 cursor-pointer"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div
+                      className="w-3.5 h-3.5 rounded-full shrink-0 ring-2 ring-white/20"
+                      style={{ backgroundColor: cal.backgroundColor || '#10b981' }}
+                    />
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-semibold text-white truncate">{cal.summary}</span>
+                        {cal.primary && (
+                          <span className="text-[9px] bg-blue-500/20 text-blue-300 px-1.5 py-0.2 rounded-full font-semibold shrink-0">
+                            Primary
+                          </span>
+                        )}
+                      </div>
+                      {cal.description && (
+                        <p className="text-[11px] text-slate-400 truncate">{cal.description}</p>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-white/10">
-                <button
-                  type="button"
-                  onClick={() => setShowAddMemberModal(false)}
-                  className="px-4 py-2 rounded-xl text-xs text-slate-300 hover:bg-white/5"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={!newMemberName.trim() || isAddingMember}
-                  className="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold disabled:opacity-50"
-                >
-                  {isAddingMember ? 'Adding...' : 'Add Member'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Join Household Modal */}
-      {showJoinModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="glass-panel w-full max-w-md rounded-3xl p-5 sm:p-6 shadow-2xl border border-white/10 space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-white/10">
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <LogIn className="w-4 h-4 text-indigo-400" />
-                Join Existing Household
-              </h3>
-              <button
-                onClick={() => setShowJoinModal(false)}
-                className="text-slate-400 hover:text-white p-1"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleJoinHousehold} className="space-y-3">
-              <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-1">
-                  6-Character Invite Code
-                </label>
-                <input
-                  type="text"
-                  required
-                  maxLength={8}
-                  placeholder="e.g. H5XWAE"
-                  value={joinCode}
-                  onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                  className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm font-mono tracking-widest uppercase text-white focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-1">Your Name</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Your first name"
-                  value={joinName}
-                  onChange={(e) => setJoinName(e.target.value)}
-                  className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-white/10">
-                <button
-                  type="button"
-                  onClick={() => setShowJoinModal(false)}
-                  className="px-4 py-2 rounded-xl text-xs text-slate-300 hover:bg-white/5"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={!joinCode.trim() || !joinName.trim() || isJoining}
-                  className="px-5 py-2 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white text-xs font-bold disabled:opacity-50"
-                >
-                  {isJoining ? 'Joining...' : 'Join Household'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Delete Member Confirmation Modal */}
-      {memberToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="glass-panel w-full max-w-md rounded-3xl p-5 sm:p-6 shadow-2xl border border-white/10 space-y-4">
-            <h3 className="text-base font-bold text-white flex items-center gap-2">
-              <Trash2 className="w-4 h-4 text-red-400" />
-              Remove Family Member
-            </h3>
-
-            <p className="text-xs text-slate-300 leading-relaxed bg-slate-900/80 p-3 rounded-2xl border border-white/5">
-              Are you sure you want to remove <span className="text-white font-bold">{memberToDelete.name}</span> from {household?.name || 'this household'}?
-            </p>
-
-            <div className="flex items-center justify-end gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => setMemberToDelete(null)}
-                disabled={isDeletingMember}
-                className="px-4 py-2 rounded-xl text-xs text-slate-300 hover:bg-white/5"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmDeleteMember}
-                disabled={isDeletingMember}
-                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold disabled:opacity-50 flex items-center gap-1.5"
-              >
-                {isDeletingMember ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-                <span>Remove</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Choose Google Calendars Modal */}
-      {calendarModalUser && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-150 p-0 sm:p-4">
-          <div className="w-full max-w-md bg-slate-900 border border-white/15 rounded-t-3xl sm:rounded-3xl p-5 pb-8 shadow-2xl animate-in slide-in-from-bottom duration-200 max-h-[85vh] flex flex-col space-y-4">
-            {/* Top Drag Handle (Mobile) */}
-            <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto sm:hidden" />
-
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-xl bg-blue-500/15 text-blue-400 border border-blue-500/20">
-                  <Calendar className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-white">Choose Calendars</h3>
-                  <p className="text-xs text-slate-400">
-                    Select which Google calendars sync for {calendarModalUser.name}
-                  </p>
-                </div>
-              </div>
-
-              <button
-                onClick={() => setCalendarModalUser(null)}
-                className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Calendar List */}
-            <div className="flex-1 overflow-y-auto space-y-2 py-1 pr-1">
-              {isLoadingCalendars ? (
-                <div className="py-12 flex flex-col items-center justify-center gap-2 text-slate-400">
-                  <Loader2 className="w-6 h-6 animate-spin text-emerald-400" />
-                  <span className="text-xs">Loading your Google calendars...</span>
-                </div>
-              ) : userCalendars.length === 0 ? (
-                <div className="py-8 text-center text-xs text-slate-500">
-                  No calendars found for this Google account.
-                </div>
-              ) : (
-                userCalendars.map((cal) => (
                   <div
-                    key={cal.id}
-                    className={`p-3 rounded-2xl border transition-all space-y-2.5 ${
+                    className={`w-5 h-5 rounded-lg border flex items-center justify-center shrink-0 transition-colors ${
                       cal.selected
-                        ? 'bg-emerald-500/10 border-emerald-500/35 ring-1 ring-emerald-500/20'
-                        : 'bg-slate-950/40 border-white/5 opacity-70 hover:opacity-100'
+                        ? 'bg-emerald-500 border-emerald-500 text-slate-950 font-black'
+                        : 'border-white/20 bg-white/5'
                     }`}
                   >
-                    <div
-                      onClick={() => handleToggleCalendar(cal.id)}
-                      className="flex items-center justify-between gap-3 cursor-pointer"
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div
-                          className="w-3.5 h-3.5 rounded-full shrink-0 ring-2 ring-white/20"
-                          style={{ backgroundColor: cal.backgroundColor || '#10b981' }}
-                        />
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs font-semibold text-white truncate">{cal.summary}</span>
-                            {cal.primary && (
-                              <span className="text-[9px] bg-blue-500/20 text-blue-300 px-1.5 py-0.2 rounded-full font-semibold shrink-0">
-                                Primary
-                              </span>
-                            )}
-                          </div>
-                          {cal.description && (
-                            <p className="text-[11px] text-slate-400 truncate">{cal.description}</p>
-                          )}
-                        </div>
-                      </div>
-
-                      <div
-                        className={`w-5 h-5 rounded-lg border flex items-center justify-center shrink-0 transition-colors ${
-                          cal.selected
-                            ? 'bg-emerald-500 border-emerald-500 text-slate-950 font-black'
-                            : 'border-white/20 bg-white/5'
-                        }`}
-                      >
-                        {cal.selected && <Check className="w-3 h-3 stroke-[3]" />}
-                      </div>
-                    </div>
-
-                    {/* Member Assignment Dropdown (shown when calendar is selected) */}
-                    {cal.selected && (
-                      <div className="pt-2 border-t border-white/5 flex items-center justify-between gap-2">
-                        <span className="text-[11px] text-slate-400 font-medium">Assign events to:</span>
-                        <select
-                          value={cal.assignedMemberId || ''}
-                          onChange={(e) => handleChangeCalendarMember(cal.id, e.target.value)}
-                          className="bg-slate-900 border border-white/10 rounded-xl px-2.5 py-1 text-xs text-emerald-300 font-semibold focus:outline-none focus:border-emerald-500/50 cursor-pointer"
-                        >
-                          <option value="">Whole Family / Shared</option>
-                          {users.map((mem) => (
-                            <option key={mem.id} value={mem.id}>
-                              {mem.name} {mem.id === calendarModalUser.id ? '(You)' : ''}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
+                    {cal.selected && <Check className="w-3 h-3 stroke-[3]" />}
                   </div>
-                ))
-              )}
-            </div>
+                </div>
 
-            {/* Actions */}
-            <div className="pt-2 border-t border-white/10 flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setCalendarModalUser(null)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={isSavingCalendars || isLoadingCalendars}
-                onClick={handleSaveCalendarSelection}
-                className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition-all shadow-md shadow-emerald-500/20 flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
-              >
-                {isSavingCalendars && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                <span>Save & Sync</span>
-              </button>
-            </div>
-          </div>
+                {/* Member Assignment Dropdown (shown when calendar is selected) */}
+                {cal.selected && (
+                  <div className="pt-2 border-t border-white/5 flex items-center justify-between gap-2">
+                    <span className="text-[11px] text-slate-400 font-medium">Assign events to:</span>
+                    <select
+                      value={cal.assignedMemberId || ''}
+                      onChange={(e) => handleChangeCalendarMember(cal.id, e.target.value)}
+                      className="bg-slate-900 border border-white/10 rounded-xl px-2.5 py-1 text-xs text-emerald-300 font-semibold focus:outline-none focus:border-emerald-500/50 cursor-pointer"
+                    >
+                      <option value="">Whole Family / Shared</option>
+                      {users.map((mem) => (
+                        <option key={mem.id} value={mem.id}>
+                          {mem.name} {mem.id === calendarModalUser?.id ? '(You)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+            ))
+          )}
         </div>
-      )}
+      </Drawer>
 
       {/* Aisle Reordering Modal */}
       {household && (

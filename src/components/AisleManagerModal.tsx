@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { Drawer } from './ui/Drawer';
 import {
-  X,
   ArrowUp,
   ArrowDown,
   Plus,
@@ -63,8 +63,6 @@ export const AisleManagerModal: React.FC<AisleManagerModalProps> = ({
     }
   }, [isOpen, householdId, initialAisles]);
 
-  if (!isOpen) return null;
-
   const moveAisle = async (index: number, direction: 'up' | 'down') => {
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
     if (targetIndex < 0 || targetIndex >= aisles.length) return;
@@ -123,42 +121,29 @@ export const AisleManagerModal: React.FC<AisleManagerModalProps> = ({
   };
 
   return (
-    <div
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-      className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-100"
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="glass-panel w-full max-w-lg rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 shadow-2xl border-t sm:border border-white/10 flex flex-col max-h-[90vh] sm:max-h-[88vh] my-0 sm:my-auto"
-      >
-        {/* Mobile drag handle */}
-        <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mb-3 sm:hidden shrink-0" />
-
-        {/* Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-white/10">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              <MoveVertical className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-white">Rearrange Store Aisles</h2>
-              <p className="text-xs text-slate-400">
-                Order aisles to match your local grocery store layout
-              </p>
-            </div>
-          </div>
+    <Drawer
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Rearrange Store Aisles"
+      subtitle="Order aisles to match your local grocery store layout"
+      icon={<MoveVertical className="w-5 h-5 text-emerald-400" />}
+      footer={
+        <div className="w-full flex items-center justify-between">
+          <span className="text-xs text-slate-400">
+            {isSaving ? 'Saving changes...' : `${aisles.length} aisles arranged`}
+          </span>
           <button
+            type="button"
             onClick={onClose}
-            className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
+            className="bg-slate-800 hover:bg-slate-700 text-white px-5 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
           >
-            <X className="w-5 h-5" />
+            Done
           </button>
         </div>
-
-        {/* Add New Aisle - Sleek Integrated Bar */}
-        <form onSubmit={handleAddAisle} className="py-3 border-b border-white/10 relative">
+      }
+    >
+      {/* Add New Aisle - Sleek Integrated Bar */}
+      <form onSubmit={handleAddAisle} className="pb-3 border-b border-white/10 relative">
           <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-slate-900/80 border border-white/10 focus-within:border-emerald-500/50 transition-all">
             {/* Clickable Color Swatch */}
             <div className="relative pl-1.5">
@@ -269,20 +254,6 @@ export const AisleManagerModal: React.FC<AisleManagerModalProps> = ({
             ))
           )}
         </div>
-
-        {/* Footer */}
-        <div className="pt-4 border-t border-white/10 flex items-center justify-between">
-          <span className="text-xs text-slate-400">
-            {isSaving ? 'Saving changes...' : `${aisles.length} aisles arranged`}
-          </span>
-          <button
-            onClick={onClose}
-            className="bg-slate-800 hover:bg-slate-700 text-white px-5 py-2 rounded-xl text-xs font-semibold transition-colors"
-          >
-            Done
-          </button>
-        </div>
-      </div>
-    </div>
+    </Drawer>
   );
 };
