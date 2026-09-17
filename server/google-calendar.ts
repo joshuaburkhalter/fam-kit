@@ -28,6 +28,20 @@ export interface GoogleCalendarEntry {
 }
 
 export const calendarTimeZoneCache = new Map<string, string>();
+export const calendarAccessRoleCache = new Map<string, string>();
+
+/**
+ * Checks if a calendar is known to be writable (owner or writer)
+ */
+export function isCalendarWritable(calendarId: string): boolean {
+  const role = calendarAccessRoleCache.get(calendarId);
+  if (role) {
+    return role === 'owner' || role === 'writer';
+  }
+  // Secondary group calendars that end in @group.calendar.google.com are often read-only subscriptions
+  // Primary email calendars or 'primary' are user-owned and writable by default
+  return calendarId === 'primary' || !calendarId.includes('@group.calendar.google.com');
+}
 
 export function getGoogleCredentials() {
   const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
@@ -347,6 +361,9 @@ export async function getUserGoogleCalendars(
       if (cal.id && cal.timeZone) {
         calendarTimeZoneCache.set(cal.id, cal.timeZone);
       }
+      if (cal.id && cal.accessRole) {
+        calendarAccessRoleCache.set(cal.id, cal.accessRole);
+      }
       const isSelected = selectedSet.has(cal.id) || (Boolean(cal.primary) && selectedSet.has('primary'));
       const assigned = memberMap[cal.id] !== undefined ? memberMap[cal.id] : userId;
 
@@ -512,6 +529,20 @@ export async function syncUserGoogleCalendar(
   const timeMax = future90.toISOString();
   let totalSynced = 0;
   const nowIso = new Date().toISOString();
+
+  // Prime timezones and access roles
+  try {
+    const listRes = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (listRes.ok) {
+      const listData = (await listRes.json()) as { items?: any[] };
+      (listData.items || []).forEach((cal) => {
+        if (cal.id && cal.timeZone) calendarTimeZoneCache.set(cal.id, cal.timeZone);
+        if (cal.id && cal.accessRole) calendarAccessRoleCache.set(cal.id, cal.accessRole);
+      });
+    }
+  } catch {}
 
   for (const calId of calendarIds) {
     // Determine which member this calendar belongs to
@@ -753,19 +784,38 @@ export function initBackgroundGoogleSync(): void {
 }
 
 /**
- * Helper to pick the first selected calendar ID from a sync record
+ * Helper to pick a writable calendar ID from a sync record
  */
 function pickFirstCalendarId(rec: GoogleSyncRecord): string {
+  let candidates: string[] = [];
   if (rec.selectedCalendarIds) {
     try {
       const ids = JSON.parse(rec.selectedCalendarIds);
-      if (Array.isArray(ids) && ids.length > 0 && ids[0]) return ids[0];
+      if (Array.isArray(ids)) candidates.push(...ids.filter(Boolean));
     } catch {}
   }
-  if (rec.selectedCalendarId) {
-    return rec.selectedCalendarId;
+  if (rec.selectedCalendarId && !candidates.includes(rec.selectedCalendarId)) {
+    candidates.push(rec.selectedCalendarId);
   }
-  return 'primary';
+  if (rec.googleEmail && !candidates.includes(rec.googleEmail)) {
+    candidates.push(rec.googleEmail);
+  }
+  if (!candidates.includes('primary')) {
+    candidates.push('primary');
+  }
+
+  // 1. Prefer primary or user's email if writable
+  const primaryOrEmail = candidates.find(
+    (id) => (id === 'primary' || id === rec.googleEmail) && isCalendarWritable(id)
+  );
+  if (primaryOrEmail) return primaryOrEmail;
+
+  // 2. Otherwise find the first candidate that is writable
+  const writableCandidate = candidates.find((id) => isCalendarWritable(id));
+  if (writableCandidate) return writableCandidate;
+
+  // 3. Fallback to rec.googleEmail or 'primary'
+  return rec.googleEmail || 'primary';
 }
 
 /**
@@ -794,7 +844,7 @@ export function resolveTargetGoogleCalendar(
         try {
           const map = JSON.parse(rec.calendarMemberMap);
           for (const [calId, mappedMemberId] of Object.entries(map)) {
-            if (mappedMemberId === event.assignedMemberId) {
+            if (mappedMemberId === event.assignedMemberId && isCalendarWritable(calId)) {
               return { record: rec, calendarId: calId };
             }
           }
@@ -817,7 +867,7 @@ export function resolveTargetGoogleCalendar(
         try {
           const map = JSON.parse(creatorRec.calendarMemberMap);
           for (const [calId, mapped] of Object.entries(map)) {
-            if (mapped === 'family' || mapped === null) {
+            if ((mapped === 'family' || mapped === null) && isCalendarWritable(calId)) {
               return { record: creatorRec, calendarId: calId };
             }
           }
@@ -827,13 +877,13 @@ export function resolveTargetGoogleCalendar(
     }
   }
 
-  // 3. Fallback: check if any connected account has a calendar mapped to "family"
+  // 3. Fallback: check if any connected account has a calendar mapped to "family" (must be writable)
   for (const rec of records) {
     if (rec.calendarMemberMap) {
       try {
         const map = JSON.parse(rec.calendarMemberMap);
         for (const [calId, mapped] of Object.entries(map)) {
-          if (mapped === 'family') {
+          if (mapped === 'family' && isCalendarWritable(calId)) {
             return { record: rec, calendarId: calId };
           }
         }
@@ -841,7 +891,7 @@ export function resolveTargetGoogleCalendar(
     }
   }
 
-  // 4. Fallback to first connected Google account
+  // 4. Fallback to first connected Google account using writable priority
   return { record: records[0], calendarId: pickFirstCalendarId(records[0]) };
 }
 
@@ -1011,6 +1061,50 @@ export async function pushEventToGoogleCalendar(
 
     if (!res.ok) {
       const errText = await res.text();
+      // If target calendar is read-only, cache and retry with user's primary/email calendar
+      if (res.status === 403 && (errText.includes('requiredAccessLevel') || errText.includes('writer access'))) {
+        calendarAccessRoleCache.set(target.calendarId, 'reader');
+        const fallbackCalId = target.record.googleEmail || 'primary';
+        if (target.calendarId !== fallbackCalId && target.calendarId !== 'primary') {
+          console.warn(
+            `[pushEventToGoogleCalendar] Calendar "${target.calendarId}" is read-only. Retrying push with primary "${fallbackCalId}"...`
+          );
+          const fallbackTz = await getCalendarTimeZone(fallbackCalId, accessToken);
+          const fallbackResource = buildGoogleEventResource(event, fallbackTz || targetTz);
+          const retryUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(fallbackCalId)}/events`;
+          try {
+            const retryRes = await fetch(retryUrl, {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(fallbackResource),
+            });
+            if (retryRes.ok) {
+              const retryGcal = (await retryRes.json()) as { id?: string };
+              if (retryGcal?.id) {
+                execute(
+                  `UPDATE calendar_events
+                   SET googleEventId = ?,
+                       googleCalendarId = ?,
+                       isGoogleEvent = 1
+                   WHERE id = ?`,
+                  [retryGcal.id, fallbackCalId, event.id]
+                );
+                saveDb();
+                return { googleEventId: retryGcal.id, googleCalendarId: fallbackCalId };
+              }
+            } else {
+              const retryErr = await retryRes.text();
+              console.warn(`[pushEventToGoogleCalendar] Fallback push also failed (${retryRes.status}):`, retryErr);
+            }
+          } catch (retryErr) {
+            console.warn('[pushEventToGoogleCalendar] Network error on retry:', retryErr);
+          }
+        }
+      }
+
       console.warn(`[pushEventToGoogleCalendar] Google API error (${res.status}) for "${event.title}" (${event.id}):`, errText);
       return null;
     }
