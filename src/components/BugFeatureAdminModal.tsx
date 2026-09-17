@@ -85,25 +85,52 @@ export const BugFeatureAdminModal: React.FC<BugFeatureAdminModalProps> = ({
     }
   };
 
+  const [isRendered, setIsRendered] = useState(false);
+  const [isVisible, setIsVisible] = useState(false);
+
+  const handleClose = () => {
+    setIsVisible(false);
+    setTimeout(() => {
+      onClose();
+    }, 320);
+  };
+
   useEffect(() => {
     if (isOpen) {
+      setIsRendered(true);
       loadRequests();
       setIsCreatingNew(false);
       setEditingId(null);
       document.body.style.overflow = 'hidden';
 
+      // Smooth double-RAF to ensure DOM is painted before slide-in transform starts
+      const animTimer = requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setIsVisible(true);
+        });
+      });
+
       const handleKeyDown = (e: KeyboardEvent) => {
-        if (e.key === 'Escape') onClose();
+        if (e.key === 'Escape') handleClose();
       };
       window.addEventListener('keydown', handleKeyDown);
+
       return () => {
-        document.body.style.overflow = '';
+        cancelAnimationFrame(animTimer);
         window.removeEventListener('keydown', handleKeyDown);
+        document.body.style.overflow = '';
       };
+    } else {
+      setIsVisible(false);
+      const timer = setTimeout(() => {
+        setIsRendered(false);
+        document.body.style.overflow = '';
+      }, 350);
+      return () => clearTimeout(timer);
     }
   }, [isOpen]);
 
-  if (!isOpen) return null;
+  if (!isRendered) return null;
 
   const handleStartReply = (req: FeedbackRequest) => {
     setEditingId(req.id);
@@ -310,15 +337,19 @@ export const BugFeatureAdminModal: React.FC<BugFeatureAdminModalProps> = ({
 
   const drawerContent = (
     <div className="fixed inset-0 z-[9999] flex justify-end">
-      {/* Semi-transparent backdrop with click-outside to close */}
+      {/* Semi-transparent backdrop with smooth fade transition */}
       <div
-        className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
-        onClick={onClose}
+        className={`fixed inset-0 bg-black/65 backdrop-blur-xs transition-opacity duration-300 ease-out cursor-pointer ${
+          isVisible ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        }`}
+        onClick={handleClose}
       />
 
-      {/* Slide-out Drawer Panel */}
+      {/* Slide-out Drawer Panel with fluid cubic-bezier spring slide */}
       <div
-        className="relative z-10 w-full max-w-full sm:max-w-xl md:max-w-2xl h-full bg-[#0a0f1d] border-l border-white/10 shadow-2xl shadow-black flex flex-col overflow-hidden animate-in slide-in-from-right duration-300 ease-out"
+        className={`relative z-10 w-full max-w-full sm:max-w-xl md:max-w-2xl h-full bg-[#0a0f1d] border-l border-white/10 shadow-2xl shadow-black flex flex-col overflow-hidden transition-transform duration-350 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+          isVisible ? 'translate-x-0' : 'translate-x-full'
+        }`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -362,7 +393,7 @@ export const BugFeatureAdminModal: React.FC<BugFeatureAdminModalProps> = ({
             </button>
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
             >
               <X className="w-4 h-4" />
@@ -844,7 +875,7 @@ export const BugFeatureAdminModal: React.FC<BugFeatureAdminModalProps> = ({
             Logged in as: <strong className="text-slate-300">{currentUser?.name}</strong> ({currentUser?.email || currentUser?.username})
           </span>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold transition-colors cursor-pointer"
           >
             Close Drawer
