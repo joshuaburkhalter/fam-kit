@@ -10,14 +10,11 @@ import {
   Clock,
   Send,
   Trash2,
-  Search,
   MessageSquare,
   AlertTriangle,
   Flame,
   Check,
-  Filter,
   ChevronUp,
-  ArrowUpDown,
 } from 'lucide-react';
 import type { FeedbackRequest } from '../types';
 import { isUserAdmin } from '../types';
@@ -39,12 +36,6 @@ export const BugFeatureAdminModal: React.FC<BugFeatureAdminModalProps> = ({
   const [requests, setRequests] = useState<FeedbackRequest[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Filters & Search
-  const [typeFilter, setTypeFilter] = useState<'all' | 'bug' | 'feature'>('all');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [sortBy, setSortBy] = useState<'votes' | 'newest'>('votes');
-  const [searchQuery, setSearchQuery] = useState('');
   const [votingId, setVotingId] = useState<string | null>(null);
 
   const isAdmin = isUserAdmin(currentUser);
@@ -240,29 +231,12 @@ export const BugFeatureAdminModal: React.FC<BugFeatureAdminModalProps> = ({
     }
   };
 
-  // Filter & Search Logic
-  const filteredRequests = requests
-    .filter((r) => {
-      if (typeFilter !== 'all' && r.type !== typeFilter) return false;
-      if (statusFilter !== 'all' && r.status !== statusFilter) return false;
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchesTitle = r.title.toLowerCase().includes(q);
-        const matchesDesc = r.description.toLowerCase().includes(q);
-        const matchesUser = (r.submitted_by_user_name || '').toLowerCase().includes(q);
-        const matchesHousehold = (r.household_name || '').toLowerCase().includes(q);
-        return matchesTitle || matchesDesc || matchesUser || matchesHousehold;
-      }
-      return true;
-    })
-    .sort((a, b) => {
-      if (sortBy === 'votes') {
-        const diff = (b.upvotes || 0) - (a.upvotes || 0);
-        if (diff !== 0) return diff;
-        return new Date(b.created_at || b.createdAt || 0).getTime() - new Date(a.created_at || a.createdAt || 0).getTime();
-      }
-      return new Date(b.created_at || b.createdAt || 0).getTime() - new Date(a.created_at || a.createdAt || 0).getTime();
-    });
+  // Sorted list of requests (most upvoted first, then newest)
+  const filteredRequests = [...requests].sort((a, b) => {
+    const diff = (b.upvotes || 0) - (a.upvotes || 0);
+    if (diff !== 0) return diff;
+    return new Date(b.created_at || b.createdAt || 0).getTime() - new Date(a.created_at || a.createdAt || 0).getTime();
+  });
 
   const getPriorityBadge = (priority: string) => {
     switch (priority) {
@@ -549,112 +523,12 @@ export const BugFeatureAdminModal: React.FC<BugFeatureAdminModalProps> = ({
         ) : (
           /* List & Management View */
           <div className="flex-1 flex flex-col min-h-0">
-            {/* Filter Bar */}
-            <div className="p-3 sm:p-4 border-b border-white/10 bg-slate-950/40 space-y-3">
-              {/* Category Tabs */}
-              <div className="flex items-center justify-between gap-2 overflow-x-auto pb-0.5">
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={() => setTypeFilter('all')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                      typeFilter === 'all'
-                        ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
-                        : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-white/5'
-                    }`}
-                  >
-                    All ({requests.length})
-                  </button>
-                  <button
-                    onClick={() => setTypeFilter('bug')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                      typeFilter === 'bug'
-                        ? 'bg-rose-500 text-slate-950 shadow-md shadow-rose-500/20'
-                        : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-white/5'
-                    }`}
-                  >
-                    <Bug className="w-3.5 h-3.5 text-rose-400" />
-                    <span>Bugs ({requests.filter((r) => r.type === 'bug').length})</span>
-                    {openBugsCount > 0 && (
-                      <span className="w-2 h-2 rounded-full bg-rose-400 animate-pulse" />
-                    )}
-                  </button>
-                  <button
-                    onClick={() => setTypeFilter('feature')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                      typeFilter === 'feature'
-                        ? 'bg-purple-500 text-white shadow-md shadow-purple-500/20'
-                        : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-white/5'
-                    }`}
-                  >
-                    <Sparkles className="w-3.5 h-3.5 text-purple-400" />
-                    <span>Features ({requests.filter((r) => r.type === 'feature').length})</span>
-                    {openFeaturesCount > 0 && (
-                      <span className="w-2 h-2 rounded-full bg-purple-400 animate-pulse" />
-                    )}
-                  </button>
-                </div>
-
-                <div className="flex items-center gap-2 flex-wrap shrink-0">
-                  {/* Status Dropdown */}
-                  <div className="flex items-center gap-1.5">
-                    <Filter className="w-3.5 h-3.5 text-slate-500" />
-                    <select
-                      value={statusFilter}
-                      onChange={(e) => setStatusFilter(e.target.value)}
-                      className="bg-slate-900 border border-white/10 rounded-xl px-2.5 py-1 text-xs text-slate-300 focus:outline-none focus:border-emerald-500 cursor-pointer"
-                    >
-                      <option value="all">All Statuses</option>
-                      <option value="open">Open</option>
-                      <option value="in_progress">In Progress</option>
-                      <option value="planned">Planned</option>
-                      <option value="resolved">Resolved</option>
-                      <option value="closed">Closed</option>
-                    </select>
-                  </div>
-
-                  {/* Sort Dropdown */}
-                  <div className="flex items-center gap-1.5">
-                    <ArrowUpDown className="w-3.5 h-3.5 text-slate-500" />
-                    <select
-                      value={sortBy}
-                      onChange={(e) => setSortBy(e.target.value as any)}
-                      className="bg-slate-900 border border-white/10 rounded-xl px-2.5 py-1 text-xs text-slate-300 focus:outline-none focus:border-emerald-500 cursor-pointer"
-                    >
-                      <option value="votes">Most Upvoted</option>
-                      <option value="newest">Newest First</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              {/* Search Bar */}
-              <div className="relative">
-                <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="Search by title, description, or submitter..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-slate-900 border border-white/10 rounded-xl pl-9 pr-8 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
-                />
-                {searchQuery && (
-                  <button
-                    type="button"
-                    onClick={() => setSearchQuery('')}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-            </div>
-
             {/* Cards List */}
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
               {isLoading ? (
                 <div className="py-16 text-center space-y-3 text-xs text-slate-400">
                   <Loader2 className="w-7 h-7 animate-spin text-emerald-400 mx-auto" />
-                  <p>Loading bug reports and feature requests...</p>
+                  <p>Loading feature requests...</p>
                 </div>
               ) : error ? (
                 <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs">
@@ -665,11 +539,9 @@ export const BugFeatureAdminModal: React.FC<BugFeatureAdminModalProps> = ({
                   <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center mx-auto">
                     <CheckCircle2 className="w-6 h-6" />
                   </div>
-                  <h3 className="text-base font-bold text-white">No requests found</h3>
+                  <h3 className="text-base font-bold text-white">No requests yet</h3>
                   <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                    {searchQuery || statusFilter !== 'all' || typeFilter !== 'all'
-                      ? 'Try clearing your filters or search query.'
-                      : 'All caught up! No bug reports or feature requests logged yet.'}
+                    All caught up! No feature requests logged yet.
                   </p>
                   <button
                     onClick={() => setIsCreatingNew(true)}
