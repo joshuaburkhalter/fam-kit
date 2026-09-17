@@ -90,6 +90,16 @@ export const BugFeatureAdminModal: React.FC<BugFeatureAdminModalProps> = ({
       loadRequests();
       setIsCreatingNew(false);
       setEditingId(null);
+      document.body.style.overflow = 'hidden';
+
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') onClose();
+      };
+      window.addEventListener('keydown', handleKeyDown);
+      return () => {
+        document.body.style.overflow = '';
+        window.removeEventListener('keydown', handleKeyDown);
+      };
     }
   }, [isOpen]);
 
@@ -298,11 +308,21 @@ export const BugFeatureAdminModal: React.FC<BugFeatureAdminModalProps> = ({
   const openBugsCount = requests.filter((r) => r.type === 'bug' && (r.status === 'open' || r.status === 'in_progress')).length;
   const openFeaturesCount = requests.filter((r) => r.type === 'feature' && (r.status === 'open' || r.status === 'in_progress')).length;
 
-  const modalContent = (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-2.5 sm:p-5 bg-black/85 backdrop-blur-md animate-in fade-in duration-150 overflow-y-auto">
-      <div className="w-full max-w-3xl bg-[#0a0f1d] border border-white/15 rounded-2xl sm:rounded-3xl shadow-2xl shadow-black flex flex-col max-h-[92vh] sm:max-h-[88vh] my-auto overflow-hidden animate-in zoom-in-95 duration-150">
+  const drawerContent = (
+    <div className="fixed inset-0 z-[9999] flex justify-end">
+      {/* Semi-transparent backdrop with click-outside to close */}
+      <div
+        className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
+        onClick={onClose}
+      />
+
+      {/* Slide-out Drawer Panel */}
+      <div
+        className="relative z-10 w-full max-w-full sm:max-w-xl md:max-w-2xl h-full bg-[#0a0f1d] border-l border-white/10 shadow-2xl shadow-black flex flex-col overflow-hidden animate-in slide-in-from-right duration-300 ease-out"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
-        <div className="p-4 sm:p-5 border-b border-white/10 flex items-center justify-between gap-3 bg-gradient-to-r from-slate-900 via-[#0a0f1d] to-slate-900">
+        <div className="p-4 sm:p-5 border-b border-white/10 flex items-center justify-between gap-3 bg-gradient-to-r from-slate-900 via-[#0a0f1d] to-slate-900 shrink-0">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-500 to-rose-500 flex items-center justify-center text-slate-950 font-black shadow-lg shadow-amber-500/20 shrink-0">
               <Bug className="w-5 h-5 stroke-[2.2]" />
@@ -818,16 +838,16 @@ export const BugFeatureAdminModal: React.FC<BugFeatureAdminModalProps> = ({
           </div>
         )}
 
-        {/* Modal Footer */}
-        <div className="p-3 sm:p-4 border-t border-white/10 bg-slate-950/60 flex items-center justify-between text-xs">
-          <span className="text-slate-500 text-[11px]">
+        {/* Drawer Footer */}
+        <div className="p-3.5 sm:p-4 border-t border-white/10 bg-slate-950/80 flex items-center justify-between text-xs shrink-0">
+          <span className="text-slate-500 text-[11px] truncate max-w-[240px] sm:max-w-none">
             Logged in as: <strong className="text-slate-300">{currentUser?.name}</strong> ({currentUser?.email || currentUser?.username})
           </span>
           <button
             onClick={onClose}
             className="px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold transition-colors cursor-pointer"
           >
-            Close
+            Close Drawer
           </button>
         </div>
       </div>
@@ -835,7 +855,7 @@ export const BugFeatureAdminModal: React.FC<BugFeatureAdminModalProps> = ({
   );
 
   if (typeof document !== 'undefined') {
-    return createPortal(modalContent, document.body);
+    return createPortal(drawerContent, document.body);
   }
-  return modalContent;
+  return drawerContent;
 };
