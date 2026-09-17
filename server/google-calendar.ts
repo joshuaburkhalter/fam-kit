@@ -871,6 +871,21 @@ export async function getCalendarTimeZone(calendarId: string, accessToken?: stri
   return 'America/Chicago';
 }
 
+function addDaysToDate(dateStr: string, days: number = 1): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d + days));
+  return date.toISOString().split('T')[0];
+}
+
+function normalizeTimeStr(timeStr?: string | null): string {
+  if (!timeStr) return '09:00:00';
+  const parts = timeStr.split(':');
+  const h = parts[0]?.padStart(2, '0') || '00';
+  const m = parts[1]?.padStart(2, '0') || '00';
+  const s = parts[2]?.padStart(2, '0') || '00';
+  return `${h}:${m}:${s}`;
+}
+
 /**
  * Format a Homebase event into a Google Calendar API resource
  */
@@ -885,27 +900,49 @@ function buildGoogleEventResource(event: any, targetTimeZone?: string) {
     !event.startTime ||
     (event.startTime === '00:00' && (event.endTime === '23:59' || !event.endTime));
 
-  if (isAllDay) {
-    const [y, m, d] = event.date.split('-').map(Number);
-    const nextDate = new Date(Date.UTC(y, m - 1, d + 1));
-    const endDateStr = nextDate.toISOString().split('T')[0];
+  const startDateStr = event.date || new Date().toISOString().split('T')[0];
 
+  if (isAllDay) {
+    const endDateStr = addDaysToDate(startDateStr, 1);
     return {
       summary,
       description,
       location,
-      start: { date: event.date },
+      start: { date: startDateStr },
       end: { date: endDateStr },
     };
   }
 
-  const startTime = event.startTime.length === 5 ? `${event.startTime}:00` : event.startTime;
-  let endTime = event.endTime ? (event.endTime.length === 5 ? `${event.endTime}:00` : event.endTime) : null;
+  const cleanStart = normalizeTimeStr(event.startTime);
+  let endDateStr = startDateStr;
+  let cleanEnd: string;
 
-  if (!endTime) {
-    const [h, min] = startTime.split(':').map(Number);
-    const endH = (h + 1) % 24;
-    endTime = `${String(endH).padStart(2, '0')}:${String(min || 0).padStart(2, '0')}:00`;
+  if (event.endTime) {
+    cleanEnd = normalizeTimeStr(event.endTime);
+    if (cleanEnd < cleanStart) {
+      // Overnight event (e.g. 23:00 to 03:00 next day)
+      endDateStr = addDaysToDate(startDateStr, 1);
+    } else if (cleanEnd === cleanStart) {
+      // Equal start and end times - Google rejects with timeRangeEmpty, so add 1 hour
+      const [h, min] = cleanStart.split(':').map(Number);
+      const endH = h + 1;
+      if (endH >= 24) {
+        endDateStr = addDaysToDate(startDateStr, 1);
+        cleanEnd = `${String(endH % 24).padStart(2, '0')}:${String(min || 0).padStart(2, '0')}:00`;
+      } else {
+        cleanEnd = `${String(endH).padStart(2, '0')}:${String(min || 0).padStart(2, '0')}:00`;
+      }
+    }
+  } else {
+    // Default to 1 hour after start
+    const [h, min] = cleanStart.split(':').map(Number);
+    const endH = h + 1;
+    if (endH >= 24) {
+      endDateStr = addDaysToDate(startDateStr, 1);
+      cleanEnd = `${String(endH % 24).padStart(2, '0')}:${String(min || 0).padStart(2, '0')}:00`;
+    } else {
+      cleanEnd = `${String(endH).padStart(2, '0')}:${String(min || 0).padStart(2, '0')}:00`;
+    }
   }
 
   // Priority: 1. target calendar's timezone, 2. event's timezone, 3. 'America/Chicago'
@@ -920,11 +957,11 @@ function buildGoogleEventResource(event: any, targetTimeZone?: string) {
     description,
     location,
     start: {
-      dateTime: `${event.date}T${startTime}`,
+      dateTime: `${startDateStr}T${cleanStart}`,
       timeZone: tz,
     },
     end: {
-      dateTime: `${event.date}T${endTime}`,
+      dateTime: `${endDateStr}T${cleanEnd}`,
       timeZone: tz,
     },
   };
@@ -974,7 +1011,7 @@ export async function pushEventToGoogleCalendar(
 
     if (!res.ok) {
       const errText = await res.text();
-      console.warn(`[pushEventToGoogleCalendar] Google API error (${res.status}):`, errText);
+      console.warn(`[pushEventToGoogleCalendar] Google API error (${res.status}) for "${event.title}" (${event.id}):`, errText);
       return null;
     }
 
@@ -1058,7 +1095,7 @@ export async function updateEventInGoogleCalendar(event: any, clientTimeZone?: s
 
     if (!res.ok) {
       const errText = await res.text();
-      console.warn(`[updateEventInGoogleCalendar] Google API error (${res.status}):`, errText);
+      console.warn(`[updateEventInGoogleCalendar] Google API error (${res.status}) for "${fullEvent.title}" (${fullEvent.id}):`, errText);
       return false;
     }
 
