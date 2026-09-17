@@ -1396,6 +1396,9 @@ function guessAisleForGroceryItem(rawName: string, aisles: Array<{ id: string; n
   if (/\b(?:chile|chili|curry|garlic|onion)\s*powder\b/i.test(lower)) {
     return findAisle(/pantry/i);
   }
+  if (/\b(?:protein powder|egg white powder|whey|collagen|creatine|matcha|protein)\b/i.test(lower)) {
+    return findAisle(/pantry/i) || findAisle(/health/i) || findAisle(/other/i);
+  }
   if (/\b(?:coconut|almond|oat|soy)\s*milk\b/i.test(lower)) {
     return findAisle(/dairy/i) || findAisle(/pantry/i);
   }
@@ -1525,9 +1528,13 @@ app.patch('/api/grocery', (req, res) => {
   if (checked !== undefined) {
     execute('UPDATE grocery_items SET checked = ? WHERE id = ?', [checked ? 1 : 0, id]);
   }
-  if (name !== undefined) execute('UPDATE grocery_items SET name = ? WHERE id = ?', [name, id]);
+  if (name !== undefined) execute('UPDATE grocery_items SET name = ? WHERE id = ?', [name.trim(), id]);
   if (quantity !== undefined) execute('UPDATE grocery_items SET quantity = ? WHERE id = ?', [quantity, id]);
+  if (unit !== undefined) execute('UPDATE grocery_items SET unit = ? WHERE id = ?', [unit, id]);
+  if (note !== undefined) execute('UPDATE grocery_items SET note = ? WHERE id = ?', [note, id]);
+  if (category !== undefined) execute('UPDATE grocery_items SET category = ? WHERE id = ?', [category, id]);
   if (aisleId !== undefined) execute('UPDATE grocery_items SET aisleId = ? WHERE id = ?', [aisleId, id]);
+  saveDb();
 
   const updated = queryOne<any>('SELECT * FROM grocery_items WHERE id = ?', [id]);
 
@@ -1665,8 +1672,43 @@ app.post('/api/recipes/import', async (req, res) => {
 
 app.delete('/api/recipes', (req, res) => {
   const id = req.query.id as string;
-  if (id) execute('DELETE FROM recipes WHERE id = ?', [id]);
+  if (id) {
+    execute('DELETE FROM recipes WHERE id = ?', [id]);
+    saveDb();
+  }
   res.json({ success: true });
+});
+
+app.patch('/api/recipes', (req, res) => {
+  try {
+    const householdId = getHouseholdId(req);
+    const { id, title, description, prepTime, cookTime, servings, sourceUrl, ingredients, instructions, tags, imageUrl } = req.body;
+    if (!id) return res.status(400).json({ error: 'Recipe ID is required' });
+
+    const existing = queryOne('SELECT * FROM recipes WHERE id = ? AND householdId = ?', [id, householdId]);
+    if (!existing) return res.status(404).json({ error: 'Recipe not found' });
+
+    if (title !== undefined) execute('UPDATE recipes SET title = ? WHERE id = ?', [title.trim(), id]);
+    if (description !== undefined) execute('UPDATE recipes SET description = ? WHERE id = ?', [description?.trim() || null, id]);
+    if (prepTime !== undefined) execute('UPDATE recipes SET prepTime = ? WHERE id = ?', [prepTime ? String(prepTime) : null, id]);
+    if (cookTime !== undefined) execute('UPDATE recipes SET cookTime = ? WHERE id = ?', [cookTime ? String(cookTime) : null, id]);
+    if (servings !== undefined) execute('UPDATE recipes SET servings = ? WHERE id = ?', [servings ? String(servings) : null, id]);
+    if (sourceUrl !== undefined) execute('UPDATE recipes SET sourceUrl = ? WHERE id = ?', [sourceUrl || null, id]);
+    if (imageUrl !== undefined) execute('UPDATE recipes SET imageUrl = ? WHERE id = ?', [imageUrl || null, id]);
+    if (ingredients !== undefined) execute('UPDATE recipes SET ingredients = ? WHERE id = ?', [typeof ingredients === 'string' ? ingredients : JSON.stringify(ingredients), id]);
+    if (instructions !== undefined) execute('UPDATE recipes SET instructions = ? WHERE id = ?', [typeof instructions === 'string' ? instructions : JSON.stringify(instructions), id]);
+    if (tags !== undefined) {
+      const tagStr = Array.isArray(tags) ? tags.join(', ') : tags;
+      execute('UPDATE recipes SET tags = ? WHERE id = ?', [tagStr, id]);
+    }
+    saveDb();
+
+    const updated = queryOne('SELECT * FROM recipes WHERE id = ?', [id]);
+    res.json(updated);
+  } catch (err: any) {
+    console.error('Update recipe error:', err);
+    res.status(500).json({ error: err.message || 'Failed to update recipe' });
+  }
 });
 
 // Endpoint: Regenerate recipe photo using Google Imagen 3 or free high-res photo search

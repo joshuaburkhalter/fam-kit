@@ -18,11 +18,13 @@ import {
   Loader2,
   ImageIcon,
   BookOpen,
+  Pencil,
 } from 'lucide-react';
 import type { Recipe } from '../types';
 import { usePWA } from '../context/PWAContext';
 import { api } from '../lib/api';
 import { RecipeScraperModal } from '../components/RecipeScraperModal';
+import { EditRecipeModal } from '../components/EditRecipeModal';
 import { useFabAutoClose } from '../hooks/useFabAutoClose';
 import { CheckSparkle, CelebrationConfetti, triggerHapticCheck } from '../components/CheckSparkle';
 
@@ -31,6 +33,7 @@ export const RecipesPage: React.FC = () => {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [isScraperOpen, setIsScraperOpen] = useState(false);
+  const [isEditRecipeModalOpen, setIsEditRecipeModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
 
@@ -290,6 +293,16 @@ export const RecipesPage: React.FC = () => {
               )}
 
               <button
+                onClick={() => setIsEditRecipeModalOpen(true)}
+                className="bg-slate-850 hover:bg-slate-800 text-slate-200 px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all border border-white/10 shrink-0 cursor-pointer"
+                title="Edit Recipe Details & Ingredients"
+              >
+                <Pencil className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="hidden sm:inline">Edit Recipe</span>
+                <span className="sm:hidden">Edit</span>
+              </button>
+
+              <button
                 onClick={() => handleAddAllToGrocery(selectedRecipe)}
                 className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20 shrink-0"
                 title="Add all ingredients to Grocery List"
@@ -470,6 +483,14 @@ export const RecipesPage: React.FC = () => {
                   <h3 className="text-sm font-bold uppercase tracking-wider text-emerald-400">
                     Ingredients ({selectedRecipe.ingredients.length})
                   </h3>
+                  <button
+                    onClick={() => setIsEditRecipeModalOpen(true)}
+                    className="text-[11px] font-semibold text-slate-400 hover:text-emerald-400 flex items-center gap-1 transition-colors px-2 py-1 rounded-lg hover:bg-white/5 cursor-pointer"
+                    title="Edit Ingredients"
+                  >
+                    <Pencil className="w-3 h-3 text-emerald-400" />
+                    <span>Edit</span>
+                  </button>
                 </div>
 
                 <div className="space-y-1.5">
@@ -884,6 +905,19 @@ export const RecipesPage: React.FC = () => {
             setRecipes((prev) => [newRec, ...prev]);
             setSelectedRecipe(newRec);
             setIsScraperOpen(false);
+          }}
+        />
+      )}
+
+      {/* Edit Recipe Modal */}
+      {selectedRecipe && (
+        <EditRecipeModal
+          isOpen={isEditRecipeModalOpen}
+          onClose={() => setIsEditRecipeModalOpen(false)}
+          recipe={selectedRecipe}
+          onSave={(updated) => {
+            setSelectedRecipe(updated);
+            setRecipes((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
           }}
         />
       )}

@@ -923,10 +923,12 @@ Return a valid JSON object only:
   "prepTime": "15 min",
   "cookTime": "30 min",
   "servings": "4",
-  "ingredients": [{ "item": "ingredient with amount", "category": "Produce" }],
+  "ingredients": [{ "item": "exact ingredient name with amount (e.g. '1/2 cup egg white protein powder', never shorten to 'egg whites')", "category": "Pantry & Dry Goods" }],
   "instructions": ["Step 1...", "Step 2..."],
   "tags": ["Dinner"]
 }
+
+Important: Keep ingredient names exact and specific (e.g. "egg white protein powder", not just "egg whites"; "almond flour", not just "flour"). Do not generalize specialty ingredients.
 
 Content:
 ${cleanText}`;

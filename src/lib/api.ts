@@ -493,6 +493,25 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
+  updateRecipe: (id: string, data: Partial<Recipe> | any): Promise<Recipe> => {
+    const payload: any = { id };
+    if (data.title !== undefined) payload.title = data.title;
+    if (data.description !== undefined) payload.description = data.description;
+    if (data.prep_time_minutes !== undefined) payload.prepTime = data.prep_time_minutes;
+    if (data.cook_time_minutes !== undefined) payload.cookTime = data.cook_time_minutes;
+    if (data.servings !== undefined) payload.servings = data.servings;
+    if (data.source_url !== undefined) payload.sourceUrl = data.source_url;
+    if (data.image_url !== undefined) payload.imageUrl = data.image_url;
+    if (data.ingredients !== undefined) payload.ingredients = data.ingredients;
+    if (data.instructions !== undefined) payload.instructions = data.instructions;
+    if (data.tags !== undefined) payload.tags = data.tags;
+
+    return fetchJson<any>('/recipes', {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }).then(normalizeDbRecipe);
+  },
+
   deleteRecipe: (id: string) =>
     fetchJson<{ success: boolean }>(`/recipes?id=${id}`, { method: 'DELETE' }),
 

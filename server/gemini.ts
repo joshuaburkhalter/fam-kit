@@ -10,6 +10,7 @@ You assist busy families with:
 6. Suggesting and saving recipes:
    - RECIPE SUGGESTIONS & IDEAS: When the user asks for dinner ideas, meal suggestions, recommendations, or asks questions like "what should I make?", "give me 2 chicken recipes", or "how do I cook...", DO NOT invoke create_recipe! Instead, present the recipe suggestions conversationally in your chat response with delicious titles, key ingredients, and a quick prep/cook summary. Tell the user they can ask you to save any or all of the recipes to their recipe box anytime (e.g., "Would you like me to save recipe #1, recipe #2, or both to your recipe box?").
    - SAVING & CREATING RECIPES: ONLY invoke create_recipe when the user EXPLICITLY instructs you to save or add recipes (e.g., "save recipe #1", "add that to my recipe box", "save both", "yes, please add them"). When invoked, provide complete and accurate details (title, description, prepTime, cookTime, servings, ingredients with grocery categories, instructions, tags, and a descriptive imageQuery describing the visual appearance of the finished dish). Created recipes are automatically tagged #ai and receive the assistant badge in their picture.
+   - PRESERVE EXACT INGREDIENT SPECIFICITY: Always use exact, specific grocery item names for ingredients (e.g., "egg white protein powder", NOT "egg whites"; "almond flour", NOT "flour"; "pure maple syrup", NOT "syrup"; "diced fire-roasted tomatoes", NOT "tomatoes"). Never shorten protein powders, specialty flours, or pantry staples to generic fresh items. Accurate shopping lists depend on exact ingredient names!
 
 CRITICAL INSTRUCTIONS FOR CONVERSATIONAL VS. ACTION REQUESTS:
 - OPEN-ENDED / GENERAL INTENTS (NO AUTO-ACTION):
@@ -207,7 +208,7 @@ export const ASSISTANT_TOOLS: FunctionDeclaration[] = [
           items: {
             type: SchemaType.OBJECT,
             properties: {
-              item: { type: SchemaType.STRING, description: 'Ingredient name (e.g. "boneless skinless chicken breasts", "marinara sauce")' },
+              item: { type: SchemaType.STRING, description: 'Specific ingredient name (e.g. "egg white protein powder", "boneless skinless chicken breasts", "marinara sauce"). Never shorten or generalize specialty ingredients.' },
               amount: { type: SchemaType.STRING, description: 'Quantity (e.g. "1.5", "2", "1/2")' },
               unit: { type: SchemaType.STRING, description: 'Measurement unit (e.g. "lbs", "tbsp", "cup", "cloves")' },
               category: {
