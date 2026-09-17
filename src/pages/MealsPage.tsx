@@ -907,7 +907,7 @@ export const MealsPage: React.FC = () => {
                         key={idx}
                         className={`flex items-center gap-2.5 p-2.5 rounded-xl border text-xs cursor-pointer transition-colors ${
                           isChecked
-                            ? 'bg-slate-950/40 border-slate-800/40 text-slate-500 line-through'
+                            ? 'bg-slate-950/40 border-slate-800/40 text-slate-400'
                             : 'bg-slate-950/80 border-slate-800 text-slate-200'
                         }`}
                       >
@@ -975,11 +975,7 @@ export const MealsPage: React.FC = () => {
                         </div>
                         <p
                           className={`flex-1 transition-colors ${
-                            isDone
-                              ? isJustDone
-                                ? 'animate-strike text-slate-400'
-                                : 'line-through text-slate-500'
-                              : 'text-slate-300'
+                            isDone ? 'text-slate-400' : 'text-slate-300'
                           }`}
                         >
                           {step}

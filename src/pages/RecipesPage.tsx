@@ -500,11 +500,7 @@ export const RecipesPage: React.FC = () => {
                           </div>
                           <span
                             className={`font-medium selectable-text transition-colors ${
-                              isChecked
-                                ? isJustChecked
-                                  ? 'animate-strike text-slate-400'
-                                  : 'line-through text-slate-400'
-                                : ''
+                              isChecked ? 'text-slate-400' : ''
                             }`}
                           >
                             {ing.item}
@@ -513,7 +509,7 @@ export const RecipesPage: React.FC = () => {
                         {ing.amount && (
                           <span
                             className={`font-mono font-bold shrink-0 ${
-                              isChecked ? 'text-slate-500 line-through' : 'text-slate-400'
+                              isChecked ? 'text-slate-500' : 'text-slate-400'
                             }`}
                           >
                             {ing.amount} {ing.unit || ''}
@@ -564,11 +560,7 @@ export const RecipesPage: React.FC = () => {
                           </div>
                           <p
                             className={`text-sm leading-relaxed selectable-text transition-colors ${
-                              isDone
-                                ? isJustDone
-                                  ? 'animate-strike text-slate-400 font-normal'
-                                  : 'line-through text-slate-500 font-normal'
-                                : 'text-slate-100'
+                              isDone ? 'text-slate-400 font-normal' : 'text-slate-100'
                             }`}
                           >
                             {step}
