@@ -819,11 +819,13 @@ export const api = {
       is_all_day?: boolean;
       location?: string;
       assigned_user_id?: string;
+      timezone?: string;
     }
   ): Promise<CalendarEvent> => {
     const date = data.start_time.split('T')[0];
     const startTime = data.is_all_day ? null : (data.start_time.split('T')[1]?.substring(0, 5) || null);
     const endTime = data.is_all_day ? null : (data.end_time.split('T')[1]?.substring(0, 5) || null);
+    const timezone = data.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Chicago';
 
     const res = await fetchJson<any>('/calendar', {
       method: 'POST',
@@ -833,8 +835,10 @@ export const api = {
         date,
         startTime,
         endTime,
+        isAllDay: Boolean(data.is_all_day),
         location: data.location,
         assignedMemberId: data.assigned_user_id,
+        timezone,
       }),
     });
 
@@ -866,11 +870,13 @@ export const api = {
       is_all_day?: boolean;
       location?: string;
       assigned_user_id?: string;
+      timezone?: string;
     }
   ): Promise<CalendarEvent> => {
     const date = data.start_time ? data.start_time.split('T')[0] : undefined;
     const startTime = data.is_all_day ? null : (data.start_time ? data.start_time.split('T')[1]?.substring(0, 5) : undefined);
     const endTime = data.is_all_day ? null : (data.end_time ? data.end_time.split('T')[1]?.substring(0, 5) : undefined);
+    const timezone = data.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Chicago';
 
     const res = await fetchJson<any>('/calendar', {
       method: 'PATCH',
@@ -881,8 +887,10 @@ export const api = {
         date,
         startTime,
         endTime,
+        isAllDay: data.is_all_day !== undefined ? Boolean(data.is_all_day) : undefined,
         location: data.location,
         assignedMemberId: data.assigned_user_id,
+        timezone,
       }),
     });
 

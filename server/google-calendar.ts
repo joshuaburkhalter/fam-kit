@@ -27,6 +27,8 @@ export interface GoogleCalendarEntry {
   assignedMemberId?: string | null;
 }
 
+export const calendarTimeZoneCache = new Map<string, string>();
+
 export function getGoogleCredentials() {
   const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
@@ -341,7 +343,10 @@ export async function getUserGoogleCalendars(
 
     const selectedSet = new Set(selectedIds);
 
-    const calendars: GoogleCalendarEntry[] = (data.items || []).map((cal) => {
+    const calendars: GoogleCalendarEntry[] = (data.items || []).map((cal: any) => {
+      if (cal.id && cal.timeZone) {
+        calendarTimeZoneCache.set(cal.id, cal.timeZone);
+      }
       const isSelected = selectedSet.has(cal.id) || (Boolean(cal.primary) && selectedSet.has('primary'));
       const assigned = memberMap[cal.id] !== undefined ? memberMap[cal.id] : userId;
 
@@ -841,14 +846,42 @@ export function resolveTargetGoogleCalendar(
 }
 
 /**
+ * Get the timeZone of a Google Calendar (from cache or Google Calendar API)
+ */
+export async function getCalendarTimeZone(calendarId: string, accessToken?: string): Promise<string> {
+  if (calendarTimeZoneCache.has(calendarId)) {
+    return calendarTimeZoneCache.get(calendarId)!;
+  }
+
+  if (accessToken) {
+    try {
+      const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { timeZone?: string };
+        if (data.timeZone) {
+          calendarTimeZoneCache.set(calendarId, data.timeZone);
+          return data.timeZone;
+        }
+      }
+    } catch {}
+  }
+
+  return 'America/Chicago';
+}
+
+/**
  * Format a Homebase event into a Google Calendar API resource
  */
-function buildGoogleEventResource(event: any) {
+function buildGoogleEventResource(event: any, targetTimeZone?: string) {
   const summary = event.title?.trim() || '(No Title)';
   const description = event.description?.trim() || undefined;
   const location = event.location?.trim() || undefined;
 
   const isAllDay =
+    Boolean(event.isAllDay) ||
+    Boolean(event.is_all_day) ||
     !event.startTime ||
     (event.startTime === '00:00' && (event.endTime === '23:59' || !event.endTime));
 
@@ -875,7 +908,12 @@ function buildGoogleEventResource(event: any) {
     endTime = `${String(endH).padStart(2, '0')}:${String(min || 0).padStart(2, '0')}:00`;
   }
 
-  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Chicago';
+  // Priority: 1. target calendar's timezone, 2. event's timezone, 3. 'America/Chicago'
+  // NEVER use server's UTC as it causes 5-6 hour shifts in US timezones!
+  let tz = targetTimeZone || event.timezone;
+  if (!tz || tz === 'UTC' || tz === 'Etc/UTC') {
+    tz = 'America/Chicago';
+  }
 
   return {
     summary,
@@ -897,13 +935,14 @@ function buildGoogleEventResource(event: any) {
  */
 export async function pushEventToGoogleCalendar(
   event: any,
-  creatorUserId?: string
+  creatorUserId?: string,
+  clientTimeZone?: string
 ): Promise<{ googleEventId: string; googleCalendarId: string } | null> {
   if (!event || !event.id || !event.householdId) return null;
 
   // If already pushed, update it instead
   if (event.googleEventId && event.googleCalendarId) {
-    await updateEventInGoogleCalendar(event);
+    await updateEventInGoogleCalendar(event, clientTimeZone);
     return { googleEventId: event.googleEventId, googleCalendarId: event.googleCalendarId };
   }
 
@@ -918,7 +957,9 @@ export async function pushEventToGoogleCalendar(
     return null;
   }
 
-  const resource = buildGoogleEventResource(event);
+  const calTz = await getCalendarTimeZone(target.calendarId, accessToken);
+  const targetTz = calTz || clientTimeZone || event.timezone || 'America/Chicago';
+  const resource = buildGoogleEventResource(event, targetTz);
   const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(target.calendarId)}/events`;
 
   try {
@@ -960,7 +1001,7 @@ export async function pushEventToGoogleCalendar(
 /**
  * Update an existing event in Google Calendar
  */
-export async function updateEventInGoogleCalendar(event: any): Promise<boolean> {
+export async function updateEventInGoogleCalendar(event: any, clientTimeZone?: string): Promise<boolean> {
   if (!event || !event.id) return false;
 
   const dbEvent = queryOne<any>('SELECT * FROM calendar_events WHERE id = ?', [event.id]);
@@ -971,7 +1012,7 @@ export async function updateEventInGoogleCalendar(event: any): Promise<boolean> 
 
   // If not yet pushed to Google, push now
   if (!googleEventId || !googleCalendarId) {
-    const pushed = await pushEventToGoogleCalendar(fullEvent, fullEvent.assignedMemberId);
+    const pushed = await pushEventToGoogleCalendar(fullEvent, fullEvent.assignedMemberId, clientTimeZone);
     return Boolean(pushed);
   }
 
@@ -998,7 +1039,9 @@ export async function updateEventInGoogleCalendar(event: any): Promise<boolean> 
   const accessToken = await getValidAccessToken(record);
   if (!accessToken) return false;
 
-  const resource = buildGoogleEventResource(fullEvent);
+  const calTz = await getCalendarTimeZone(googleCalendarId, accessToken);
+  const targetTz = calTz || clientTimeZone || fullEvent.timezone || 'America/Chicago';
+  const resource = buildGoogleEventResource(fullEvent, targetTz);
   const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(
     googleCalendarId
   )}/events/${encodeURIComponent(googleEventId)}`;

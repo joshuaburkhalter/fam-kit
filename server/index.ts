@@ -968,7 +968,7 @@ ${contextString}
 
             const createdEv = queryOne('SELECT * FROM calendar_events WHERE id = ?', [id]);
             try {
-              await pushEventToGoogleCalendar(createdEv, activeMemberId || getAuthUser(req)?.id);
+              await pushEventToGoogleCalendar({ ...createdEv, timezone }, activeMemberId || getAuthUser(req)?.id, timezone);
             } catch (pushErr) {
               console.warn('Failed to push AI-scheduled event to Google Calendar:', pushErr);
             }
@@ -1988,7 +1988,7 @@ function cleanTimeStr(t: any): string | null {
 
 app.post('/api/calendar', async (req, res) => {
   const householdId = getHouseholdId(req);
-  const { title, description, date, startTime, endTime, category, location, assignedMemberId } = req.body;
+  const { title, description, date, startTime, endTime, category, location, assignedMemberId, timezone, isAllDay } = req.body;
   const finalDate = cleanDateStr(date);
   const finalStart = cleanTimeStr(startTime);
   const finalEnd = cleanTimeStr(endTime);
@@ -2023,7 +2023,7 @@ app.post('/api/calendar', async (req, res) => {
 
   // Immediately push event to Google Calendar if connected
   try {
-    const pushed = await pushEventToGoogleCalendar(created, actor?.id);
+    const pushed = await pushEventToGoogleCalendar({ ...created, timezone, isAllDay }, actor?.id, timezone);
     if (pushed) {
       const refreshed = queryOne('SELECT * FROM calendar_events WHERE id = ?', [id]);
       return res.json(refreshed || created);
@@ -2038,7 +2038,7 @@ app.post('/api/calendar', async (req, res) => {
 app.patch('/api/calendar', async (req, res) => {
   try {
     const householdId = getHouseholdId(req);
-    const { id, title, description, date, startTime, endTime, category, location, assignedMemberId } = req.body;
+    const { id, title, description, date, startTime, endTime, category, location, assignedMemberId, timezone, isAllDay } = req.body;
     if (!id) return res.status(400).json({ error: 'Event id is required' });
 
     const existing = queryOne('SELECT * FROM calendar_events WHERE id = ? AND householdId = ?', [id, householdId]);
@@ -2084,7 +2084,7 @@ app.patch('/api/calendar', async (req, res) => {
     // Immediately update in Google Calendar if connected
     try {
       if (updated) {
-        await updateEventInGoogleCalendar(updated);
+        await updateEventInGoogleCalendar({ ...updated, timezone, isAllDay }, timezone);
       }
     } catch (pushErr) {
       console.warn('Failed to immediately update event in Google Calendar:', pushErr);
