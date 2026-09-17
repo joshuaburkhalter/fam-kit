@@ -16,6 +16,7 @@ import type { GroceryItem, Aisle, CustomList } from '../types';
 import { usePWA } from '../context/PWAContext';
 import { api } from '../lib/api';
 import { useFabAutoClose } from '../hooks/useFabAutoClose';
+import { CheckSparkle, triggerHapticCheck } from '../components/CheckSparkle';
 
 interface GroceryDataCache {
   householdId: string;
@@ -60,6 +61,8 @@ export const GroceryPage: React.FC = () => {
     return !(groceryDataCache && groceryDataCache.itemsByList['grocery'] !== undefined);
   });
   const [collapsedAisles, setCollapsedAisles] = useState<Record<string, boolean>>({});
+  const [crossingOffIds, setCrossingOffIds] = useState<Record<string, boolean>>({});
+  const crossingTimersRef = useRef<Record<string, any>>({});
 
   const dockRef = useFabAutoClose<HTMLDivElement>({
     isOpen: isInputExpanded,
@@ -73,6 +76,7 @@ export const GroceryPage: React.FC = () => {
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
+      Object.values(crossingTimersRef.current).forEach((t) => clearTimeout(t));
     };
   }, []);
 
@@ -204,18 +208,68 @@ export const GroceryPage: React.FC = () => {
   };
 
   const handleToggleItem = async (id: string) => {
+    const item = items.find((it) => it.id === id);
+    if (!item) return;
+
+    // If currently playing the crossing-off animation, cancel it if clicked again
+    if (crossingOffIds[id]) {
+      if (crossingTimersRef.current[id]) {
+        clearTimeout(crossingTimersRef.current[id]);
+        delete crossingTimersRef.current[id];
+      }
+      setCrossingOffIds((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      return;
+    }
+
+    // Case 1: Item is active -> Play delightful crossing-off animation first!
+    if (!item.is_completed) {
+      triggerHapticCheck();
+      setCrossingOffIds((prev) => ({ ...prev, [id]: true }));
+
+      crossingTimersRef.current[id] = setTimeout(async () => {
+        delete crossingTimersRef.current[id];
+        setCrossingOffIds((prev) => {
+          const next = { ...prev };
+          delete next[id];
+          return next;
+        });
+
+        setItems((prev) => {
+          const next = prev.map((it) => (it.id === id ? { ...it, is_completed: true } : it));
+          if (groceryDataCache && householdId && groceryDataCache.householdId === householdId) {
+            groceryDataCache.itemsByList[activeListTypeRef.current] = next;
+          }
+          return next;
+        });
+
+        try {
+          await api.toggleGroceryItem(id);
+        } catch (err) {
+          console.error('Failed to toggle item:', err);
+          loadData(activeListTypeRef.current, false);
+        }
+      }, 360);
+      return;
+    }
+
+    // Case 2: Item is in CROSSED OFF section -> Uncross immediately
+    triggerHapticCheck();
     try {
       setItems((prev) => {
-        const next = prev.map((it) => (it.id === id ? { ...it, is_completed: !it.is_completed } : it));
+        const next = prev.map((it) => (it.id === id ? { ...it, is_completed: false } : it));
         if (groceryDataCache && householdId && groceryDataCache.householdId === householdId) {
-          groceryDataCache.itemsByList[activeListType] = next;
+          groceryDataCache.itemsByList[activeListTypeRef.current] = next;
         }
         return next;
       });
       await api.toggleGroceryItem(id);
     } catch (err) {
-      console.error('Failed to toggle item:', err);
-      loadData(activeListType, false);
+      console.error('Failed to uncheck item:', err);
+      loadData(activeListTypeRef.current, false);
     }
   };
 
@@ -542,56 +596,78 @@ export const GroceryPage: React.FC = () => {
                 {/* Items in this Aisle */}
                 {!isCollapsed && (
                   <div className="divide-y divide-white/5">
-                    {aisleItems.map((item) => (
-                      <div
-                        key={item.id}
-                        onClick={() => handleToggleItem(item.id)}
-                        className="flex items-center justify-between px-3.5 py-2 transition-colors cursor-pointer group hover:bg-white/5 gap-2 min-h-[42px]"
-                      >
-                        <div className="flex items-center gap-3 min-w-0 flex-1">
-                          <div className="w-5 h-5 rounded-md border border-white/20 bg-slate-900/80 flex items-center justify-center shrink-0 transition-all group-hover:border-emerald-500">
-                            {item.is_completed && (
-                              <Check className="w-3.5 h-3.5 text-emerald-400 font-bold" />
-                            )}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-semibold text-slate-100 truncate">
-                                {item.name}
-                              </span>
-                              {item.quantity && (
-                                <span className="text-xs font-mono text-slate-400 shrink-0">
-                                  ({item.quantity}{item.unit ? ` ${item.unit}` : ''})
-                                </span>
+                    {aisleItems.map((item) => {
+                      const isCrossing = Boolean(crossingOffIds[item.id]);
+                      const isChecked = item.is_completed || isCrossing;
+                      return (
+                        <div
+                          key={item.id}
+                          onClick={() => handleToggleItem(item.id)}
+                          className={`flex items-center justify-between px-3.5 py-2 transition-all cursor-pointer group hover:bg-white/5 gap-2 min-h-[42px] ${
+                            isCrossing ? 'animate-row-crossing' : ''
+                          }`}
+                        >
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                            <div
+                              className={`relative w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition-all ${
+                                isChecked
+                                  ? 'border-emerald-500 bg-emerald-500 text-slate-950 shadow-sm shadow-emerald-500/30 ' +
+                                    (isCrossing ? 'animate-check-pop' : '')
+                                  : 'border-white/20 bg-slate-900/80 group-hover:border-emerald-500'
+                              }`}
+                            >
+                              <CheckSparkle trigger={isCrossing} />
+                              {isChecked && (
+                                <Check className="w-3.5 h-3.5 text-slate-950 font-bold stroke-[3]" />
                               )}
                             </div>
-                            {item.notes && (
-                              <p className="text-[11px] text-emerald-400/80 truncate leading-tight mt-0.5">
-                                {item.notes}
-                              </p>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={`text-sm font-semibold truncate transition-colors ${
+                                    isCrossing
+                                      ? 'animate-strike text-slate-400'
+                                      : isChecked
+                                      ? 'line-through text-slate-400'
+                                      : 'text-slate-100'
+                                  }`}
+                                >
+                                  {item.name}
+                                </span>
+                                {item.quantity && (
+                                  <span className="text-xs font-mono text-slate-400 shrink-0">
+                                    ({item.quantity}{item.unit ? ` ${item.unit}` : ''})
+                                  </span>
+                                )}
+                              </div>
+                              {item.notes && (
+                                <p className="text-[11px] text-emerald-400/80 truncate leading-tight mt-0.5">
+                                  {item.notes}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {item.added_by_user_name && (
+                              <span className="text-[10px] text-slate-500 hidden sm:inline shrink-0">
+                                {item.added_by_user_name}
+                              </span>
                             )}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteItem(item.id);
+                              }}
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 opacity-40 group-hover:opacity-100 transition-all"
+                              title="Delete item"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         </div>
-
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          {item.added_by_user_name && (
-                            <span className="text-[10px] text-slate-500 hidden sm:inline shrink-0">
-                              {item.added_by_user_name}
-                            </span>
-                          )}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteItem(item.id);
-                            }}
-                            className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 opacity-40 group-hover:opacity-100 transition-all"
-                            title="Delete item"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -611,19 +687,122 @@ export const GroceryPage: React.FC = () => {
               </span>
             </div>
             <div className="divide-y divide-white/5">
-              {uncategorizedItems.map((item) => (
+              {uncategorizedItems.map((item) => {
+                const isCrossing = Boolean(crossingOffIds[item.id]);
+                const isChecked = item.is_completed || isCrossing;
+                return (
+                  <div
+                    key={item.id}
+                    onClick={() => handleToggleItem(item.id)}
+                    className={`flex items-center justify-between px-3.5 py-2 hover:bg-white/5 transition-all cursor-pointer group gap-2 min-h-[42px] ${
+                      isCrossing ? 'animate-row-crossing' : ''
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <div
+                        className={`relative w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition-all ${
+                          isChecked
+                            ? 'border-emerald-500 bg-emerald-500 text-slate-950 shadow-sm shadow-emerald-500/30 ' +
+                              (isCrossing ? 'animate-check-pop' : '')
+                            : 'border-white/20 bg-slate-900/80 group-hover:border-emerald-500'
+                        }`}
+                      >
+                        <CheckSparkle trigger={isCrossing} />
+                        {isChecked && (
+                          <Check className="w-3.5 h-3.5 text-slate-950 font-bold stroke-[3]" />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`text-sm font-semibold truncate transition-colors ${
+                              isCrossing
+                                ? 'animate-strike text-slate-400'
+                                : isChecked
+                                ? 'line-through text-slate-400'
+                                : 'text-slate-100'
+                            }`}
+                          >
+                            {item.name}
+                          </span>
+                          {item.quantity && (
+                            <span className="text-xs font-mono text-slate-400 shrink-0">
+                              ({item.quantity}{item.unit ? ` ${item.unit}` : ''})
+                            </span>
+                          )}
+                        </div>
+                        {item.notes && (
+                          <p className="text-[11px] text-emerald-400/80 truncate leading-tight mt-0.5">
+                            {item.notes}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {item.added_by_user_name && (
+                        <span className="text-[10px] text-slate-500 hidden sm:inline shrink-0">
+                          {item.added_by_user_name}
+                        </span>
+                      )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteItem(item.id);
+                        }}
+                        className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 opacity-40 group-hover:opacity-100 transition-all"
+                        title="Delete item"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Non-Grocery Custom List: Display as Simple Flat Checklist */}
+        {!isGroceryList && activeItems.length > 0 && (
+          <div className="glass-panel rounded-3xl border border-white/10 overflow-hidden shadow-sm divide-y divide-white/5">
+            {activeItems.map((item) => {
+              const isCrossing = Boolean(crossingOffIds[item.id]);
+              const isChecked = item.is_completed || isCrossing;
+              return (
                 <div
                   key={item.id}
                   onClick={() => handleToggleItem(item.id)}
-                  className="flex items-center justify-between px-3.5 py-2 hover:bg-white/5 transition-colors cursor-pointer group gap-2 min-h-[42px]"
+                  className={`flex items-center justify-between px-3.5 py-2 hover:bg-white/5 transition-all cursor-pointer group gap-2 min-h-[42px] ${
+                    isCrossing ? 'animate-row-crossing' : ''
+                  }`}
                 >
                   <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <div className="w-5 h-5 rounded-md border border-white/20 bg-slate-900/80 flex items-center justify-center shrink-0">
-                      {item.is_completed && <Check className="w-3.5 h-3.5 text-emerald-400 font-bold" />}
+                    <div
+                      className={`relative w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition-all ${
+                        isChecked
+                          ? 'border-emerald-500 bg-emerald-500 text-slate-950 shadow-sm shadow-emerald-500/30 ' +
+                            (isCrossing ? 'animate-check-pop' : '')
+                          : 'border-white/20 bg-slate-900/80 group-hover:border-emerald-500'
+                      }`}
+                    >
+                      <CheckSparkle trigger={isCrossing} />
+                      {isChecked && (
+                        <Check className="w-3.5 h-3.5 text-slate-950 font-bold stroke-[3]" />
+                      )}
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-slate-100 truncate">{item.name}</span>
+                        <span
+                          className={`text-sm font-semibold truncate transition-colors ${
+                            isCrossing
+                              ? 'animate-strike text-slate-400'
+                              : isChecked
+                              ? 'line-through text-slate-400'
+                              : 'text-slate-100'
+                          }`}
+                        >
+                          {item.name}
+                        </span>
                         {item.quantity && (
                           <span className="text-xs font-mono text-slate-400 shrink-0">
                             ({item.quantity}{item.unit ? ` ${item.unit}` : ''})
@@ -655,59 +834,8 @@ export const GroceryPage: React.FC = () => {
                     </button>
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Non-Grocery Custom List: Display as Simple Flat Checklist */}
-        {!isGroceryList && activeItems.length > 0 && (
-          <div className="glass-panel rounded-3xl border border-white/10 overflow-hidden shadow-sm divide-y divide-white/5">
-            {activeItems.map((item) => (
-              <div
-                key={item.id}
-                onClick={() => handleToggleItem(item.id)}
-                className="flex items-center justify-between px-3.5 py-2 hover:bg-white/5 transition-colors cursor-pointer group gap-2 min-h-[42px]"
-              >
-                <div className="flex items-center gap-3 min-w-0 flex-1">
-                  <div className="w-5 h-5 rounded-md border border-white/20 bg-slate-900/80 flex items-center justify-center shrink-0 group-hover:border-emerald-500">
-                    {item.is_completed && <Check className="w-3.5 h-3.5 text-emerald-400 font-bold" />}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-slate-100 truncate">{item.name}</span>
-                      {item.quantity && (
-                        <span className="text-xs font-mono text-slate-400 shrink-0">
-                          ({item.quantity}{item.unit ? ` ${item.unit}` : ''})
-                        </span>
-                      )}
-                    </div>
-                    {item.notes && (
-                      <p className="text-[11px] text-emerald-400/80 truncate leading-tight mt-0.5">
-                        {item.notes}
-                      </p>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  {item.added_by_user_name && (
-                    <span className="text-[10px] text-slate-500 hidden sm:inline shrink-0">
-                      {item.added_by_user_name}
-                    </span>
-                  )}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteItem(item.id);
-                    }}
-                    className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 opacity-40 group-hover:opacity-100 transition-all"
-                    title="Delete item"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 

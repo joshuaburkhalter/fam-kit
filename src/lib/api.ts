@@ -12,6 +12,8 @@ import type {
   GoogleSyncStatus,
   GoogleCalendarEntry,
   NotificationPreferences,
+  SubscriptionStatus,
+  PromoCode,
 } from '../types';
 
 const BASE_URL = '/api';
@@ -1002,4 +1004,63 @@ export const api = {
 
   // Alias sendAssistantMessage to askAssistant
   sendAssistantMessage: (data: Parameters<typeof api.askAssistant>[0]) => api.askAssistant(data),
+
+  // Subscription & Promo Code API
+  getSubscriptionStatus: async () => {
+    return fetchJson<SubscriptionStatus>('/subscription/status');
+  },
+
+  redeemPromoCode: async (code: string) => {
+    return fetchJson<{
+      success: boolean;
+      message: string;
+      household: any;
+      durationMonths: number | null;
+      expiresAt: string | null;
+    }>('/subscription/redeem', {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    });
+  },
+
+  subscribePlan: async (plan: 'monthly' | 'annual') => {
+    return fetchJson<{ success: boolean; message: string; household: any }>('/subscription/subscribe', {
+      method: 'POST',
+      body: JSON.stringify({ plan }),
+    });
+  },
+
+  createCheckoutSession: async (plan: 'monthly' | 'annual') => {
+    return fetchJson<{ checkoutUrl?: string; simulated?: boolean; message?: string; household?: any }>(
+      '/subscription/create-checkout-session',
+      {
+        method: 'POST',
+        body: JSON.stringify({ plan }),
+      }
+    );
+  },
+
+  verifyCheckoutSession: async (sessionId: string) => {
+    return fetchJson<{ success: boolean; message?: string; household?: any }>(
+      `/subscription/verify-checkout-session?session_id=${encodeURIComponent(sessionId)}`
+    );
+  },
+
+  generatePromoCode: async (data: { durationMonths: 3 | 6 | null; description?: string; maxUses?: number }) => {
+    return fetchJson<PromoCode>('/subscription/generate-code', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  getPromoCodes: async () => {
+    return fetchJson<PromoCode[]>('/subscription/promo-codes');
+  },
+
+  testSetSubscriptionState: async (data: { status: 'active' | 'unpaid' | 'expired'; plan?: string; expiresAt?: string | null }) => {
+    return fetchJson<{ success: boolean; household: any }>('/subscription/test-set-state', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
 };

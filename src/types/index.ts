@@ -3,7 +3,37 @@ export interface Household {
   name: string;
   invite_code: string;
   inviteCode?: string;
+  subscription_status?: 'active' | 'unpaid' | 'expired';
+  subscriptionStatus?: 'active' | 'unpaid' | 'expired';
+  subscription_plan?: string | null;
+  subscriptionPlan?: string | null;
+  subscription_expires_at?: string | null;
+  subscriptionExpiresAt?: string | null;
+  promo_code_used?: string | null;
+  promoCodeUsed?: string | null;
+  has_active_access?: boolean;
+  hasActiveAccess?: boolean;
   created_at: string;
+}
+
+export interface SubscriptionStatus {
+  householdId: string;
+  householdName: string;
+  subscriptionStatus: 'active' | 'unpaid' | 'expired';
+  subscriptionPlan: string | null;
+  subscriptionExpiresAt: string | null;
+  promoCodeUsed: string | null;
+  hasActiveAccess: boolean;
+}
+
+export interface PromoCode {
+  code: string;
+  description: string;
+  durationMonths: number | null;
+  maxUses: number;
+  timesUsed: number;
+  isActive: number | boolean;
+  createdAt: string;
 }
 
 export interface User {

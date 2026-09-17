@@ -23,6 +23,7 @@ import { EditProfileModal } from './EditProfileModal';
 interface NavbarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
+  onOpenPricing?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {

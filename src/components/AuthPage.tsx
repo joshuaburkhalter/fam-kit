@@ -14,6 +14,7 @@ import {
   EyeOff,
   Home,
   ArrowLeft,
+  Gift,
 } from 'lucide-react';
 import { usePWA } from '../context/PWAContext';
 import { HomebaseLogo } from './HomebaseLogo';
@@ -89,6 +90,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
   const [householdAction, setHouseholdAction] = useState<'create_household' | 'join_household'>('create_household');
   const [newHouseholdName, setNewHouseholdName] = useState('');
   const [joinInviteCode, setJoinInviteCode] = useState('');
+  const [promoCode, setPromoCode] = useState('');
 
   // UI state
   const [isLoading, setIsLoading] = useState(false);
@@ -103,7 +105,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
     try {
       await login(loginIdentifier.trim(), loginPassword);
     } catch (err: any) {
-      setErrorMessage(err.message || 'Login failed. Please check your credentials.');
+      setErrorMessage(err.message || 'Incorrect username or password. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -113,17 +115,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
     e.preventDefault();
     const cleanUser = registerUsername.trim().toLowerCase().replace(/\s+/g, '');
     if (!cleanUser) {
-      setErrorMessage('Please choose a username.');
-      return;
-    }
-
-    if (cleanUser.length < 3) {
-      setErrorMessage('Username must be at least 3 characters long.');
-      return;
-    }
-
-    if (!/^[a-z0-9_-]+$/.test(cleanUser)) {
-      setErrorMessage('Username can only contain letters, numbers, underscores, and hyphens (no spaces).');
+      setErrorMessage('Please choose a valid username.');
       return;
     }
 
@@ -150,6 +142,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
         action: householdAction,
         householdName: newHouseholdName.trim() || undefined,
         inviteCode: joinInviteCode.trim().toUpperCase() || undefined,
+        promoCode: promoCode.trim() ? promoCode.trim().toUpperCase() : undefined,
       });
     } catch (err: any) {
       setErrorMessage(err.message || 'Registration failed.');
@@ -518,18 +511,40 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                 </div>
 
                 {householdAction === 'create_household' ? (
-                  <div>
-                    <label className="text-[11px] font-semibold text-slate-300 block mb-1">
-                      Household Name
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={newHouseholdName}
-                      onChange={(e) => setNewHouseholdName(e.target.value)}
-                      placeholder="e.g. The Garcia Family"
-                      className="w-full bg-slate-900/90 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-                    />
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+                        Household Name
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={newHouseholdName}
+                        onChange={(e) => setNewHouseholdName(e.target.value)}
+                        placeholder="e.g. The Garcia Family"
+                        className="w-full bg-slate-900/90 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                      />
+                    </div>
+
+                    {/* Optional Voucher Code */}
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+                        Free Access Voucher Code <span className="text-[10px] text-slate-500 font-normal">(Optional)</span>
+                      </label>
+                      <div className="relative">
+                        <Gift className="w-3.5 h-3.5 text-emerald-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          value={promoCode}
+                          onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+                          placeholder="e.g. HB3-XXXX-XXXX or HB6-XXXX-XXXX"
+                          className="w-full bg-slate-900/90 border border-white/10 rounded-xl pl-8 pr-3.5 py-2 text-xs font-mono uppercase text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                        />
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-1">
+                        Have a 3-month, 6-month, or lifetime pass? Enter it here to skip payment.
+                      </p>
+                    </div>
                   </div>
                 ) : (
                   <div>

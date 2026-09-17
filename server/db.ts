@@ -359,6 +359,77 @@ function initSchema(db: Database) {
     console.error('Error randomizing invite codes:', err);
   }
 
+  // Auto-migration for subscription & promo codes
+  try {
+    db.run(`ALTER TABLE households ADD COLUMN subscriptionStatus TEXT DEFAULT 'unpaid'`);
+  } catch {}
+  try {
+    db.run(`ALTER TABLE households ADD COLUMN subscriptionPlan TEXT`);
+  } catch {}
+  try {
+    db.run(`ALTER TABLE households ADD COLUMN subscriptionExpiresAt TEXT`);
+  } catch {}
+  try {
+    db.run(`ALTER TABLE households ADD COLUMN promoCodeUsed TEXT`);
+  } catch {}
+  try {
+    db.run(`ALTER TABLE households ADD COLUMN stripeCustomerId TEXT`);
+  } catch {}
+  try {
+    db.run(`ALTER TABLE households ADD COLUMN stripeSubscriptionId TEXT`);
+  } catch {}
+  try {
+    db.run(`
+      CREATE TABLE IF NOT EXISTS promo_codes (
+        code TEXT PRIMARY KEY,
+        description TEXT NOT NULL,
+        durationMonths INTEGER,
+        maxUses INTEGER NOT NULL DEFAULT 1,
+        timesUsed INTEGER NOT NULL DEFAULT 0,
+        isActive INTEGER NOT NULL DEFAULT 1,
+        createdByUserId TEXT,
+        createdAt TEXT NOT NULL
+      );
+    `);
+  } catch {}
+
+  // Backfill demo households with active lifetime access so demo users remain functional
+  try {
+    db.run(`
+      UPDATE households 
+      SET subscriptionStatus = 'active', 
+          subscriptionPlan = 'lifetime_founder' 
+      WHERE (id IN ('fam_default_1', 'fam_default_2') OR id LIKE 'fam_default_%')
+        AND (subscriptionStatus IS NULL OR subscriptionStatus = '' OR subscriptionStatus = 'unpaid')
+    `);
+  } catch {}
+
+  // Seed sample secure promo codes if none exist
+  try {
+    const promoCountRes = db.exec('SELECT COUNT(*) FROM promo_codes');
+    const promoCount = (promoCountRes[0]?.values[0]?.[0] as number) || 0;
+    if (promoCount === 0) {
+      const now = new Date().toISOString();
+      // 3 Months Free sample code
+      db.run(
+        `INSERT INTO promo_codes (code, description, durationMonths, maxUses, timesUsed, isActive, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        ['HB3-7X9K-2M4P', '3 Months Complimentary Full Access', 3, 100, 0, 1, now]
+      );
+      // 6 Months Free sample code
+      db.run(
+        `INSERT INTO promo_codes (code, description, durationMonths, maxUses, timesUsed, isActive, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        ['HB6-8W4R-9Q1Z', '6 Months Complimentary Full Access', 6, 100, 0, 1, now]
+      );
+      // Lifetime Free sample code
+      db.run(
+        `INSERT INTO promo_codes (code, description, durationMonths, maxUses, timesUsed, isActive, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        ['HBL-5T2N-8B7C', 'Lifetime VIP Complimentary Access', null, 50, 0, 1, now]
+      );
+    }
+  } catch (err) {
+    console.error('Error seeding promo codes:', err);
+  }
+
   // Check if seeded
   const check = db.exec('SELECT COUNT(*) as count FROM households');
   const count = (check[0]?.values[0]?.[0] as number) || 0;
@@ -375,6 +446,18 @@ function initSchema(db: Database) {
   }
 
   saveDb();
+}
+
+export function generateSecureVoucherCode(prefix: string = 'HB'): string {
+  const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const pick = (len: number) => {
+    let res = '';
+    for (let i = 0; i < len; i++) {
+      res += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return res;
+  };
+  return `${prefix}-${pick(4)}-${pick(4)}`;
 }
 
 export const DEFAULT_AISLE_TEMPLATES = [
@@ -412,7 +495,7 @@ function seedDemoData(db: Database) {
     demoInviteCode += chars.charAt(Math.floor(Math.random() * chars.length));
   }
 
-  db.run(`INSERT INTO households VALUES (?, ?, ?, ?)`, [householdId, 'The Burkhalter Family', demoInviteCode, now]);
+  db.run(`INSERT INTO households (id, name, inviteCode, createdAt, subscriptionStatus, subscriptionPlan) VALUES (?, ?, ?, ?, ?, ?)`, [householdId, 'The Burkhalter Family', demoInviteCode, now, 'active', 'lifetime_founder']);
 
   db.run(`INSERT INTO users (id, name, username, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, ['u1', 'Joshua', 'joshua', 'joshua@redpointaudio.com', '👨‍💻', '#10b981', 'Parent', householdId, 'password123']);
   db.run(`INSERT INTO users (id, name, username, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, ['u2', 'Sarah', 'sarah', 'sarah@famkit.app', '👩‍🏫', '#ec4899', 'Parent', householdId, 'password123']);
@@ -552,7 +635,7 @@ function seedMillerFamily(db: Database) {
     millerInviteCode += chars.charAt(Math.floor(Math.random() * chars.length));
   }
 
-  db.run(`INSERT OR IGNORE INTO households VALUES (?, ?, ?, ?)`, [householdId, 'The Miller Family', millerInviteCode, now]);
+  db.run(`INSERT OR IGNORE INTO households (id, name, inviteCode, createdAt, subscriptionStatus, subscriptionPlan) VALUES (?, ?, ?, ?, ?, ?)`, [householdId, 'The Miller Family', millerInviteCode, now, 'active', 'lifetime_founder']);
 
   db.run(`INSERT OR IGNORE INTO users (id, name, username, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, ['u5', 'Alex Miller', 'alex', 'alex@miller.com', '👨‍💼', '#3b82f6', 'Parent', householdId, 'password123']);
   db.run(`INSERT OR IGNORE INTO users (id, name, username, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, ['u6', 'Jamie Miller', 'jamie', 'jamie@miller.com', '👩‍🔬', '#8b5cf6', 'Parent', householdId, 'password123']);

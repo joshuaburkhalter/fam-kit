@@ -31,6 +31,7 @@ import {
 import type { WeeklyMeal, MealLog, Recipe } from '../types';
 import { usePWA } from '../context/PWAContext';
 import { api } from '../lib/api';
+import { CheckSparkle, triggerHapticCheck } from '../components/CheckSparkle';
 
 interface MealsDataCache {
   householdId: string;
@@ -74,6 +75,8 @@ export const MealsPage: React.FC = () => {
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
   const [recipeSearch, setRecipeSearch] = useState('');
   const [checkedIngredients, setCheckedIngredients] = useState<Record<string, boolean>>({});
+  const [recipeStepProgress, setRecipeStepProgress] = useState<Record<number, boolean>>({});
+  const [justCompletedModalStep, setJustCompletedModalStep] = useState<number | null>(null);
 
   // Quick Date Picker Modal
   const [quickDateMeal, setQuickDateMeal] = useState<WeeklyMeal | null>(null);
@@ -828,8 +831,12 @@ export const MealsPage: React.FC = () => {
               )}
 
               <button
-                onClick={() => setViewingRecipe(null)}
-                className="absolute top-2.5 right-2.5 p-2 rounded-full bg-slate-950/70 hover:bg-slate-950 text-white backdrop-blur-md transition-colors border border-white/10"
+                onClick={() => {
+                  setViewingRecipe(null);
+                  setRecipeStepProgress({});
+                  setJustCompletedModalStep(null);
+                }}
+                className="absolute top-2.5 right-2.5 p-2 rounded-full bg-slate-950/70 hover:bg-slate-950 text-white backdrop-blur-md transition-colors border border-white/10 cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -932,18 +939,54 @@ export const MealsPage: React.FC = () => {
                   <span>Directions ({viewingRecipe.instructions.length})</span>
                 </h3>
 
-                <div className="space-y-2.5">
-                  {viewingRecipe.instructions.map((step, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-start gap-2.5 bg-slate-950/50 border border-slate-800/80 rounded-2xl p-3 text-xs text-slate-300 leading-relaxed"
-                    >
-                      <span className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5 border border-emerald-500/30">
-                        {idx + 1}
-                      </span>
-                      <p className="flex-1">{step}</p>
-                    </div>
-                  ))}
+                <div className="space-y-2">
+                  {viewingRecipe.instructions.map((step, idx) => {
+                    const isDone = Boolean(recipeStepProgress[idx]);
+                    const isJustDone = justCompletedModalStep === idx;
+                    return (
+                      <div
+                        key={idx}
+                        onClick={() => {
+                          const nextDone = !isDone;
+                          if (nextDone) {
+                            triggerHapticCheck();
+                            setJustCompletedModalStep(idx);
+                          }
+                          setRecipeStepProgress((prev) => ({ ...prev, [idx]: nextDone }));
+                        }}
+                        className={`flex items-start gap-2.5 rounded-2xl p-3 text-xs leading-relaxed transition-all cursor-pointer border ${
+                          isDone
+                            ? 'bg-slate-950/30 border-slate-800/40 opacity-60'
+                            : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-200'
+                        } ${isJustDone ? 'animate-row-crossing ring-1 ring-emerald-500/40' : ''}`}
+                      >
+                        <div className="relative shrink-0 mt-0.5">
+                          <CheckSparkle trigger={isJustDone} />
+                          <span
+                            className={`w-5 h-5 rounded-full font-bold text-[11px] flex items-center justify-center transition-all ${
+                              isDone
+                                ? 'bg-emerald-500 text-slate-950 shadow-sm shadow-emerald-500/30 ' +
+                                  (isJustDone ? 'animate-check-pop' : '')
+                                : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                            }`}
+                          >
+                            {isDone ? <Check className="w-3 h-3 stroke-[3]" /> : idx + 1}
+                          </span>
+                        </div>
+                        <p
+                          className={`flex-1 transition-colors ${
+                            isDone
+                              ? isJustDone
+                                ? 'animate-strike text-slate-400'
+                                : 'line-through text-slate-500'
+                              : 'text-slate-300'
+                          }`}
+                        >
+                          {step}
+                        </p>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -951,8 +994,12 @@ export const MealsPage: React.FC = () => {
             {/* Sticky Bottom Actions */}
             <div className="p-3.5 bg-slate-950 border-t border-slate-800 flex items-center gap-2 pb-safe">
               <button
-                onClick={() => setViewingRecipe(null)}
-                className="w-1/3 py-3 rounded-2xl text-xs font-bold text-slate-400 bg-slate-900 border border-slate-800"
+                onClick={() => {
+                  setViewingRecipe(null);
+                  setRecipeStepProgress({});
+                  setJustCompletedModalStep(null);
+                }}
+                className="w-1/3 py-3 rounded-2xl text-xs font-bold text-slate-400 bg-slate-900 border border-slate-800 hover:text-white transition-colors"
               >
                 Close
               </button>

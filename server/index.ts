@@ -3,7 +3,7 @@ import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
-import { getDb, queryAll, queryOne, execute, saveDb, createDefaultAisles } from './db.js';
+import { getDb, queryAll, queryOne, execute, saveDb, createDefaultAisles, generateSecureVoucherCode } from './db.js';
 import { getGeminiModel } from './gemini.js';
 import { parseRecipeFromUrl, parseRecipeFromHtml, getCuratedFoodImage, findAccurateRecipePhoto, generateRecipeImageWithImagen } from './recipe-parser.js';
 import {
@@ -28,10 +28,20 @@ import {
 dotenv.config();
 dotenv.config({ path: '.env.local' });
 
+import Stripe from 'stripe';
+
+function getStripe(): Stripe | null {
+  const secretKey = process.env.STRIPE_SECRET_KEY;
+  if (!secretKey || !secretKey.trim()) return null;
+  return new Stripe(secretKey.trim(), {
+    apiVersion: '2025-02-24.acacia' as any,
+  });
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const app = express();
+export const app = express();
 const PORT = process.env.PORT || 3001;
 
 app.use(cors());
@@ -83,12 +93,33 @@ function getUniqueInviteCode(): string {
 function formatHousehold(h: any) {
   if (!h) return null;
   const code = h.inviteCode || h.invite_code || '';
+  let status = h.subscriptionStatus || 'unpaid';
+  const expiresAt = h.subscriptionExpiresAt || null;
+
+  // Auto-expire if past the expiration timestamp
+  if (status === 'active' && expiresAt) {
+    const expTime = new Date(expiresAt).getTime();
+    if (!isNaN(expTime) && expTime < Date.now()) {
+      status = 'expired';
+      try {
+        execute('UPDATE households SET subscriptionStatus = ? WHERE id = ?', ['expired', h.id]);
+      } catch {}
+    }
+  }
+
+  const hasActiveAccess = status === 'active' || status === 'lifetime_founder';
+
   return {
     ...h,
     id: h.id,
     name: h.name,
     inviteCode: code,
     invite_code: code,
+    subscriptionStatus: status,
+    subscriptionPlan: h.subscriptionPlan || null,
+    subscriptionExpiresAt: expiresAt,
+    promoCodeUsed: h.promoCodeUsed || null,
+    hasActiveAccess,
     createdAt: h.createdAt || h.created_at || '',
     created_at: h.createdAt || h.created_at || '',
   };
@@ -201,7 +232,29 @@ app.post('/api/auth/register', (req, res) => {
     targetHouseholdId = `fam_${Date.now()}`;
     const code = getUniqueInviteCode();
 
-    execute('INSERT INTO households VALUES (?, ?, ?, ?)', [targetHouseholdId, householdName.trim(), code, now]);
+    let initialStatus = 'unpaid';
+    let initialPlan: string | null = null;
+    let initialExpiresAt: string | null = null;
+    let initialPromoUsed: string | null = null;
+
+    const promoInput = (req.body.promoCode || '').trim().toUpperCase();
+    if (promoInput) {
+      const promoRow = queryOne<any>('SELECT * FROM promo_codes WHERE UPPER(code) = ? AND isActive = 1', [promoInput]);
+      if (promoRow && (!promoRow.maxUses || promoRow.timesUsed < promoRow.maxUses)) {
+        initialStatus = 'active';
+        initialPlan = promoRow.durationMonths ? `promo_${promoRow.durationMonths}mo` : 'promo_lifetime';
+        initialExpiresAt = promoRow.durationMonths
+          ? new Date(Date.now() + promoRow.durationMonths * 30 * 24 * 60 * 60 * 1000).toISOString()
+          : null;
+        initialPromoUsed = promoRow.code;
+        execute('UPDATE promo_codes SET timesUsed = timesUsed + 1 WHERE code = ?', [promoRow.code]);
+      }
+    }
+
+    execute(
+      'INSERT INTO households (id, name, inviteCode, createdAt, subscriptionStatus, subscriptionPlan, subscriptionExpiresAt, promoCodeUsed) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [targetHouseholdId, householdName.trim(), code, now, initialStatus, initialPlan, initialExpiresAt, initialPromoUsed]
+    );
     createDefaultAisles(targetHouseholdId);
   } else if (action === 'join_household') {
     if (!inviteCode || !inviteCode.trim()) {
@@ -272,6 +325,407 @@ app.get('/api/auth/demo-users', (_req, res) => {
   });
 
   res.json(formatted);
+});
+
+// ---------------- SUBSCRIPTION & PROMO CODE ROUTES ----------------
+
+// Rate limiting failed promo code attempts: max 5 failed attempts per 15 minutes
+const failedPromoAttempts = new Map<string, { count: number; lastAttempt: number }>();
+
+function checkPromoRateLimit(key: string): boolean {
+  const now = Date.now();
+  const entry = failedPromoAttempts.get(key);
+  if (!entry) return true;
+  if (now - entry.lastAttempt > 15 * 60 * 1000) {
+    failedPromoAttempts.delete(key);
+    return true;
+  }
+  return entry.count < 5;
+}
+
+function recordFailedPromoAttempt(key: string) {
+  const now = Date.now();
+  const entry = failedPromoAttempts.get(key);
+  if (!entry || now - entry.lastAttempt > 15 * 60 * 1000) {
+    failedPromoAttempts.set(key, { count: 1, lastAttempt: now });
+  } else {
+    entry.count += 1;
+    entry.lastAttempt = now;
+  }
+}
+
+function clearFailedPromoAttempts(key: string) {
+  failedPromoAttempts.delete(key);
+}
+
+// 1. Subscription status for active household
+app.get('/api/subscription/status', (req, res) => {
+  const householdId = getHouseholdId(req);
+  const rawH = queryOne('SELECT * FROM households WHERE id = ?', [householdId]);
+  if (!rawH) {
+    return res.status(404).json({ error: 'Household not found' });
+  }
+  const h = formatHousehold(rawH);
+  res.json({
+    householdId: h.id,
+    householdName: h.name,
+    subscriptionStatus: h.subscriptionStatus,
+    subscriptionPlan: h.subscriptionPlan,
+    subscriptionExpiresAt: h.subscriptionExpiresAt,
+    promoCodeUsed: h.promoCodeUsed,
+    hasActiveAccess: h.hasActiveAccess,
+  });
+});
+
+// 2. Redeem a free access promo code
+app.post('/api/subscription/redeem', (req, res) => {
+  const householdId = getHouseholdId(req);
+  const { code } = req.body;
+  const rawCode = (code || '').trim().toUpperCase();
+
+  if (!rawCode) {
+    return res.status(400).json({ error: 'Please enter a promo code.' });
+  }
+
+  const clientKey = `${req.ip || 'ip'}_${householdId}`;
+  if (!checkPromoRateLimit(clientKey)) {
+    return res.status(429).json({
+      error: 'Too many unsuccessful attempts. Please wait 15 minutes before trying again.',
+    });
+  }
+
+  const promo = queryOne<any>(
+    'SELECT * FROM promo_codes WHERE UPPER(code) = ?',
+    [rawCode]
+  );
+
+  if (!promo || promo.isActive !== 1) {
+    recordFailedPromoAttempt(clientKey);
+    return res.status(400).json({ error: 'Invalid or expired promo code.' });
+  }
+
+  if (promo.maxUses && promo.maxUses > 0 && promo.timesUsed >= promo.maxUses) {
+    recordFailedPromoAttempt(clientKey);
+    return res.status(400).json({ error: 'This promo code has reached its redemption limit.' });
+  }
+
+  clearFailedPromoAttempts(clientKey);
+
+  const durationMonths = promo.durationMonths ? Number(promo.durationMonths) : null;
+  const expiresAt = durationMonths
+    ? new Date(Date.now() + durationMonths * 30 * 24 * 60 * 60 * 1000).toISOString()
+    : null;
+  const planName = durationMonths ? `promo_${durationMonths}mo` : 'promo_lifetime';
+
+  execute(
+    'UPDATE households SET subscriptionStatus = ?, subscriptionPlan = ?, subscriptionExpiresAt = ?, promoCodeUsed = ? WHERE id = ?',
+    ['active', planName, expiresAt, promo.code, householdId]
+  );
+
+  execute('UPDATE promo_codes SET timesUsed = timesUsed + 1 WHERE code = ?', [promo.code]);
+
+  const updatedHousehold = queryOne('SELECT * FROM households WHERE id = ?', [householdId]);
+  const formatted = formatHousehold(updatedHousehold);
+
+  const durationText = durationMonths
+    ? `${durationMonths} months of full free access unlocked!`
+    : 'Lifetime complimentary family access unlocked!';
+
+  res.json({
+    success: true,
+    message: durationText,
+    household: formatted,
+    durationMonths,
+    expiresAt,
+  });
+});
+
+// 3. Subscribe to a paid plan ($10/mo or $7/mo annually)
+app.post('/api/subscription/subscribe', (req, res) => {
+  const householdId = getHouseholdId(req);
+  const { plan } = req.body; // 'monthly' | 'annual'
+
+  if (plan !== 'monthly' && plan !== 'annual') {
+    return res.status(400).json({ error: 'Invalid subscription plan. Choose monthly or annual.' });
+  }
+
+  const isAnnual = plan === 'annual';
+  const durationDays = isAnnual ? 365 : 30;
+  const expiresAt = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString();
+
+  execute(
+    'UPDATE households SET subscriptionStatus = ?, subscriptionPlan = ?, subscriptionExpiresAt = ?, promoCodeUsed = NULL WHERE id = ?',
+    ['active', plan, expiresAt, householdId]
+  );
+
+  const updatedHousehold = queryOne('SELECT * FROM households WHERE id = ?', [householdId]);
+  const formatted = formatHousehold(updatedHousehold);
+
+  res.json({
+    success: true,
+    message: isAnnual
+      ? 'Annual subscription activated ($7/mo billed annually at $84/yr)!'
+      : 'Monthly subscription activated ($10/mo)!',
+    household: formatted,
+  });
+});
+
+// 3.1. Create Stripe Checkout Session (Redirects to Stripe hosted checkout)
+app.post('/api/subscription/create-checkout-session', async (req, res) => {
+  const householdId = getHouseholdId(req);
+  const { plan } = req.body; // 'monthly' | 'annual'
+
+  if (plan !== 'monthly' && plan !== 'annual') {
+    return res.status(400).json({ error: 'Invalid subscription plan. Choose monthly or annual.' });
+  }
+
+  const stripe = getStripe();
+  const monthlyPriceId = process.env.STRIPE_PRICE_MONTHLY || 'price_1UGQDGCzQPmA3BBxQKWSqlSm';
+  const annualPriceId = process.env.STRIPE_PRICE_ANNUAL || 'price_1UGQDxCzQPmA3BBxgb9WhM8G';
+  const priceId = plan === 'annual' ? annualPriceId : monthlyPriceId;
+
+  if (!stripe) {
+    // If Stripe secret key is not set, activate in simulated mode
+    const isAnnual = plan === 'annual';
+    const durationDays = isAnnual ? 365 : 30;
+    const expiresAt = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString();
+
+    execute(
+      'UPDATE households SET subscriptionStatus = ?, subscriptionPlan = ?, subscriptionExpiresAt = ?, promoCodeUsed = NULL WHERE id = ?',
+      ['active', plan, expiresAt, householdId]
+    );
+
+    const updatedHousehold = queryOne('SELECT * FROM households WHERE id = ?', [householdId]);
+    return res.json({
+      simulated: true,
+      message: `${isAnnual ? 'Annual ($7/mo)' : 'Monthly ($10/mo)'} subscription activated (Simulated mode - Add STRIPE_SECRET_KEY to enable live checkout).`,
+      household: formatHousehold(updatedHousehold),
+    });
+  }
+
+  try {
+    const rawOrigin = req.headers.origin || req.headers.referer || 'http://localhost:3001';
+    const origin = String(rawOrigin).replace(/\/$/, '');
+    const user = getAuthUser(req);
+    const household = queryOne<{ id: string; name: string; stripeCustomerId?: string }>(
+      'SELECT id, name, stripeCustomerId FROM households WHERE id = ?',
+      [householdId]
+    );
+
+    let customerId = household?.stripeCustomerId;
+    if (!customerId && user?.email) {
+      try {
+        const customer = await stripe.customers.create({
+          email: user.email,
+          name: user.name || household?.name,
+          metadata: { householdId, userId: user.id },
+        });
+        customerId = customer.id;
+        execute('UPDATE households SET stripeCustomerId = ? WHERE id = ?', [customerId, householdId]);
+      } catch (e) {
+        console.warn('Stripe customer creation note:', e);
+      }
+    }
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      mode: 'subscription',
+      customer: customerId || undefined,
+      customer_email: !customerId && user?.email ? user.email : undefined,
+      line_items: [
+        {
+          price: priceId,
+          quantity: 1,
+        },
+      ],
+      client_reference_id: householdId,
+      metadata: {
+        householdId,
+        userId: user?.id || '',
+        plan,
+      },
+      subscription_data: {
+        metadata: {
+          householdId,
+          userId: user?.id || '',
+          plan,
+        },
+      },
+      success_url: `${origin}/?stripe_session_id={CHECKOUT_SESSION_ID}&stripe_status=success`,
+      cancel_url: `${origin}/pricing?canceled=true`,
+    });
+
+    res.json({ checkoutUrl: session.url });
+  } catch (err: any) {
+    console.error('Stripe checkout session error:', err);
+    res.status(500).json({ error: err.message || 'Failed to create checkout session' });
+  }
+});
+
+// 3.2. Verify Stripe Checkout Session on return
+app.get('/api/subscription/verify-checkout-session', async (req, res) => {
+  const sessionId = req.query.session_id as string;
+  if (!sessionId) {
+    return res.status(400).json({ error: 'Session ID is required' });
+  }
+
+  const stripe = getStripe();
+  if (!stripe) {
+    return res.status(400).json({ error: 'Stripe is not configured' });
+  }
+
+  try {
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    const householdId = session.client_reference_id || session.metadata?.householdId;
+    const plan = session.metadata?.plan || 'annual';
+
+    if (session.payment_status === 'paid' || session.status === 'complete') {
+      if (householdId) {
+        const isAnnual = plan === 'annual';
+        const durationDays = isAnnual ? 365 : 30;
+        const expiresAt = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString();
+        const subId = typeof session.subscription === 'string' ? session.subscription : (session.subscription as any)?.id || null;
+        const custId = typeof session.customer === 'string' ? session.customer : (session.customer as any)?.id || null;
+
+        execute(
+          'UPDATE households SET subscriptionStatus = ?, subscriptionPlan = ?, subscriptionExpiresAt = ?, stripeCustomerId = ?, stripeSubscriptionId = ? WHERE id = ?',
+          ['active', plan, expiresAt, custId, subId, householdId]
+        );
+
+        const updatedHousehold = queryOne('SELECT * FROM households WHERE id = ?', [householdId]);
+        return res.json({
+          success: true,
+          message: 'Payment confirmed! Household access is active.',
+          household: formatHousehold(updatedHousehold),
+        });
+      }
+    }
+
+    res.json({ success: false, status: session.status, paymentStatus: session.payment_status });
+  } catch (err: any) {
+    console.error('Verify checkout session error:', err);
+    res.status(500).json({ error: err.message || 'Failed to verify session' });
+  }
+});
+
+// 3.3. Stripe Webhook Endpoint
+app.post('/api/subscription/stripe-webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  const stripe = getStripe();
+  const sig = req.headers['stripe-signature'];
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+  let event: any;
+
+  if (stripe && webhookSecret && sig) {
+    try {
+      event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+    } catch (err: any) {
+      console.error('Stripe webhook signature error:', err.message);
+      return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+  } else {
+    event = typeof req.body === 'string' || Buffer.isBuffer(req.body) ? JSON.parse(req.body.toString()) : req.body;
+  }
+
+  try {
+    switch (event.type) {
+      case 'checkout.session.completed': {
+        const session = event.data.object as any;
+        const householdId = session.client_reference_id || session.metadata?.householdId;
+        const plan = session.metadata?.plan || 'annual';
+        if (householdId) {
+          const isAnnual = plan === 'annual';
+          const durationDays = isAnnual ? 365 : 30;
+          const expiresAt = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString();
+          execute(
+            'UPDATE households SET subscriptionStatus = ?, subscriptionPlan = ?, subscriptionExpiresAt = ?, stripeCustomerId = ?, stripeSubscriptionId = ? WHERE id = ?',
+            ['active', plan, expiresAt, session.customer, session.subscription, householdId]
+          );
+        }
+        break;
+      }
+      case 'customer.subscription.deleted': {
+        const sub = event.data.object as any;
+        const householdId = sub.metadata?.householdId;
+        if (householdId) {
+          execute("UPDATE households SET subscriptionStatus = 'expired' WHERE id = ?", [householdId]);
+        } else if (sub.id) {
+          execute("UPDATE households SET subscriptionStatus = 'expired' WHERE stripeSubscriptionId = ?", [sub.id]);
+        }
+        break;
+      }
+      case 'customer.subscription.updated': {
+        const sub = event.data.object as any;
+        const householdId = sub.metadata?.householdId;
+        const status = sub.status === 'active' || sub.status === 'trialing' ? 'active' : 'expired';
+        if (householdId) {
+          execute("UPDATE households SET subscriptionStatus = ? WHERE id = ?", [status, householdId]);
+        }
+        break;
+      }
+    }
+    res.json({ received: true });
+  } catch (err: any) {
+    console.error('Error handling webhook event:', err);
+    res.status(500).json({ error: 'Webhook processing failed' });
+  }
+});
+
+// 4. Generate new secure promo code (Owner/Admin tool)
+app.post('/api/subscription/generate-code', (req, res) => {
+  const { durationMonths, description, maxUses } = req.body;
+  const parsedDuration = durationMonths === 3 || durationMonths === 6 ? durationMonths : null;
+  const prefix = parsedDuration === 3 ? 'HB3' : parsedDuration === 6 ? 'HB6' : 'HBL';
+  const code = generateSecureVoucherCode(prefix);
+  const now = new Date().toISOString();
+  const desc =
+    description && description.trim()
+      ? description.trim()
+      : parsedDuration
+      ? `${parsedDuration} Months Complimentary Family Access`
+      : 'Lifetime Complimentary Access';
+  const uses = typeof maxUses === 'number' && maxUses > 0 ? maxUses : 1;
+
+  const authUser = getAuthUser(req);
+
+  execute(
+    'INSERT INTO promo_codes (code, description, durationMonths, maxUses, timesUsed, isActive, createdByUserId, createdAt) VALUES (?, ?, ?, ?, 0, 1, ?, ?)',
+    [code, desc, parsedDuration, uses, authUser?.id || null, now]
+  );
+
+  res.json({
+    code,
+    description: desc,
+    durationMonths: parsedDuration,
+    maxUses: uses,
+    timesUsed: 0,
+    isActive: 1,
+    createdAt: now,
+  });
+});
+
+// 5. List promo codes (for Settings management)
+app.get('/api/subscription/promo-codes', (_req, res) => {
+  const codes = queryAll<any>('SELECT * FROM promo_codes ORDER BY createdAt DESC LIMIT 50');
+  res.json(codes);
+});
+
+// 6. Test helper to toggle or set subscription state
+app.post('/api/subscription/test-set-state', (req, res) => {
+  const householdId = getHouseholdId(req);
+  const { status, plan, expiresAt } = req.body;
+  const validStatus = status === 'active' || status === 'unpaid' || status === 'expired' ? status : 'unpaid';
+
+  execute(
+    'UPDATE households SET subscriptionStatus = ?, subscriptionPlan = ?, subscriptionExpiresAt = ? WHERE id = ?',
+    [validStatus, plan || null, expiresAt || null, householdId]
+  );
+
+  const updatedHousehold = queryOne('SELECT * FROM households WHERE id = ?', [householdId]);
+  res.json({
+    success: true,
+    household: formatHousehold(updatedHousehold),
+  });
 });
 
 // ---------------- API ROUTES ----------------

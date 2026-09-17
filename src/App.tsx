@@ -10,22 +10,26 @@ import { CalendarPage } from './pages/CalendarPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { LandingPage } from './pages/LandingPage';
 import { LegalPage } from './pages/LegalPage';
+import { PricingPage } from './pages/PricingPage';
+import { PaywallModal } from './components/PaywallModal';
 import { AuthPage } from './components/AuthPage';
 import { usePWA } from './context/PWAContext';
-import { Loader2, ArrowRight } from 'lucide-react';
+import { Loader2, ArrowRight, CheckCircle2, X } from 'lucide-react';
 
 const VALID_TABS = ['assistant', 'grocery', 'meals', 'recipes', 'calendar', 'settings', 'family'];
 const LAST_TAB_KEY = 'homebase_last_active_tab';
 
-function resolveInitialLegalView(): 'privacy' | 'terms' | null {
+function resolveInitialOverlayView(): 'privacy' | 'terms' | 'pricing' | null {
   if (typeof window === 'undefined') return null;
   try {
     const p = window.location.pathname.toLowerCase();
     if (p === '/privacy' || p.startsWith('/privacy')) return 'privacy';
     if (p === '/terms' || p.startsWith('/terms')) return 'terms';
+    if (p === '/pricing' || p.startsWith('/pricing')) return 'pricing';
     const params = new URLSearchParams(window.location.search);
     if (params.get('view') === 'privacy') return 'privacy';
     if (params.get('view') === 'terms') return 'terms';
+    if (params.get('view') === 'pricing' || params.get('tab') === 'pricing') return 'pricing';
   } catch {}
   return null;
 }
@@ -75,9 +79,10 @@ function resolveInitialTab(): string {
 }
 
 export const AppContent: React.FC = () => {
-  const { currentUser, isLoadingAuth } = usePWA();
+  const { currentUser, isLoadingAuth, hasActiveAccess, verifyCheckoutSession } = usePWA();
   const [activeTab, setActiveTabState] = useState<string>(resolveInitialTab);
-  const [legalView, setLegalView] = useState<'privacy' | 'terms' | null>(resolveInitialLegalView);
+  const [overlayView, setOverlayView] = useState<'privacy' | 'terms' | 'pricing' | null>(resolveInitialOverlayView);
+  const [stripeSuccessMessage, setStripeSuccessMessage] = useState<string | null>(null);
   const [showAuthModal, setShowAuthModal] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
@@ -112,10 +117,10 @@ export const AppContent: React.FC = () => {
     } catch {}
   };
 
-  // Intercept global link clicks to /privacy and /terms and handle browser back/forward
+  // Intercept global link clicks to /privacy, /terms, /pricing and handle browser back/forward
   useEffect(() => {
     const handleLocationChange = () => {
-      setLegalView(resolveInitialLegalView());
+      setOverlayView(resolveInitialOverlayView());
     };
 
     const handleLinkClick = (e: MouseEvent) => {
@@ -125,11 +130,15 @@ export const AppContent: React.FC = () => {
       if (href === '/privacy' || href?.startsWith('/privacy')) {
         e.preventDefault();
         window.history.pushState({}, '', '/privacy');
-        setLegalView('privacy');
+        setOverlayView('privacy');
       } else if (href === '/terms' || href?.startsWith('/terms')) {
         e.preventDefault();
         window.history.pushState({}, '', '/terms');
-        setLegalView('terms');
+        setOverlayView('terms');
+      } else if (href === '/pricing' || href?.startsWith('/pricing')) {
+        e.preventDefault();
+        window.history.pushState({}, '', '/pricing');
+        setOverlayView('pricing');
       }
     };
 
@@ -142,7 +151,7 @@ export const AppContent: React.FC = () => {
     };
   }, []);
 
-  // Handle URL parameters for PWA share_target and OAuth callbacks
+  // Handle URL parameters for PWA share_target, OAuth callbacks, and Stripe Checkout returns
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (
@@ -157,20 +166,62 @@ export const AppContent: React.FC = () => {
     if (shared || sharedUrl) {
       setActiveTab('recipes');
     }
-  }, []);
 
-  // Top priority: If user navigated to Privacy Policy or Terms of Service
-  if (legalView) {
+    // Stripe checkout return verification
+    const stripeSessionId = params.get('stripe_session_id') || params.get('session_id');
+    const stripeStatus = params.get('stripe_status');
+    if (stripeSessionId) {
+      verifyCheckoutSession(stripeSessionId)
+        .then((res) => {
+          if (res.success) {
+            setStripeSuccessMessage(res.message || 'Payment confirmed! Welcome to Homebase.');
+            // Clean up query string
+            const cleanUrl = window.location.pathname;
+            window.history.replaceState({}, document.title, cleanUrl);
+          }
+        })
+        .catch((err) => {
+          console.error('Failed to verify Stripe session:', err);
+        });
+    } else if (stripeStatus === 'success') {
+      setStripeSuccessMessage('Payment confirmed! Welcome to Homebase.');
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState({}, document.title, cleanUrl);
+    }
+  }, [verifyCheckoutSession]);
+
+  // Top priority overlay views: Privacy Policy, Terms of Service, or Pricing
+  if (overlayView === 'privacy' || overlayView === 'terms') {
     return (
       <LegalPage
-        type={legalView}
+        type={overlayView}
         onBack={() => {
-          setLegalView(null);
+          setOverlayView(null);
           if (window.history.length > 1) {
             window.history.back();
           } else {
             window.history.pushState({}, '', '/');
           }
+        }}
+      />
+    );
+  }
+
+  if (overlayView === 'pricing') {
+    return (
+      <PricingPage
+        onBack={() => {
+          setOverlayView(null);
+          if (window.history.length > 1) {
+            window.history.back();
+          } else {
+            window.history.pushState({}, '', '/');
+          }
+        }}
+        onOpenAuth={(mode) => {
+          setAuthInitialTab(mode || 'login');
+          setShowAuthModal(true);
+          setOverlayView(null);
         }}
       />
     );
@@ -201,15 +252,37 @@ export const AppContent: React.FC = () => {
           setAuthInitialTab(mode || 'login');
           setShowAuthModal(true);
         }}
+        onOpenPricing={() => {
+          window.history.pushState({}, '', '/pricing');
+          setOverlayView('pricing');
+        }}
       />
     );
   }
 
-  // If logged in, but specifically requested to see the Landing Page / Install guide
+  // If user is logged in, but their household does not have active subscription / voucher access -> Paywall
+  if (!hasActiveAccess) {
+    return (
+      <PaywallModal
+        onOpenPricingDetails={() => {
+          window.history.pushState({}, '', '/pricing');
+          setOverlayView('pricing');
+        }}
+      />
+    );
+  }
+
+  // If logged in and active, but specifically requested to see the Landing Page / Install guide
   if (showLandingForUser) {
     return (
       <div className="relative">
-        <LandingPage onOpenAuth={() => setShowLandingForUser(false)} />
+        <LandingPage
+          onOpenAuth={() => setShowLandingForUser(false)}
+          onOpenPricing={() => {
+            window.history.pushState({}, '', '/pricing');
+            setOverlayView('pricing');
+          }}
+        />
         <div className="fixed bottom-6 right-6 z-50">
           <button
             onClick={() => setShowLandingForUser(false)}
@@ -223,9 +296,29 @@ export const AppContent: React.FC = () => {
     );
   }
 
+  const handleOpenPricing = () => {
+    window.history.pushState({}, '', '/pricing');
+    setOverlayView('pricing');
+  };
+
   return (
     <div className="min-h-screen bg-background text-slate-100 flex flex-col selection:bg-emerald-500/30 selection:text-emerald-300">
-      <Navbar activeTab={activeTab} setActiveTab={setActiveTab} />
+      <Navbar activeTab={activeTab} setActiveTab={setActiveTab} onOpenPricing={handleOpenPricing} />
+
+      {stripeSuccessMessage && (
+        <div className="fixed top-20 right-4 z-50 max-w-md bg-emerald-500 text-slate-950 px-4 py-3 rounded-2xl shadow-2xl backdrop-blur-md flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top duration-300">
+          <div className="flex items-center gap-2 text-xs font-bold">
+            <CheckCircle2 className="w-5 h-5 shrink-0" />
+            <span>{stripeSuccessMessage}</span>
+          </div>
+          <button
+            onClick={() => setStripeSuccessMessage(null)}
+            className="p-1 rounded-lg hover:bg-black/10 transition-colors cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       <main className="flex-1 w-full overflow-x-hidden">
         {activeTab === 'assistant' && <AssistantPage />}
@@ -233,7 +326,9 @@ export const AppContent: React.FC = () => {
         {activeTab === 'meals' && <MealsPage />}
         {activeTab === 'recipes' && <RecipesPage />}
         {activeTab === 'calendar' && <CalendarPage />}
-        {(activeTab === 'settings' || activeTab === 'family') && <SettingsPage />}
+        {(activeTab === 'settings' || activeTab === 'family') && (
+          <SettingsPage onOpenPricing={handleOpenPricing} />
+        )}
       </main>
 
       <MobileNav activeTab={activeTab} setActiveTab={setActiveTab} />

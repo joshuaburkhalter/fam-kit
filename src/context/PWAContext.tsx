@@ -27,8 +27,14 @@ interface PWAContextType {
     action: 'create_household' | 'join_household';
     householdName?: string;
     inviteCode?: string;
+    promoCode?: string;
   }) => Promise<void>;
   logout: () => void;
+  hasActiveAccess: boolean;
+  redeemPromoCode: (code: string) => Promise<{ success: boolean; message: string; durationMonths?: number | null; expiresAt?: string | null }>;
+  subscribePlan: (plan: 'monthly' | 'annual') => Promise<{ success: boolean; message: string }>;
+  verifyCheckoutSession: (sessionId: string) => Promise<{ success: boolean; message: string }>;
+  testSetSubscriptionState: (status: 'active' | 'unpaid' | 'expired') => Promise<void>;
   isPushSupported: boolean;
   isPushSubscribed: boolean;
   pushPermission: NotificationPermission | 'unsupported';
@@ -109,11 +115,39 @@ function saveDeviceProfile(user: User, householdName?: string) {
 const normalizeHousehold = (h: any): Household | null => {
   if (!h) return null;
   const code = h.invite_code || h.inviteCode || '';
+  const status = (h.subscription_status || h.subscriptionStatus || 'unpaid') as 'active' | 'unpaid' | 'expired';
+  const expiresAt = h.subscription_expires_at || h.subscriptionExpiresAt || null;
+
+  let isExpired = false;
+  if (expiresAt) {
+    const expTime = new Date(expiresAt).getTime();
+    if (!isNaN(expTime) && expTime < Date.now()) {
+      isExpired = true;
+    }
+  }
+
+  const effectiveStatus = isExpired ? 'expired' : status;
+  const hasAccess =
+    effectiveStatus === 'active' ||
+    (effectiveStatus as string) === 'lifetime_founder' ||
+    h.has_active_access === true ||
+    h.hasActiveAccess === true;
+
   return {
     id: h.id,
     name: h.name,
     invite_code: code,
     inviteCode: code,
+    subscription_status: effectiveStatus,
+    subscriptionStatus: effectiveStatus,
+    subscription_plan: h.subscription_plan || h.subscriptionPlan || null,
+    subscriptionPlan: h.subscription_plan || h.subscriptionPlan || null,
+    subscription_expires_at: expiresAt,
+    subscriptionExpiresAt: expiresAt,
+    promo_code_used: h.promo_code_used || h.promoCodeUsed || null,
+    promoCodeUsed: h.promo_code_used || h.promoCodeUsed || null,
+    has_active_access: hasAccess,
+    hasActiveAccess: hasAccess,
     created_at: h.created_at || h.createdAt || '',
   };
 };
@@ -255,6 +289,7 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     action: 'create_household' | 'join_household';
     householdName?: string;
     inviteCode?: string;
+    promoCode?: string;
   }) => {
     const res = await api.register(data);
     localStorage.setItem('famkit_auth_token', res.token);
@@ -549,6 +584,79 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     saveDeviceProfile(normUser, household?.name);
   };
 
+  const hasActiveAccess = Boolean(household?.has_active_access || household?.hasActiveAccess);
+
+  const redeemPromoCode = async (code: string) => {
+    const res = await api.redeemPromoCode(code);
+    if (res.household) {
+      const normH = normalizeHousehold(res.household);
+      setHouseholdState(normH);
+      if (normH) {
+        localStorage.setItem('famkit_household', JSON.stringify(normH));
+      }
+    }
+    return res;
+  };
+
+  const subscribePlan = async (plan: 'monthly' | 'annual') => {
+    try {
+      const checkoutRes = await api.createCheckoutSession(plan);
+      if (checkoutRes.checkoutUrl) {
+        window.location.href = checkoutRes.checkoutUrl;
+        return { success: true, message: 'Redirecting to Stripe checkout...' };
+      }
+      if (checkoutRes.household) {
+        const normH = normalizeHousehold(checkoutRes.household);
+        setHouseholdState(normH);
+        if (normH) {
+          localStorage.setItem('famkit_household', JSON.stringify(normH));
+        }
+        return {
+          success: true,
+          message: checkoutRes.message || 'Subscription activated successfully!',
+        };
+      }
+    } catch (e: any) {
+      console.warn('Stripe checkout error, falling back to direct subscription:', e);
+    }
+
+    const res = await api.subscribePlan(plan);
+    if (res.household) {
+      const normH = normalizeHousehold(res.household);
+      setHouseholdState(normH);
+      if (normH) {
+        localStorage.setItem('famkit_household', JSON.stringify(normH));
+      }
+    }
+    return res;
+  };
+
+  const verifyCheckoutSession = async (sessionId: string) => {
+    const res = await api.verifyCheckoutSession(sessionId);
+    if (res.household) {
+      const normH = normalizeHousehold(res.household);
+      setHouseholdState(normH);
+      if (normH) {
+        localStorage.setItem('famkit_household', JSON.stringify(normH));
+      }
+    }
+    return {
+      success: Boolean(res.success),
+      message: res.message || (res.success ? 'Payment verified!' : 'Payment verification pending'),
+    };
+  };
+
+  const testSetSubscriptionState = async (status: 'active' | 'unpaid' | 'expired') => {
+    const res = await api.testSetSubscriptionState({ status });
+    if (res.household) {
+      const normH = normalizeHousehold(res.household);
+      setHouseholdState(normH);
+      if (normH) {
+        localStorage.setItem('famkit_household', JSON.stringify(normH));
+      }
+    }
+  };
+
   return (
     <PWAContext.Provider
       value={{
@@ -568,6 +676,11 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         login,
         register,
         logout,
+        hasActiveAccess,
+        redeemPromoCode,
+        subscribePlan,
+        verifyCheckoutSession,
+        testSetSubscriptionState,
         installPWA,
         subscribeToPush,
         unsubscribeFromPush,

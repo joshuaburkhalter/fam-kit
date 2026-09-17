@@ -24,6 +24,7 @@ import { usePWA } from '../context/PWAContext';
 import { api } from '../lib/api';
 import { RecipeScraperModal } from '../components/RecipeScraperModal';
 import { useFabAutoClose } from '../hooks/useFabAutoClose';
+import { CheckSparkle, CelebrationConfetti, triggerHapticCheck } from '../components/CheckSparkle';
 
 export const RecipesPage: React.FC = () => {
   const { household, apiKey } = usePWA();
@@ -41,6 +42,9 @@ export const RecipesPage: React.FC = () => {
   const [isCookMode, setIsCookMode] = useState(false);
   const [checkedIngredients, setCheckedIngredients] = useState<Record<number, boolean>>({});
   const [completedSteps, setCompletedSteps] = useState<Record<number, boolean>>({});
+  const [justCompletedStep, setJustCompletedStep] = useState<number | null>(null);
+  const [justCheckedIngredient, setJustCheckedIngredient] = useState<number | null>(null);
+  const [showConfetti, setShowConfetti] = useState(false);
   const [addedGroceryFeedback, setAddedGroceryFeedback] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
@@ -121,15 +125,31 @@ export const RecipesPage: React.FC = () => {
     if (!selectedRecipe) return;
     const isNowCompleted = !completedSteps[index];
 
-    setCompletedSteps((prev) => ({
-      ...prev,
+    if (isNowCompleted) {
+      triggerHapticCheck();
+      setJustCompletedStep(index);
+    }
+
+    const nextSteps = {
+      ...completedSteps,
       [index]: isNowCompleted,
-    }));
+    };
+    setCompletedSteps(nextSteps);
+
+    // If all steps completed, celebrate with confetti!
+    const isAllDone =
+      selectedRecipe.instructions.length > 0 &&
+      selectedRecipe.instructions.every((_, idx) => nextSteps[idx]);
+
+    if (isAllDone && isNowCompleted) {
+      setShowConfetti(true);
+      setTimeout(() => setShowConfetti(false), 4500);
+    }
 
     // If step was just crossed off, scroll to the next step
     if (isNowCompleted) {
       let nextIndex = index + 1;
-      while (nextIndex < selectedRecipe.instructions.length && completedSteps[nextIndex]) {
+      while (nextIndex < selectedRecipe.instructions.length && nextSteps[nextIndex]) {
         nextIndex++;
       }
       if (nextIndex >= selectedRecipe.instructions.length && index + 1 < selectedRecipe.instructions.length) {
@@ -142,9 +162,21 @@ export const RecipesPage: React.FC = () => {
           if (nextEl) {
             nextEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
           }
-        }, 120);
+        }, 130);
       }
     }
+  };
+
+  const handleToggleIngredient = (index: number) => {
+    const isNowChecked = !checkedIngredients[index];
+    if (isNowChecked) {
+      triggerHapticCheck();
+      setJustCheckedIngredient(index);
+    }
+    setCheckedIngredients((prev) => ({
+      ...prev,
+      [index]: isNowChecked,
+    }));
   };
 
   const handleDeleteRecipe = async (id: string, title: string) => {
@@ -171,6 +203,9 @@ export const RecipesPage: React.FC = () => {
   const handleResetProgress = () => {
     setCheckedIngredients({});
     setCompletedSteps({});
+    setJustCompletedStep(null);
+    setJustCheckedIngredient(null);
+    setShowConfetti(false);
   };
 
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
@@ -210,7 +245,9 @@ export const RecipesPage: React.FC = () => {
     <div className="max-w-3xl mx-auto px-3 sm:px-6 pt-3 pb-36 md:pb-28 space-y-4">
       {/* If a recipe is selected, show detail view / Cook Mode */}
       {selectedRecipe ? (
-        <div className="space-y-4 animate-in fade-in duration-150">
+        <div className="space-y-4 animate-in fade-in duration-150 relative">
+          <CelebrationConfetti active={showConfetti || allStepsCompleted} />
+
           {/* Back button & Actions Bar */}
           <div className="flex flex-wrap items-center justify-between gap-2.5 glass-panel p-3 rounded-2xl border border-white/10">
             <button
@@ -436,50 +473,55 @@ export const RecipesPage: React.FC = () => {
                 </div>
 
                 <div className="space-y-1.5">
-                  {selectedRecipe.ingredients.map((ing, i) => (
-                    <div
-                      key={i}
-                      onClick={() =>
-                        setCheckedIngredients((prev) => ({
-                          ...prev,
-                          [i]: !prev[i],
-                        }))
-                      }
-                      className={`p-3 rounded-2xl flex items-center justify-between text-xs cursor-pointer transition-colors border ${
-                        checkedIngredients[i]
-                          ? 'bg-emerald-500/10 text-slate-400 border-emerald-500/20'
-                          : 'bg-slate-900/60 hover:bg-slate-900/90 text-slate-200 border-white/5'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0 pr-2">
-                        <div
-                          className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0 ${
-                            checkedIngredients[i]
-                              ? 'border-emerald-500 bg-emerald-500 text-slate-950'
-                              : 'border-white/20'
-                          }`}
-                        >
-                          {checkedIngredients[i] && <Check className="w-3 h-3 font-bold" />}
+                  {selectedRecipe.ingredients.map((ing, i) => {
+                    const isJustChecked = justCheckedIngredient === i;
+                    const isChecked = Boolean(checkedIngredients[i]);
+                    return (
+                      <div
+                        key={i}
+                        onClick={() => handleToggleIngredient(i)}
+                        className={`p-3 rounded-2xl flex items-center justify-between text-xs cursor-pointer transition-all border ${
+                          isChecked
+                            ? 'bg-emerald-500/10 text-slate-400 border-emerald-500/20'
+                            : 'bg-slate-900/60 hover:bg-slate-900/90 text-slate-200 border-white/5'
+                        } ${isJustChecked ? 'animate-row-crossing ring-1 ring-emerald-500/30' : ''}`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                          <div
+                            className={`relative w-4 h-4 rounded-md border flex items-center justify-center shrink-0 transition-all ${
+                              isChecked
+                                ? 'border-emerald-500 bg-emerald-500 text-slate-950 shadow-sm shadow-emerald-500/30 ' +
+                                  (isJustChecked ? 'animate-check-pop' : '')
+                                : 'border-white/20'
+                            }`}
+                          >
+                            <CheckSparkle trigger={isJustChecked} />
+                            {isChecked && <Check className="w-3 h-3 font-bold stroke-[3]" />}
+                          </div>
+                          <span
+                            className={`font-medium selectable-text transition-colors ${
+                              isChecked
+                                ? isJustChecked
+                                  ? 'animate-strike text-slate-400'
+                                  : 'line-through text-slate-400'
+                                : ''
+                            }`}
+                          >
+                            {ing.item}
+                          </span>
                         </div>
-                        <span
-                          className={`font-medium selectable-text ${
-                            checkedIngredients[i] ? 'line-through text-slate-400' : ''
-                          }`}
-                        >
-                          {ing.item}
-                        </span>
+                        {ing.amount && (
+                          <span
+                            className={`font-mono font-bold shrink-0 ${
+                              isChecked ? 'text-slate-500 line-through' : 'text-slate-400'
+                            }`}
+                          >
+                            {ing.amount} {ing.unit || ''}
+                          </span>
+                        )}
                       </div>
-                      {ing.amount && (
-                        <span
-                          className={`font-mono font-bold shrink-0 ${
-                            checkedIngredients[i] ? 'text-slate-500 line-through' : 'text-slate-400'
-                          }`}
-                        >
-                          {ing.amount} {ing.unit || ''}
-                        </span>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
@@ -490,49 +532,69 @@ export const RecipesPage: React.FC = () => {
                 </h3>
 
                 <div className="space-y-3">
-                  {selectedRecipe.instructions.map((step, i) => (
-                    <div
-                      key={i}
-                      id={`recipe-step-${i}`}
-                      onClick={() => handleToggleStep(i)}
-                      className={`p-4 rounded-3xl transition-all cursor-pointer border scroll-mt-24 ${
-                        completedSteps[i]
-                          ? 'bg-slate-900/30 border-white/5 opacity-50'
-                          : isCookMode
-                          ? 'bg-slate-900/90 border-amber-500/40 shadow-lg'
-                          : 'glass-panel-subtle border-white/5 hover:border-white/15'
-                      }`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <span
-                          className={`w-6 h-6 rounded-xl flex items-center justify-center text-xs font-mono font-bold shrink-0 mt-0.5 ${
-                            completedSteps[i]
-                              ? 'bg-emerald-500 text-slate-950'
-                              : 'bg-white/10 text-pink-400'
-                          }`}
-                        >
-                          {completedSteps[i] ? <Check className="w-3.5 h-3.5" /> : i + 1}
-                        </span>
-                        <p
-                          className={`text-sm leading-relaxed selectable-text ${
-                            completedSteps[i] ? 'line-through text-slate-500' : 'text-slate-100'
-                          }`}
-                        >
-                          {step}
-                        </p>
+                  {selectedRecipe.instructions.map((step, i) => {
+                    const isJustDone = justCompletedStep === i;
+                    const isDone = Boolean(completedSteps[i]);
+                    return (
+                      <div
+                        key={i}
+                        id={`recipe-step-${i}`}
+                        onClick={() => handleToggleStep(i)}
+                        className={`p-4 rounded-3xl transition-all cursor-pointer border scroll-mt-24 ${
+                          isDone
+                            ? 'bg-slate-900/30 border-white/5 opacity-60'
+                            : isCookMode
+                            ? 'bg-slate-900/90 border-amber-500/40 shadow-lg'
+                            : 'glass-panel-subtle border-white/5 hover:border-white/15'
+                        } ${isJustDone ? 'animate-row-crossing ring-2 ring-emerald-500/40' : ''}`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="relative shrink-0 mt-0.5">
+                            <CheckSparkle trigger={isJustDone} />
+                            <span
+                              className={`w-6 h-6 rounded-xl flex items-center justify-center text-xs font-mono font-bold transition-all ${
+                                isDone
+                                  ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/30 ' +
+                                    (isJustDone ? 'animate-check-pop' : '')
+                                  : 'bg-white/10 text-pink-400 hover:bg-pink-500/20'
+                              }`}
+                            >
+                              {isDone ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : i + 1}
+                            </span>
+                          </div>
+                          <p
+                            className={`text-sm leading-relaxed selectable-text transition-colors ${
+                              isDone
+                                ? isJustDone
+                                  ? 'animate-strike text-slate-400 font-normal'
+                                  : 'line-through text-slate-500 font-normal'
+                                : 'text-slate-100'
+                            }`}
+                          >
+                            {step}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
 
                   {/* All Steps Completed Celebration Banner */}
                   {allStepsCompleted && (
-                    <div className="p-4 rounded-3xl bg-emerald-500/10 border border-emerald-500/20 text-center space-y-2.5 animate-in fade-in">
-                      <p className="text-xs sm:text-sm font-bold text-emerald-400">
-                        🎉 All instructions completed! Enjoy your meal!
-                      </p>
+                    <div className="p-5 rounded-3xl bg-gradient-to-br from-emerald-950/40 to-slate-900 border border-emerald-500/30 text-center space-y-3 animate-in fade-in shadow-xl shadow-emerald-500/10 relative overflow-hidden">
+                      <div className="w-12 h-12 mx-auto rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center animate-trophy-bounce border border-emerald-500/30 shadow-inner">
+                        <ChefHat className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <h4 className="text-base font-black text-white">
+                          🎉 Recipe Completed! Bon Appétit!
+                        </h4>
+                        <p className="text-xs text-emerald-300/80 mt-1 max-w-sm mx-auto">
+                          All steps crossed off! Time to sit back, relax, and enjoy your delicious meal.
+                        </p>
+                      </div>
                       <button
                         onClick={handleResetProgress}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20"
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer"
                       >
                         <RotateCcw className="w-3.5 h-3.5" />
                         <span>Reset recipe for next time</span>
