@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   X,
   Bug,
@@ -250,9 +251,9 @@ export const BugFeatureAdminModal: React.FC<BugFeatureAdminModalProps> = ({
   const openBugsCount = requests.filter((r) => r.type === 'bug' && (r.status === 'open' || r.status === 'in_progress')).length;
   const openFeaturesCount = requests.filter((r) => r.type === 'feature' && (r.status === 'open' || r.status === 'in_progress')).length;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/85 backdrop-blur-md animate-in fade-in duration-150">
-      <div className="w-full max-w-3xl bg-[#0a0f1d] border border-white/15 rounded-3xl shadow-2xl shadow-black flex flex-col max-h-[92vh] overflow-hidden">
+  const modalContent = (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-2.5 sm:p-5 bg-black/85 backdrop-blur-md animate-in fade-in duration-150 overflow-y-auto">
+      <div className="w-full max-w-3xl bg-[#0a0f1d] border border-white/15 rounded-2xl sm:rounded-3xl shadow-2xl shadow-black flex flex-col max-h-[92vh] sm:max-h-[88vh] my-auto overflow-hidden animate-in zoom-in-95 duration-150">
         {/* Header */}
         <div className="p-4 sm:p-5 border-b border-white/10 flex items-center justify-between gap-3 bg-gradient-to-r from-slate-900 via-[#0a0f1d] to-slate-900">
           <div className="flex items-center gap-3 min-w-0">
@@ -725,4 +726,9 @@ export const BugFeatureAdminModal: React.FC<BugFeatureAdminModalProps> = ({
       </div>
     </div>
   );
+
+  if (typeof document !== 'undefined') {
+    return createPortal(modalContent, document.body);
+  }
+  return modalContent;
 };
