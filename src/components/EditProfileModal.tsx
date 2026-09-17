@@ -78,9 +78,11 @@ const isValidPhoto = (imgStr?: string | null): boolean => {
   return imgStr.startsWith('data:image') || imgStr.startsWith('http://') || imgStr.startsWith('https://');
 };
 
-export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onClose }) => {
+export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onClose, targetUser }) => {
   const { currentUser, users, updateProfile, switchUser } = usePWA();
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const activeUser = targetUser || currentUser;
 
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
@@ -97,20 +99,20 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    if (currentUser && isOpen) {
-      setName(currentUser.name || '');
-      setUsername(currentUser.username || '');
-      setEmail(currentUser.email || '');
-      setRole(currentUser.role || 'member');
-      setColor(currentUser.avatar_color || AVATAR_COLORS[0]);
-      setAvatarImage(isValidPhoto(currentUser.avatar) ? currentUser.avatar! : '');
+    if (activeUser && isOpen) {
+      setName(activeUser.name || '');
+      setUsername(activeUser.username || '');
+      setEmail(activeUser.email || '');
+      setRole(activeUser.role || 'member');
+      setColor(activeUser.avatar_color || AVATAR_COLORS[0]);
+      setAvatarImage(isValidPhoto(activeUser.avatar) ? activeUser.avatar! : '');
       setNewPassword('');
       setErrorMessage(null);
       setSuccessMessage(null);
     }
-  }, [currentUser, isOpen]);
+  }, [activeUser, isOpen]);
 
-  if (!isOpen || !currentUser) return null;
+  if (!isOpen || !activeUser) return null;
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -153,6 +155,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
     try {
       setIsSaving(true);
       await updateProfile({
+        userId: activeUser.id,
         name: name.trim(),
         username: username.trim().toLowerCase().replace(/\s+/g, '') || undefined,
         email: email.trim().toLowerCase() || undefined,
@@ -175,7 +178,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
     }
   };
 
-  const otherMembers = users.filter((u) => u.id !== currentUser.id);
+  const otherMembers = users.filter((u) => u.id !== activeUser.id);
 
   const modalContent = (
     <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-5 bg-black/85 backdrop-blur-md animate-in fade-in duration-150">
@@ -191,8 +194,14 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
               <User className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-white">Edit Profile</h2>
-              <p className="text-xs text-slate-400">Update your photo, name, username, and account details</p>
+              <h2 className="text-base font-bold text-white">
+                {activeUser.id === currentUser?.id ? 'Edit Profile' : `Edit ${activeUser.name}'s Profile`}
+              </h2>
+              <p className="text-xs text-slate-400">
+                {activeUser.id === currentUser?.id
+                  ? 'Update your photo, name, username, and account details'
+                  : `Update ${activeUser.name}'s photo, color, name, and account details`}
+              </p>
             </div>
           </div>
 
@@ -235,7 +244,9 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                   ) : isValidPhoto(avatarImage) ? (
                     <img src={avatarImage} alt="Profile preview" className="w-full h-full object-cover" />
                   ) : (
-                    <span className="font-bold text-2xl select-none">{name ? name.charAt(0).toUpperCase() : 'J'}</span>
+                    <span className="font-bold text-2xl select-none">
+                      {name ? name.charAt(0).toUpperCase() : activeUser?.name ? activeUser.name.charAt(0).toUpperCase() : '👤'}
+                    </span>
                   )}
 
                   {/* Hover Camera Overlay */}

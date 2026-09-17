@@ -2324,60 +2324,98 @@ app.delete('/api/family', (req, res) => {
 
 // Update User Profile
 app.put('/api/users/profile', (req, res) => {
-  const authUser = getAuthUser(req);
-  const targetUserId = req.body.userId || authUser?.id;
-  if (!targetUserId) {
-    return res.status(401).json({ error: 'Unauthorized: missing user identifier' });
-  }
-
-  const existing = queryOne<{ id: string; name: string; username: string; email: string; avatar: string; color: string; role: string; password: string }>(
-    'SELECT * FROM users WHERE id = ?',
-    [targetUserId]
-  );
-  if (!existing) {
-    return res.status(404).json({ error: 'User not found' });
-  }
-
-  const { name, username, email, color, role, password, avatar } = req.body;
-
-  let newUsername = existing.username;
-  if (username !== undefined) {
-    const cleanUsername = (username || '').toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9_-]/g, '');
-    if (cleanUsername && cleanUsername !== (existing.username || '').toLowerCase()) {
-      const conflict = queryOne<{ id: string }>(
-        'SELECT id FROM users WHERE LOWER(username) = ? AND id != ?',
-        [cleanUsername, targetUserId]
-      );
-      if (conflict) {
-        return res.status(400).json({ error: 'Username is already taken. Please choose another.' });
-      }
-      newUsername = cleanUsername;
+  try {
+    const authUser = getAuthUser(req);
+    const householdId = getHouseholdId(req);
+    const targetUserId = req.body.userId || authUser?.id;
+    if (!targetUserId) {
+      return res.status(401).json({ error: 'Unauthorized: missing user identifier' });
     }
+
+    const existing = queryOne<{
+      id: string;
+      name: string;
+      username: string;
+      email: string;
+      avatar: string;
+      color: string;
+      role: string;
+      password: string;
+      householdId: string;
+    }>(
+      'SELECT id, name, username, email, avatar, color, role, password, householdId FROM users WHERE id = ?',
+      [targetUserId]
+    );
+    if (!existing) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Household isolation check: only allow editing members within the same household
+    if (householdId && existing.householdId && existing.householdId !== householdId) {
+      return res.status(403).json({ error: 'Forbidden: member belongs to a different household' });
+    }
+
+    const { name, username, email, color, role, password, avatar } = req.body;
+
+    let newUsername = existing.username;
+    if (username !== undefined) {
+      const cleanUsername = (username || '').toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9_-]/g, '');
+      if (cleanUsername && cleanUsername !== (existing.username || '').toLowerCase()) {
+        const conflict = queryOne<{ id: string }>(
+          'SELECT id FROM users WHERE LOWER(username) = ? AND id != ?',
+          [cleanUsername, targetUserId]
+        );
+        if (conflict) {
+          return res.status(400).json({ error: 'Username is already taken. Please choose another.' });
+        }
+        newUsername = cleanUsername;
+      }
+    }
+
+    const newName = name && typeof name === 'string' && name.trim() ? name.trim() : existing.name;
+    const newEmail = email !== undefined ? (typeof email === 'string' && email.trim() ? email.trim().toLowerCase() : null) : existing.email;
+    const newColor = color && typeof color === 'string' && color.trim() ? color.trim() : (existing.color || '#10b981');
+    const newRole = role && typeof role === 'string' && role.trim() ? role.trim() : (existing.role || 'Member');
+    const newPassword = password && typeof password === 'string' && password.trim() ? password.trim() : (existing.password || 'password123');
+
+    // CRITICAL: users.avatar has a NOT NULL constraint in the database.
+    // If avatar is empty string, not provided, or not an image data/url, safely store '' or '👤' instead of null.
+    let newAvatar = existing.avatar || '👤';
+    if (avatar !== undefined) {
+      if (avatar && typeof avatar === 'string' && (avatar.startsWith('data:image') || avatar.startsWith('http://') || avatar.startsWith('https://'))) {
+        newAvatar = avatar;
+      } else {
+        newAvatar = '';
+      }
+    }
+
+    execute(
+      'UPDATE users SET name = ?, username = ?, email = ?, color = ?, role = ?, password = ?, avatar = ? WHERE id = ?',
+      [newName, newUsername, newEmail, newColor, newRole, newPassword, newAvatar, targetUserId]
+    );
+    saveDb();
+
+    const updated = queryOne<{
+      id: string;
+      name: string;
+      username: string;
+      email: string;
+      avatar: string;
+      color: string;
+      role: string;
+      householdId: string;
+    }>(
+      'SELECT id, name, username, email, avatar, color, role, householdId FROM users WHERE id = ?',
+      [targetUserId]
+    );
+
+    res.json({
+      user: formatUser(updated),
+    });
+  } catch (err: any) {
+    console.error('Error updating user profile:', err);
+    res.status(500).json({ error: err.message || 'Failed to update user profile' });
   }
-
-  const newName = name && typeof name === 'string' && name.trim() ? name.trim() : existing.name;
-  const newEmail = email !== undefined ? (typeof email === 'string' && email.trim() ? email.trim().toLowerCase() : null) : existing.email;
-  const newColor = color && typeof color === 'string' ? color : existing.color;
-  const newRole = role && typeof role === 'string' ? role : existing.role;
-  const newPassword = password && typeof password === 'string' && password.trim() ? password.trim() : existing.password;
-  let newAvatar = existing.avatar;
-  if (avatar !== undefined) {
-    newAvatar = (avatar && typeof avatar === 'string' && (avatar.startsWith('data:image') || avatar.startsWith('http://') || avatar.startsWith('https://'))) ? avatar : null;
-  }
-
-  execute(
-    'UPDATE users SET name = ?, username = ?, email = ?, color = ?, role = ?, password = ?, avatar = ? WHERE id = ?',
-    [newName, newUsername, newEmail, newColor, newRole, newPassword, newAvatar, targetUserId]
-  );
-
-  const updated = queryOne<{ id: string; name: string; username: string; email: string; avatar: string; color: string; role: string; householdId: string }>(
-    'SELECT id, name, username, email, avatar, color, role, householdId FROM users WHERE id = ?',
-    [targetUserId]
-  );
-
-  res.json({
-    user: formatUser(updated),
-  });
 });
 
 // 8. Push API & Notification Preferences

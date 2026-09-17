@@ -46,6 +46,7 @@ interface PWAContextType {
   autoAudioResponses: boolean;
   setAutoAudioResponses: (enabled: boolean) => void;
   updateProfile: (data: {
+    userId?: string;
     name?: string;
     username?: string;
     email?: string;
@@ -548,6 +549,7 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateProfile = async (data: {
+    userId?: string;
     name?: string;
     username?: string;
     email?: string;
@@ -557,17 +559,20 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     password?: string;
   }): Promise<User> => {
     if (!currentUser) throw new Error('Not logged in');
+    const targetUserId = data.userId || currentUser.id;
     const updated = await api.updateUserProfile({
-      userId: currentUser.id,
       ...data,
+      userId: targetUserId,
     });
     const normUser = normalizeUser(updated);
     if (normUser) {
-      setCurrentUserState(normUser);
+      if (normUser.id === currentUser.id) {
+        setCurrentUserState(normUser);
+        localStorage.setItem('famkit_current_user', JSON.stringify(normUser));
+        localStorage.setItem('famkit_last_username', normUser.username || normUser.name);
+        saveDeviceProfile(normUser, household?.name);
+      }
       setUsers((prev) => prev.map((u) => (u.id === normUser.id ? normUser : u)));
-      localStorage.setItem('famkit_current_user', JSON.stringify(normUser));
-      localStorage.setItem('famkit_last_username', normUser.username || normUser.name);
-      saveDeviceProfile(normUser, household?.name);
       return normUser;
     }
     return updated;

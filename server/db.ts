@@ -55,7 +55,7 @@ function initSchema(db: Database) {
       name TEXT NOT NULL,
       username TEXT UNIQUE,
       email TEXT,
-      avatar TEXT NOT NULL DEFAULT '👤',
+      avatar TEXT DEFAULT '👤',
       color TEXT NOT NULL DEFAULT '#10b981',
       role TEXT NOT NULL DEFAULT 'Parent',
       householdId TEXT NOT NULL,
@@ -291,7 +291,7 @@ function initSchema(db: Database) {
     db.run(`UPDATE users SET password = 'password123' WHERE password IS NULL OR password = ''`);
   } catch {}
   try {
-    db.run(`UPDATE users SET avatar = NULL WHERE avatar IS NOT NULL AND avatar NOT LIKE 'data:image%' AND avatar NOT LIKE 'http%'`);
+    db.run(`UPDATE users SET avatar = '' WHERE avatar IS NOT NULL AND avatar NOT LIKE 'data:image%' AND avatar NOT LIKE 'http%'`);
   } catch {}
 
   // Username column migration & backfill
