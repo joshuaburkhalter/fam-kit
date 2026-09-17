@@ -614,7 +614,7 @@ export const CalendarPage: React.FC = () => {
                       isCurrentDay
                         ? 'w-3.5 h-3.5 bg-emerald-400 ring-4 ring-emerald-400/20 ring-offset-2 ring-offset-slate-950 shadow-sm shadow-emerald-500/50'
                         : dayEvents.length > 0
-                        ? 'w-2.5 h-2.5 bg-emerald-400 ring-2 ring-slate-950 group-hover:scale-125'
+                        ? 'w-2.5 h-2.5 bg-slate-600 ring-2 ring-slate-950 group-hover:bg-slate-400 group-hover:scale-125'
                         : 'w-2 h-2 bg-slate-700 ring-2 ring-slate-950 group-hover:bg-slate-500 group-hover:scale-125'
                     }`}
                   />
