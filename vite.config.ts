@@ -52,7 +52,7 @@ export default defineConfig({
           }
         ],
         share_target: {
-          action: '/recipes?shared=true',
+          action: '/recipes',
           method: 'GET',
           params: {
             title: 'title',

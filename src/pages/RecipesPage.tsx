@@ -23,7 +23,7 @@ import {
 import type { Recipe } from '../types';
 import { usePWA } from '../context/PWAContext';
 import { api } from '../lib/api';
-import { RecipeScraperModal } from '../components/RecipeScraperModal';
+import { RecipeScraperModal, extractSharedUrl } from '../components/RecipeScraperModal';
 import { EditRecipeModal } from '../components/EditRecipeModal';
 import { useFabAutoClose } from '../hooks/useFabAutoClose';
 import { CheckSparkle, CelebrationConfetti, triggerHapticCheck } from '../components/CheckSparkle';
@@ -33,9 +33,39 @@ export const RecipesPage: React.FC = () => {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [isScraperOpen, setIsScraperOpen] = useState(false);
+  const [scraperInitialUrl, setScraperInitialUrl] = useState('');
+  const [scraperAutoImport, setScraperAutoImport] = useState(false);
   const [isEditRecipeModalOpen, setIsEditRecipeModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
+
+  // Check URL parameters for Web Share Target PWA sharing
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const checkShareParams = () => {
+      const params = new URLSearchParams(window.location.search);
+      const sharedUrl = extractSharedUrl(params);
+      const isShared = params.get('shared') === 'true' || params.has('shared');
+
+      if (sharedUrl) {
+        setScraperInitialUrl(sharedUrl);
+        setScraperAutoImport(true);
+        setIsScraperOpen(true);
+        const cleanPath = window.location.pathname;
+        window.history.replaceState({}, '', cleanPath);
+      } else if (isShared || params.has('import')) {
+        setIsScraperOpen(true);
+        const cleanPath = window.location.pathname;
+        window.history.replaceState({}, '', cleanPath);
+      }
+    };
+
+    checkShareParams();
+
+    window.addEventListener('popstate', checkShareParams);
+    return () => window.removeEventListener('popstate', checkShareParams);
+  }, []);
 
   const dockRef = useFabAutoClose<HTMLDivElement>({
     isOpen: isSearchExpanded,
@@ -899,12 +929,23 @@ export const RecipesPage: React.FC = () => {
       {household && (
         <RecipeScraperModal
           isOpen={isScraperOpen}
-          onClose={() => setIsScraperOpen(false)}
+          onClose={() => {
+            setIsScraperOpen(false);
+            setScraperInitialUrl('');
+            setScraperAutoImport(false);
+          }}
           householdId={household.id}
+          initialUrl={scraperInitialUrl}
+          autoImport={scraperAutoImport}
           onRecipeImported={(newRec) => {
-            setRecipes((prev) => [newRec, ...prev]);
+            setRecipes((prev) => {
+              const exists = prev.some((r) => r.id === newRec.id);
+              return exists ? prev.map((r) => (r.id === newRec.id ? newRec : r)) : [newRec, ...prev];
+            });
             setSelectedRecipe(newRec);
             setIsScraperOpen(false);
+            setScraperInitialUrl('');
+            setScraperAutoImport(false);
           }}
         />
       )}

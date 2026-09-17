@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   Link2,
@@ -9,10 +9,41 @@ import {
   Clock,
   Users,
   AlertCircle,
+  ClipboardPaste,
+  ArrowRight,
 } from 'lucide-react';
 import type { Recipe } from '../types';
 import { api } from '../lib/api';
 import { usePWA } from '../context/PWAContext';
+
+export function cleanExtractedUrl(raw: string): string {
+  return raw.replace(/[),.;!]+$/, '').trim();
+}
+
+export function extractSharedUrl(params: URLSearchParams): string | null {
+  // 1. Direct 'url' parameter
+  const rawUrl = params.get('url');
+  if (rawUrl) {
+    const trimmed = cleanExtractedUrl(rawUrl);
+    if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  }
+
+  // 2. Mobile browsers/apps share the link in 'text' (e.g. "Check out this recipe: https://...")
+  const rawText = params.get('text');
+  if (rawText) {
+    const match = rawText.match(/https?:\/\/[^\s]+/i);
+    if (match) return cleanExtractedUrl(match[0]);
+  }
+
+  // 3. Fallback check on 'title' if a link was shared as title
+  const rawTitle = params.get('title');
+  if (rawTitle) {
+    const match = rawTitle.match(/https?:\/\/[^\s]+/i);
+    if (match) return cleanExtractedUrl(match[0]);
+  }
+
+  return null;
+}
 
 interface RecipeScraperModalProps {
   isOpen: boolean;
@@ -20,6 +51,7 @@ interface RecipeScraperModalProps {
   householdId: string;
   onRecipeImported: (recipe: Recipe) => void;
   initialUrl?: string;
+  autoImport?: boolean;
 }
 
 export const RecipeScraperModal: React.FC<RecipeScraperModalProps> = ({
@@ -28,25 +60,41 @@ export const RecipeScraperModal: React.FC<RecipeScraperModalProps> = ({
   householdId,
   onRecipeImported,
   initialUrl = '',
+  autoImport = false,
 }) => {
   const { apiKey } = usePWA();
   const [url, setUrl] = useState(initialUrl);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [importedRecipe, setImportedRecipe] = useState<Recipe | null>(null);
+  const [isCopiedFromClipboard, setIsCopiedFromClipboard] = useState(false);
+  const autoImportTriggeredRef = useRef<string | null>(null);
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    if (initialUrl && initialUrl !== url) {
+      setUrl(initialUrl);
+    }
+  }, [initialUrl]);
 
-  const handleScrape = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!url.trim()) return;
+  useEffect(() => {
+    if (!isOpen) {
+      setError(null);
+      setImportedRecipe(null);
+      setIsLoading(false);
+      autoImportTriggeredRef.current = null;
+    }
+  }, [isOpen]);
+
+  const scrapeUrl = async (targetUrl: string) => {
+    const clean = cleanExtractedUrl(targetUrl);
+    if (!clean) return;
 
     setIsLoading(true);
     setError(null);
     setImportedRecipe(null);
 
     try {
-      const recipe = await api.importRecipeFromUrl(householdId, url.trim(), apiKey || undefined);
+      const recipe = await api.importRecipeFromUrl(householdId, clean, apiKey || undefined);
       setImportedRecipe(recipe);
       onRecipeImported(recipe);
     } catch (err: any) {
@@ -57,6 +105,45 @@ export const RecipeScraperModal: React.FC<RecipeScraperModalProps> = ({
       );
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen && initialUrl && autoImport && householdId) {
+      if (autoImportTriggeredRef.current !== initialUrl) {
+        autoImportTriggeredRef.current = initialUrl;
+        scrapeUrl(initialUrl);
+      }
+    }
+  }, [isOpen, initialUrl, autoImport, householdId]);
+
+  if (!isOpen) return null;
+
+  const handleScrape = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!url.trim()) return;
+    await scrapeUrl(url);
+  };
+
+  const handlePasteClipboard = async () => {
+    try {
+      if (!navigator.clipboard?.readText) {
+        alert('Clipboard access is not available. Please paste the link manually.');
+        return;
+      }
+      const text = await navigator.clipboard.readText();
+      const match = text.match(/https?:\/\/[^\s]+/i);
+      const link = match ? cleanExtractedUrl(match[0]) : text.trim();
+      if (link && /^https?:\/\//i.test(link)) {
+        setUrl(link);
+        setIsCopiedFromClipboard(true);
+        setTimeout(() => setIsCopiedFromClipboard(false), 2000);
+      } else {
+        alert('No valid web link found on your clipboard. Please copy a recipe URL first.');
+      }
+    } catch (err: any) {
+      console.warn('Clipboard read error:', err);
+      alert('Could not access clipboard. Please paste the link into the box.');
     }
   };
 
@@ -89,9 +176,21 @@ export const RecipeScraperModal: React.FC<RecipeScraperModalProps> = ({
 
         {/* URL Form */}
         <form onSubmit={handleScrape} className="py-4 border-b border-white/10 space-y-3">
-          <label className="text-xs font-semibold text-slate-300 block">
-            Recipe Link / URL
-          </label>
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-semibold text-slate-300 block">
+              Recipe Link / URL
+            </label>
+            {typeof navigator !== 'undefined' && Boolean(navigator.clipboard?.readText) && (
+              <button
+                type="button"
+                onClick={handlePasteClipboard}
+                className="text-[11px] text-emerald-400 hover:text-emerald-300 font-semibold flex items-center gap-1 hover:underline cursor-pointer"
+              >
+                <ClipboardPaste className="w-3.5 h-3.5" />
+                <span>{isCopiedFromClipboard ? 'Pasted!' : 'Paste from Clipboard'}</span>
+              </button>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
               <input
@@ -227,14 +326,37 @@ export const RecipeScraperModal: React.FC<RecipeScraperModalProps> = ({
           )}
         </div>
 
+        {/* PWA Direct Share Tip */}
+        <div className="pt-3 pb-1 text-[11px] text-slate-400 leading-relaxed border-t border-white/5 space-y-1">
+          <p className="font-semibold text-slate-300 flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+            <span>Direct Sharing with PWA</span>
+          </p>
+          <p>
+            When viewing a recipe on <strong>Android</strong> or modern <strong>iOS</strong>, tap your browser's <strong>Share</strong> button and choose <strong>Homebase</strong>. The app will open directly and import the recipe automatically!
+          </p>
+        </div>
+
         {/* Footer */}
-        <div className="pt-4 border-t border-white/10 flex items-center justify-between">
+        <div className="pt-3 border-t border-white/10 flex items-center justify-between">
           <button
             onClick={onClose}
-            className="bg-slate-800 hover:bg-slate-700 text-white px-5 py-2 rounded-xl text-xs font-semibold transition-colors"
+            className="bg-slate-800 hover:bg-slate-700 text-white px-5 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
           >
             Close
           </button>
+          {importedRecipe && (
+            <button
+              onClick={() => {
+                onRecipeImported(importedRecipe);
+                onClose();
+              }}
+              className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-5 py-2 rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-500/20 flex items-center gap-1.5 cursor-pointer"
+            >
+              <span>View Recipe</span>
+              <ArrowRight className="w-3.5 h-3.5 stroke-[2.5]" />
+            </button>
+          )}
         </div>
       </div>
     </div>
