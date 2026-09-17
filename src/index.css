@@ -225,3 +225,60 @@ input, textarea, [contenteditable="true"], .selectable-text {
 .animate-trophy-bounce {
   animation: trophy-bounce 1.2s ease-in-out infinite;
 }
+
+/* 7. Native Hardware-Accelerated Slide-Out Drawer Animations */
+@keyframes drawer-slide-in {
+  from {
+    transform: translate3d(100%, 0, 0);
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes drawer-slide-out {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(100%, 0, 0);
+  }
+}
+
+@keyframes drawer-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes drawer-backdrop-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.animate-drawer-in {
+  animation: drawer-slide-in 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform;
+}
+
+.animate-drawer-out {
+  animation: drawer-slide-out 0.26s cubic-bezier(0.2, 0, 0, 1) forwards;
+  will-change: transform;
+}
+
+.animate-backdrop-in {
+  animation: drawer-backdrop-in 0.26s ease-out forwards;
+  will-change: opacity;
+}
+
+.animate-backdrop-out {
+  animation: drawer-backdrop-out 0.24s ease-in forwards;
+  will-change: opacity;
+}

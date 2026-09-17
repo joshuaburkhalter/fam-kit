@@ -85,30 +85,31 @@ export const BugFeatureAdminModal: React.FC<BugFeatureAdminModalProps> = ({
     }
   };
 
-  const [isRendered, setIsRendered] = useState(false);
-  const [isVisible, setIsVisible] = useState(false);
+  const [isRendered, setIsRendered] = useState(isOpen);
+  const [isClosing, setIsClosing] = useState(false);
+
+  // Sync render state immediately when isOpen becomes true
+  if (isOpen && !isRendered) {
+    setIsRendered(true);
+    setIsClosing(false);
+  }
 
   const handleClose = () => {
-    setIsVisible(false);
+    if (isClosing) return;
+    setIsClosing(true);
     setTimeout(() => {
       onClose();
-    }, 320);
+      setIsRendered(false);
+      setIsClosing(false);
+    }, 260);
   };
 
   useEffect(() => {
     if (isOpen) {
-      setIsRendered(true);
       loadRequests();
       setIsCreatingNew(false);
       setEditingId(null);
       document.body.style.overflow = 'hidden';
-
-      // Smooth double-RAF to ensure DOM is painted before slide-in transform starts
-      const animTimer = requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          setIsVisible(true);
-        });
-      });
 
       const handleKeyDown = (e: KeyboardEvent) => {
         if (e.key === 'Escape') handleClose();
@@ -116,16 +117,16 @@ export const BugFeatureAdminModal: React.FC<BugFeatureAdminModalProps> = ({
       window.addEventListener('keydown', handleKeyDown);
 
       return () => {
-        cancelAnimationFrame(animTimer);
         window.removeEventListener('keydown', handleKeyDown);
         document.body.style.overflow = '';
       };
-    } else {
-      setIsVisible(false);
+    } else if (isRendered && !isClosing) {
+      setIsClosing(true);
       const timer = setTimeout(() => {
         setIsRendered(false);
+        setIsClosing(false);
         document.body.style.overflow = '';
-      }, 350);
+      }, 260);
       return () => clearTimeout(timer);
     }
   }, [isOpen]);
@@ -337,18 +338,18 @@ export const BugFeatureAdminModal: React.FC<BugFeatureAdminModalProps> = ({
 
   const drawerContent = (
     <div className="fixed inset-0 z-[9999] flex justify-end">
-      {/* Semi-transparent backdrop with smooth fade transition */}
+      {/* Semi-transparent backdrop with smooth fade animation */}
       <div
-        className={`fixed inset-0 bg-black/65 backdrop-blur-xs transition-opacity duration-300 ease-out cursor-pointer ${
-          isVisible ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        className={`fixed inset-0 bg-black/65 backdrop-blur-xs cursor-pointer ${
+          isClosing ? 'animate-backdrop-out pointer-events-none' : 'animate-backdrop-in'
         }`}
         onClick={handleClose}
       />
 
       {/* Slide-out Drawer Panel with fluid cubic-bezier spring slide */}
       <div
-        className={`relative z-10 w-full max-w-full sm:max-w-xl md:max-w-2xl h-full bg-[#0a0f1d] border-l border-white/10 shadow-2xl shadow-black flex flex-col overflow-hidden transition-transform duration-350 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-          isVisible ? 'translate-x-0' : 'translate-x-full'
+        className={`relative z-10 w-full max-w-full sm:max-w-xl md:max-w-2xl h-full bg-[#0a0f1d] border-l border-white/10 shadow-2xl shadow-black flex flex-col overflow-hidden ${
+          isClosing ? 'animate-drawer-out' : 'animate-drawer-in'
         }`}
         onClick={(e) => e.stopPropagation()}
       >
