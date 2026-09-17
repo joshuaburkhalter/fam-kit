@@ -22,11 +22,16 @@ const LAST_TAB_KEY = 'homebase_last_active_tab';
 function resolveInitialOverlayView(): 'privacy' | 'terms' | 'pricing' | null {
   if (typeof window === 'undefined') return null;
   try {
+    const params = new URLSearchParams(window.location.search);
+    // If returning from Stripe checkout, dismiss any overlay to display app dashboard
+    if (params.has('stripe_session_id') || params.get('stripe_status') === 'success') {
+      return null;
+    }
+
     const p = window.location.pathname.toLowerCase();
     if (p === '/privacy' || p.startsWith('/privacy')) return 'privacy';
     if (p === '/terms' || p.startsWith('/terms')) return 'terms';
     if (p === '/pricing' || p.startsWith('/pricing')) return 'pricing';
-    const params = new URLSearchParams(window.location.search);
     if (params.get('view') === 'privacy') return 'privacy';
     if (params.get('view') === 'terms') return 'terms';
     if (params.get('view') === 'pricing' || params.get('tab') === 'pricing') return 'pricing';
@@ -174,19 +179,19 @@ export const AppContent: React.FC = () => {
       verifyCheckoutSession(stripeSessionId)
         .then((res) => {
           if (res.success) {
+            setOverlayView(null);
             setStripeSuccessMessage(res.message || 'Payment confirmed! Welcome to Homebase.');
-            // Clean up query string
-            const cleanUrl = window.location.pathname;
-            window.history.replaceState({}, document.title, cleanUrl);
+            // Clean up query string and reset path to root
+            window.history.replaceState({}, document.title, '/');
           }
         })
         .catch((err) => {
           console.error('Failed to verify Stripe session:', err);
         });
     } else if (stripeStatus === 'success') {
+      setOverlayView(null);
       setStripeSuccessMessage('Payment confirmed! Welcome to Homebase.');
-      const cleanUrl = window.location.pathname;
-      window.history.replaceState({}, document.title, cleanUrl);
+      window.history.replaceState({}, document.title, '/');
     }
   }, [verifyCheckoutSession]);
 

@@ -31,11 +31,36 @@ dotenv.config({ path: '.env.local' });
 import Stripe from 'stripe';
 
 function getStripe(): Stripe | null {
-  const secretKey = process.env.STRIPE_SECRET_KEY;
-  if (!secretKey || !secretKey.trim()) return null;
-  return new Stripe(secretKey.trim(), {
+  const rawKey = process.env.STRIPE_SECRET_KEY;
+  if (!rawKey || !rawKey.trim()) return null;
+  const secretKey = rawKey.trim().replace(/^["']|["']$/g, '');
+  if (!secretKey) return null;
+  return new Stripe(secretKey, {
     apiVersion: '2025-02-24.acacia' as any,
   });
+}
+
+function getCleanOrigin(req: express.Request): string {
+  const forwardedHost = req.headers['x-forwarded-host'] as string;
+  const forwardedProto = (req.headers['x-forwarded-proto'] as string) || 'https';
+  if (forwardedHost) {
+    return `${forwardedProto}://${forwardedHost.split(',')[0].trim()}`.replace(/\/$/, '');
+  }
+
+  const raw = req.headers.origin || req.headers.referer;
+  if (raw) {
+    try {
+      return new URL(String(raw)).origin;
+    } catch {}
+  }
+
+  const host = req.headers.host;
+  if (host) {
+    const proto = req.secure ? 'https' : 'http';
+    return `${proto}://${host}`.replace(/\/$/, '');
+  }
+
+  return 'http://localhost:3001';
 }
 
 const __filename = fileURLToPath(import.meta.url);
@@ -480,8 +505,8 @@ app.post('/api/subscription/create-checkout-session', async (req, res) => {
   }
 
   const stripe = getStripe();
-  const monthlyPriceId = process.env.STRIPE_PRICE_MONTHLY || 'price_1UGUN3ENC8h8A0IWVonYj7bF';
-  const annualPriceId = process.env.STRIPE_PRICE_ANNUAL || 'price_1UGUN3ENC8h8A0IWfTmFAHMM';
+  const monthlyPriceId = (process.env.STRIPE_PRICE_MONTHLY || 'price_1UGUN3ENC8h8A0IWVonYj7bF').trim().replace(/^["']|["']$/g, '');
+  const annualPriceId = (process.env.STRIPE_PRICE_ANNUAL || 'price_1UGUN3ENC8h8A0IWfTmFAHMM').trim().replace(/^["']|["']$/g, '');
   const priceId = plan === 'annual' ? annualPriceId : monthlyPriceId;
 
   if (!stripe) {
@@ -504,21 +529,21 @@ app.post('/api/subscription/create-checkout-session', async (req, res) => {
   }
 
   try {
-    const rawOrigin = req.headers.origin || req.headers.referer || 'http://localhost:3001';
-    const origin = String(rawOrigin).replace(/\/$/, '');
+    const origin = getCleanOrigin(req);
     const user = getAuthUser(req);
     const household = queryOne<{ id: string; name: string; stripeCustomerId?: string }>(
       'SELECT id, name, stripeCustomerId FROM households WHERE id = ?',
       [householdId]
     );
 
+    const validUserEmail = user?.email && user.email.includes('@') ? user.email.trim() : undefined;
     let customerId = household?.stripeCustomerId;
-    if (!customerId && user?.email) {
+    if (!customerId && validUserEmail) {
       try {
         const customer = await stripe.customers.create({
-          email: user.email,
-          name: user.name || household?.name,
-          metadata: { householdId, userId: user.id },
+          email: validUserEmail,
+          name: user?.name || household?.name || 'Homebase Family',
+          metadata: { householdId, userId: user?.id || '' },
         });
         customerId = customer.id;
         execute('UPDATE households SET stripeCustomerId = ? WHERE id = ?', [customerId, householdId]);
@@ -531,7 +556,7 @@ app.post('/api/subscription/create-checkout-session', async (req, res) => {
       payment_method_types: ['card'],
       mode: 'subscription',
       customer: customerId || undefined,
-      customer_email: !customerId && user?.email ? user.email : undefined,
+      customer_email: !customerId ? validUserEmail : undefined,
       line_items: [
         {
           price: priceId,
@@ -560,6 +585,23 @@ app.post('/api/subscription/create-checkout-session', async (req, res) => {
     console.error('Stripe checkout session error:', err);
     res.status(500).json({ error: err.message || 'Failed to create checkout session' });
   }
+});
+
+// 3.1b. Stripe Integration Health & Diagnostics (Safe for public inspection)
+app.get('/api/subscription/stripe-status', (_req, res) => {
+  const stripe = getStripe();
+  const rawKey = process.env.STRIPE_SECRET_KEY || '';
+  const cleanKey = rawKey.trim().replace(/^["']|["']$/g, '');
+  const monthlyPriceId = (process.env.STRIPE_PRICE_MONTHLY || 'price_1UGUN3ENC8h8A0IWVonYj7bF').trim().replace(/^["']|["']$/g, '');
+  const annualPriceId = (process.env.STRIPE_PRICE_ANNUAL || 'price_1UGUN3ENC8h8A0IWfTmFAHMM').trim().replace(/^["']|["']$/g, '');
+
+  res.json({
+    configured: Boolean(stripe),
+    mode: stripe ? (cleanKey.startsWith('sk_test_') ? 'test' : 'live') : 'simulated',
+    hasPublishableKey: Boolean((process.env.STRIPE_PUBLISHABLE_KEY || '').trim()),
+    monthlyPriceId,
+    annualPriceId,
+  });
 });
 
 // 3.2. Verify Stripe Checkout Session on return

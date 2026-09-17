@@ -38,6 +38,13 @@ export const PricingPage: React.FC<PricingPageProps> = ({ onBack, onOpenAuth }) 
   const [isSubscribing, setIsSubscribing] = useState(false);
   const [subscribeSuccess, setSubscribeSuccess] = useState<string | null>(null);
   const [subscribeError, setSubscribeError] = useState<string | null>(null);
+  const [isCanceledNotice, setIsCanceledNotice] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('canceled') === 'true';
+    }
+    return false;
+  });
 
   const [openFaq, setOpenFaq] = useState<number | null>(0);
 
@@ -234,6 +241,22 @@ export const PricingPage: React.FC<PricingPageProps> = ({ onBack, onOpenAuth }) 
               <p className="font-bold text-white mb-0.5">Error</p>
               <p>{subscribeError || redeemError}</p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {isCanceledNotice && !subscribeSuccess && !subscribeError && (
+        <div className="max-w-md mx-auto px-4 w-full mb-6">
+          <div className="p-4 rounded-2xl bg-slate-800/80 border border-white/10 flex items-center justify-between gap-3 text-slate-300 animate-in fade-in">
+            <span className="text-xs">
+              Checkout was canceled. Whenever you're ready, select a plan below.
+            </span>
+            <button
+              onClick={() => setIsCanceledNotice(false)}
+              className="text-xs text-slate-400 hover:text-white px-2 py-1 rounded-lg hover:bg-white/10 transition-colors"
+            >
+              Dismiss
+            </button>
           </div>
         </div>
       )}

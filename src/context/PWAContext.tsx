@@ -599,36 +599,23 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const subscribePlan = async (plan: 'monthly' | 'annual') => {
-    try {
-      const checkoutRes = await api.createCheckoutSession(plan);
-      if (checkoutRes.checkoutUrl) {
-        window.location.href = checkoutRes.checkoutUrl;
-        return { success: true, message: 'Redirecting to Stripe checkout...' };
-      }
-      if (checkoutRes.household) {
-        const normH = normalizeHousehold(checkoutRes.household);
-        setHouseholdState(normH);
-        if (normH) {
-          localStorage.setItem('famkit_household', JSON.stringify(normH));
-        }
-        return {
-          success: true,
-          message: checkoutRes.message || 'Subscription activated successfully!',
-        };
-      }
-    } catch (e: any) {
-      console.warn('Stripe checkout error, falling back to direct subscription:', e);
+    const checkoutRes = await api.createCheckoutSession(plan);
+    if (checkoutRes.checkoutUrl) {
+      window.location.href = checkoutRes.checkoutUrl;
+      return { success: true, message: 'Redirecting to secure Stripe checkout...' };
     }
-
-    const res = await api.subscribePlan(plan);
-    if (res.household) {
-      const normH = normalizeHousehold(res.household);
+    if (checkoutRes.household) {
+      const normH = normalizeHousehold(checkoutRes.household);
       setHouseholdState(normH);
       if (normH) {
         localStorage.setItem('famkit_household', JSON.stringify(normH));
       }
+      return {
+        success: true,
+        message: checkoutRes.message || 'Subscription activated successfully!',
+      };
     }
-    return res;
+    throw new Error('Unable to initialize checkout session. Please try again.');
   };
 
   const verifyCheckoutSession = async (sessionId: string) => {
