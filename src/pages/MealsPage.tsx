@@ -50,11 +50,17 @@ interface MealsDataCache {
 
 let mealsDataCache: MealsDataCache | null = null;
 
-function resolveInitialSubTab(): 'planner' | 'recipes' | 'history' {
-  if (typeof window === 'undefined') return 'planner';
+function resolveInitialSubTab(): 'recipes' | 'planner' | 'history' {
+  if (typeof window === 'undefined') return 'recipes';
   try {
     const params = new URLSearchParams(window.location.search);
     const pathname = window.location.pathname.toLowerCase();
+    if (params.get('subtab') === 'planner' || params.get('view') === 'planner') {
+      return 'planner';
+    }
+    if (params.get('subtab') === 'history' || params.get('view') === 'history') {
+      return 'history';
+    }
     if (
       params.has('shared') ||
       params.has('import') ||
@@ -65,11 +71,8 @@ function resolveInitialSubTab(): 'planner' | 'recipes' | 'history' {
     ) {
       return 'recipes';
     }
-    if (params.get('subtab') === 'history' || params.get('view') === 'history') {
-      return 'history';
-    }
   } catch {}
-  return 'planner';
+  return 'recipes';
 }
 
 export const MealsPage: React.FC = () => {
@@ -77,15 +80,15 @@ export const MealsPage: React.FC = () => {
   const householdId = household?.id;
   const isMountedRef = useRef(true);
 
-  // Sub-views: 'planner' (On deck & ready to shop) | 'recipes' (Recipe Box) | 'history' (Cooked log)
-  const [activeTab, setActiveTab] = useState<'planner' | 'recipes' | 'history'>(resolveInitialSubTab);
+  // Sub-views: 'recipes' (Recipe Box) | 'planner' (On deck & ready to shop) | 'history' (Cooked log)
+  const [activeTab, setActiveTab] = useState<'recipes' | 'planner' | 'history'>(resolveInitialSubTab);
 
   // Keep visited tabs mounted with CSS display:none for instant 0ms switching without DOM thrashing
   const [visitedTabs, setVisitedTabs] = useState<Record<string, boolean>>(() => ({
     [resolveInitialSubTab()]: true,
   }));
 
-  const handleTabChange = (tab: 'planner' | 'recipes' | 'history') => {
+  const handleTabChange = (tab: 'recipes' | 'planner' | 'history') => {
     setActiveTab(tab);
     setVisitedTabs((prev) => (prev[tab] ? prev : { ...prev, [tab]: true }));
     if (tab !== 'recipes') {
@@ -382,16 +385,31 @@ export const MealsPage: React.FC = () => {
 
   /**
    * CORE ACTION: Add a recipe to Planner (puts on deck ready to shop and cook)
+   * Only changes the button state (optimistically) with zero visual popups or toasts.
    */
   const handleAddRecipeToPlanner = async (recipe: Recipe, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     if (!householdId) return;
 
-    // If already in planner, notify user
+    // If already in planner, do nothing
     const existing = meals.find((m) => m.recipe_id === recipe.id);
-    if (existing) {
-      showToast(`"${recipe.title}" is already on deck in your Planner!`);
-      return;
+    if (existing) return;
+
+    // Optimistic temporary meal so the button flips to "In Planner" instantly
+    const tempId = `temp-${Date.now()}`;
+    const tempMeal: WeeklyMeal = {
+      id: tempId,
+      household_id: householdId,
+      title: recipe.title,
+      recipe_id: recipe.id,
+      is_made: false,
+      week_start_date: new Date().toISOString().split('T')[0],
+      created_at: new Date().toISOString(),
+    };
+
+    setMeals((prev) => [tempMeal, ...prev]);
+    if (mealsDataCache && mealsDataCache.householdId === householdId) {
+      mealsDataCache.meals = [tempMeal, ...mealsDataCache.meals];
     }
 
     try {
@@ -401,15 +419,18 @@ export const MealsPage: React.FC = () => {
         recipe_id: recipe.id,
       });
 
-      setMeals((prev) => [added, ...prev]);
+      // Replace temp record with server record
+      setMeals((prev) => prev.map((m) => (m.id === tempId ? added : m)));
       if (mealsDataCache && mealsDataCache.householdId === householdId) {
-        mealsDataCache.meals = [added, ...mealsDataCache.meals];
+        mealsDataCache.meals = mealsDataCache.meals.map((m) => (m.id === tempId ? added : m));
       }
-      setIsRecipePickerOpen(false);
-      showToast(`✓ Added "${recipe.title}" to Planner! On deck & ready to shop.`);
     } catch (err) {
       console.error('Failed to add recipe to planner', err);
-      showToast('Error adding recipe to planner');
+      // Roll back on failure
+      setMeals((prev) => prev.filter((m) => m.id !== tempId));
+      if (mealsDataCache && mealsDataCache.householdId === householdId) {
+        mealsDataCache.meals = mealsDataCache.meals.filter((m) => m.id !== tempId);
+      }
     }
   };
 
@@ -1094,29 +1115,8 @@ export const MealsPage: React.FC = () => {
             </h1>
           </div>
 
-          {/* Full-width compact segmented sub-navigation */}
+          {/* Full-width compact segmented sub-navigation: Recipes -> Planner -> History */}
           <div className="w-full flex items-center p-1 bg-slate-900/80 rounded-xl border border-white/10 shadow-md">
-            <button
-              onClick={() => handleTabChange('planner')}
-              className={`flex-1 py-1.5 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors duration-150 cursor-pointer ${
-                activeTab === 'planner'
-                  ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
-                  : 'text-slate-400 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              <Utensils className="w-3.5 h-3.5" />
-              <span>Planner</span>
-              {meals.length > 0 && (
-                <span
-                  className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
-                    activeTab === 'planner' ? 'bg-slate-950/25 text-slate-950' : 'bg-emerald-500/20 text-emerald-400'
-                  }`}
-                >
-                  {meals.length}
-                </span>
-              )}
-            </button>
-
             <button
               onClick={() => handleTabChange('recipes')}
               className={`flex-1 py-1.5 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors duration-150 cursor-pointer ${
@@ -1134,6 +1134,27 @@ export const MealsPage: React.FC = () => {
                   }`}
                 >
                   {recipes.length}
+                </span>
+              )}
+            </button>
+
+            <button
+              onClick={() => handleTabChange('planner')}
+              className={`flex-1 py-1.5 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors duration-150 cursor-pointer ${
+                activeTab === 'planner'
+                  ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
+                  : 'text-slate-400 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <Utensils className="w-3.5 h-3.5" />
+              <span>Planner</span>
+              {meals.length > 0 && (
+                <span
+                  className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
+                    activeTab === 'planner' ? 'bg-slate-950/25 text-slate-950' : 'bg-emerald-500/20 text-emerald-400'
+                  }`}
+                >
+                  {meals.length}
                 </span>
               )}
             </button>
@@ -1160,7 +1181,197 @@ export const MealsPage: React.FC = () => {
             </button>
           </div>
 
-          {/* ================= 1. PLANNER TAB ================= */}
+          {/* ================= 1. RECIPES TAB ================= */}
+          {visitedTabs['recipes'] && (
+            <div className={activeTab === 'recipes' ? 'space-y-4' : 'hidden'}>
+              {/* Tag Filters */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+                {searchQuery && (
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-semibold whitespace-nowrap">
+                    <span>"{searchQuery}"</span>
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="p-0.5 hover:text-white cursor-pointer"
+                      title="Clear search"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
+                <button
+                  onClick={() => setSelectedTag(null)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+                    selectedTag === null
+                      ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
+                      : 'bg-slate-900/80 text-slate-400 hover:text-white border border-white/5'
+                  }`}
+                >
+                  All ({recipes.length})
+                </button>
+
+                {hasAiRecipes && (
+                  <button
+                    onClick={() => setSelectedTag(selectedTag === 'ai' ? null : 'ai')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap flex items-center gap-1 transition-all cursor-pointer ${
+                      selectedTag === 'ai'
+                        ? 'bg-gradient-to-tr from-emerald-400 to-teal-300 text-slate-950 shadow-md shadow-emerald-500/20'
+                        : 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 hover:bg-emerald-500/20'
+                    }`}
+                  >
+                    <Sparkles className="w-3 h-3 text-emerald-400" />
+                    <span>AI Recipes</span>
+                  </button>
+                )}
+
+                {allUniqueTags
+                  .filter((t) => t.toLowerCase() !== 'ai')
+                  .slice(0, 12)
+                  .map((tag) => (
+                    <button
+                      key={tag}
+                      onClick={() => setSelectedTag(selectedTag === tag ? null : tag)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                        selectedTag === tag
+                          ? 'bg-emerald-500 text-slate-950 font-bold shadow-md shadow-emerald-500/20'
+                          : 'bg-slate-900/80 hover:bg-slate-850 text-slate-300 border border-white/5'
+                      }`}
+                    >
+                      #{tag}
+                    </button>
+                  ))}
+              </div>
+
+              {/* Recipe Cards Grid */}
+              {isLoading ? (
+                <div className="py-12 text-center text-xs text-slate-400">Loading recipes...</div>
+              ) : filteredRecipes.length === 0 ? (
+                <div className="py-16 text-center glass-panel rounded-3xl p-8 border border-white/5 space-y-3">
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center mx-auto">
+                    <ChefHat className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-base font-bold text-white">No recipes found</h3>
+                  <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                    {searchQuery
+                      ? `No recipes match "${searchQuery}".`
+                      : 'Import your first recipe by pasting a link from any cooking site or asking the AI Assistant!'}
+                  </p>
+                  <div className="pt-2">
+                    <button
+                      onClick={() => setIsScraperOpen(true)}
+                      className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-4 py-2 rounded-2xl text-xs font-bold inline-flex items-center gap-2 transition-all shadow-md shadow-emerald-500/20 cursor-pointer"
+                    >
+                      <Link2 className="w-4 h-4" />
+                      <span>Import Recipe from Web</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {filteredRecipes.map((recipe) => {
+                    const isAlreadyInPlanner = meals.some((m) => m.recipe_id === recipe.id);
+                    return (
+                      <div
+                        key={recipe.id}
+                        onClick={() => handleSelectRecipe(recipe)}
+                        className="glass-panel rounded-3xl border border-white/10 hover:border-emerald-500/40 overflow-hidden cursor-pointer transition-all hover:scale-[1.01] shadow-lg flex flex-col group"
+                      >
+                        {/* Thumbnail with AI badge */}
+                        <div className="relative w-full h-44 overflow-hidden border-b border-white/10 bg-slate-900">
+                          {recipe.image_url ? (
+                            <img
+                              src={recipe.image_url}
+                              alt={recipe.title}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-slate-600">
+                              <ChefHat className="w-10 h-10" />
+                            </div>
+                          )}
+
+                          {isAiRecipe(recipe) && (
+                            <div
+                              className="absolute bottom-2.5 right-2.5 z-10 w-7 h-7 rounded-xl bg-gradient-to-tr from-emerald-400 to-teal-300 flex items-center justify-center text-zinc-950 shadow-lg shadow-emerald-950/50 border border-white/30"
+                              title="Created by AI Assistant"
+                            >
+                              <Sparkles className="w-4 h-4 stroke-[2.2]" />
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
+                          <div>
+                            <h3 className="text-sm font-bold text-white line-clamp-1 group-hover:text-emerald-300 transition-colors">
+                              {recipe.title}
+                            </h3>
+                            {recipe.description && (
+                              <p className="text-xs text-slate-400 mt-1 line-clamp-2">
+                                {recipe.description}
+                              </p>
+                            )}
+
+                            {recipe.tags && recipe.tags.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-2">
+                                {recipe.tags.slice(0, 3).map((t, idx) => {
+                                  const cleanTag = t.trim().replace(/^#/, '');
+                                  const isAi = cleanTag.toLowerCase() === 'ai';
+                                  return (
+                                    <span
+                                      key={idx}
+                                      className={`text-[10px] px-2 py-0.5 rounded-md border flex items-center gap-0.5 ${
+                                        isAi
+                                          ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30 font-semibold'
+                                          : 'bg-white/5 text-slate-400 border-white/5'
+                                      }`}
+                                    >
+                                      {isAi && <Sparkles className="w-2.5 h-2.5 text-emerald-400" />}
+                                      #{cleanTag}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Footer with "+ Add to Planner" / "✓ In Planner" */}
+                          <div className="flex items-center justify-between text-[11px] text-slate-400 pt-2 border-t border-white/5">
+                            <div className="flex items-center gap-3">
+                              {((recipe.prep_time_minutes || 0) + (recipe.cook_time_minutes || 0) > 0) ? (
+                                <span className="flex items-center gap-1 font-mono">
+                                  <Clock className="w-3 h-3 text-pink-400" />
+                                  {(recipe.prep_time_minutes || 0) + (recipe.cook_time_minutes || 0)}m
+                                </span>
+                              ) : null}
+                              <span>{recipe.ingredients.length} items</span>
+                            </div>
+
+                            {/* Front of Card Planner Button */}
+                            {isAlreadyInPlanner ? (
+                              <span className="inline-flex items-center gap-1 text-emerald-400 font-bold bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-1 rounded-xl text-[11px]">
+                                <Check className="w-3 h-3 stroke-[2.5]" />
+                                <span>In Planner</span>
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={(e) => handleAddRecipeToPlanner(recipe, e)}
+                                className="inline-flex items-center gap-1 text-emerald-400 hover:text-white bg-emerald-500/10 hover:bg-emerald-500 border border-emerald-500/30 hover:border-emerald-500 px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all shadow-sm active:scale-95 cursor-pointer"
+                              >
+                                <Plus className="w-3 h-3 stroke-[2.5]" />
+                                <span>Add to Planner</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ================= 2. PLANNER TAB ================= */}
           {visitedTabs['planner'] && (
             <div className={activeTab === 'planner' ? 'space-y-4' : 'hidden'}>
               {isLoading ? (
@@ -1302,196 +1513,6 @@ export const MealsPage: React.FC = () => {
                   </button>
                 </form>
               </div>
-            </div>
-          )}
-
-          {/* ================= 2. RECIPE BOX TAB ================= */}
-          {visitedTabs['recipes'] && (
-            <div className={activeTab === 'recipes' ? 'space-y-4' : 'hidden'}>
-              {/* Tag Filters */}
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
-                {searchQuery && (
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-semibold whitespace-nowrap">
-                    <span>"{searchQuery}"</span>
-                    <button
-                      onClick={() => setSearchQuery('')}
-                      className="p-0.5 hover:text-white cursor-pointer"
-                      title="Clear search"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                )}
-                  <button
-                    onClick={() => setSelectedTag(null)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
-                      selectedTag === null
-                        ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
-                        : 'bg-slate-900/80 text-slate-400 hover:text-white border border-white/5'
-                    }`}
-                  >
-                    All ({recipes.length})
-                  </button>
-
-                  {hasAiRecipes && (
-                    <button
-                      onClick={() => setSelectedTag(selectedTag === 'ai' ? null : 'ai')}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap flex items-center gap-1 transition-all cursor-pointer ${
-                        selectedTag === 'ai'
-                          ? 'bg-gradient-to-tr from-emerald-400 to-teal-300 text-slate-950 shadow-md shadow-emerald-500/20'
-                          : 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 hover:bg-emerald-500/20'
-                      }`}
-                    >
-                      <Sparkles className="w-3 h-3 text-emerald-400" />
-                      <span>AI Recipes</span>
-                    </button>
-                  )}
-
-                  {allUniqueTags
-                    .filter((t) => t.toLowerCase() !== 'ai')
-                    .slice(0, 12)
-                    .map((tag) => (
-                      <button
-                        key={tag}
-                        onClick={() => setSelectedTag(selectedTag === tag ? null : tag)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                          selectedTag === tag
-                            ? 'bg-emerald-500 text-slate-950 font-bold shadow-md shadow-emerald-500/20'
-                            : 'bg-slate-900/80 hover:bg-slate-850 text-slate-300 border border-white/5'
-                        }`}
-                      >
-                        #{tag}
-                      </button>
-                    ))}
-                </div>
-
-              {/* Recipe Cards Grid */}
-              {isLoading ? (
-                <div className="py-12 text-center text-xs text-slate-400">Loading recipes...</div>
-              ) : filteredRecipes.length === 0 ? (
-                <div className="py-16 text-center glass-panel rounded-3xl p-8 border border-white/5 space-y-3">
-                  <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center mx-auto">
-                    <ChefHat className="w-6 h-6" />
-                  </div>
-                  <h3 className="text-base font-bold text-white">No recipes found</h3>
-                  <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                    {searchQuery
-                      ? `No recipes match "${searchQuery}".`
-                      : 'Import your first recipe by pasting a link from any cooking site or asking the AI Assistant!'}
-                  </p>
-                  <div className="pt-2">
-                    <button
-                      onClick={() => setIsScraperOpen(true)}
-                      className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-4 py-2 rounded-2xl text-xs font-bold inline-flex items-center gap-2 transition-all shadow-md shadow-emerald-500/20 cursor-pointer"
-                    >
-                      <Link2 className="w-4 h-4" />
-                      <span>Import Recipe from Web</span>
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {filteredRecipes.map((recipe) => {
-                    const isAlreadyInPlanner = meals.some((m) => m.recipe_id === recipe.id);
-                    return (
-                      <div
-                        key={recipe.id}
-                        onClick={() => handleSelectRecipe(recipe)}
-                        className="glass-panel rounded-3xl border border-white/10 hover:border-emerald-500/40 overflow-hidden cursor-pointer transition-all hover:scale-[1.01] shadow-lg flex flex-col group"
-                      >
-                        {/* Thumbnail with AI badge */}
-                        <div className="relative w-full h-44 overflow-hidden border-b border-white/10 bg-slate-900">
-                          {recipe.image_url ? (
-                            <img
-                              src={recipe.image_url}
-                              alt={recipe.title}
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-slate-600">
-                              <ChefHat className="w-10 h-10" />
-                            </div>
-                          )}
-
-                          {isAiRecipe(recipe) && (
-                            <div
-                              className="absolute bottom-2.5 right-2.5 z-10 w-7 h-7 rounded-xl bg-gradient-to-tr from-emerald-400 to-teal-300 flex items-center justify-center text-zinc-950 shadow-lg shadow-emerald-950/50 border border-white/30"
-                              title="Created by AI Assistant"
-                            >
-                              <Sparkles className="w-4 h-4 stroke-[2.2]" />
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
-                          <div>
-                            <h3 className="text-sm font-bold text-white line-clamp-1 group-hover:text-emerald-300 transition-colors">
-                              {recipe.title}
-                            </h3>
-                            {recipe.description && (
-                              <p className="text-xs text-slate-400 mt-1 line-clamp-2">
-                                {recipe.description}
-                              </p>
-                            )}
-
-                            {recipe.tags && recipe.tags.length > 0 && (
-                              <div className="flex flex-wrap gap-1 mt-2">
-                                {recipe.tags.slice(0, 3).map((t, idx) => {
-                                  const cleanTag = t.trim().replace(/^#/, '');
-                                  const isAi = cleanTag.toLowerCase() === 'ai';
-                                  return (
-                                    <span
-                                      key={idx}
-                                      className={`text-[10px] px-2 py-0.5 rounded-md border flex items-center gap-0.5 ${
-                                        isAi
-                                          ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30 font-semibold'
-                                          : 'bg-white/5 text-slate-400 border-white/5'
-                                      }`}
-                                    >
-                                      {isAi && <Sparkles className="w-2.5 h-2.5 text-emerald-400" />}
-                                      #{cleanTag}
-                                    </span>
-                                  );
-                                })}
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Footer with "+ Add to Planner" / "✓ In Planner" */}
-                          <div className="flex items-center justify-between text-[11px] text-slate-400 pt-2 border-t border-white/5">
-                            <div className="flex items-center gap-3">
-                              {((recipe.prep_time_minutes || 0) + (recipe.cook_time_minutes || 0) > 0) ? (
-                                <span className="flex items-center gap-1 font-mono">
-                                  <Clock className="w-3 h-3 text-pink-400" />
-                                  {(recipe.prep_time_minutes || 0) + (recipe.cook_time_minutes || 0)}m
-                                </span>
-                              ) : null}
-                              <span>{recipe.ingredients.length} items</span>
-                            </div>
-
-                            {/* Front of Card Planner Button */}
-                            {isAlreadyInPlanner ? (
-                              <span className="inline-flex items-center gap-1 text-emerald-400 font-bold bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-1 rounded-xl text-[11px]">
-                                <Check className="w-3 h-3 stroke-[2.5]" />
-                                <span>In Planner</span>
-                              </span>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={(e) => handleAddRecipeToPlanner(recipe, e)}
-                                className="inline-flex items-center gap-1 text-emerald-400 hover:text-white bg-emerald-500/10 hover:bg-emerald-500 border border-emerald-500/30 hover:border-emerald-500 px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all shadow-sm active:scale-95 cursor-pointer"
-                              >
-                                <Plus className="w-3 h-3 stroke-[2.5]" />
-                                <span>Add to Planner</span>
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
             </div>
           )}
 
