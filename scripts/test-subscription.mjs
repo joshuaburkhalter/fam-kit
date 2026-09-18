@@ -297,6 +297,9 @@ async function runTests() {
   const fetchedCodes = queryAll(codesQuery);
   console.log(`11. Fetched ${fetchedCodes.length} promo codes via endpoint query.`);
 
+  // Cleanup test artifacts
+  execute(`DELETE FROM promo_codes WHERE code LIKE 'TEST-%'`);
+
   console.log('--- All subscription & tracking tests PASSED successfully! ---');
 }
 

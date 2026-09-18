@@ -568,19 +568,25 @@ function initSchema(db: Database) {
     console.error('Error seeding promo codes:', err);
   }
 
+  // Cleanup any legacy seeded Miller family demo households and users
+  try {
+    db.run(`DELETE FROM grocery_items WHERE householdId = 'fam_default_2' OR id LIKE 'gm%'`);
+    db.run(`DELETE FROM calendar_events WHERE householdId = 'fam_default_2' OR id LIKE 'ev_m%'`);
+    db.run(`DELETE FROM meal_plans WHERE householdId = 'fam_default_2' OR id = 'm_miller_today'`);
+    db.run(`DELETE FROM aisles WHERE householdId = 'fam_default_2'`);
+    db.run(`DELETE FROM users WHERE householdId = 'fam_default_2' OR email IN ('alex@miller.com', 'jamie@miller.com') OR id IN ('u5', 'u6') OR householdId IN (SELECT id FROM households WHERE name LIKE 'Test %')`);
+    db.run(`DELETE FROM households WHERE id = 'fam_default_2' OR name = 'The Miller Family' OR name LIKE 'Test %'`);
+    db.run(`DELETE FROM promo_codes WHERE code LIKE 'TEST-%'`);
+  } catch (err) {
+    console.error('Error cleaning up legacy demo seed data:', err);
+  }
+
   // Check if seeded
   const check = db.exec('SELECT COUNT(*) as count FROM households');
   const count = (check[0]?.values[0]?.[0] as number) || 0;
 
   if (count === 0) {
     seedDemoData(db);
-  } else {
-    // Check if Miller family exists
-    const checkMiller = db.exec("SELECT COUNT(*) FROM households WHERE id = 'fam_default_2'");
-    const millerCount = (checkMiller[0]?.values[0]?.[0] as number) || 0;
-    if (millerCount === 0) {
-      seedMillerFamily(db);
-    }
   }
 
   saveDb();
@@ -633,7 +639,7 @@ function seedDemoData(db: Database) {
     demoInviteCode += chars.charAt(Math.floor(Math.random() * chars.length));
   }
 
-  db.run(`INSERT INTO households (id, name, inviteCode, createdAt, subscriptionStatus, subscriptionPlan) VALUES (?, ?, ?, ?, ?, ?)`, [householdId, 'The Miller Family', demoInviteCode, now, 'active', 'lifetime_founder']);
+  db.run(`INSERT INTO households (id, name, inviteCode, createdAt, subscriptionStatus, subscriptionPlan) VALUES (?, ?, ?, ?, ?, ?)`, [householdId, 'My Family', demoInviteCode, now, 'active', 'lifetime_founder']);
 
   db.run(`INSERT INTO users (id, name, username, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, ['u1', 'Alex', 'alex', 'alex@famkit.app', '👨‍💻', '#10b981', 'Parent', householdId, 'password123']);
   db.run(`INSERT INTO users (id, name, username, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, ['u2', 'Sarah', 'sarah', 'sarah@famkit.app', '👩‍🏫', '#ec4899', 'Parent', householdId, 'password123']);
@@ -641,7 +647,6 @@ function seedDemoData(db: Database) {
   db.run(`INSERT INTO users (id, name, username, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, ['u4', 'Emma', 'emma', 'emma@famkit.app', '👧', '#06b6d4', 'Kid', householdId, 'password123']);
 
   createDefaultAisles(householdId, db);
-  seedMillerFamily(db);
 
   const sampleItems = [
     { id: 'g1', name: 'Organic Bananas', category: 'Produce', aisleId: 'a1', quantity: '1', unit: 'bunch', checked: 0 },
@@ -761,52 +766,6 @@ function seedDemoData(db: Database) {
   db.run(`INSERT INTO calendar_events VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, ['ev1', 'Leo Soccer Practice', '', tomorrowStr, '16:30', '17:45', 'Sports', 'Community Park Field #2', 'u3', householdId, now]);
   db.run(`INSERT INTO calendar_events VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, ['ev2', 'Emma Ballet Class', '', dayAfterStr, '15:30', '16:30', 'School', 'Downtown Dance Studio', 'u4', householdId, now]);
   db.run(`INSERT INTO calendar_events VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, ['ev3', 'Family Pizza & Movie Night 🍕', '', fridayStr, '18:30', '21:00', 'Family', 'Living Room', 'u1', householdId, now]);
-}
-
-function seedMillerFamily(db: Database) {
-  const now = new Date().toISOString();
-  const householdId = 'fam_default_2';
-
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let millerInviteCode = '';
-  for (let i = 0; i < 6; i++) {
-    millerInviteCode += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-
-  db.run(`INSERT OR IGNORE INTO households (id, name, inviteCode, createdAt, subscriptionStatus, subscriptionPlan) VALUES (?, ?, ?, ?, ?, ?)`, [householdId, 'The Miller Family', millerInviteCode, now, 'active', 'lifetime_founder']);
-
-  db.run(`INSERT OR IGNORE INTO users (id, name, username, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, ['u5', 'Alex Miller', 'alex', 'alex@miller.com', '👨‍💼', '#3b82f6', 'Parent', householdId, 'password123']);
-  db.run(`INSERT OR IGNORE INTO users (id, name, username, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, ['u6', 'Jamie Miller', 'jamie', 'jamie@miller.com', '👩‍🔬', '#8b5cf6', 'Parent', householdId, 'password123']);
-
-  createDefaultAisles(householdId, db);
-
-  const millerGrocery = [
-    { id: 'gm1', name: 'Organic Almond Milk', category: 'Dairy & Eggs', quantity: '2', unit: 'cartons' },
-    { id: 'gm2', name: 'Ripe Hass Avocados', category: 'Produce', quantity: '4', unit: '' },
-    { id: 'gm3', name: 'Organic Strawberries', category: 'Produce', quantity: '1', unit: 'clamshell' },
-    { id: 'gm4', name: 'Artisan Chia Seed Bread', category: 'Bakery & Bread', quantity: '1', unit: 'loaf' },
-    { id: 'gm5', name: 'Cold Brew Coffee', category: 'Beverages', quantity: '1', unit: 'bottle' },
-  ];
-
-  for (const g of millerGrocery) {
-    db.run(`INSERT OR IGNORE INTO grocery_items VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
-      g.id, g.name, g.category, null, g.quantity, g.unit, '', 0, null, 'u5', householdId, now
-    ]);
-  }
-
-  const tomorrowStr = new Date(Date.now() + 86400000).toISOString().split('T')[0];
-  const weekendStr = new Date(Date.now() + 86400000 * 3).toISOString().split('T')[0];
-
-  db.run(`INSERT OR IGNORE INTO calendar_events VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
-    'ev_m1', 'Jamie Dentist Checkup', 'Annual cleaning', tomorrowStr, '10:00', '11:00', 'Appointment', 'Smile Dental', 'u6', householdId, now
-  ]);
-  db.run(`INSERT OR IGNORE INTO calendar_events VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
-    'ev_m2', 'Weekend Farmers Market', 'Pick up fresh produce', weekendStr, '09:00', '11:30', 'Family', 'Town Square', 'u5', householdId, now
-  ]);
-
-  db.run(`INSERT OR IGNORE INTO meal_plans VALUES (?, ?, ?, ?, ?, ?, ?)`, [
-    `m_miller_today`, tomorrowStr, 'dinner', 'Avocado & Herb Grain Bowl', 'Fresh greens and quinoa', null, householdId
-  ]);
 }
 
 // Query helpers for JSON rows
