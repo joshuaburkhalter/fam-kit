@@ -12,6 +12,7 @@ import {
   X,
   Loader2,
   Pencil,
+  GripVertical,
 } from 'lucide-react';
 import type { GroceryItem, Aisle, CustomList } from '../types';
 import { usePWA } from '../context/PWAContext';
@@ -30,7 +31,7 @@ interface GroceryDataCache {
 let groceryDataCache: GroceryDataCache | null = null;
 
 export const GroceryPage: React.FC = () => {
-  const { household, currentUser, aisles } = usePWA();
+  const { household, currentUser, aisles, refreshAisles } = usePWA();
   const effectiveHouseholdId =
     household?.id ||
     currentUser?.household_id ||
@@ -457,6 +458,137 @@ export const GroceryPage: React.FC = () => {
     });
   }
 
+  // Draggable category sorting state
+  const [draggingAisleId, setDraggingAisleId] = useState<string | null>(null);
+  const dragCurrentIndexRef = useRef<number>(-1);
+  const cardElementsRef = useRef<Map<string, HTMLDivElement>>(new Map());
+  const itemsByAisleRef = useRef<{ aisle: Aisle; items: GroceryItem[] }[]>([]);
+  itemsByAisleRef.current = itemsByAisle;
+
+  const handleDragStart = (e: React.PointerEvent, aisleId: string, index: number) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {}
+
+    setDraggingAisleId(aisleId);
+    dragCurrentIndexRef.current = index;
+
+    try {
+      if ('vibrate' in navigator) navigator.vibrate(15);
+    } catch {}
+  };
+
+  const performSwap = (fromIdx: number, toIdx: number) => {
+    dragCurrentIndexRef.current = toIdx;
+
+    try {
+      if ('vibrate' in navigator) navigator.vibrate(10);
+    } catch {}
+
+    const currentList = itemsByAisleRef.current;
+    const fromAisle = currentList[fromIdx]?.aisle;
+    const toAisle = currentList[toIdx]?.aisle;
+    if (!fromAisle || !toAisle) return;
+
+    setLocalAisles((prevAisles) => {
+      const base = prevAisles.length > 0 ? [...prevAisles] : [...aisles];
+      const fromAisleIndex = base.findIndex((a) => a.id === fromAisle.id);
+      const toAisleIndex = base.findIndex((a) => a.id === toAisle.id);
+      if (fromAisleIndex === -1 || toAisleIndex === -1) return prevAisles;
+
+      const currentFromOrder = base[fromAisleIndex].display_order;
+      const currentToOrder = base[toAisleIndex].display_order;
+
+      base[fromAisleIndex] = { ...base[fromAisleIndex], display_order: currentToOrder };
+      base[toAisleIndex] = { ...base[toAisleIndex], display_order: currentFromOrder };
+
+      return [...base]
+        .sort((a, b) => a.display_order - b.display_order)
+        .map((a, i) => ({
+          ...a,
+          display_order: i,
+        }));
+    });
+  };
+
+  const handleDragMove = (e: React.PointerEvent) => {
+    if (!draggingAisleId) return;
+
+    const currentY = e.clientY;
+    const currentIndex = dragCurrentIndexRef.current;
+    if (currentIndex < 0) return;
+
+    const currentList = itemsByAisleRef.current;
+
+    // Check item above
+    if (currentIndex > 0) {
+      const prevAisle = currentList[currentIndex - 1]?.aisle;
+      if (prevAisle) {
+        const prevEl = cardElementsRef.current.get(prevAisle.id);
+        if (prevEl) {
+          const rect = prevEl.getBoundingClientRect();
+          const midpoint = rect.top + rect.height / 2;
+          if (currentY < midpoint) {
+            performSwap(currentIndex, currentIndex - 1);
+            return;
+          }
+        }
+      }
+    }
+
+    // Check item below
+    if (currentIndex < currentList.length - 1) {
+      const nextAisle = currentList[currentIndex + 1]?.aisle;
+      if (nextAisle) {
+        const nextEl = cardElementsRef.current.get(nextAisle.id);
+        if (nextEl) {
+          const rect = nextEl.getBoundingClientRect();
+          const midpoint = rect.top + rect.height / 2;
+          if (currentY > midpoint) {
+            performSwap(currentIndex, currentIndex + 1);
+            return;
+          }
+        }
+      }
+    }
+  };
+
+  const handleDragEnd = (e: React.PointerEvent) => {
+    if (!draggingAisleId) return;
+
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {}
+
+    setDraggingAisleId(null);
+    dragCurrentIndexRef.current = -1;
+
+    // Persist to server
+    setLocalAisles((currentAisles) => {
+      const sorted = [...currentAisles].sort((a, b) => a.display_order - b.display_order);
+      const sortedIds = sorted.map((a) => a.id);
+
+      if (groceryDataCache && householdId && groceryDataCache.householdId === householdId) {
+        groceryDataCache.aisles = sorted;
+      }
+
+      api.reorderAisles(householdId, sortedIds)
+        .then(() => {
+          refreshAisles();
+          showToast('Category order saved');
+        })
+        .catch((err) => {
+          console.error('Failed to save category order:', err);
+        });
+
+      return currentAisles;
+    });
+  };
+
   const currentList = customLists.find((l) => l.id === activeListType);
   const currentListName = isGroceryList ? 'Grocery List' : currentList?.title || 'Checklist';
   const currentListIcon = isGroceryList ? '🛒' : currentList?.icon || '📋';
@@ -619,37 +751,86 @@ export const GroceryPage: React.FC = () => {
         ) : null}
 
         {/* If Grocery List: Display Grouped by Store Aisles */}
+        {isGroceryList && itemsByAisle.length > 1 && (
+          <div className="flex items-center justify-between px-1 text-[11px] font-medium text-slate-400">
+            <span className="flex items-center gap-1.5">
+              <GripVertical className="w-3.5 h-3.5 text-slate-500" />
+              <span>Drag handle to reorder categories</span>
+            </span>
+            <span className="text-[10px] font-mono opacity-70">
+              {itemsByAisle.length} categories
+            </span>
+          </div>
+        )}
+
         {isGroceryList &&
-          itemsByAisle.map(({ aisle, items: aisleItems }) => {
+          itemsByAisle.map(({ aisle, items: aisleItems }, idx) => {
             const isCollapsed = collapsedAisles[aisle.id];
+            const isDragging = draggingAisleId === aisle.id;
             return (
               <div
                 key={aisle.id}
-                className="glass-panel rounded-3xl border border-white/10 overflow-hidden shadow-sm"
+                ref={(el) => {
+                  if (el) {
+                    cardElementsRef.current.set(aisle.id, el);
+                  } else {
+                    cardElementsRef.current.delete(aisle.id);
+                  }
+                }}
+                className={`glass-panel rounded-3xl border overflow-hidden transition-all duration-200 ${
+                  isDragging
+                    ? 'border-emerald-500/60 ring-2 ring-emerald-500/50 shadow-2xl scale-[1.01] bg-slate-900/95 z-20 opacity-95'
+                    : 'border-white/10 shadow-sm'
+                }`}
               >
                 {/* Aisle Category Header */}
-                <button
-                  onClick={() => toggleAisleCollapse(aisle.id)}
-                  className="w-full flex items-center justify-between p-3.5 bg-slate-900/40 hover:bg-slate-900/60 border-b border-white/5 transition-colors text-left"
+                <div
+                  className={`w-full flex items-center justify-between px-3 py-2.5 sm:px-3.5 sm:py-3 border-b border-white/5 transition-colors select-none ${
+                    isDragging ? 'bg-slate-850' : 'bg-slate-900/40 hover:bg-slate-900/60'
+                  }`}
                 >
-                  <div className="flex items-center gap-2.5">
+                  {/* Drag Handle */}
+                  {itemsByAisle.length > 1 && (
                     <div
-                      className="w-3.5 h-3.5 rounded-full shadow-sm"
-                      style={{ backgroundColor: aisle.color || '#10b981' }}
-                    />
-                    <span className="text-xs font-bold uppercase tracking-wider text-slate-200">
-                      {aisle.name}
-                    </span>
-                    <span className="text-[10px] font-mono bg-white/5 px-2 py-0.5 rounded-full text-slate-400">
-                      {aisleItems.length}
-                    </span>
-                  </div>
-                  {isCollapsed ? (
-                    <ChevronRight className="w-4 h-4 text-slate-500" />
-                  ) : (
-                    <ChevronDown className="w-4 h-4 text-slate-500" />
+                      onPointerDown={(e) => handleDragStart(e, aisle.id, idx)}
+                      onPointerMove={handleDragMove}
+                      onPointerUp={handleDragEnd}
+                      onPointerCancel={handleDragEnd}
+                      className="p-1 -ml-1 text-slate-500 hover:text-slate-300 active:text-emerald-400 cursor-grab active:cursor-grabbing touch-none select-none rounded-md hover:bg-white/5 transition-colors shrink-0"
+                      title="Drag to reorder category"
+                    >
+                      <GripVertical className="w-4 h-4" />
+                    </div>
                   )}
-                </button>
+
+                  {/* Category Title & Collapse Trigger */}
+                  <button
+                    type="button"
+                    onClick={() => toggleAisleCollapse(aisle.id)}
+                    className="flex-1 min-w-0 flex items-center justify-between ml-1.5 py-0.5 text-left cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div
+                        className="w-3 h-3 rounded-full shadow-sm shrink-0"
+                        style={{ backgroundColor: aisle.color || '#10b981' }}
+                      />
+                      <span className="text-xs font-bold uppercase tracking-wider text-slate-200 truncate">
+                        {aisle.name}
+                      </span>
+                      <span className="text-[10px] font-mono bg-white/5 px-2 py-0.5 rounded-full text-slate-400 shrink-0">
+                        {aisleItems.length}
+                      </span>
+                    </div>
+
+                    <div className="text-slate-500 hover:text-slate-300 transition-colors shrink-0">
+                      {isCollapsed ? (
+                        <ChevronRight className="w-4 h-4" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4" />
+                      )}
+                    </div>
+                  </button>
+                </div>
 
                 {/* Items in this Aisle */}
                 {!isCollapsed && (
