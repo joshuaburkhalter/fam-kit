@@ -1308,29 +1308,20 @@ export const MealsPage: React.FC = () => {
           {/* ================= 2. RECIPE BOX TAB ================= */}
           {visitedTabs['recipes'] && (
             <div className={activeTab === 'recipes' ? 'space-y-4' : 'hidden'}>
-              {/* Search Bar & Tag Filters */}
-              <div className="space-y-3">
-                <div className="relative">
-                  <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    placeholder="Search recipes by title or tag (e.g. Chicken, Pasta, Soup)..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full bg-slate-900/90 border border-white/10 rounded-2xl pl-10 pr-10 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-all"
-                  />
-                  {searchQuery && (
+              {/* Tag Filters */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+                {searchQuery && (
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-semibold whitespace-nowrap">
+                    <span>"{searchQuery}"</span>
                     <button
                       onClick={() => setSearchQuery('')}
-                      className="p-1.5 text-slate-400 hover:text-white absolute right-2.5 top-1/2 -translate-y-1/2 cursor-pointer"
+                      className="p-0.5 hover:text-white cursor-pointer"
+                      title="Clear search"
                     >
-                      <X className="w-4 h-4" />
+                      <X className="w-3 h-3" />
                     </button>
-                  )}
-                </div>
-
-                {/* Tag Filters */}
-                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+                  </div>
+                )}
                   <button
                     onClick={() => setSelectedTag(null)}
                     className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
@@ -1373,7 +1364,6 @@ export const MealsPage: React.FC = () => {
                       </button>
                     ))}
                 </div>
-              </div>
 
               {/* Recipe Cards Grid */}
               {isLoading ? (
@@ -1667,36 +1657,53 @@ export const MealsPage: React.FC = () => {
                     type="button"
                     onClick={() => setIsRecipeFabOpen(true)}
                     className="w-full h-full flex items-center justify-center text-slate-950 cursor-pointer"
-                    title="Add or Import Recipe"
+                    title="Search Recipes"
                   >
-                    <Plus className="w-6 h-6 stroke-[2.5]" />
+                    <Search className="w-5 h-5 stroke-[2.2]" />
                   </button>
                 ) : (
-                  <div className="w-full flex items-center justify-between gap-2 animate-in fade-in duration-200">
+                  <div className="w-full flex items-center gap-2 animate-in fade-in duration-200">
                     <button
                       type="button"
                       onClick={() => setIsRecipeFabOpen(false)}
                       className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center shrink-0 transition-colors cursor-pointer"
-                      title="Close"
+                      title="Close search"
                     >
                       <X className="w-4 h-4" />
                     </button>
 
-                    <span className="text-xs font-bold text-slate-300 ml-1 hidden xs:inline sm:inline truncate">
-                      Add Recipe
-                    </span>
+                    <div className="flex-1 min-w-0 flex items-center relative">
+                      <input
+                        autoFocus
+                        type="text"
+                        placeholder="Search recipes by title or tags..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full bg-transparent border-none text-xs text-white placeholder-slate-500 focus:outline-none px-1"
+                      />
+                      {searchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setSearchQuery('')}
+                          className="p-1 text-slate-400 hover:text-white shrink-0 cursor-pointer"
+                          title="Clear search"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
 
-                    <div className="flex items-center gap-2 ml-auto shrink-0">
+                    <div className="flex items-center gap-1.5 shrink-0">
                       <button
                         type="button"
                         onClick={() => {
                           setIsRecipeFabOpen(false);
                           setIsScraperOpen(true);
                         }}
-                        className="min-h-[36px] px-3.5 py-1.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 shadow-sm"
+                        className="w-8 h-8 rounded-xl bg-white/5 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-400 border border-white/10 hover:border-emerald-500/30 flex items-center justify-center transition-all cursor-pointer"
+                        title="Import Recipe from Web"
                       >
-                        <Link2 className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>Import Web</span>
+                        <Link2 className="w-4 h-4 text-emerald-400" />
                       </button>
 
                       <button
@@ -1706,10 +1713,10 @@ export const MealsPage: React.FC = () => {
                           setEditingRecipe(null);
                           setIsEditRecipeModalOpen(true);
                         }}
-                        className="min-h-[36px] px-3.5 py-1.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer"
+                        className="w-8 h-8 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 flex items-center justify-center transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer"
+                        title="New Recipe"
                       >
-                        <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-                        <span>New Recipe</span>
+                        <Plus className="w-4 h-4 stroke-[2.5]" />
                       </button>
                     </div>
                   </div>
