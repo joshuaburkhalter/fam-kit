@@ -443,7 +443,7 @@ app.post('/api/subscription/redeem', (req, res) => {
   const rawCode = (code || '').trim().toUpperCase();
 
   if (!rawCode) {
-    return res.status(400).json({ error: 'Please enter a promo code.' });
+    return res.status(400).json({ error: 'Please enter a beta invite code.' });
   }
 
   const clientKey = `${req.ip || 'ip'}_${householdId}`;
@@ -474,22 +474,22 @@ app.post('/api/subscription/redeem', (req, res) => {
     );
     if (isInviteCode) {
       return res.status(400).json({
-        error: `"${rawCode}" is a family invite code for "${isInviteCode.name}", not a membership promo voucher. To join that household, tap Sign Out and select "Join Family".`,
+        error: `"${rawCode}" is a family invite code for "${isInviteCode.name}", not a beta access pass. To join that household, tap Sign Out and select "Join Family".`,
       });
     }
 
     recordFailedPromoAttempt(clientKey);
-    return res.status(400).json({ error: 'Invalid or expired promo code.' });
+    return res.status(400).json({ error: 'Invalid or expired beta invite code.' });
   }
 
   if (promo.isActive !== 1) {
     recordFailedPromoAttempt(clientKey);
-    return res.status(400).json({ error: 'This promo code is no longer active.' });
+    return res.status(400).json({ error: 'This invite code is no longer active.' });
   }
 
   if (promo.maxUses && promo.maxUses > 0 && promo.timesUsed >= promo.maxUses) {
     recordFailedPromoAttempt(clientKey);
-    return res.status(400).json({ error: 'This promo code has reached its redemption limit.' });
+    return res.status(400).json({ error: 'This invite code has reached its maximum redemptions.' });
   }
 
   clearFailedPromoAttempts(clientKey);
@@ -534,8 +534,8 @@ app.post('/api/subscription/redeem', (req, res) => {
   const formatted = formatHousehold(updatedHousehold);
 
   const durationText = durationMonths
-    ? `${durationMonths} months of full free access unlocked!`
-    : 'Lifetime complimentary family access unlocked!';
+    ? `Beta invite code activated! ${durationMonths} months of beta access unlocked for your household.`
+    : 'Beta invite code activated! Full closed beta access unlocked for your household.';
 
   res.json({
     success: true,

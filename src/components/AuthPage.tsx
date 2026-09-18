@@ -526,10 +526,10 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                       />
                     </div>
 
-                    {/* Optional Voucher Code */}
+                    {/* Beta Invite Code */}
                     <div>
                       <label className="text-[11px] font-semibold text-slate-300 block mb-1">
-                        Free Access Voucher Code <span className="text-[10px] text-slate-500 font-normal">(Optional)</span>
+                        Beta Invite Code <span className="text-[10px] text-slate-500 font-normal">(Optional)</span>
                       </label>
                       <div className="relative">
                         <Gift className="w-3.5 h-3.5 text-emerald-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -537,12 +537,12 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                           type="text"
                           value={promoCode}
                           onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
-                          placeholder="e.g. HB3-XXXX-XXXX or HB6-XXXX-XXXX"
+                          placeholder="e.g. BETA2026 or HB-XXXX-XXXX"
                           className="w-full bg-slate-900/90 border border-white/10 rounded-xl pl-8 pr-3.5 py-2 text-xs font-mono uppercase text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
                         />
                       </div>
                       <p className="text-[10px] text-slate-400 mt-1">
-                        Have a 3-month, 6-month, or lifetime pass? Enter it here to skip payment.
+                        Homebase is in closed beta. Enter your invite code now or redeem it after signing in.
                       </p>
                     </div>
                   </div>

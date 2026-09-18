@@ -755,63 +755,49 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
         </div>
       )}
 
-      {/* 0. Subscription & Membership Plan */}
+      {/* 0. Closed Beta Access & Membership */}
       <div className="glass-panel rounded-3xl p-5 border border-white/10 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <div className="p-2 rounded-xl bg-gradient-to-tr from-emerald-500/20 to-teal-500/20 text-emerald-400 border border-emerald-500/30 shrink-0">
-              <CreditCard className="w-4 h-4" />
+              <ShieldCheck className="w-4 h-4" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-sm font-bold text-white">Subscription & Plan</h3>
+                <h3 className="text-sm font-bold text-white">Closed Beta Access</h3>
                 {hasActiveAccess ? (
                   <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
                     <ShieldCheck className="w-3 h-3" />
-                    Active Access
+                    Active Beta Access
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30">
-                    Expired / Inactive
+                    Locked / Code Required
                   </span>
                 )}
               </div>
               <p className="text-[11px] text-slate-400 mt-0.5">
-                {household?.subscription_plan === 'annual'
-                  ? 'Annual Membership ($7/mo billed annually at $84/yr)'
-                  : household?.subscription_plan === 'monthly'
-                  ? 'Monthly Plan ($10/mo)'
-                  : household?.subscription_plan?.startsWith('promo_')
-                  ? `${household.subscription_plan === 'promo_3mo' ? '3 Months Free Access' : household.subscription_plan === 'promo_6mo' ? '6 Months Free Access' : 'Lifetime Complimentary Access'} ${household.promo_code_used ? `(Voucher: ${household.promo_code_used})` : ''}`
+                {household?.promo_code_used
+                  ? `Active Beta Tester (Redeemed Code: ${household.promo_code_used})`
                   : hasActiveAccess
-                  ? 'Complimentary Family Access'
-                  : 'No active plan. Subscribe or redeem a voucher code below.'}
+                  ? 'Active Beta Tester (Complimentary Early Access)'
+                  : 'Closed Beta invite required. Redeem an invite code below.'}
               </p>
               {household?.subscription_expires_at && (
                 <p className="text-[10px] text-slate-500 font-mono mt-0.5">
-                  Expires on {new Date(household.subscription_expires_at).toLocaleDateString()}
+                  Beta access active until {new Date(household.subscription_expires_at).toLocaleDateString()}
                 </p>
               )}
             </div>
           </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={() => onOpenPricing ? onOpenPricing() : (window.location.href = '/pricing')}
-              className="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-950 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 shadow-md shadow-emerald-500/20 transition-all flex items-center gap-1.5 cursor-pointer"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>View Pricing ($10 / $7 mo)</span>
-            </button>
-          </div>
         </div>
 
-        {/* Voucher Code Redemption Form */}
+        {/* Beta Invite Code Redemption Form */}
         <div className="bg-slate-900/60 rounded-2xl p-3.5 border border-white/5 space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
               <Gift className="w-3.5 h-3.5 text-emerald-400" />
-              Redeem Free Access Voucher
+              Redeem Beta Invite Code
             </span>
             {settingsPromoSuccess && (
               <span className="text-[10px] text-emerald-400 font-semibold">{settingsPromoSuccess}</span>
@@ -822,7 +808,7 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
               type="text"
               value={settingsPromoInput}
               onChange={(e) => setSettingsPromoInput(e.target.value.toUpperCase())}
-              placeholder="Enter voucher code (e.g. HB3-... or HB6-...)"
+              placeholder="Enter invite code (e.g. BETA2026 or HB-...)"
               className="flex-1 bg-slate-950/80 border border-white/10 focus:border-emerald-500 rounded-xl px-3 py-1.5 text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 uppercase transition-all"
             />
             <button
@@ -835,7 +821,7 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
           </form>
         </div>
 
-        {/* Owner Tool: Generate Voucher Codes */}
+        {/* Owner Tool: Generate Beta Invite Codes */}
         <div className="border-t border-white/5 pt-3">
           <button
             onClick={() => setShowCodeGenerator(!showCodeGenerator)}
@@ -843,7 +829,7 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
           >
             <span className="flex items-center gap-1.5">
               <Gift className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Owner Tool: Generate Free Access Codes</span>
+              <span>Owner Tool: Generate Beta Invite Codes</span>
             </span>
             <span className="text-[10px] text-slate-500">{showCodeGenerator ? 'Hide' : 'Open'}</span>
           </button>
@@ -1247,14 +1233,14 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
             onClick={() => setShowTestControls(!showTestControls)}
             className="text-[10px] text-slate-500 hover:text-slate-400 flex items-center justify-between w-full transition-colors cursor-pointer"
           >
-            <span>Developer / Paywall Testing Controls</span>
+            <span>Developer / Beta Gate Testing Controls</span>
             <span>{showTestControls ? 'Hide' : 'Show'}</span>
           </button>
 
           {showTestControls && (
             <div className="mt-2.5 p-3 rounded-xl bg-slate-900/50 border border-white/5 space-y-2">
               <p className="text-[10px] text-slate-400">
-                Simulate different household subscription states to test the paywall gate:
+                Simulate different household states to test the Closed Beta gate:
               </p>
               <div className="flex flex-wrap gap-2">
                 <button
@@ -1269,14 +1255,14 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
                   onClick={() => handleSetTestState('unpaid')}
                   className="px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 text-[10px] font-bold border border-amber-500/30 cursor-pointer"
                 >
-                  Set to Unpaid (Test Paywall)
+                  Set to Locked (Test Beta Gate)
                 </button>
                 <button
                   type="button"
                   onClick={() => handleSetTestState('expired')}
                   className="px-2.5 py-1 rounded-lg bg-rose-500/20 text-rose-300 hover:bg-rose-500/30 text-[10px] font-bold border border-rose-500/30 cursor-pointer"
                 >
-                  Set to Expired (Test Paywall)
+                  Set to Expired (Test Beta Gate)
                 </button>
               </div>
             </div>

@@ -521,6 +521,8 @@ function initSchema(db: Database) {
       ['HOMEBASEVIP', 'Lifetime VIP Master Pass', null, 500, now, 'VIP Master Pass'],
       ['FAMILYVIP', 'Lifetime VIP Family Access', null, 500, now, 'VIP Family Pass'],
       ['VIP2026', 'Complimentary Family Access Pass', null, 500, now, 'VIP 2026 Pass'],
+      ['BETA2026', 'Closed Beta Early Access Pass', null, 1000, now, 'Beta 2026 Master Pass'],
+      ['BETA', 'Closed Beta Tester Pass', null, 1000, now, 'Beta Tester Pass'],
     ];
 
     for (const [c, desc, dur, maxU, dt, assigned] of defaultCodes) {

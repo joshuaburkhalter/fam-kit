@@ -63,18 +63,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onOpenPric
             >
               Install on Phone
             </button>
-            <a
-              href="/pricing"
-              onClick={(e) => {
-                if (onOpenPricing) {
-                  e.preventDefault();
-                  onOpenPricing();
-                }
-              }}
-              className="hover:text-emerald-400 transition-colors cursor-pointer text-emerald-400 font-bold"
+            <button
+              onClick={() => scrollToSection('beta')}
+              className="hover:text-emerald-400 transition-colors cursor-pointer text-emerald-400 font-bold flex items-center gap-1.5"
             >
-              Pricing
-            </a>
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span>Closed Beta</span>
+            </button>
             <a
               href="/privacy"
               className="hover:text-emerald-400 transition-colors cursor-pointer"
@@ -489,104 +484,63 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onOpenPric
         </div>
       </section>
 
-      {/* 5.5 Pricing Section */}
-      <section id="pricing" className="px-4 sm:px-8 py-16 max-w-5xl mx-auto w-full">
-        <div className="text-center space-y-3 mb-10">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-xs font-semibold shadow-inner">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Clear Family Pricing</span>
-          </div>
-          <h2 className="text-2xl sm:text-4xl font-black text-white tracking-tight">
-            One membership for your entire family.
-          </h2>
-          <p className="text-xs sm:text-sm text-slate-400 max-w-xl mx-auto">
-            Unlimited members, real-time shared lists, Gemini AI family assistant, and 2-way Google Calendar synchronization.
-          </p>
-        </div>
+      {/* 5.5 Closed Beta Section */}
+      <section id="beta" className="px-4 sm:px-8 py-16 max-w-5xl mx-auto w-full">
+        <div className="rounded-3xl p-8 sm:p-12 bg-gradient-to-b from-slate-900 to-slate-950 border border-emerald-500/40 shadow-2xl relative overflow-hidden text-center space-y-6">
+          <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch max-w-4xl mx-auto mb-8">
-          {/* Annual Plan */}
-          <div className="rounded-3xl p-6 sm:p-8 bg-gradient-to-b from-slate-900 to-slate-950 border border-emerald-500 shadow-xl shadow-emerald-500/15 relative flex flex-col justify-between">
-            <div className="absolute -top-3.5 right-6 bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 font-black text-[10px] uppercase tracking-wider px-3 py-1 rounded-full shadow">
-              Save 30% • Best Value
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold shadow-inner">
+            <Lock className="w-3.5 h-3.5" />
+            <span>Private Closed Beta • Invite Only</span>
+          </div>
+
+          <h2 className="text-2xl sm:text-4xl font-black text-white tracking-tight max-w-2xl mx-auto">
+            Currently by invitation only for early families.
+          </h2>
+
+          <p className="text-xs sm:text-sm text-slate-400 max-w-xl mx-auto leading-relaxed">
+            Homebase is in private closed beta while we test and refine features with an initial group of families. If your family was given a beta access pass, you can redeem it to unlock full access immediately.
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-3xl mx-auto text-left pt-2 pb-2">
+            <div className="p-4 rounded-2xl bg-white/5 border border-white/5 space-y-1">
+              <span className="text-emerald-400 font-bold text-xs flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                Shared Groceries
+              </span>
+              <p className="text-[11px] text-slate-400">Live aisle sorting and grocery checklists across all family devices.</p>
             </div>
-            <div>
-              <h3 className="text-base font-bold text-white mb-1">Annual Membership</h3>
-              <p className="text-xs text-slate-400 mb-4">Billed annually at $84/year ($7/mo)</p>
-              <div className="flex items-baseline gap-1 mb-4">
-                <span className="text-4xl font-black text-emerald-400">$7</span>
-                <span className="text-xs text-slate-400 font-medium">/ month</span>
-              </div>
-              <ul className="space-y-2.5 text-xs text-slate-300 border-t border-white/10 pt-4 mb-6">
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span>Entire household & all devices included</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span>Gemini AI Family Assistant</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span>Two-way Google Calendar synchronization</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span>Save $36 every year</span>
-                </li>
-              </ul>
+            <div className="p-4 rounded-2xl bg-white/5 border border-white/5 space-y-1">
+              <span className="text-teal-400 font-bold text-xs flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                Meals & Recipes
+              </span>
+              <p className="text-[11px] text-slate-400">On-deck meal planning, web recipe discovery, and step-by-step cook mode.</p>
             </div>
+            <div className="p-4 rounded-2xl bg-white/5 border border-white/5 space-y-1">
+              <span className="text-cyan-400 font-bold text-xs flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                Google Calendar & AI
+              </span>
+              <p className="text-[11px] text-slate-400">Two-way Google Calendar sync and Gemini AI assistant.</p>
+            </div>
+          </div>
+
+          <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
             <button
-              onClick={() => onOpenPricing ? onOpenPricing() : onOpenAuth('register')}
-              className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-bold text-xs shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.01]"
+              onClick={() => onOpenAuth('register')}
+              className="w-full sm:w-auto py-3 px-6 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-bold text-xs shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
             >
-              <span>Get Started Annually</span>
+              <span>Join Closed Beta with Code</span>
               <ArrowRight className="w-4 h-4" />
             </button>
-          </div>
-
-          {/* Monthly Plan */}
-          <div className="rounded-3xl p-6 sm:p-8 bg-slate-900/60 border border-white/10 flex flex-col justify-between">
-            <div>
-              <h3 className="text-base font-bold text-white mb-1">Monthly Plan</h3>
-              <p className="text-xs text-slate-400 mb-4">Flexible month-to-month access</p>
-              <div className="flex items-baseline gap-1 mb-4">
-                <span className="text-4xl font-black text-white">$10</span>
-                <span className="text-xs text-slate-400 font-medium">/ month</span>
-              </div>
-              <ul className="space-y-2.5 text-xs text-slate-300 border-t border-white/10 pt-4 mb-6">
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span>Entire household & all devices included</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span>Real-time grocery lists with smart aisles</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span>Cancel or switch anytime</span>
-                </li>
-              </ul>
-            </div>
             <button
-              onClick={() => onOpenPricing ? onOpenPricing() : onOpenAuth('register')}
-              className="w-full py-3 px-4 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs border border-white/15 transition-all flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.01]"
+              onClick={() => onOpenAuth('login')}
+              className="w-full sm:w-auto py-3 px-6 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs border border-white/15 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
             >
-              <span>Choose Monthly</span>
-              <ArrowRight className="w-4 h-4 text-emerald-400" />
+              <span>Existing Member Sign In</span>
             </button>
           </div>
-        </div>
-
-        <div className="text-center">
-          <button
-            onClick={() => onOpenPricing ? onOpenPricing() : (window.location.href = '/pricing')}
-            className="text-xs font-semibold text-emerald-400 hover:text-emerald-300 inline-flex items-center gap-1 transition-colors cursor-pointer"
-          >
-            <span>Have a free access code or want to see all plan details? View Full Pricing & FAQ</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
         </div>
       </section>
 
@@ -616,18 +570,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onOpenPric
           </div>
 
           <div className="flex flex-wrap items-center justify-center gap-6 text-xs text-slate-400 font-medium">
-            <a
-              href="/pricing"
-              onClick={(e) => {
-                if (onOpenPricing) {
-                  e.preventDefault();
-                  onOpenPricing();
-                }
-              }}
-              className="hover:text-emerald-400 transition-colors"
+            <button
+              onClick={() => scrollToSection('beta')}
+              className="hover:text-emerald-400 transition-colors cursor-pointer text-emerald-400 font-semibold"
             >
-              Pricing
-            </a>
+              Closed Beta
+            </button>
             <a href="/privacy" className="hover:text-emerald-400 transition-colors">
               Privacy Policy
             </a>

@@ -341,16 +341,9 @@ export const AppContent: React.FC = () => {
     );
   }
 
-  // If user is logged in, but their household does not have active subscription / voucher access -> Paywall
+  // If user is logged in, but their household does not have active closed beta invite access -> Closed Beta Gate
   if (!hasActiveAccess) {
-    return (
-      <PaywallModal
-        onOpenPricingDetails={() => {
-          window.history.pushState({}, '', '/pricing');
-          setOverlayView('pricing');
-        }}
-      />
-    );
+    return <PaywallModal />;
   }
 
   // If logged in and active, but specifically requested to see the Landing Page / Install guide
