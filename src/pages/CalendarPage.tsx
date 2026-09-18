@@ -8,6 +8,9 @@ import {
   X,
   Loader2,
   ArrowDown,
+  ArrowUp,
+  ChevronDown,
+  ChevronUp,
   Sparkles,
 } from 'lucide-react';
 import {
@@ -143,8 +146,10 @@ export const CalendarPage: React.FC = () => {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Timeline configuration: 14 days by default, expandable by 14
+  // Timeline configuration: 14 days forward by default, expandable by 14
   const [daysCount, setDaysCount] = useState<number>(14);
+  const [showPastEvents, setShowPastEvents] = useState<boolean>(false);
+  const [pastDaysCount, setPastDaysCount] = useState<number>(14);
   const [selectedMemberId, setSelectedMemberId] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'all' | 'events-only'>('all');
 
@@ -178,11 +183,6 @@ export const CalendarPage: React.FC = () => {
     onClose: () => setIsQuickAddExpanded(false),
     ignore: isModalOpen,
   });
-
-  // Calculate timeline date range: starts from yesterday (1 day past context) through 14 days ahead
-  const rangeStart = subDays(new Date(), 1);
-  const rangeEnd = addDays(rangeStart, daysCount);
-  const timelineDays = eachDayOfInterval({ start: rangeStart, end: rangeEnd });
 
   const loadData = async () => {
     if (!household) return;
@@ -242,6 +242,34 @@ export const CalendarPage: React.FC = () => {
     if (selectedMemberId === 'all') return true;
     return ev.assigned_user_id === selectedMemberId;
   });
+
+  const today = new Date();
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+  const pastEventsCount = filteredEvents.filter((ev) => {
+    try {
+      const start = parseISO(ev.start_time);
+      const evDate = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+      return evDate < todayStart;
+    } catch {
+      return false;
+    }
+  }).length;
+
+  const hasOlderPastEvents = filteredEvents.some((ev) => {
+    try {
+      const start = parseISO(ev.start_time);
+      const evDate = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+      return evDate < subDays(todayStart, pastDaysCount);
+    } catch {
+      return false;
+    }
+  });
+
+  // Calculate timeline date range: starts from Today by default, or pastDaysCount days ago if showPastEvents is true
+  const rangeStart = showPastEvents ? subDays(todayStart, pastDaysCount) : todayStart;
+  const rangeEnd = addDays(todayStart, daysCount);
+  const timelineDays = eachDayOfInterval({ start: rangeStart, end: rangeEnd });
 
   const handleOpenAddModal = (dateStr?: string) => {
     setEditingEventId(null);
@@ -509,37 +537,103 @@ export const CalendarPage: React.FC = () => {
           })}
         </div>
 
-        {/* Smaller & Simpler View Mode Toggle */}
-        <div className="flex items-center bg-slate-900 rounded-lg p-0.5 border border-white/10 shrink-0 text-[11px]">
+        {/* Smaller & Simpler View Mode Toggle + Past Events Quick Toggle */}
+        <div className="flex items-center gap-1.5 shrink-0">
           <button
             type="button"
-            onClick={() => setViewMode('all')}
-            className={`px-2 py-0.5 rounded-md font-medium transition-all ${
-              viewMode === 'all'
-                ? 'bg-slate-800 text-white font-semibold'
-                : 'text-slate-400 hover:text-slate-200'
+            onClick={() => setShowPastEvents((prev) => !prev)}
+            className={`px-2 py-1 rounded-lg text-[11px] font-semibold transition-all flex items-center gap-1.5 cursor-pointer border ${
+              showPastEvents
+                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-xs'
+                : 'bg-slate-900 text-slate-400 hover:text-slate-200 border-white/10'
             }`}
+            title={showPastEvents ? 'Hide past events' : 'Show past events'}
           >
-            All
+            <Clock className={`w-3 h-3 ${showPastEvents ? 'text-amber-400' : 'text-slate-400'}`} />
+            <span>Past</span>
+            {pastEventsCount > 0 && (
+              <span className="text-[10px] opacity-80 font-mono">({pastEventsCount})</span>
+            )}
           </button>
-          <button
-            type="button"
-            onClick={() => setViewMode('events-only')}
-            className={`px-2 py-0.5 rounded-md font-medium transition-all ${
-              viewMode === 'events-only'
-                ? 'bg-slate-800 text-white font-semibold'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            Events
-          </button>
+
+          <div className="flex items-center bg-slate-900 rounded-lg p-0.5 border border-white/10 shrink-0 text-[11px]">
+            <button
+              type="button"
+              onClick={() => setViewMode('all')}
+              className={`px-2 py-0.5 rounded-md font-medium transition-all ${
+                viewMode === 'all'
+                  ? 'bg-slate-800 text-white font-semibold'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              All
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('events-only')}
+              className={`px-2 py-0.5 rounded-md font-medium transition-all ${
+                viewMode === 'events-only'
+                  ? 'bg-slate-800 text-white font-semibold'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Events
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Clean Synchronous Timeline List */}
       <div className="relative pt-1">
+        {/* Past Events Section Toggle Banner */}
+        <div className="flex items-center justify-between gap-2 pb-3 pt-0.5">
+          <button
+            type="button"
+            onClick={() => setShowPastEvents((prev) => !prev)}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all border shadow-xs cursor-pointer ${
+              showPastEvents
+                ? 'bg-amber-500/15 text-amber-300 border-amber-500/30 hover:bg-amber-500/25'
+                : 'bg-slate-900/90 text-slate-300 hover:text-white border-white/10 hover:border-amber-500/40'
+            }`}
+          >
+            <Clock className={`w-3.5 h-3.5 ${showPastEvents ? 'text-amber-400' : 'text-slate-400'}`} />
+            <span>{showPastEvents ? 'Hide Past Events' : 'See Past Events'}</span>
+            {pastEventsCount > 0 ? (
+              <span
+                className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                  showPastEvents
+                    ? 'bg-amber-400 text-slate-950'
+                    : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                }`}
+              >
+                {pastEventsCount} {pastEventsCount === 1 ? 'event' : 'events'}
+              </span>
+            ) : (
+              <span className="text-[10px] text-slate-500 font-normal">None</span>
+            )}
+            {showPastEvents ? (
+              <ChevronUp className="w-3.5 h-3.5 text-amber-400 ml-0.5" />
+            ) : (
+              <ChevronDown className="w-3.5 h-3.5 text-slate-400 ml-0.5" />
+            )}
+          </button>
+
+          {showPastEvents && hasOlderPastEvents && (
+            <button
+              type="button"
+              onClick={() => setPastDaysCount((prev) => prev + 14)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-white/10 hover:border-amber-500/40 text-slate-300 hover:text-white text-xs font-medium transition-all shadow-xs cursor-pointer"
+              title="Load older past days"
+            >
+              <ArrowUp className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden sm:inline">Load 14 Earlier Days</span>
+              <span className="sm:hidden">Earlier</span>
+            </button>
+          )}
+        </div>
+
         {/* Continuous Synchronous Timeline Rail Spine */}
-        <div className="absolute left-[4.5rem] -translate-x-1/2 top-4 bottom-14 w-[2px] bg-slate-800 pointer-events-none" />
+        <div className="absolute left-[4.5rem] -translate-x-1/2 top-11 bottom-14 w-[2px] bg-slate-800 pointer-events-none" />
 
         {timelineDays.map((day, idx) => {
           const dateStr = format(day, 'yyyy-MM-dd');
@@ -620,6 +714,11 @@ export const CalendarPage: React.FC = () => {
                   {isTomorrowDay && (
                     <span className="text-[9px] font-medium text-slate-400 uppercase tracking-tight mt-0.5">
                       Tmrw
+                    </span>
+                  )}
+                  {isYesterdayDay && (
+                    <span className="text-[9px] font-medium text-amber-400 uppercase tracking-tight mt-0.5">
+                      Yest
                     </span>
                   )}
                 </div>
