@@ -310,7 +310,13 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onBack }) => {
       setFeedbackList((prev) => prev.map((f) => (f.id === id ? { ...f, ...updated } : f)));
       setRespondingFeedbackId(null);
       setResponseText('');
-      showToast('Developer note published successfully!');
+      const wasPushed = (updated as any)?.pushedToUser;
+      const recipient = (updated as any)?.submittedByUserName;
+      if (wasPushed) {
+        showToast(`Developer note published & push notification sent to ${recipient || 'user'}!`);
+      } else {
+        showToast('Developer note published! (User has not enabled push notifications)');
+      }
     } catch (err: any) {
       console.error(err);
       showToast('Failed to update request');
@@ -324,7 +330,12 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onBack }) => {
     try {
       const updated = await api.updateFeedbackRequest(id, { status: newStatus as any });
       setFeedbackList((prev) => prev.map((f) => (f.id === id ? { ...f, status: updated.status } : f)));
-      showToast(`Status changed to ${newStatus.replace('_', ' ')}`);
+      const wasPushed = (updated as any)?.pushedToUser;
+      if (wasPushed) {
+        showToast(`Status changed to ${newStatus.replace('_', ' ')} & user notified!`);
+      } else {
+        showToast(`Status changed to ${newStatus.replace('_', ' ')}`);
+      }
     } catch (err: any) {
       console.error(err);
       showToast('Failed to change status');

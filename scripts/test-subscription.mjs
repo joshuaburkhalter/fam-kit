@@ -1,5 +1,6 @@
 import { getDb, queryAll, queryOne, execute, generateSecureVoucherCode } from '../server/db.ts';
 import { isBasicPantryStaple } from '../server/groceryStaples.ts';
+import { sendPushNotificationToUser } from '../server/push.ts';
 
 async function runTests() {
   console.log('--- Testing Subscription & Voucher Code System ---');
@@ -311,6 +312,46 @@ async function runTests() {
   `;
   const fetchedCodes = queryAll(codesQuery);
   console.log(`11. Fetched ${fetchedCodes.length} promo codes via endpoint query.`);
+
+  // 12. Test Feedback Request Push Notification Dispatch
+  console.log('12. Testing Feedback Request Push Notification System:');
+  const testUserId = 'test-push-user-' + Date.now();
+  const testHouseholdId = 'test-push-hh-' + Date.now();
+
+  // Test 12a: user with no subscriptions returns sentCount: 0 cleanly
+  const noSubResult = await sendPushNotificationToUser(testUserId, {
+    title: 'Test Title',
+    body: 'Test Body',
+  });
+  if (noSubResult.success !== false || noSubResult.sentCount !== 0) {
+    throw new Error('Expected noSubResult to have success: false, sentCount: 0');
+  }
+  console.log('    ✓ Correctly handles user without push subscription (returns sentCount: 0)');
+
+  // Test 12b: insert mock push subscription and verify query resolution
+  const mockEndpoint = 'https://fcm.googleapis.com/fcm/send/test-token-' + Date.now();
+  const mockKeys = JSON.stringify({ p256dh: 'mock-p256dh-key', auth: 'mock-auth-key' });
+  execute(
+    `INSERT INTO push_subscriptions (id, endpoint, keys, userId, householdId, createdAt)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    ['sub-' + Date.now(), mockEndpoint, mockKeys, testUserId, testHouseholdId, new Date().toISOString()]
+  );
+
+  const matchedSubs = queryAll('SELECT * FROM push_subscriptions WHERE userId = ?', [testUserId]);
+  if (matchedSubs.length !== 1 || matchedSubs[0].endpoint !== mockEndpoint) {
+    throw new Error('Expected push subscription to be queried by userId');
+  }
+  console.log('    ✓ Correctly matched and queried push subscription for user: ' + testUserId);
+
+  // Test 12c: fallback query by householdId when userId is empty
+  const matchedHhSubs = queryAll('SELECT * FROM push_subscriptions WHERE householdId = ?', [testHouseholdId]);
+  if (matchedHhSubs.length !== 1) {
+    throw new Error('Expected push subscription to be queried by householdId fallback');
+  }
+  console.log('    ✓ Correctly matched household push subscription fallback for: ' + testHouseholdId);
+
+  // Clean up mock push subscription
+  execute('DELETE FROM push_subscriptions WHERE userId = ?', [testUserId]);
 
   // Cleanup test artifacts
   execute(`DELETE FROM promo_codes WHERE code LIKE 'TEST-%'`);

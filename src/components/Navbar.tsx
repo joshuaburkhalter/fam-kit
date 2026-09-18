@@ -46,10 +46,28 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
   const [copiedInvite, setCopiedInvite] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [showEditProfileModal, setShowEditProfileModal] = useState(false);
-  const [showBugFeatureModal, setShowBugFeatureModal] = useState(false);
+  const [showBugFeatureModal, setShowBugFeatureModal] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const p = new URLSearchParams(window.location.search);
+      return p.has('feedback') || p.has('openFeedback') || p.get('modal') === 'feedback';
+    }
+    return false;
+  });
   const [openFeedbackCount, setOpenFeedbackCount] = useState(0);
 
   const isAdmin = isUserAdmin(currentUser);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const checkFeedbackParam = () => {
+      const p = new URLSearchParams(window.location.search);
+      if (p.has('feedback') || p.has('openFeedback') || p.get('modal') === 'feedback') {
+        setShowBugFeatureModal(true);
+      }
+    };
+    window.addEventListener('popstate', checkFeedbackParam);
+    return () => window.removeEventListener('popstate', checkFeedbackParam);
+  }, []);
 
   useEffect(() => {
     if (currentUser) {
@@ -415,7 +433,18 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
       {/* Bug & Feature Request Modal */}
       <BugFeatureAdminModal
         isOpen={showBugFeatureModal}
-        onClose={() => setShowBugFeatureModal(false)}
+        onClose={() => {
+          setShowBugFeatureModal(false);
+          if (typeof window !== 'undefined') {
+            const url = new URL(window.location.href);
+            if (url.searchParams.has('feedback') || url.searchParams.has('openFeedback') || url.searchParams.get('modal') === 'feedback') {
+              url.searchParams.delete('feedback');
+              url.searchParams.delete('openFeedback');
+              if (url.searchParams.get('modal') === 'feedback') url.searchParams.delete('modal');
+              window.history.replaceState(window.history.state || {}, '', url.pathname + (url.search ? url.search : ''));
+            }
+          }
+        }}
         onCountChange={setOpenFeedbackCount}
       />
     </header>

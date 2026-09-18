@@ -22,6 +22,7 @@ export type NotificationCategory =
   | 'meal_plans'
   | 'recipes_added'
   | 'assistant_actions'
+  | 'feedback_reply'
   | 'test';
 
 export interface UserNotificationPreferences {
@@ -230,3 +231,68 @@ export async function sendPushNotificationToHousehold(
     console.error('Error sending push notification:', error);
   }
 }
+
+export async function sendPushNotificationToUser(
+  userId: string,
+  payload: { title: string; body: string; url?: string; tag?: string },
+  options?: {
+    householdId?: string;
+  }
+): Promise<{ success: boolean; sentCount: number }> {
+  try {
+    let subscriptions: Array<{ id: string; endpoint: string; keys: string; userId: string | null; householdId: string }> = [];
+
+    if (userId && userId.trim()) {
+      subscriptions = queryAll<{ id: string; endpoint: string; keys: string; userId: string | null; householdId: string }>(
+        'SELECT * FROM push_subscriptions WHERE userId = ?',
+        [userId.trim()]
+      );
+    }
+
+    // Fallback: if no subscriptions found strictly by userId, and householdId is provided, query by householdId
+    if ((!subscriptions || subscriptions.length === 0) && options?.householdId) {
+      subscriptions = queryAll<{ id: string; endpoint: string; keys: string; userId: string | null; householdId: string }>(
+        'SELECT * FROM push_subscriptions WHERE householdId = ?',
+        [options.householdId]
+      );
+    }
+
+    if (!subscriptions || subscriptions.length === 0) {
+      return { success: false, sentCount: 0 };
+    }
+
+    let sentCount = 0;
+    const notifications = subscriptions.map(async (sub) => {
+      try {
+        const keys = JSON.parse(sub.keys);
+        const pushSubscription = { endpoint: sub.endpoint, keys };
+
+        await webPush.sendNotification(
+          pushSubscription,
+          JSON.stringify({
+            title: payload.title,
+            body: payload.body,
+            icon: '/icons/icon-192.png',
+            badge: '/icons/icon-192.png',
+            data: { url: payload.url || '/?feedback=true' },
+            tag: payload.tag || 'feedback-response',
+          })
+        );
+        sentCount++;
+      } catch (err: any) {
+        if (err.statusCode === 404 || err.statusCode === 410 || err.statusCode === 401 || err.statusCode === 403) {
+          execute('DELETE FROM push_subscriptions WHERE id = ?', [sub.id]);
+        } else {
+          console.error('Failed to send push to user subscription:', sub.id, err?.message || err);
+        }
+      }
+    });
+
+    await Promise.allSettled(notifications);
+    return { success: sentCount > 0, sentCount };
+  } catch (error) {
+    console.error('Error in sendPushNotificationToUser:', error);
+    return { success: false, sentCount: 0 };
+  }
+}
+

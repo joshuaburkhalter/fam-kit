@@ -8,6 +8,7 @@ import { getGeminiModel } from './gemini.js';
 import { parseRecipeFromUrl, parseRecipeFromHtml, getCuratedFoodImage, findAccurateRecipePhoto, generateRecipeImageWithImagen } from './recipe-parser.js';
 import {
   sendPushNotificationToHousehold,
+  sendPushNotificationToUser,
   vapidPublicKey,
   getNotificationPreferences,
   saveNotificationPreferences,
@@ -3058,7 +3059,7 @@ app.post('/api/feedback', (req, res) => {
   });
 });
 
-app.patch('/api/feedback', (req, res) => {
+app.patch('/api/feedback', async (req, res) => {
   const user = getAuthUser(req);
   if (!user || !isServerAdmin(user)) {
     return res.status(403).json({ error: 'Admin access required to respond to or update status of requests' });
@@ -3090,11 +3091,102 @@ app.patch('/api/feedback', (req, res) => {
   try {
     voters = updated.upvoters ? JSON.parse(updated.upvoters) : [];
   } catch {}
+
+  let pushedToUser = false;
+  let pushRecipientCount = 0;
+
+  // Dispatch push notification to user if admin provided a response message or updated status
+  const hasNewResponse =
+    typeof adminResponse === 'string' &&
+    adminResponse.trim().length > 0 &&
+    adminResponse.trim() !== (existing.adminResponse || '').trim();
+  const hasStatusChange = status && status !== existing.status;
+
+  if (hasNewResponse || hasStatusChange) {
+    try {
+      const recipientUserId = existing.submittedByUserId;
+      const recipientHouseholdId = existing.householdId;
+      const typeLabel = existing.type === 'bug' ? 'Bug Report' : 'Feature Request';
+
+      let pushTitle = `Update on your ${typeLabel}`;
+      if (nextStatus === 'resolved') {
+        pushTitle = `🎉 ${typeLabel} Completed!`;
+      } else if (hasNewResponse) {
+        pushTitle = `💬 Response to: "${existing.title.length > 32 ? existing.title.slice(0, 29) + '...' : existing.title}"`;
+      }
+
+      let pushBody = '';
+      if (hasNewResponse) {
+        const cleanMsg = adminResponse.trim();
+        pushBody = `${user.name || 'Admin'}: "${cleanMsg.length > 120 ? cleanMsg.slice(0, 117) + '...' : cleanMsg}"`;
+      } else if (hasStatusChange) {
+        const statusDisplay = nextStatus.replace('_', ' ');
+        pushBody = `Status changed to ${statusDisplay}: "${existing.title}"`;
+      }
+
+      // Send to the author if not the admin
+      if (recipientUserId && recipientUserId !== user.id) {
+        const pushRes = await sendPushNotificationToUser(
+          recipientUserId,
+          {
+            title: pushTitle,
+            body: pushBody,
+            url: '/?tab=assistant&feedback=true',
+            tag: `feedback-${id}`,
+          },
+          { householdId: recipientHouseholdId }
+        );
+
+        if (pushRes.success && pushRes.sentCount > 0) {
+          pushedToUser = true;
+          pushRecipientCount += pushRes.sentCount;
+        }
+      } else if (!recipientUserId && recipientHouseholdId && recipientHouseholdId !== user.householdId) {
+        // Fallback for requests created without a specific userId
+        const pushRes = await sendPushNotificationToUser(
+          '',
+          {
+            title: pushTitle,
+            body: pushBody,
+            url: '/?tab=assistant&feedback=true',
+            tag: `feedback-${id}`,
+          },
+          { householdId: recipientHouseholdId }
+        );
+
+        if (pushRes.success && pushRes.sentCount > 0) {
+          pushedToUser = true;
+          pushRecipientCount += pushRes.sentCount;
+        }
+      }
+
+      // Also notify any other upvoters if status is resolved or there is a new response
+      if (Array.isArray(voters) && voters.length > 0) {
+        const otherVoters = voters.filter((vId) => vId !== user.id && vId !== recipientUserId);
+        for (const voterId of otherVoters) {
+          await sendPushNotificationToUser(voterId, {
+            title: nextStatus === 'resolved' ? `🎉 Upvoted Feature Completed!` : `Update on "${existing.title}"`,
+            body: hasNewResponse
+              ? `${user.name || 'Admin'} replied: "${adminResponse.trim().slice(0, 80)}..."`
+              : `Status updated to ${nextStatus.replace('_', ' ')}: "${existing.title}"`,
+            url: '/?tab=assistant&feedback=true',
+            tag: `feedback-${id}`,
+          }).catch(() => {});
+        }
+      }
+    } catch (pushErr) {
+      console.warn('Failed to dispatch feedback push notification:', pushErr);
+    }
+  }
+
   res.json({
     ...updated,
     upvotes: typeof updated.upvotes === 'number' ? updated.upvotes : voters.length,
     upvoters: voters,
     hasUpvoted: voters.includes(user.id),
+    pushedToUser,
+    pushRecipientCount,
+    submittedByUserName: existing.submittedByUserName,
   });
 });
 

@@ -165,7 +165,13 @@ export const BugFeatureAdminModal: React.FC<BugFeatureAdminModalProps> = ({
 
       setRequests((prev) => prev.map((r) => (r.id === id ? updated : r)));
       setEditingId(null);
-      showToast('Response saved & status updated!');
+      const wasPushed = (updated as any)?.pushedToUser;
+      const recipient = (updated as any)?.submittedByUserName;
+      if (wasPushed) {
+        showToast(`Response saved & push notification sent to ${recipient || 'user'}!`);
+      } else {
+        showToast('Response saved! (User has not enabled push notifications)');
+      }
       const openCount = requests
         .map((r) => (r.id === id ? updated : r))
         .filter((r) => r.status === 'open' || r.status === 'in_progress').length;
