@@ -8,7 +8,6 @@ import {
   X,
   Loader2,
   ArrowDown,
-  ArrowUp,
   ChevronDown,
   ChevronUp,
   Sparkles,
@@ -245,6 +244,7 @@ export const CalendarPage: React.FC = () => {
 
   const today = new Date();
   const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const yesterday = subDays(todayStart, 1);
 
   const pastEventsCount = filteredEvents.filter((ev) => {
     try {
@@ -256,20 +256,20 @@ export const CalendarPage: React.FC = () => {
     }
   }).length;
 
-  const hasOlderPastEvents = filteredEvents.some((ev) => {
-    try {
-      const start = parseISO(ev.start_time);
-      const evDate = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-      return evDate < subDays(todayStart, pastDaysCount);
-    } catch {
-      return false;
-    }
+  // 1. Upcoming Timeline: starts Today and goes forward
+  const upcomingDays = eachDayOfInterval({
+    start: todayStart,
+    end: addDays(todayStart, daysCount),
   });
 
-  // Calculate timeline date range: starts from Today by default, or pastDaysCount days ago if showPastEvents is true
-  const rangeStart = showPastEvents ? subDays(todayStart, pastDaysCount) : todayStart;
-  const rangeEnd = addDays(todayStart, daysCount);
-  const timelineDays = eachDayOfInterval({ start: rangeStart, end: rangeEnd });
+  // 2. Past Timeline: starts Yesterday and scrolls down into the past (most recent first)
+  const pastDays = eachDayOfInterval({
+    start: subDays(todayStart, pastDaysCount),
+    end: yesterday,
+  }).reverse();
+
+  // Active timeline days depending on view mode
+  const timelineDays = showPastEvents ? pastDays : upcomingDays;
 
   const handleOpenAddModal = (dateStr?: string) => {
     setEditingEventId(null);
@@ -466,7 +466,7 @@ export const CalendarPage: React.FC = () => {
               {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" />}
             </h1>
             <p className="text-[11px] sm:text-xs text-slate-400 font-medium">
-              14-day family agenda & schedule
+              {showPastEvents ? 'Past family events & activity' : '14-day family agenda & schedule'}
             </p>
           </div>
         </div>
@@ -475,8 +475,15 @@ export const CalendarPage: React.FC = () => {
           {/* Today Jump Button */}
           <button
             type="button"
-            onClick={scrollToToday}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-white/10 hover:border-emerald-500/40 text-emerald-400 text-xs font-semibold transition-all active:scale-95 shadow-sm"
+            onClick={() => {
+              if (showPastEvents) {
+                setShowPastEvents(false);
+              }
+              setTimeout(() => {
+                scrollToToday();
+              }, 50);
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-white/10 hover:border-emerald-500/40 text-emerald-400 text-xs font-semibold transition-all active:scale-95 shadow-sm cursor-pointer"
             title="Jump to Today"
           >
             <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
@@ -544,15 +551,17 @@ export const CalendarPage: React.FC = () => {
             onClick={() => setShowPastEvents((prev) => !prev)}
             className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all flex items-center gap-1.5 cursor-pointer border ${
               showPastEvents
-                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-xs'
+                ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-xs font-bold'
                 : 'bg-slate-900 text-slate-400 hover:text-slate-200 border-white/10'
             }`}
-            title={showPastEvents ? 'Hide past events' : 'Show past events'}
+            title={showPastEvents ? 'Switch back to upcoming events' : 'View past events'}
           >
-            <Clock className={`w-3 h-3 ${showPastEvents ? 'text-amber-400' : 'text-slate-400'}`} />
+            <Clock className={`w-3 h-3 ${showPastEvents ? 'text-slate-950 stroke-[2.5]' : 'text-slate-400'}`} />
             <span>Past</span>
             {pastEventsCount > 0 && (
-              <span className="text-[10px] opacity-80 font-mono">({pastEventsCount})</span>
+              <span className={`text-[10px] font-mono ${showPastEvents ? 'text-slate-950 font-bold' : 'opacity-80'}`}>
+                ({pastEventsCount})
+              </span>
             )}
           </button>
 
@@ -585,17 +594,38 @@ export const CalendarPage: React.FC = () => {
 
       {/* Clean Synchronous Timeline List */}
       <div className="relative pt-1">
-        {/* Load Earlier Days Button when Past Events are Expanded */}
-        {showPastEvents && hasOlderPastEvents && (
-          <div className="flex justify-center pb-3 pt-0.5">
+        {/* Banner indicator when viewing Past Events */}
+        {showPastEvents && (
+          <div className="flex items-center justify-between px-3.5 py-2 mb-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs">
+            <div className="flex items-center gap-2">
+              <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span>
+                Viewing <strong>Past Events</strong> (most recent first)
+              </span>
+            </div>
             <button
               type="button"
-              onClick={() => setPastDaysCount((prev) => prev + 14)}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-900/90 border border-white/10 hover:border-amber-500/40 text-slate-300 hover:text-white text-xs font-medium transition-all shadow-xs cursor-pointer"
-              title="Load older past days"
+              onClick={() => setShowPastEvents(false)}
+              className="text-amber-300 hover:text-white font-semibold underline text-[11px] cursor-pointer ml-2 shrink-0"
             >
-              <ArrowUp className="w-3.5 h-3.5 text-amber-400" />
-              <span>Load 14 Earlier Days</span>
+              Back to Today
+            </button>
+          </div>
+        )}
+
+        {showPastEvents && pastEventsCount === 0 && (
+          <div className="text-center py-12 px-4 rounded-2xl bg-slate-900/40 border border-white/5 my-4">
+            <Clock className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+            <p className="text-sm font-semibold text-slate-300">No past events recorded</p>
+            <p className="text-xs text-slate-500 mt-1">
+              Events that have already taken place will appear here.
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowPastEvents(false)}
+              className="mt-4 px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-all cursor-pointer"
+            >
+              Back to Upcoming Events
             </button>
           </div>
         )}
@@ -819,17 +849,30 @@ export const CalendarPage: React.FC = () => {
           );
         })}
 
-        {/* Load More Days (+14 Days) */}
-        <div className="pt-3 pb-8 flex justify-center">
-          <button
-            type="button"
-            onClick={() => setDaysCount((prev) => prev + 14)}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-900 border border-white/10 hover:border-emerald-500/40 text-slate-300 hover:text-white text-xs font-semibold transition-all active:scale-95 shadow-sm"
-          >
-            <ArrowDown className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Load 14 More Days</span>
-          </button>
-        </div>
+        {/* Load More Days / Past Events (+14 Days) */}
+        {(!showPastEvents || pastEventsCount > 0) && (
+          <div className="pt-3 pb-8 flex justify-center">
+            {showPastEvents ? (
+              <button
+                type="button"
+                onClick={() => setPastDaysCount((prev) => prev + 14)}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-900 border border-amber-500/30 hover:border-amber-500/60 text-amber-300 hover:text-white text-xs font-semibold transition-all active:scale-95 shadow-sm cursor-pointer"
+              >
+                <ArrowDown className="w-3.5 h-3.5 text-amber-400" />
+                <span>Show More Past Events (14 Earlier Days)</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setDaysCount((prev) => prev + 14)}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-900 border border-white/10 hover:border-emerald-500/40 text-slate-300 hover:text-white text-xs font-semibold transition-all active:scale-95 shadow-sm cursor-pointer"
+              >
+                <ArrowDown className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Load 14 More Days</span>
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Unified Add / Edit Event Drawer */}
