@@ -16,6 +16,7 @@ import type {
   PromoCode,
   FeedbackRequest,
 } from '../types';
+import { filterRecipeIngredientsForGrocery } from './groceryStaples';
 
 const BASE_URL = '/api';
 
@@ -558,8 +559,9 @@ export const api = {
 
   addRecipeToGrocery: async (recipeOrId: string | Recipe, householdId: string) => {
     const recipe = typeof recipeOrId === 'string' ? await api.getRecipe(recipeOrId) : recipeOrId;
+    const { toAdd, skippedStaples } = filterRecipeIngredientsForGrocery(recipe.ingredients || []);
     let count = 0;
-    for (const ing of (recipe.ingredients || [])) {
+    for (const ing of toAdd) {
       await api.addGroceryItem(householdId, {
         name: ing.item,
         quantity: ing.amount,
@@ -569,25 +571,36 @@ export const api = {
       });
       count++;
     }
-    return { success: true, addedCount: count };
+    return {
+      success: true,
+      addedCount: count,
+      skippedStaplesCount: skippedStaples.length,
+      skippedStaples: skippedStaples.map((s) => s.item),
+    };
   },
 
-  exportRecipeToGrocery: async (householdId: string, recipe: Recipe): Promise<{ addedCount: number }> => {
+  exportRecipeToGrocery: async (
+    householdId: string,
+    recipe: Recipe
+  ): Promise<{ addedCount: number; skippedCount: number; skippedStaples: string[] }> => {
     let count = 0;
-    if (recipe.ingredients && Array.isArray(recipe.ingredients)) {
-      for (const ing of recipe.ingredients) {
-        if (!ing.item?.trim()) continue;
-        await api.addGroceryItem(householdId, {
-          name: ing.item.trim(),
-          quantity: ing.amount,
-          unit: ing.unit,
-          category: ing.category,
-          notes: `For: ${recipe.title}`,
-        });
-        count++;
-      }
+    const { toAdd, skippedStaples } = filterRecipeIngredientsForGrocery(recipe.ingredients || []);
+    for (const ing of toAdd) {
+      if (!ing.item?.trim()) continue;
+      await api.addGroceryItem(householdId, {
+        name: ing.item.trim(),
+        quantity: ing.amount,
+        unit: ing.unit,
+        category: ing.category,
+        notes: `For: ${recipe.title}`,
+      });
+      count++;
     }
-    return { addedCount: count };
+    return {
+      addedCount: count,
+      skippedCount: skippedStaples.length,
+      skippedStaples: skippedStaples.map((s) => s.item),
+    };
   },
 
   // Meal Plans

@@ -160,7 +160,10 @@ export const RecipesPage: React.FC = () => {
         recipe_id: recipe.id,
       }).catch((e) => console.warn('Auto-add to shopped meals:', e));
 
-      setAddedGroceryFeedback(`Added ${res.addedCount} ingredients to Grocery List & Meals on Deck!`);
+      const feedback = (res as any).skippedStaplesCount > 0
+        ? `Added ${res.addedCount} ingredients (filtered ${(res as any).skippedStaplesCount} pantry staples: water, salt, etc.)!`
+        : `Added ${res.addedCount} ingredients to Grocery List & Meals on Deck!`;
+      setAddedGroceryFeedback(feedback);
       setTimeout(() => setAddedGroceryFeedback(null), 3500);
     } catch (err: any) {
       console.error('Add to grocery failed:', err);

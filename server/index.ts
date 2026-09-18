@@ -28,6 +28,7 @@ import {
   deleteEventFromGoogleCalendar,
   pushUnsyncedLocalEventsToGoogle,
 } from './google-calendar.js';
+import { isBasicPantryStaple } from './groceryStaples.js';
 
 dotenv.config();
 dotenv.config({ path: '.env.local' });
@@ -1105,6 +1106,25 @@ ${contextString}
 
           const createdItems: any[] = [];
           for (const item of itemsToAdd) {
+            const rawName = (item.name || '').trim();
+            if (!rawName) continue;
+
+            // Auto-filter plain water (boiling water, tap water, etc.) as it's never a grocery item
+            const lowerName = rawName.toLowerCase();
+            const isPlainWater = /^(?:[\d\s½⅓⅔¼¾⅛⅜⅝⅞/.,-]+\s*(?:cups?|c|tbsp|tsp|ml|oz|liters?|quarts?|gallons?)\s+)?(?:boiling|warm|hot|cold|tap|ice|lukewarm|filtered|clean)?\s*water$/i.test(lowerName) &&
+              !/\b(?:sparkling|mineral|coconut|tonic|rose|seltzer|bottled)\b/i.test(lowerName);
+            if (isPlainWater) {
+              console.log(`[Assistant] Filtered out staple water item: "${rawName}"`);
+              continue;
+            }
+
+            // Auto-filter basic pantry staples if identified as recipe ingredients
+            const isRecipeIngredient = !!(item.note && /recipe|for:/i.test(item.note));
+            if (isRecipeIngredient && isBasicPantryStaple(rawName)) {
+              console.log(`[Assistant] Filtered out recipe pantry staple: "${rawName}"`);
+              continue;
+            }
+
             let matchedAisle = guessAisleForGroceryItem(item.name, aisles);
             if (!matchedAisle && item.category) {
               matchedAisle = aisles.find(

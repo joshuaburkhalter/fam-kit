@@ -1,4 +1,5 @@
 import { getDb, queryAll, queryOne, execute, generateSecureVoucherCode } from '../server/db.ts';
+import { isBasicPantryStaple } from '../server/groceryStaples.ts';
 
 async function runTests() {
   console.log('--- Testing Subscription & Voucher Code System ---');
@@ -169,6 +170,62 @@ async function runTests() {
     }
   }
   console.log('8. Verified all Deli vs Meat categorization tests pass.');
+
+  // 9. Test Basic Kitchen Staples auto-filter (boiling water, salt, pepper, basic butter, neutral/olive oil)
+  const stapleTests = [
+    // Must be auto-filtered (return true)
+    ['boiling water', true],
+    ['4 cups boiling water', true],
+    ['tap water', true],
+    ['cold water', true],
+    ['1 cup cold water', true],
+    ['warm water', true],
+    ['water', true],
+    ['salt', true],
+    ['kosher salt', true],
+    ['1 tsp sea salt', true],
+    ['black pepper', true],
+    ['freshly ground black pepper', true],
+    ['salt & pepper to taste', true],
+    ['butter', true],
+    ['unsalted butter', true],
+    ['1 tbsp melted butter', true],
+    ['vegetable oil', true],
+    ['canola oil', true],
+    ['olive oil', true],
+    ['2 tbsp extra virgin olive oil', true],
+    ['cooking oil', true],
+
+    // Must NOT be auto-filtered (return false - specialty culinary items or distinct groceries)
+    ['watermelon', false],
+    ['water chestnuts', false],
+    ['sparkling water', false],
+    ['coconut water', false],
+    ['truffle salt', false],
+    ['pink himalayan salt', false],
+    ['bell pepper', false],
+    ['red bell pepper', false],
+    ['chili pepper', false],
+    ['cayenne pepper', false],
+    ['peanut butter', false],
+    ['almond butter', false],
+    ['apple butter', false],
+    ['sesame oil', false],
+    ['toasted sesame oil', false],
+    ['avocado oil', false],
+    ['truffle oil', false],
+    ['chili oil', false],
+  ];
+
+  for (const [ingredient, shouldFilter] of stapleTests) {
+    const result = isBasicPantryStaple(ingredient);
+    if (result !== shouldFilter) {
+      throw new Error(
+        `Pantry staple check failed for "${ingredient}": expected ${shouldFilter ? 'FILTERED (true)' : 'KEPT (false)'}, got ${result}`
+      );
+    }
+  }
+  console.log(`9. Verified all ${stapleTests.length} pantry staple filtering tests pass (boiling water, staples vs specialty items).`);
 
   console.log('--- All subscription & tracking tests PASSED successfully! ---');
 }

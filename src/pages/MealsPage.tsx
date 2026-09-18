@@ -312,16 +312,11 @@ export const MealsPage: React.FC = () => {
     e.stopPropagation();
     if (!householdId) return;
     try {
-      for (const ing of recipe.ingredients) {
-        await api.addGroceryItem(householdId, {
-          name: ing.item,
-          quantity: ing.amount,
-          unit: ing.unit,
-          category: ing.category,
-          notes: `For: ${recipe.title}`,
-        });
-      }
-      showToast(`Added ${recipe.ingredients.length} ingredients to Grocery list!`);
+      const res = await api.addRecipeToGrocery(recipe, householdId);
+      const msg = (res as any).skippedStaplesCount > 0
+        ? `Added ${res.addedCount} ingredients (filtered ${(res as any).skippedStaplesCount} pantry staples: water, salt, etc.)!`
+        : `Added ${res.addedCount} ingredients to Grocery list!`;
+      showToast(msg);
     } catch (err) {
       console.error('Failed to add ingredients', err);
       showToast('Error adding ingredients');
