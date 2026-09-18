@@ -1105,11 +1105,17 @@ ${contextString}
 
           const createdItems: any[] = [];
           for (const item of itemsToAdd) {
-            const matchedAisle = aisles.find(
-              (a) =>
-                a.name.toLowerCase().includes((item.category || '').toLowerCase()) ||
-                (item.category || '').toLowerCase().includes(a.name.toLowerCase())
-            ) || aisles.find((a) => a.name === 'Other') || aisles[0];
+            let matchedAisle = guessAisleForGroceryItem(item.name, aisles);
+            if (!matchedAisle && item.category) {
+              matchedAisle = aisles.find(
+                (a) =>
+                  a.name.toLowerCase().includes((item.category || '').toLowerCase()) ||
+                  (item.category || '').toLowerCase().includes(a.name.toLowerCase())
+              );
+            }
+            if (!matchedAisle) {
+              matchedAisle = aisles.find((a) => a.name === 'Other') || aisles[0];
+            }
 
             const id = `g_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
             const now = new Date().toISOString();
@@ -1117,10 +1123,10 @@ ${contextString}
             execute(
               `INSERT INTO grocery_items (id, name, category, aisleId, quantity, note, checked, householdId, addedById, createdAt)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-              [id, item.name, item.category || matchedAisle?.name || 'Other', matchedAisle?.id, item.quantity || '1', item.note || null, 0, householdId, activeMemberId || 'u1', now]
+              [id, item.name, matchedAisle?.name || item.category || 'Other', matchedAisle?.id, item.quantity || '1', item.note || null, 0, householdId, activeMemberId || 'u1', now]
             );
 
-            createdItems.push({ id, name: item.name, category: item.category || matchedAisle?.name });
+            createdItems.push({ id, name: item.name, category: matchedAisle?.name || item.category });
           }
 
           actionsExecuted.push({
@@ -1560,12 +1566,24 @@ app.get('/api/grocery', (req, res) => {
   const lists = queryAll('SELECT * FROM custom_lists WHERE householdId = ? ORDER BY createdAt ASC', [householdId]);
   const aisles = queryAll('SELECT * FROM aisles WHERE householdId = ? ORDER BY orderIndex ASC', [householdId]);
 
-  // Auto-heal any existing grocery items missing an aisleId
+  // Auto-heal any existing grocery items missing an aisleId or miscategorized deli items
   if (!listId) {
+    const deliAisle = aisles.find((a) => /deli|prepared/i.test(a.name));
     for (const it of items) {
       if (!it.aisleId) {
         const matched = guessAisleForGroceryItem(it.name, aisles);
         if (matched) {
+          it.aisleId = matched.id;
+          it.category = matched.name;
+          execute('UPDATE grocery_items SET aisleId = ?, category = ? WHERE id = ?', [
+            matched.id,
+            matched.name,
+            it.id,
+          ]);
+        }
+      } else if (deliAisle && /meat|seafood/i.test(it.category || '')) {
+        const matched = guessAisleForGroceryItem(it.name, aisles);
+        if (matched && matched.id === deliAisle.id) {
           it.aisleId = matched.id;
           it.category = matched.name;
           execute('UPDATE grocery_items SET aisleId = ?, category = ? WHERE id = ?', [
@@ -1619,7 +1637,17 @@ function guessAisleForGroceryItem(rawName: string, aisles: Array<{ id: string; n
     return findAisle(/bakery|bread/i);
   }
 
-  // 2. Meat & Seafood
+  // 2. Deli & Prepared (sliced lunch meats, deli counter meats, rotisserie chicken, prepared salads & dips)
+  if (
+    /\b(?:deli|lunch\s*meat|lunchmeat|cold\s*cuts?|prosciutto|salami|pepperoni|bologna|pastrami|capicola|pancetta|mortadella)\b/i.test(lower) ||
+    (/\b(?:sliced|shaved|deli)\b/i.test(lower) && /\b(?:turkey|chicken|ham|roast\s*beef|beef|pastrami)\b/i.test(lower) && !/\b(?:ground|raw|whole)\b/i.test(lower)) ||
+    /\b(?:turkey|chicken|ham|beef|roast\s*beef)\s+(?:slices?|cold\s*cuts?|lunch\s*meat)\b/i.test(lower) ||
+    /\b(?:rotisserie\s*chicken|potato\s*salad|macaroni\s*salad|coleslaw|chicken\s*salad|egg\s*salad|tuna\s*salad|hummus|tzatziki)\b/i.test(lower)
+  ) {
+    return findAisle(/deli|prepared/i) || findAisle(/meat|seafood/i);
+  }
+
+  // 3. Meat & Seafood
   if (/\b(?:chicken|beef|pork|steak|bacon|turkey|salmon|fish|shrimp|sausage|lamb|tuna|meat|prawns?|scallops?|halibut|cod|tilapia|ribs?|ground beef|ground turkey)\b/i.test(clean)) {
     return findAisle(/meat|seafood/i);
   }

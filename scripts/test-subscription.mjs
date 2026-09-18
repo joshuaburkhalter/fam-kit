@@ -108,6 +108,68 @@ async function runTests() {
     throw new Error('Claimed person full name and household were not saved or retrieved');
   }
 
+  // 8. Test Deli vs Meat Grocery Categorization
+  function cleanIngredientName(raw) {
+    return raw
+      .toLowerCase()
+      .replace(/^[\d\s½⅓⅔¼¾⅛⅜⅝⅞/.,-]+(?:to\s+[\d\s½⅓⅔¼¾⅛⅜⅝⅞/.,-]+)?/i, '')
+      .replace(/\b(?:cups?|c|tablespoons?|tbsp?|teaspoons?|tsp?|pounds?|lbs?|ounces?|oz|grams?|g|kg|ml|liters?|pinches?|cloves?|stalks?|bunches?|cans?|bottles?|packages?|pkgs?|slices?|pieces?)\b/gi, '')
+      .replace(/\([^)]*\)/g, '')
+      .replace(/\b(?:divided|optional|to taste|for serving|freshly|grated|chopped|sliced|diced|minced|cubed|crushed|plus more as needed)\b/gi, '')
+      .replace(/[^\w\s-]/g, ' ')
+      .trim();
+  }
+
+  function guessAisleForGroceryItem(rawName, aisles) {
+    const clean = cleanIngredientName(rawName);
+    const lower = rawName.toLowerCase();
+    const findAisle = (regex) => aisles.find((a) => regex.test(a.name));
+
+    if (
+      /\b(?:deli|lunch\s*meat|lunchmeat|cold\s*cuts?|prosciutto|salami|pepperoni|bologna|pastrami|capicola|pancetta|mortadella)\b/i.test(lower) ||
+      (/\b(?:sliced|shaved|deli)\b/i.test(lower) && /\b(?:turkey|chicken|ham|roast\s*beef|beef|pastrami)\b/i.test(lower) && !/\b(?:ground|raw|whole)\b/i.test(lower)) ||
+      /\b(?:turkey|chicken|ham|beef|roast\s*beef)\s+(?:slices?|cold\s*cuts?|lunch\s*meat)\b/i.test(lower) ||
+      /\b(?:rotisserie\s*chicken|potato\s*salad|macaroni\s*salad|coleslaw|chicken\s*salad|egg\s*salad|tuna\s*salad|hummus|tzatziki)\b/i.test(lower)
+    ) {
+      return findAisle(/deli|prepared/i) || findAisle(/meat|seafood/i);
+    }
+    if (/\b(?:chicken|beef|pork|steak|bacon|turkey|salmon|fish|shrimp|sausage|lamb|tuna|meat|prawns?|scallops?|halibut|cod|tilapia|ribs?|ground beef|ground turkey)\b/i.test(clean)) {
+      return findAisle(/meat|seafood/i);
+    }
+    return findAisle(/other/i);
+  }
+
+  const mockAisles = [
+    { id: 'a1', name: 'Produce' },
+    { id: 'a2', name: 'Bakery & Bread' },
+    { id: 'a3', name: 'Deli & Prepared' },
+    { id: 'a4', name: 'Meat & Seafood' },
+    { id: 'a5', name: 'Dairy & Eggs' },
+  ];
+
+  const deliTests = [
+    ['sliced turkey', 'Deli & Prepared'],
+    ['1/2 lb sliced honey turkey breast', 'Deli & Prepared'],
+    ['deli turkey', 'Deli & Prepared'],
+    ['shaved ham', 'Deli & Prepared'],
+    ['roast beef deli slices', 'Deli & Prepared'],
+    ['lunch meat', 'Deli & Prepared'],
+    ['prosciutto', 'Deli & Prepared'],
+    ['salami', 'Deli & Prepared'],
+    ['rotisserie chicken', 'Deli & Prepared'],
+    ['ground turkey', 'Meat & Seafood'],
+    ['chicken breasts', 'Meat & Seafood'],
+    ['raw steak', 'Meat & Seafood'],
+  ];
+
+  for (const [item, expected] of deliTests) {
+    const result = guessAisleForGroceryItem(item, mockAisles);
+    if (!result || result.name !== expected) {
+      throw new Error(`Deli test failed for "${item}": expected "${expected}", got "${result?.name}"`);
+    }
+  }
+  console.log('8. Verified all Deli vs Meat categorization tests pass.');
+
   console.log('--- All subscription & tracking tests PASSED successfully! ---');
 }
 
