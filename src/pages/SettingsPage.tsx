@@ -720,10 +720,7 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
           <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 font-black shadow-lg shadow-emerald-500/20 shrink-0">
             <SettingsIcon className="w-5 h-5 stroke-[2.5]" />
           </div>
-          <div>
-            <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">Settings</h1>
-            <p className="text-xs text-slate-400">Household, voice & aisle setup</p>
-          </div>
+          <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">Settings</h1>
         </div>
 
         <div className="text-right shrink-0">

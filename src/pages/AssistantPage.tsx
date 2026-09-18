@@ -274,14 +274,9 @@ export const AssistantPage: React.FC = () => {
           <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-md shadow-emerald-500/20 text-slate-950">
             <Sparkles className="w-5 h-5 stroke-[2.2]" />
           </div>
-          <div>
-            <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white flex items-center gap-2">
-              Assistant
-            </h1>
-            <p className="text-[11px] sm:text-xs text-slate-400 font-medium">
-              Family AI organizer & helper
-            </p>
-          </div>
+          <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white flex items-center gap-2">
+            Assistant
+          </h1>
         </div>
 
         <div className="flex items-center gap-2">

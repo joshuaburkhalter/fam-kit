@@ -57,81 +57,85 @@ function parseNaturalLanguageEvent(raw: string, members: { id: string; name: str
         const currentDayIndex = now.getDay();
         let diff = targetDayIndex - currentDayIndex;
         if (diff <= 0) diff += 7; // next occurrence
-        if (match[1]) diff += 7; // explicit "next [day]"
         targetDate = addDays(now, diff);
         break;
       }
     }
   }
 
-  // 2. Detect Times
-  let startTime = '18:00';
-  let endTime = '19:00';
-  let isAllDay = false;
+  // 2. Detect Times (e.g., "from 6-9", "at 4pm", "6:30pm", "14:00")
+  let startTime = '09:00';
+  let endTime = '10:00';
+  let isAllDay = true; // Default to all day if no time specified
 
-  // Range match: "from 6-9", "6-9pm", "from 6:30 to 8:30pm", "6pm - 9pm"
-  const rangeMatch = lower.match(
-    /\b(?:from\s+)?(\d{1,2})(?::(\d{2}))?\s*(?:am|pm)?\s*(?:-|–|to)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b/i
-  );
-  // Single time match: "at 4pm", "4:30pm", "at 10am"
-  const singleMatch = lower.match(/\b(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i);
-
+  // Match pattern like "from 6 to 8", "from 6-8pm", "6-9pm"
+  const rangeMatch = lower.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:to|-)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/);
   if (rangeMatch) {
-    let startH = parseInt(rangeMatch[1], 10);
-    const startM = rangeMatch[2] || '00';
-    let endH = parseInt(rangeMatch[3], 10);
-    const endM = rangeMatch[4] || '00';
-    const ampm = (rangeMatch[5] || '').toLowerCase();
+    isAllDay = false;
+    let sH = parseInt(rangeMatch[1], 10);
+    const sM = rangeMatch[2] || '00';
+    let sMeridiem = rangeMatch[3];
 
-    // Default evening assumptions for typical ranges like 6-9, 5-7
-    if (ampm === 'pm' || (!ampm && startH < 12)) {
-      if (endH < 12) endH += 12;
-      if (startH < 12 && startH <= endH - 12) startH += 12;
-      else if (startH < 12 && endH >= 12 && startH < endH) startH += 12;
-    } else if (ampm === 'am') {
-      if (startH === 12) startH = 0;
-      if (endH === 12) endH = 0;
+    let eH = parseInt(rangeMatch[4], 10);
+    const eM = rangeMatch[5] || '00';
+    const eMeridiem = rangeMatch[6];
+
+    // Inherit meridiem if only provided on end time (e.g., "6-8pm")
+    if (!sMeridiem && eMeridiem) {
+      sMeridiem = eMeridiem;
     }
 
-    startTime = `${String(startH).padStart(2, '0')}:${startM}`;
-    endTime = `${String(endH).padStart(2, '0')}:${endM}`;
-  } else if (singleMatch) {
-    let hour = parseInt(singleMatch[1], 10);
-    const min = singleMatch[2] || '00';
-    const ampm = singleMatch[3].toLowerCase();
-    if (ampm === 'pm' && hour < 12) hour += 12;
-    if (ampm === 'am' && hour === 12) hour = 0;
-    startTime = `${String(hour).padStart(2, '0')}:${min}`;
-    endTime = `${String((hour + 1) % 24).padStart(2, '0')}:${min}`;
-  } else if (lower.includes('all day')) {
-    isAllDay = true;
-    startTime = '00:00';
-    endTime = '23:59';
+    if (sMeridiem === 'pm' && sH < 12) sH += 12;
+    if (sMeridiem === 'am' && sH === 12) sH = 0;
+    if (eMeridiem === 'pm' && eH < 12) eH += 12;
+    if (eMeridiem === 'am' && eH === 12) eH = 0;
+
+    startTime = `${String(sH).padStart(2, '0')}:${sM}`;
+    endTime = `${String(eH).padStart(2, '0')}:${eM}`;
+  } else {
+    // Single time match like "at 4pm", "at 6:30", "18:00"
+    const singleMatch = lower.match(/(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)/);
+    if (singleMatch) {
+      isAllDay = false;
+      let h = parseInt(singleMatch[1], 10);
+      const m = singleMatch[2] || '00';
+      const meridiem = singleMatch[3];
+      if (meridiem === 'pm' && h < 12) h += 12;
+      if (meridiem === 'am' && h === 12) h = 0;
+      startTime = `${String(h).padStart(2, '0')}:${m}`;
+      endTime = `${String((h + 1) % 24).padStart(2, '0')}:${m}`;
+    }
   }
 
-  // 3. Clean up Title
-  let cleanTitle = text
-    .replace(/\b(?:on\s+)?(?:next\s+)?(?:sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/gi, '')
-    .replace(/\b(?:tomorrow|today|tonight|all day)\b/gi, '')
-    .replace(/\b(?:from\s+)?\d{1,2}(?::\d{2})?\s*(?:am|pm)?\s*(?:-|–|to)\s*\d{1,2}(?::\d{2})?\s*(?:am|pm)?\b/gi, '')
-    .replace(/\b(?:at\s+)?\d{1,2}(?::\d{2})?\s*(?:am|pm)\b/gi, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  if (!cleanTitle) cleanTitle = 'Family Event';
-  cleanTitle = cleanTitle.charAt(0).toUpperCase() + cleanTitle.slice(1);
-
-  // 4. Assigned Member
+  // 3. Detect Assigned Member
   let assignedUserId: string | undefined;
   for (const m of members) {
-    if (lower.includes(m.name.toLowerCase())) {
+    const firstName = m.name.split(' ')[0].toLowerCase();
+    if (lower.includes(firstName)) {
       assignedUserId = m.id;
       break;
     }
   }
 
+  // 4. Clean Cleaned Title
+  let title = text
+    .replace(/\b(tomorrow|today|tonight)\b/gi, '')
+    .replace(/\b(next\s+)?(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/gi, '')
+    .replace(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:to|-)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/gi, '')
+    .replace(/(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)/gi, '')
+    .replace(/\b(for|with)\s+([A-Z][a-z]+)\b/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
+  if (!title) {
+    title = 'Family Event';
+  }
+
+  // Capitalize First Letter
+  title = title.charAt(0).toUpperCase() + title.slice(1);
+
   return {
-    title: cleanTitle,
+    title,
     date: format(targetDate, 'yyyy-MM-dd'),
     startTime,
     endTime,
@@ -141,11 +145,9 @@ function parseNaturalLanguageEvent(raw: string, members: { id: string; name: str
 }
 
 export const CalendarPage: React.FC = () => {
-  const { household, users, currentUser } = usePWA();
+  const { currentUser, household, users } = usePWA();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-
-  // Timeline configuration: 14 days forward by default, expandable by 14
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [daysCount, setDaysCount] = useState<number>(14);
   const [showPastEvents, setShowPastEvents] = useState<boolean>(false);
   const [pastDaysCount, setPastDaysCount] = useState<number>(14);
@@ -175,8 +177,6 @@ export const CalendarPage: React.FC = () => {
     date?: string;
   } | null>(null);
 
-  const todayRef = useRef<HTMLDivElement>(null);
-
   const dockRef = useFabAutoClose<HTMLDivElement>({
     isOpen: isQuickAddExpanded,
     onClose: () => setIsQuickAddExpanded(false),
@@ -199,12 +199,6 @@ export const CalendarPage: React.FC = () => {
   useEffect(() => {
     loadData();
   }, [household]);
-
-  const scrollToToday = () => {
-    if (todayRef.current) {
-      todayRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-  };
 
   const formatTimeRange = (ev: CalendarEvent) => {
     if (ev.is_all_day) return 'All Day';
@@ -460,45 +454,10 @@ export const CalendarPage: React.FC = () => {
           <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-md shadow-emerald-500/20 text-slate-950">
             <CalendarIcon className="w-5 h-5 stroke-[2.2]" />
           </div>
-          <div>
-            <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white flex items-center gap-2">
-              Calendar
-              {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" />}
-            </h1>
-            <p className="text-[11px] sm:text-xs text-slate-400 font-medium">
-              {showPastEvents ? 'Past family events & activity' : '14-day family agenda & schedule'}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {/* Today Jump Button */}
-          <button
-            type="button"
-            onClick={() => {
-              if (showPastEvents) {
-                setShowPastEvents(false);
-              }
-              setTimeout(() => {
-                scrollToToday();
-              }, 50);
-            }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-white/10 hover:border-emerald-500/40 text-emerald-400 text-xs font-semibold transition-all active:scale-95 shadow-sm cursor-pointer"
-            title="Jump to Today"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Today</span>
-          </button>
-
-          {/* New Event Button */}
-          <button
-            type="button"
-            onClick={() => handleOpenAddModal()}
-            className="flex items-center gap-1 px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 active:scale-95"
-          >
-            <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-            <span>Event</span>
-          </button>
+          <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white flex items-center gap-2">
+            Calendar
+            {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" />}
+          </h1>
         </div>
       </div>
 
@@ -661,7 +620,6 @@ export const CalendarPage: React.FC = () => {
 
               {/* Day Row */}
               <div
-                ref={isCurrentDay ? todayRef : undefined}
                 className={`relative flex items-start gap-3 pb-3.5 group ${
                   isCurrentDay ? 'scroll-mt-20' : ''
                 }`}

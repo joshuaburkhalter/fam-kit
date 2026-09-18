@@ -485,16 +485,11 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onBack }) => {
           <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-emerald-500/30 to-teal-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shadow-md">
             <ShieldCheck className="w-6 h-6" />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-lg sm:text-xl font-black text-white tracking-tight">Admin Command Center</h1>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                Superadmin
-              </span>
-            </div>
-            <p className="text-xs text-slate-400">
-              Live system operations, users, vouchers, usage analytics, and feature backlog.
-            </p>
+          <div className="flex items-center gap-2">
+            <h1 className="text-lg sm:text-xl font-black text-white tracking-tight">Admin Command Center</h1>
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+              Superadmin
+            </span>
           </div>
         </div>
 
