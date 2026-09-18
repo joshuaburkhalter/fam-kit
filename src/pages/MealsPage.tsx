@@ -1658,7 +1658,7 @@ export const MealsPage: React.FC = () => {
                 ref={recipeFabRef}
                 className={`fab-dock-transition pointer-events-auto h-[50px] border shadow-2xl flex items-center overflow-hidden ${
                   isRecipeFabOpen
-                    ? 'w-[270px] rounded-3xl border-white/25 bg-slate-900/95 backdrop-blur-xl px-2.5 shadow-emerald-500/10'
+                    ? 'w-full rounded-3xl border-white/25 bg-slate-900/95 backdrop-blur-xl shadow-emerald-500/10 px-2.5'
                     : 'w-[50px] rounded-full border-emerald-400/40 bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 cursor-pointer shadow-xl shadow-emerald-500/30 hover:scale-105 active:scale-95 justify-center'
                 }`}
               >
@@ -1672,40 +1672,46 @@ export const MealsPage: React.FC = () => {
                     <Plus className="w-6 h-6 stroke-[2.5]" />
                   </button>
                 ) : (
-                  <div className="w-full flex items-center justify-between gap-1.5 animate-in fade-in duration-200">
+                  <div className="w-full flex items-center justify-between gap-2 animate-in fade-in duration-200">
                     <button
                       type="button"
                       onClick={() => setIsRecipeFabOpen(false)}
-                      className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer shrink-0"
+                      className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center shrink-0 transition-colors cursor-pointer"
                       title="Close"
                     >
                       <X className="w-4 h-4" />
                     </button>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsRecipeFabOpen(false);
-                        setIsScraperOpen(true);
-                      }}
-                      className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
-                    >
-                      <Link2 className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>Import Web</span>
-                    </button>
+                    <span className="text-xs font-bold text-slate-300 ml-1 hidden xs:inline sm:inline truncate">
+                      Add Recipe
+                    </span>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsRecipeFabOpen(false);
-                        setEditingRecipe(null);
-                        setIsEditRecipeModalOpen(true);
-                      }}
-                      className="px-2.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center gap-1 transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer shrink-0"
-                    >
-                      <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-                      <span>New Recipe</span>
-                    </button>
+                    <div className="flex items-center gap-2 ml-auto shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsRecipeFabOpen(false);
+                          setIsScraperOpen(true);
+                        }}
+                        className="min-h-[36px] px-3.5 py-1.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 shadow-sm"
+                      >
+                        <Link2 className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Import Web</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsRecipeFabOpen(false);
+                          setEditingRecipe(null);
+                          setIsEditRecipeModalOpen(true);
+                        }}
+                        className="min-h-[36px] px-3.5 py-1.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                        <span>New Recipe</span>
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
