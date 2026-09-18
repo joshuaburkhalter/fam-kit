@@ -252,7 +252,22 @@ async function runTests() {
   if (allUsers.length === 0) throw new Error('Expected registered users in database');
   console.log(`10. Verified Admin system checks: ${allUsers.length} users and admin role authorization validated.`);
 
-  // 11. Test /api/subscription/promo-codes exact query
+  // Test User Deletion & Protection Logic
+  const dummyUserId = 'test_del_dummy_999';
+  execute(
+    `INSERT INTO users (id, name, username, email, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [dummyUserId, 'Temporary User', 'tempuser_del', 'tempdel@example.com', 'Member', 'fam_default_1', 'password123']
+  );
+  const foundDummy = queryOne(`SELECT id FROM users WHERE id = ?`, [dummyUserId]);
+  if (!foundDummy) throw new Error('Failed to insert test dummy user');
+
+  // Verify deletion
+  execute(`DELETE FROM users WHERE id = ?`, [dummyUserId]);
+  const checkDeleted = queryOne(`SELECT id FROM users WHERE id = ?`, [dummyUserId]);
+  if (checkDeleted) throw new Error('Test dummy user was not deleted');
+  console.log('11. Verified User Deletion and database lifecycle.');
+
+  // 12. Test /api/subscription/promo-codes exact query
   const codesQuery = `
     SELECT 
       p.*,

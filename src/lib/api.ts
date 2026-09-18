@@ -1282,4 +1282,16 @@ export const api = {
   getAdminHouseholds: async (): Promise<AdminHousehold[]> => {
     return fetchJson<AdminHousehold[]>('/admin/households');
   },
+
+  deleteAdminUser: async (userId: string): Promise<{ success: boolean; message?: string }> => {
+    return fetchJson<{ success: boolean; message?: string }>(`/admin/users/${encodeURIComponent(userId)}`, {
+      method: 'DELETE',
+    });
+  },
+
+  deleteAdminHousehold: async (householdId: string): Promise<{ success: boolean; message?: string }> => {
+    return fetchJson<{ success: boolean; message?: string }>(`/admin/households/${encodeURIComponent(householdId)}`, {
+      method: 'DELETE',
+    });
+  },
 };

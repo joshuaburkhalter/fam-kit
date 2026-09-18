@@ -2729,6 +2729,12 @@ app.delete('/api/family', (req, res) => {
   res.json({ success: true });
 });
 
+app.delete('/api/users/:id', (req, res) => {
+  const memberId = req.params.id;
+  if (memberId) execute('DELETE FROM users WHERE id = ?', [memberId]);
+  res.json({ success: true });
+});
+
 // Update User Profile
 app.put('/api/users/profile', (req, res) => {
   try {
@@ -3299,6 +3305,66 @@ app.get('/api/admin/households', (req, res) => {
   `);
 
   res.json(households);
+});
+
+// Admin: Delete User
+app.delete('/api/admin/users/:id', (req, res) => {
+  const user = getAuthUser(req);
+  if (!user || !isServerAdmin(user)) {
+    return res.status(403).json({ error: 'Admin access required.' });
+  }
+
+  const targetId = req.params.id;
+  const targetUser = queryOne<any>('SELECT * FROM users WHERE id = ?', [targetId]);
+  if (!targetUser) {
+    return res.status(404).json({ error: 'User not found.' });
+  }
+
+  // Prevent admin from deleting their own active logged-in user account
+  const isCurrentAdmin =
+    user.id === targetId ||
+    (user.username && targetUser.username && user.username.toLowerCase() === targetUser.username.toLowerCase()) ||
+    (user.email && targetUser.email && user.email.toLowerCase() === targetUser.email.toLowerCase());
+
+  if (isCurrentAdmin) {
+    return res.status(400).json({ error: 'Cannot delete your own active administrator account.' });
+  }
+
+  execute('DELETE FROM users WHERE id = ?', [targetId]);
+  saveDb();
+
+  res.json({ success: true, message: `User ${targetUser.name} deleted successfully.` });
+});
+
+// Admin: Delete Household
+app.delete('/api/admin/households/:id', (req, res) => {
+  const user = getAuthUser(req);
+  if (!user || !isServerAdmin(user)) {
+    return res.status(403).json({ error: 'Admin access required.' });
+  }
+
+  const targetId = req.params.id;
+  const targetHousehold = queryOne<any>('SELECT * FROM households WHERE id = ?', [targetId]);
+  if (!targetHousehold) {
+    return res.status(404).json({ error: 'Household not found.' });
+  }
+
+  // Prevent admin from deleting their own active household
+  if (user.householdId === targetId) {
+    return res.status(400).json({ error: 'Cannot delete the household you currently belong to.' });
+  }
+
+  // Delete all data associated with this household
+  execute('DELETE FROM users WHERE householdId = ?', [targetId]);
+  execute('DELETE FROM grocery_items WHERE householdId = ?', [targetId]);
+  execute('DELETE FROM recipes WHERE householdId = ?', [targetId]);
+  execute('DELETE FROM calendar_events WHERE householdId = ?', [targetId]);
+  execute('DELETE FROM meal_plans WHERE householdId = ?', [targetId]);
+  execute('DELETE FROM aisles WHERE householdId = ?', [targetId]);
+  execute('DELETE FROM households WHERE id = ?', [targetId]);
+  saveDb();
+
+  res.json({ success: true, message: `Household ${targetHousehold.name} and associated records deleted.` });
 });
 
 // Public Privacy Policy & Terms (for Google OAuth verification & branding)

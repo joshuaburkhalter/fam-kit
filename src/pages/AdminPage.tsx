@@ -93,6 +93,14 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onBack }) => {
   const [responseStatus, setResponseStatus] = useState<string>('in_progress');
   const [isSubmittingResponse, setIsSubmittingResponse] = useState(false);
 
+  // User Deletion State
+  const [userToDelete, setUserToDelete] = useState<AdminUser | null>(null);
+  const [isDeletingUser, setIsDeletingUser] = useState(false);
+
+  // Household Deletion State
+  const [householdToDelete, setHouseholdToDelete] = useState<AdminHousehold | null>(null);
+  const [isDeletingHousehold, setIsDeletingHousehold] = useState(false);
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3000);
@@ -147,6 +155,46 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onBack }) => {
     } catch (err: any) {
       console.error(err);
       showToast(err.message || 'Failed to update user role');
+    }
+  };
+
+  // Delete User Handler
+  const handleDeleteUser = async () => {
+    if (!userToDelete) return;
+    setIsDeletingUser(true);
+    try {
+      await api.deleteAdminUser(userToDelete.id);
+      setUsersList((prev) => prev.filter((u) => u.id !== userToDelete.id));
+      showToast(`User "${userToDelete.name}" deleted successfully.`);
+      setUserToDelete(null);
+      // Refresh overview and households in background
+      api.getAdminOverview().then((ov) => { if (ov) setOverview(ov); }).catch(() => {});
+      api.getAdminHouseholds().then((h) => { if (h) setHouseholdsList(h); }).catch(() => {});
+    } catch (err: any) {
+      console.error('Failed to delete user:', err);
+      showToast(err.message || 'Failed to delete user');
+    } finally {
+      setIsDeletingUser(false);
+    }
+  };
+
+  // Delete Household Handler
+  const handleDeleteHousehold = async () => {
+    if (!householdToDelete) return;
+    setIsDeletingHousehold(true);
+    try {
+      await api.deleteAdminHousehold(householdToDelete.id);
+      setHouseholdsList((prev) => prev.filter((h) => h.id !== householdToDelete.id));
+      setUsersList((prev) => prev.filter((u) => u.householdId !== householdToDelete.id));
+      showToast(`Household "${householdToDelete.name}" and all members deleted.`);
+      setHouseholdToDelete(null);
+      // Refresh overview in background
+      api.getAdminOverview().then((ov) => { if (ov) setOverview(ov); }).catch(() => {});
+    } catch (err: any) {
+      console.error('Failed to delete household:', err);
+      showToast(err.message || 'Failed to delete household');
+    } finally {
+      setIsDeletingHousehold(false);
     }
   };
 
@@ -810,21 +858,50 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onBack }) => {
                         </div>
                       </div>
 
-                      {/* Role Selector */}
-                      <div className="shrink-0 text-right">
-                        <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">
-                          Role
-                        </label>
-                        <select
-                          value={u.role || 'Member'}
-                          onChange={(e) => handleUpdateUserRole(u.id, e.target.value)}
-                          className="bg-slate-800 border border-white/15 text-xs text-emerald-400 font-semibold rounded-xl px-2.5 py-1 focus:outline-none focus:border-emerald-400 cursor-pointer"
-                        >
-                          <option value="Admin">Admin</option>
-                          <option value="Parent">Parent</option>
-                          <option value="Member">Member</option>
-                          <option value="Kid">Kid</option>
-                        </select>
+                      {/* Role Selector & Delete */}
+                      <div className="shrink-0 flex items-center gap-2">
+                        <div className="text-right">
+                          <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">
+                            Role
+                          </label>
+                          <select
+                            value={u.role || 'Member'}
+                            onChange={(e) => handleUpdateUserRole(u.id, e.target.value)}
+                            className="bg-slate-800 border border-white/15 text-xs text-emerald-400 font-semibold rounded-xl px-2.5 py-1 focus:outline-none focus:border-emerald-400 cursor-pointer"
+                          >
+                            <option value="Admin">Admin</option>
+                            <option value="Parent">Parent</option>
+                            <option value="Member">Member</option>
+                            <option value="Kid">Kid</option>
+                          </select>
+                        </div>
+
+                        <div className="pt-3.5">
+                          <button
+                            onClick={() => setUserToDelete(u)}
+                            disabled={
+                              currentUser?.id === u.id ||
+                              (Boolean(currentUser?.email) && Boolean(u.email) && currentUser!.email!.toLowerCase() === u.email!.toLowerCase()) ||
+                              (Boolean(currentUser?.username) && Boolean(u.username) && currentUser!.username!.toLowerCase() === u.username!.toLowerCase())
+                            }
+                            title={
+                              currentUser?.id === u.id ||
+                              (Boolean(currentUser?.email) && Boolean(u.email) && currentUser!.email!.toLowerCase() === u.email!.toLowerCase()) ||
+                              (Boolean(currentUser?.username) && Boolean(u.username) && currentUser!.username!.toLowerCase() === u.username!.toLowerCase())
+                                ? 'Cannot delete your active administrator account'
+                                : `Delete user ${u.name}`
+                            }
+                            className={`p-2 rounded-xl transition-all cursor-pointer ${
+                              currentUser?.id === u.id ||
+                              (Boolean(currentUser?.email) && Boolean(u.email) && currentUser!.email!.toLowerCase() === u.email!.toLowerCase()) ||
+                              (Boolean(currentUser?.username) && Boolean(u.username) && currentUser!.username!.toLowerCase() === u.username!.toLowerCase())
+                                ? 'opacity-20 cursor-not-allowed text-slate-600'
+                                : 'text-slate-400 hover:text-red-400 hover:bg-red-500/15 border border-white/5 hover:border-red-500/30'
+                            }`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
                     </div>
 
@@ -1370,13 +1447,32 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onBack }) => {
                         </p>
                       </div>
 
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono uppercase font-bold ${
-                        h.subscriptionStatus === 'active' || h.subscriptionStatus === 'lifetime_founder'
-                          ? 'bg-emerald-500/20 text-emerald-300'
-                          : 'bg-amber-500/20 text-amber-300'
-                      }`}>
-                        {h.subscriptionStatus === 'lifetime_founder' ? 'VIP Lifetime' : h.subscriptionStatus}
-                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono uppercase font-bold ${
+                          h.subscriptionStatus === 'active' || h.subscriptionStatus === 'lifetime_founder'
+                            ? 'bg-emerald-500/20 text-emerald-300'
+                            : 'bg-amber-500/20 text-amber-300'
+                        }`}>
+                          {h.subscriptionStatus === 'lifetime_founder' ? 'VIP Lifetime' : h.subscriptionStatus}
+                        </span>
+
+                        <button
+                          onClick={() => setHouseholdToDelete(h)}
+                          disabled={currentUser?.household_id === h.id || (currentUser as any)?.householdId === h.id}
+                          title={
+                            currentUser?.household_id === h.id || (currentUser as any)?.householdId === h.id
+                              ? 'Cannot delete your active household'
+                              : `Delete household ${h.name}`
+                          }
+                          className={`p-1.5 rounded-xl transition-all cursor-pointer ${
+                            currentUser?.household_id === h.id || (currentUser as any)?.householdId === h.id
+                              ? 'opacity-20 cursor-not-allowed text-slate-600'
+                              : 'text-slate-400 hover:text-red-400 hover:bg-red-500/15 border border-white/5 hover:border-red-500/30'
+                          }`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
 
                     <div className="flex items-center gap-2 text-xs">
@@ -1409,6 +1505,118 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onBack }) => {
             </div>
           )}
         </>
+      )}
+
+      {/* Delete User Confirmation Modal */}
+      {userToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-slate-900 border border-red-500/30 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
+            <div className="flex items-center gap-3 text-red-400">
+              <div className="w-10 h-10 rounded-2xl bg-red-500/20 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-red-400" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Delete User Account</h3>
+                <p className="text-xs text-slate-400">This action cannot be undone.</p>
+              </div>
+            </div>
+
+            <div className="bg-slate-800/80 border border-white/10 rounded-2xl p-4 text-xs text-slate-300 space-y-2">
+              <p>
+                Are you sure you want to permanently delete <strong className="text-white">{userToDelete.name}</strong>?
+              </p>
+              <div className="text-[11px] text-slate-400 font-mono space-y-0.5 pt-1">
+                {userToDelete.username && <p>Username: @{userToDelete.username}</p>}
+                {userToDelete.email && <p>Email: {userToDelete.email}</p>}
+                {userToDelete.householdName && <p>Household: {userToDelete.householdName}</p>}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                onClick={() => setUserToDelete(null)}
+                disabled={isDeletingUser}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteUser}
+                disabled={isDeletingUser}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/25 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                {isDeletingUser ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete User</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Household Confirmation Modal */}
+      {householdToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-slate-900 border border-red-500/30 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
+            <div className="flex items-center gap-3 text-red-400">
+              <div className="w-10 h-10 rounded-2xl bg-red-500/20 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-red-400" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Delete Household</h3>
+                <p className="text-xs text-slate-400">This action permanently deletes all household data.</p>
+              </div>
+            </div>
+
+            <div className="bg-slate-800/80 border border-white/10 rounded-2xl p-4 text-xs text-slate-300 space-y-2">
+              <p>
+                Are you sure you want to permanently delete <strong className="text-white">{householdToDelete.name}</strong> and all associated data?
+              </p>
+              <div className="text-[11px] text-slate-400 space-y-0.5 pt-1">
+                <p>Invite Code: <span className="font-mono text-emerald-400 font-bold">{householdToDelete.inviteCode}</span></p>
+                {householdToDelete.memberNames && <p>Members: {householdToDelete.memberNames}</p>}
+                <p className="text-rose-400 pt-1 font-semibold">
+                  ⚠️ This will delete all user accounts, meal plans, recipes, calendar events, and grocery items in this household!
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                onClick={() => setHouseholdToDelete(null)}
+                disabled={isDeletingHousehold}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteHousehold}
+                disabled={isDeletingHousehold}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/25 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                {isDeletingHousehold ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete Household</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
