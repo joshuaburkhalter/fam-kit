@@ -1052,15 +1052,81 @@ export const MealsPage: React.FC = () => {
       ) : (
         /* ================= MAIN MEALS VIEW (TABS) ================= */
         <div className="space-y-4">
-          {/* Header */}
+          {/* Header Bar: Title + Segmented Pills + Contextual Actions */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
+            <div className="flex flex-wrap items-center gap-3">
               <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 shadow-md shadow-emerald-500/20">
                   <ChefHat className="w-5 h-5 stroke-[2.5]" />
                 </div>
                 Meals
               </h1>
+
+              {/* 3-Tab Segmented Selector Pills in the same bar */}
+              <div className="flex items-center gap-1 p-1 bg-slate-900/80 rounded-2xl border border-white/10">
+                <button
+                  onClick={() => setActiveTab('planner')}
+                  className={`py-1.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    activeTab === 'planner'
+                      ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <Utensils className="w-3.5 h-3.5" />
+                  <span>Planner</span>
+                  {meals.length > 0 && (
+                    <span
+                      className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                        activeTab === 'planner' ? 'bg-slate-950/25 text-slate-950' : 'bg-emerald-500/20 text-emerald-400'
+                      }`}
+                    >
+                      {meals.length}
+                    </span>
+                  )}
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('recipes')}
+                  className={`py-1.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    activeTab === 'recipes'
+                      ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <BookOpen className="w-3.5 h-3.5" />
+                  <span>Recipes</span>
+                  {recipes.length > 0 && (
+                    <span
+                      className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                        activeTab === 'recipes' ? 'bg-slate-950/25 text-slate-950' : 'bg-emerald-500/20 text-emerald-400'
+                      }`}
+                    >
+                      {recipes.length}
+                    </span>
+                  )}
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('history')}
+                  className={`py-1.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    activeTab === 'history'
+                      ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <History className="w-3.5 h-3.5" />
+                  <span>History</span>
+                  {mealLogs.length > 0 && (
+                    <span
+                      className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                        activeTab === 'history' ? 'bg-slate-950/25 text-slate-950' : 'bg-emerald-500/20 text-emerald-400'
+                      }`}
+                    >
+                      {mealLogs.length}
+                    </span>
+                  )}
+                </button>
+              </div>
             </div>
 
             {/* Contextual actions based on active sub-tab */}
@@ -1072,7 +1138,7 @@ export const MealsPage: React.FC = () => {
                     className="bg-slate-900 hover:bg-slate-800 text-slate-300 border border-white/10 px-3.5 py-2 rounded-2xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
                   >
                     <BookOpen className="w-4 h-4 text-emerald-400" />
-                    <span>Browse Recipe Box</span>
+                    <span>Browse Recipes</span>
                   </button>
                   <button
                     onClick={() => setIsRecipePickerOpen(true)}
@@ -1116,72 +1182,6 @@ export const MealsPage: React.FC = () => {
             </div>
           </div>
 
-          {/* 3-Tab Segmented Selector */}
-          <div className="flex items-center gap-1 p-1 bg-slate-900/80 rounded-2xl border border-white/10 max-w-md">
-            <button
-              onClick={() => setActiveTab('planner')}
-              className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                activeTab === 'planner'
-                  ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <Utensils className="w-3.5 h-3.5" />
-              <span>Planner</span>
-              {meals.length > 0 && (
-                <span
-                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
-                    activeTab === 'planner' ? 'bg-slate-950/25 text-slate-950' : 'bg-emerald-500/20 text-emerald-400'
-                  }`}
-                >
-                  {meals.length}
-                </span>
-              )}
-            </button>
-
-            <button
-              onClick={() => setActiveTab('recipes')}
-              className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                activeTab === 'recipes'
-                  ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <BookOpen className="w-3.5 h-3.5" />
-              <span>Recipe Box</span>
-              {recipes.length > 0 && (
-                <span
-                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
-                    activeTab === 'recipes' ? 'bg-slate-950/25 text-slate-950' : 'bg-emerald-500/20 text-emerald-400'
-                  }`}
-                >
-                  {recipes.length}
-                </span>
-              )}
-            </button>
-
-            <button
-              onClick={() => setActiveTab('history')}
-              className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                activeTab === 'history'
-                  ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <History className="w-3.5 h-3.5" />
-              <span>History</span>
-              {mealLogs.length > 0 && (
-                <span
-                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
-                    activeTab === 'history' ? 'bg-slate-950/25 text-slate-950' : 'bg-emerald-500/20 text-emerald-400'
-                  }`}
-                >
-                  {mealLogs.length}
-                </span>
-              )}
-            </button>
-          </div>
-
           {/* ================= 1. PLANNER TAB ================= */}
           {activeTab === 'planner' && (
             <div className="space-y-4">
@@ -1194,7 +1194,7 @@ export const MealsPage: React.FC = () => {
                   </div>
                   <h3 className="text-base font-bold text-white">No meals on deck</h3>
                   <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                    Add recipes from your Recipe Box to put them on deck and ready to shop for!
+                    Add recipes to put them on deck and ready to shop for!
                   </p>
                   <div className="pt-2 flex items-center justify-center gap-2">
                     <button
@@ -1202,7 +1202,7 @@ export const MealsPage: React.FC = () => {
                       className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-4 py-2 rounded-2xl text-xs font-bold inline-flex items-center gap-2 transition-all shadow-md shadow-emerald-500/20 cursor-pointer"
                     >
                       <BookOpen className="w-4 h-4" />
-                      <span>Browse Recipe Box</span>
+                      <span>Browse Recipes</span>
                     </button>
                   </div>
                 </div>
