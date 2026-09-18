@@ -537,84 +537,71 @@ export const CalendarPage: React.FC = () => {
           })}
         </div>
 
-        {/* Smaller & Simpler View Mode Toggle */}
-        <div className="flex items-center bg-slate-900 rounded-lg p-0.5 border border-white/10 shrink-0 text-[11px]">
+        {/* Smaller & Simpler View Mode Toggle + Past Quick Toggle */}
+        <div className="flex items-center gap-1.5 shrink-0">
           <button
             type="button"
-            onClick={() => setViewMode('all')}
-            className={`px-2 py-0.5 rounded-md font-medium transition-all ${
-              viewMode === 'all'
-                ? 'bg-slate-800 text-white font-semibold'
-                : 'text-slate-400 hover:text-slate-200'
+            onClick={() => setShowPastEvents((prev) => !prev)}
+            className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all flex items-center gap-1.5 cursor-pointer border ${
+              showPastEvents
+                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-xs'
+                : 'bg-slate-900 text-slate-400 hover:text-slate-200 border-white/10'
             }`}
+            title={showPastEvents ? 'Hide past events' : 'Show past events'}
           >
-            All
+            <Clock className={`w-3 h-3 ${showPastEvents ? 'text-amber-400' : 'text-slate-400'}`} />
+            <span>Past</span>
+            {pastEventsCount > 0 && (
+              <span className="text-[10px] opacity-80 font-mono">({pastEventsCount})</span>
+            )}
           </button>
-          <button
-            type="button"
-            onClick={() => setViewMode('events-only')}
-            className={`px-2 py-0.5 rounded-md font-medium transition-all ${
-              viewMode === 'events-only'
-                ? 'bg-slate-800 text-white font-semibold'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            Events
-          </button>
+
+          <div className="flex items-center bg-slate-900 rounded-lg p-0.5 border border-white/10 shrink-0 text-[11px]">
+            <button
+              type="button"
+              onClick={() => setViewMode('all')}
+              className={`px-2 py-0.5 rounded-md font-medium transition-all ${
+                viewMode === 'all'
+                  ? 'bg-slate-800 text-white font-semibold'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              All
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('events-only')}
+              className={`px-2 py-0.5 rounded-md font-medium transition-all ${
+                viewMode === 'events-only'
+                  ? 'bg-slate-800 text-white font-semibold'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Events
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Clean Synchronous Timeline List */}
       <div className="relative pt-1">
-        {/* Past Events Section Toggle Banner */}
-        <div className="flex items-center justify-between gap-2 pb-3 pt-0.5">
-          <button
-            type="button"
-            onClick={() => setShowPastEvents((prev) => !prev)}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all border shadow-xs cursor-pointer ${
-              showPastEvents
-                ? 'bg-amber-500/15 text-amber-300 border-amber-500/30 hover:bg-amber-500/25'
-                : 'bg-slate-900/90 text-slate-300 hover:text-white border-white/10 hover:border-amber-500/40'
-            }`}
-          >
-            <Clock className={`w-3.5 h-3.5 ${showPastEvents ? 'text-amber-400' : 'text-slate-400'}`} />
-            <span>{showPastEvents ? 'Hide Past Events' : 'See Past Events'}</span>
-            {pastEventsCount > 0 ? (
-              <span
-                className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                  showPastEvents
-                    ? 'bg-amber-400 text-slate-950'
-                    : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                }`}
-              >
-                {pastEventsCount} {pastEventsCount === 1 ? 'event' : 'events'}
-              </span>
-            ) : (
-              <span className="text-[10px] text-slate-500 font-normal">None</span>
-            )}
-            {showPastEvents ? (
-              <ChevronUp className="w-3.5 h-3.5 text-amber-400 ml-0.5" />
-            ) : (
-              <ChevronDown className="w-3.5 h-3.5 text-slate-400 ml-0.5" />
-            )}
-          </button>
-
-          {showPastEvents && hasOlderPastEvents && (
+        {/* Load Earlier Days Button when Past Events are Expanded */}
+        {showPastEvents && hasOlderPastEvents && (
+          <div className="flex justify-center pb-3 pt-0.5">
             <button
               type="button"
               onClick={() => setPastDaysCount((prev) => prev + 14)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-white/10 hover:border-amber-500/40 text-slate-300 hover:text-white text-xs font-medium transition-all shadow-xs cursor-pointer"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-900/90 border border-white/10 hover:border-amber-500/40 text-slate-300 hover:text-white text-xs font-medium transition-all shadow-xs cursor-pointer"
               title="Load older past days"
             >
               <ArrowUp className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden sm:inline">Load 14 Earlier Days</span>
-              <span className="sm:hidden">Earlier</span>
+              <span>Load 14 Earlier Days</span>
             </button>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Continuous Synchronous Timeline Rail Spine */}
-        <div className="absolute left-[4.5rem] -translate-x-1/2 top-11 bottom-14 w-[2px] bg-slate-800 pointer-events-none" />
+        <div className="absolute left-[4.5rem] -translate-x-1/2 top-4 bottom-14 w-[2px] bg-slate-800 pointer-events-none" />
 
         {timelineDays.map((day, idx) => {
           const dateStr = format(day, 'yyyy-MM-dd');
