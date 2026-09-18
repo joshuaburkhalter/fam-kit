@@ -5,17 +5,7 @@ import { api, onServerUpdatingChange } from '../lib/api';
 export const AppUpdatingOverlay: React.FC = () => {
   const [isUpdating, setIsUpdating] = useState(false);
   const [isRestored, setIsRestored] = useState(false);
-  const [dots, setDots] = useState('');
   const pollIntervalRef = useRef<any>(null);
-
-  // Animated ellipsis
-  useEffect(() => {
-    if (!isUpdating) return;
-    const dotInterval = setInterval(() => {
-      setDots((prev) => (prev.length >= 3 ? '' : prev + '.'));
-    }, 500);
-    return () => clearInterval(dotInterval);
-  }, [isUpdating]);
 
   // Listen to API deploy / 502 / 503 triggers
   useEffect(() => {
@@ -79,7 +69,7 @@ export const AppUpdatingOverlay: React.FC = () => {
 
         {/* Status Text */}
         <h2 className="text-xl font-bold text-white tracking-tight mb-2">
-          {isRestored ? 'Update Ready!' : `Updating Homebase${dots}`}
+          {isRestored ? 'Update Ready!' : 'Updating Homebase'}
         </h2>
 
         <p className="text-xs text-slate-400 max-w-sm leading-relaxed mb-6">
