@@ -39,6 +39,7 @@ import { CheckSparkle, CelebrationConfetti, triggerHapticCheck } from '../compon
 import { Drawer } from '../components/ui/Drawer';
 import { RecipeScraperModal, extractSharedUrl } from '../components/RecipeScraperModal';
 import { EditRecipeModal } from '../components/EditRecipeModal';
+import { useFabAutoClose } from '../hooks/useFabAutoClose';
 
 interface MealsDataCache {
   householdId: string;
@@ -123,7 +124,15 @@ export const MealsPage: React.FC = () => {
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
   const [recipeSearch, setRecipeSearch] = useState('');
 
-  // Recipe Box search & tags
+  // Multi-action Recipe FAB
+  const [isRecipeFabOpen, setIsRecipeFabOpen] = useState(false);
+  const recipeFabRef = useFabAutoClose<HTMLDivElement>({
+    isOpen: isRecipeFabOpen,
+    onClose: () => setIsRecipeFabOpen(false),
+    ignore: isScraperOpen || isEditRecipeModalOpen || Boolean(selectedRecipe),
+  });
+
+  // Recipe search & tags
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
 
@@ -1052,134 +1061,80 @@ export const MealsPage: React.FC = () => {
       ) : (
         /* ================= MAIN MEALS VIEW (TABS) ================= */
         <div className="space-y-4">
-          {/* Header Bar: Title + Segmented Pills + Contextual Actions */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-3">
-              <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 shadow-md shadow-emerald-500/20">
-                  <ChefHat className="w-5 h-5 stroke-[2.5]" />
-                </div>
-                Meals
-              </h1>
-
-              {/* 3-Tab Segmented Selector Pills in the same bar */}
-              <div className="flex items-center gap-1 p-1 bg-slate-900/80 rounded-2xl border border-white/10">
-                <button
-                  onClick={() => setActiveTab('planner')}
-                  className={`py-1.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                    activeTab === 'planner'
-                      ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <Utensils className="w-3.5 h-3.5" />
-                  <span>Planner</span>
-                  {meals.length > 0 && (
-                    <span
-                      className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
-                        activeTab === 'planner' ? 'bg-slate-950/25 text-slate-950' : 'bg-emerald-500/20 text-emerald-400'
-                      }`}
-                    >
-                      {meals.length}
-                    </span>
-                  )}
-                </button>
-
-                <button
-                  onClick={() => setActiveTab('recipes')}
-                  className={`py-1.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                    activeTab === 'recipes'
-                      ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <BookOpen className="w-3.5 h-3.5" />
-                  <span>Recipes</span>
-                  {recipes.length > 0 && (
-                    <span
-                      className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
-                        activeTab === 'recipes' ? 'bg-slate-950/25 text-slate-950' : 'bg-emerald-500/20 text-emerald-400'
-                      }`}
-                    >
-                      {recipes.length}
-                    </span>
-                  )}
-                </button>
-
-                <button
-                  onClick={() => setActiveTab('history')}
-                  className={`py-1.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                    activeTab === 'history'
-                      ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <History className="w-3.5 h-3.5" />
-                  <span>History</span>
-                  {mealLogs.length > 0 && (
-                    <span
-                      className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
-                        activeTab === 'history' ? 'bg-slate-950/25 text-slate-950' : 'bg-emerald-500/20 text-emerald-400'
-                      }`}
-                    >
-                      {mealLogs.length}
-                    </span>
-                  )}
-                </button>
+          {/* Header Bar: Title */}
+          <div className="flex items-center justify-between">
+            <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight flex items-center gap-2.5">
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 shadow-md shadow-emerald-500/20">
+                <ChefHat className="w-5 h-5 stroke-[2.5]" />
               </div>
-            </div>
+              Meals
+            </h1>
+          </div>
 
-            {/* Contextual actions based on active sub-tab */}
-            <div className="flex items-center gap-2">
-              {activeTab === 'planner' && (
-                <>
-                  <button
-                    onClick={() => setActiveTab('recipes')}
-                    className="bg-slate-900 hover:bg-slate-800 text-slate-300 border border-white/10 px-3.5 py-2 rounded-2xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
-                  >
-                    <BookOpen className="w-4 h-4 text-emerald-400" />
-                    <span>Browse Recipes</span>
-                  </button>
-                  <button
-                    onClick={() => setIsRecipePickerOpen(true)}
-                    className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-3.5 py-2 rounded-2xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer"
-                  >
-                    <Plus className="w-4 h-4 stroke-[2.5]" />
-                    <span>Quick Add</span>
-                  </button>
-                </>
-              )}
-              {activeTab === 'recipes' && (
-                <>
-                  <button
-                    onClick={() => setIsScraperOpen(true)}
-                    className="bg-slate-900 hover:bg-slate-800 text-slate-300 border border-white/10 px-3.5 py-2 rounded-2xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
-                  >
-                    <Link2 className="w-4 h-4 text-emerald-400" />
-                    <span>Import Web</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      setEditingRecipe(null);
-                      setIsEditRecipeModalOpen(true);
-                    }}
-                    className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-3.5 py-2 rounded-2xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer"
-                  >
-                    <Plus className="w-4 h-4 stroke-[2.5]" />
-                    <span>New Recipe</span>
-                  </button>
-                </>
-              )}
-              {activeTab === 'history' && (
-                <button
-                  onClick={() => setIsLogModalOpen(true)}
-                  className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-3.5 py-2 rounded-2xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer"
+          {/* Full-width segmented sub-navigation */}
+          <div className="w-full flex items-center p-1 bg-slate-900/80 rounded-2xl border border-white/10 shadow-lg">
+            <button
+              onClick={() => setActiveTab('planner')}
+              className={`flex-1 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                activeTab === 'planner'
+                  ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
+                  : 'text-slate-400 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <Utensils className="w-4 h-4" />
+              <span>Planner</span>
+              {meals.length > 0 && (
+                <span
+                  className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
+                    activeTab === 'planner' ? 'bg-slate-950/25 text-slate-950' : 'bg-emerald-500/20 text-emerald-400'
+                  }`}
                 >
-                  <Plus className="w-4 h-4 stroke-[2.5]" />
-                  <span>Log Meal</span>
-                </button>
+                  {meals.length}
+                </span>
               )}
-            </div>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('recipes')}
+              className={`flex-1 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                activeTab === 'recipes'
+                  ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
+                  : 'text-slate-400 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <BookOpen className="w-4 h-4" />
+              <span>Recipes</span>
+              {recipes.length > 0 && (
+                <span
+                  className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
+                    activeTab === 'recipes' ? 'bg-slate-950/25 text-slate-950' : 'bg-emerald-500/20 text-emerald-400'
+                  }`}
+                >
+                  {recipes.length}
+                </span>
+              )}
+            </button>
+
+            <button
+              onClick={() => setActiveTab('history')}
+              className={`flex-1 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                activeTab === 'history'
+                  ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
+                  : 'text-slate-400 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <History className="w-4 h-4" />
+              <span>History</span>
+              {mealLogs.length > 0 && (
+                <span
+                  className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
+                    activeTab === 'history' ? 'bg-slate-950/25 text-slate-950' : 'bg-emerald-500/20 text-emerald-400'
+                  }`}
+                >
+                  {mealLogs.length}
+                </span>
+              )}
+            </button>
           </div>
 
           {/* ================= 1. PLANNER TAB ================= */}
@@ -1194,17 +1149,8 @@ export const MealsPage: React.FC = () => {
                   </div>
                   <h3 className="text-base font-bold text-white">No meals on deck</h3>
                   <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                    Add recipes to put them on deck and ready to shop for!
+                    Add recipes or dishes using the Quick Add button below to put them on deck and ready to shop for!
                   </p>
-                  <div className="pt-2 flex items-center justify-center gap-2">
-                    <button
-                      onClick={() => setActiveTab('recipes')}
-                      className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-4 py-2 rounded-2xl text-xs font-bold inline-flex items-center gap-2 transition-all shadow-md shadow-emerald-500/20 cursor-pointer"
-                    >
-                      <BookOpen className="w-4 h-4" />
-                      <span>Browse Recipes</span>
-                    </button>
-                  </div>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1666,6 +1612,96 @@ export const MealsPage: React.FC = () => {
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ================= FLOATING ACTION BUTTONS (FAB) ================= */}
+      {!selectedRecipe && (
+        <div className="fixed bottom-[calc(76px+1rem+env(safe-area-inset-bottom,0px))] md:bottom-8 left-0 right-0 z-40 px-4 pointer-events-none">
+          <div className="max-w-4xl mx-auto pointer-events-none flex justify-end">
+            {activeTab === 'planner' && (
+              <button
+                type="button"
+                onClick={() => setIsRecipePickerOpen(true)}
+                className="pointer-events-auto h-[50px] px-5 rounded-full border border-emerald-400/40 bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 font-bold text-xs sm:text-sm shadow-xl shadow-emerald-500/30 hover:scale-105 active:scale-95 flex items-center gap-2 transition-all cursor-pointer"
+                title="Quick Add Meal to Planner"
+              >
+                <Plus className="w-5 h-5 stroke-[2.5]" />
+                <span>Quick Add</span>
+              </button>
+            )}
+
+            {activeTab === 'recipes' && (
+              <div
+                ref={recipeFabRef}
+                className={`fab-dock-transition pointer-events-auto h-[50px] border shadow-2xl flex items-center overflow-hidden transition-all duration-200 ${
+                  isRecipeFabOpen
+                    ? 'rounded-3xl border-white/20 bg-slate-900/95 backdrop-blur-xl px-2.5 gap-2 shadow-emerald-500/10'
+                    : 'rounded-full border-emerald-400/40 bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 cursor-pointer shadow-xl shadow-emerald-500/30 hover:scale-105 active:scale-95 px-5'
+                }`}
+              >
+                {!isRecipeFabOpen ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsRecipeFabOpen(true)}
+                    className="w-full h-full flex items-center gap-2 font-bold text-xs sm:text-sm text-slate-950 cursor-pointer"
+                    title="Add or Import Recipe"
+                  >
+                    <Plus className="w-5 h-5 stroke-[2.5]" />
+                    <span>Add Recipe</span>
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsRecipeFabOpen(false)}
+                      className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                      title="Close"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsRecipeFabOpen(false);
+                        setIsScraperOpen(true);
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      <Link2 className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Import Web</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsRecipeFabOpen(false);
+                        setEditingRecipe(null);
+                        setIsEditRecipeModalOpen(true);
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                      <span>New Recipe</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'history' && (
+              <button
+                type="button"
+                onClick={() => setIsLogModalOpen(true)}
+                className="pointer-events-auto h-[50px] px-5 rounded-full border border-emerald-400/40 bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 font-bold text-xs sm:text-sm shadow-xl shadow-emerald-500/30 hover:scale-105 active:scale-95 flex items-center gap-2 transition-all cursor-pointer"
+                title="Log a Cooked Meal"
+              >
+                <Plus className="w-5 h-5 stroke-[2.5]" />
+                <span>Log Meal</span>
+              </button>
+            )}
+          </div>
         </div>
       )}
 
