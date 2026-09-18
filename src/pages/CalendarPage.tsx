@@ -144,6 +144,85 @@ function parseNaturalLanguageEvent(raw: string, members: { id: string; name: str
   };
 }
 
+/**
+ * Calculates the vertical Y offset (in px) along Today's timeline row
+ * so that the green dot accurately follows the hours of the day.
+ */
+function calculateCurrentTimeY(events: CalendarEvent[], now: Date, rowHeight: number): number {
+  const totalMinutes = now.getHours() * 60 + now.getMinutes();
+  const timedEvents = events.filter((e) => !e.is_all_day && e.start_time);
+
+  // If no timed events, map totalMinutes (0 to 1440) across the row height
+  if (timedEvents.length === 0) {
+    const progress = Math.min(1, Math.max(0, totalMinutes / 1440));
+    const startY = 16;
+    const endY = Math.max(80, rowHeight - 20);
+    return startY + progress * (endY - startY);
+  }
+
+  // Sort timed events by start time
+  const sorted = [...timedEvents].sort((a, b) => {
+    try {
+      return parseISO(a.start_time).getTime() - parseISO(b.start_time).getTime();
+    } catch {
+      return 0;
+    }
+  });
+
+  const eventTimes = sorted.map((ev) => {
+    try {
+      const s = parseISO(ev.start_time);
+      const e = ev.end_time ? parseISO(ev.end_time) : s;
+      const startMin = s.getHours() * 60 + s.getMinutes();
+      const endMin = Math.max(startMin + 30, e.getHours() * 60 + e.getMinutes());
+      return { startMin, endMin };
+    } catch {
+      return { startMin: 540, endMin: 600 };
+    }
+  });
+
+  const cardHeight = 64;
+  const cardGap = 6;
+  const topOffset = 10;
+
+  // If current time is before the first event
+  if (totalMinutes < eventTimes[0].startMin) {
+    const fraction = Math.max(0, totalMinutes / eventTimes[0].startMin);
+    return Math.max(8, fraction * (topOffset + 4));
+  }
+
+  // If current time is during or between events
+  for (let i = 0; i < eventTimes.length; i++) {
+    const ev = eventTimes[i];
+    const cardTop = topOffset + i * (cardHeight + cardGap);
+    const cardBottom = cardTop + cardHeight;
+
+    if (totalMinutes >= ev.startMin && totalMinutes <= ev.endMin) {
+      const dur = Math.max(1, ev.endMin - ev.startMin);
+      const frac = (totalMinutes - ev.startMin) / dur;
+      return cardTop + frac * cardHeight;
+    }
+
+    if (i < eventTimes.length - 1) {
+      const nextEv = eventTimes[i + 1];
+      if (totalMinutes > ev.endMin && totalMinutes < nextEv.startMin) {
+        const gap = Math.max(1, nextEv.startMin - ev.endMin);
+        const frac = (totalMinutes - ev.endMin) / gap;
+        const nextTop = topOffset + (i + 1) * (cardHeight + cardGap);
+        return cardBottom + frac * (nextTop - cardBottom);
+      }
+    }
+  }
+
+  // If current time is after all events
+  const lastEv = eventTimes[eventTimes.length - 1];
+  const remaining = Math.max(1, 1440 - lastEv.endMin);
+  const afterFrac = Math.min(1, Math.max(0, (totalMinutes - lastEv.endMin) / remaining));
+  const lastBottom = topOffset + (eventTimes.length - 1) * (cardHeight + cardGap) + cardHeight;
+  const extraSpace = Math.max(24, rowHeight - lastBottom - 16);
+  return lastBottom + afterFrac * extraSpace;
+}
+
 export const CalendarPage: React.FC = () => {
   const { currentUser, household, users } = usePWA();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
@@ -199,6 +278,31 @@ export const CalendarPage: React.FC = () => {
   useEffect(() => {
     loadData();
   }, [household]);
+
+  // Live Current Time state to follow hours of the day along the timeline
+  const [currentTime, setCurrentTime] = useState(() => new Date());
+  const todayRowRef = useRef<HTMLDivElement | null>(null);
+  const [todayRowHeight, setTodayRowHeight] = useState(160);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 30000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!todayRowRef.current) return;
+    const updateHeight = () => {
+      if (todayRowRef.current) {
+        setTodayRowHeight(todayRowRef.current.offsetHeight);
+      }
+    };
+    updateHeight();
+    const ro = new ResizeObserver(updateHeight);
+    ro.observe(todayRowRef.current);
+    return () => ro.disconnect();
+  }, [events, selectedMemberId]);
 
   const formatTimeRange = (ev: CalendarEvent) => {
     if (ev.is_all_day) return 'All Day';
@@ -598,6 +702,8 @@ export const CalendarPage: React.FC = () => {
           const prevDay = idx > 0 ? timelineDays[idx - 1] : null;
           const isFirstOfMonth = !prevDay || format(prevDay, 'M') !== format(day, 'M');
 
+          const currentTimeY = isCurrentDay ? calculateCurrentTimeY(dayEvents, currentTime, todayRowHeight) : 0;
+
           return (
             <React.Fragment key={dateStr}>
               {/* Subtle Month Header seamlessly integrated into timeline */}
@@ -620,8 +726,9 @@ export const CalendarPage: React.FC = () => {
 
               {/* Day Row */}
               <div
+                ref={isCurrentDay ? todayRowRef : undefined}
                 className={`relative flex items-start gap-3 pb-3.5 group ${
-                  isCurrentDay ? 'scroll-mt-20' : ''
+                  isCurrentDay ? 'scroll-mt-20 min-h-[140px]' : ''
                 }`}
               >
                 {/* 1. Date Column */}
@@ -666,13 +773,36 @@ export const CalendarPage: React.FC = () => {
                   <div
                     className={`rounded-full transition-all ${
                       isCurrentDay
-                        ? 'w-3.5 h-3.5 bg-emerald-400 ring-4 ring-emerald-400/20 ring-offset-2 ring-offset-slate-950 shadow-sm shadow-emerald-500/50'
+                        ? 'w-2.5 h-2.5 bg-slate-700 ring-2 ring-slate-950'
                         : dayEvents.length > 0
                         ? 'w-2.5 h-2.5 bg-slate-600 ring-2 ring-slate-950 group-hover:bg-slate-400 group-hover:scale-125'
                         : 'w-2 h-2 bg-slate-700 ring-2 ring-slate-950 group-hover:bg-slate-500 group-hover:scale-125'
                     }`}
                   />
                 </div>
+
+                {/* 2B. Moving Green Dot following the hours in the day along the timeline */}
+                {isCurrentDay && (
+                  <div
+                    className="absolute left-[4.5rem] -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none flex items-center transition-[top] duration-700 ease-out"
+                    style={{ top: `${currentTimeY}px` }}
+                  >
+                    {/* Pulsing Green Dot */}
+                    <div className="relative flex items-center justify-center">
+                      <span className="absolute w-4 h-4 rounded-full bg-emerald-400/40 animate-ping" />
+                      <div className="w-3.5 h-3.5 rounded-full bg-emerald-400 ring-4 ring-emerald-400/20 ring-offset-2 ring-offset-slate-950 shadow-sm shadow-emerald-500/60" />
+                    </div>
+
+                    {/* Current Time Pill & horizontal trail */}
+                    <div className="flex items-center gap-1.5 pl-2.5 pointer-events-auto select-none">
+                      <span className="text-[10px] font-mono font-bold text-emerald-400 bg-slate-950/95 border border-emerald-500/40 px-2 py-0.5 rounded-full shadow-lg shadow-emerald-950/50 flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        <span>{format(currentTime, 'h:mm a')}</span>
+                      </span>
+                      <div className="w-8 sm:w-16 h-px bg-gradient-to-r from-emerald-500/40 to-transparent" />
+                    </div>
+                  </div>
+                )}
 
                 {/* 3. Content Column */}
                 <div className="flex-1 min-w-0 pt-0.5">
