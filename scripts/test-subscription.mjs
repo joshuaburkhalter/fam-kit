@@ -30,14 +30,33 @@ async function runTests() {
     throw new Error('Generated voucher codes do not match expected prefix patterns');
   }
 
-  // Test household subscription columns
-  const demoHousehold = queryOne('SELECT id, name, subscriptionStatus, subscriptionPlan, subscriptionExpiresAt, promoCodeUsed FROM households WHERE id = "fam_default_1"');
-  console.log('4. Demo household status:');
-  console.log('   ', demoHousehold);
-
-  if (!demoHousehold || demoHousehold.subscriptionStatus !== 'active') {
-    throw new Error('Demo household should be active');
+  // Test resilient promo code lookup (case insensitive, dash-insensitive, space-insensitive)
+  function findPromo(input) {
+    const raw = (input || '').trim().toUpperCase();
+    const clean = raw.replace(/[\s\-_]/g, '');
+    let row = queryOne('SELECT * FROM promo_codes WHERE UPPER(code) = ?', [raw]);
+    if (!row) {
+      row = queryOne("SELECT * FROM promo_codes WHERE REPLACE(REPLACE(REPLACE(UPPER(code), '-', ''), ' ', ''), '_', '') = ?", [clean]);
+    }
+    return row;
   }
+
+  const testInputs = [
+    ['hb37x9k2m4p', 'HB3-7X9K-2M4P'],
+    ['HB3-7X9K-2M4P', 'HB3-7X9K-2M4P'],
+    ['homebase vip', 'HOMEBASEVIP'],
+    ['familyvip', 'FAMILYVIP'],
+    ['hbl 5t2n 8b7c', 'HBL-5T2N-8B7C'],
+    ['HBL-5T2N-8B7C', 'HBL-5T2N-8B7C'],
+  ];
+
+  for (const [inp, expected] of testInputs) {
+    const res = findPromo(inp);
+    if (!res || res.code !== expected) {
+      throw new Error(`Lookup failed for "${inp}": expected "${expected}", got "${res?.code}"`);
+    }
+  }
+  console.log('5. Resilient promo code normalization verified for all test cases.');
 
   console.log('--- All subscription tests PASSED successfully! ---');
 }

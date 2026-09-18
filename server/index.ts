@@ -268,7 +268,14 @@ app.post('/api/auth/register', (req, res) => {
 
     const promoInput = (req.body.promoCode || '').trim().toUpperCase();
     if (promoInput) {
-      const promoRow = queryOne<any>('SELECT * FROM promo_codes WHERE UPPER(code) = ? AND isActive = 1', [promoInput]);
+      const cleanPromo = promoInput.replace(/[\s\-_]/g, '');
+      let promoRow = queryOne<any>('SELECT * FROM promo_codes WHERE UPPER(code) = ? AND isActive = 1', [promoInput]);
+      if (!promoRow) {
+        promoRow = queryOne<any>(
+          "SELECT * FROM promo_codes WHERE REPLACE(REPLACE(REPLACE(UPPER(code), '-', ''), ' ', ''), '_', '') = ? AND isActive = 1",
+          [cleanPromo]
+        );
+      }
       if (promoRow && (!promoRow.maxUses || promoRow.timesUsed < promoRow.maxUses)) {
         initialStatus = 'active';
         initialPlan = promoRow.durationMonths ? `promo_${promoRow.durationMonths}mo` : 'promo_lifetime';
@@ -423,14 +430,38 @@ app.post('/api/subscription/redeem', (req, res) => {
     });
   }
 
-  const promo = queryOne<any>(
+  const cleanCode = rawCode.replace(/[\s\-_]/g, '');
+
+  let promo = queryOne<any>(
     'SELECT * FROM promo_codes WHERE UPPER(code) = ?',
     [rawCode]
   );
+  if (!promo) {
+    promo = queryOne<any>(
+      "SELECT * FROM promo_codes WHERE REPLACE(REPLACE(REPLACE(UPPER(code), '-', ''), ' ', ''), '_', '') = ?",
+      [cleanCode]
+    );
+  }
 
-  if (!promo || promo.isActive !== 1) {
+  if (!promo) {
+    // Check if the user mistakenly typed their family invite code
+    const isInviteCode = queryOne<any>(
+      'SELECT id, name FROM households WHERE UPPER(inviteCode) = ?',
+      [rawCode]
+    );
+    if (isInviteCode) {
+      return res.status(400).json({
+        error: `"${rawCode}" is a family invite code for "${isInviteCode.name}", not a membership promo voucher. To join that household, tap Sign Out and select "Join Family".`,
+      });
+    }
+
     recordFailedPromoAttempt(clientKey);
     return res.status(400).json({ error: 'Invalid or expired promo code.' });
+  }
+
+  if (promo.isActive !== 1) {
+    recordFailedPromoAttempt(clientKey);
+    return res.status(400).json({ error: 'This promo code is no longer active.' });
   }
 
   if (promo.maxUses && promo.maxUses > 0 && promo.timesUsed >= promo.maxUses) {

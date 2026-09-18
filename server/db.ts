@@ -469,22 +469,20 @@ function initSchema(db: Database) {
   try {
     const promoCountRes = db.exec('SELECT COUNT(*) FROM promo_codes');
     const promoCount = (promoCountRes[0]?.values[0]?.[0] as number) || 0;
-    if (promoCount === 0) {
-      const now = new Date().toISOString();
-      // 3 Months Free sample code
+    const now = new Date().toISOString();
+    const defaultCodes = [
+      ['HB3-7X9K-2M4P', '3 Months Complimentary Full Access', 3, 100, now],
+      ['HB6-8W4R-9Q1Z', '6 Months Complimentary Full Access', 6, 100, now],
+      ['HBL-5T2N-8B7C', 'Lifetime VIP Complimentary Access', null, 100, now],
+      ['HOMEBASEVIP', 'Lifetime VIP Master Pass', null, 500, now],
+      ['FAMILYVIP', 'Lifetime VIP Family Access', null, 500, now],
+      ['VIP2026', 'Complimentary Family Access Pass', null, 500, now],
+    ];
+
+    for (const [c, desc, dur, maxU, dt] of defaultCodes) {
       db.run(
-        `INSERT INTO promo_codes (code, description, durationMonths, maxUses, timesUsed, isActive, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        ['HB3-7X9K-2M4P', '3 Months Complimentary Full Access', 3, 100, 0, 1, now]
-      );
-      // 6 Months Free sample code
-      db.run(
-        `INSERT INTO promo_codes (code, description, durationMonths, maxUses, timesUsed, isActive, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        ['HB6-8W4R-9Q1Z', '6 Months Complimentary Full Access', 6, 100, 0, 1, now]
-      );
-      // Lifetime Free sample code
-      db.run(
-        `INSERT INTO promo_codes (code, description, durationMonths, maxUses, timesUsed, isActive, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        ['HBL-5T2N-8B7C', 'Lifetime VIP Complimentary Access', null, 50, 0, 1, now]
+        `INSERT OR IGNORE INTO promo_codes (code, description, durationMonths, maxUses, timesUsed, isActive, createdAt) VALUES (?, ?, ?, ?, 0, 1, ?)`,
+        [c, desc, dur, maxU, dt]
       );
     }
   } catch (err) {
