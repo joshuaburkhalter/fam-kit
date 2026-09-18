@@ -108,22 +108,36 @@ export const EditRecipeModal: React.FC<EditRecipeModalProps> = ({
         .map((t) => t.trim().replace(/^#/, ''))
         .filter(Boolean);
 
-      const updated = await api.updateRecipe(recipe.id, {
-        title: title.trim(),
-        description: description.trim() || undefined,
-        prep_time_minutes: prepTime ? parseInt(prepTime, 10) : undefined,
-        cook_time_minutes: cookTime ? parseInt(cookTime, 10) : undefined,
-        servings: servings ? parseInt(servings, 10) : undefined,
-        tags: cleanTags,
-        ingredients: cleanIngredients,
-        instructions: cleanInstructions,
-      });
+      let savedRecipe: Recipe;
+      if (recipe.id) {
+        savedRecipe = await api.updateRecipe(recipe.id, {
+          title: title.trim(),
+          description: description.trim() || undefined,
+          prep_time_minutes: prepTime ? parseInt(prepTime, 10) : undefined,
+          cook_time_minutes: cookTime ? parseInt(cookTime, 10) : undefined,
+          servings: servings ? parseInt(servings, 10) : undefined,
+          tags: cleanTags,
+          ingredients: cleanIngredients,
+          instructions: cleanInstructions,
+        });
+      } else {
+        savedRecipe = await api.createRecipe(recipe.household_id, {
+          title: title.trim(),
+          description: description.trim() || undefined,
+          prep_time_minutes: prepTime ? parseInt(prepTime, 10) : undefined,
+          cook_time_minutes: cookTime ? parseInt(cookTime, 10) : undefined,
+          servings: servings ? parseInt(servings, 10) : undefined,
+          tags: cleanTags,
+          ingredients: cleanIngredients,
+          instructions: cleanInstructions,
+        });
+      }
 
-      onSave(updated);
+      onSave(savedRecipe);
       onClose();
     } catch (err: any) {
-      console.error('Failed to update recipe:', err);
-      setError(err.message || 'Failed to save recipe updates');
+      console.error('Failed to save recipe:', err);
+      setError(err.message || 'Failed to save recipe');
     } finally {
       setIsSaving(false);
     }
@@ -133,8 +147,8 @@ export const EditRecipeModal: React.FC<EditRecipeModalProps> = ({
     <Drawer
       isOpen={isOpen}
       onClose={onClose}
-      title="Edit Recipe"
-      subtitle="Update title, ingredients, notes, or instructions"
+      title={recipe.id ? "Edit Recipe" : "New Recipe"}
+      subtitle={recipe.id ? "Update title, ingredients, notes, or instructions" : "Add a custom recipe to your collection"}
       icon={<ChefHat className="w-5 h-5 text-emerald-400" />}
       footer={
         <div className="flex items-center gap-3">

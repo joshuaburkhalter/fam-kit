@@ -23,6 +23,26 @@ import { filterRecipeIngredientsForGrocery } from './groceryStaples';
 
 const BASE_URL = '/api';
 
+type ServerUpdatingListener = (isUpdating: boolean) => void;
+const serverUpdatingListeners = new Set<ServerUpdatingListener>();
+
+export function onServerUpdatingChange(listener: ServerUpdatingListener): () => void {
+  serverUpdatingListeners.add(listener);
+  return () => {
+    serverUpdatingListeners.delete(listener);
+  };
+}
+
+export function notifyServerUpdating(isUpdating: boolean): void {
+  serverUpdatingListeners.forEach((fn) => {
+    try {
+      fn(isUpdating);
+    } catch (err) {
+      console.error('Error in server updating listener:', err);
+    }
+  });
+}
+
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   const token = localStorage.getItem('famkit_auth_token') || '';
   const userId = localStorage.getItem('famkit_user_id') || '';
@@ -33,16 +53,27 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   if (userId) authHeaders['x-user-id'] = userId;
   if (householdId) authHeaders['x-household-id'] = householdId;
 
-  const res = await fetch(`${BASE_URL}${url}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...authHeaders,
-      ...options?.headers,
-    },
-    ...options,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${BASE_URL}${url}`, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders,
+        ...options?.headers,
+      },
+      ...options,
+    });
+  } catch (err: any) {
+    if (typeof navigator !== 'undefined' && navigator.onLine !== false && !url.startsWith('/health')) {
+      notifyServerUpdating(true);
+    }
+    throw err;
+  }
 
   if (!res.ok) {
+    if ((res.status === 502 || res.status === 503 || res.status === 504) && !url.startsWith('/health')) {
+      notifyServerUpdating(true);
+    }
     const errorBody = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(errorBody.error || `HTTP error ${res.status}`);
   }
@@ -1296,5 +1327,20 @@ export const api = {
     return fetchJson<{ success: boolean; message?: string }>(`/admin/households/${encodeURIComponent(householdId)}`, {
       method: 'DELETE',
     });
+  },
+
+  checkHealth: async (): Promise<boolean> => {
+    try {
+      const res = await fetch(`${BASE_URL}/health?_t=${Date.now()}`, {
+        cache: 'no-store',
+      });
+      if (res.ok) {
+        const data = await res.json().catch(() => null);
+        return data?.status === 'ok';
+      }
+      return false;
+    } catch {
+      return false;
+    }
   },
 };

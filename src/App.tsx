@@ -5,7 +5,6 @@ import { MobileNav } from './components/MobileNav';
 import { AssistantPage } from './pages/AssistantPage';
 import { GroceryPage } from './pages/GroceryPage';
 import { MealsPage } from './pages/MealsPage';
-import { RecipesPage } from './pages/RecipesPage';
 import { CalendarPage } from './pages/CalendarPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { AdminPage } from './pages/AdminPage';
@@ -15,6 +14,7 @@ import { PricingPage } from './pages/PricingPage';
 import { PaywallModal } from './components/PaywallModal';
 import { AuthPage } from './components/AuthPage';
 import { usePWA } from './context/PWAContext';
+import { AppUpdatingOverlay } from './components/AppUpdatingOverlay';
 import { Loader2, ArrowRight, CheckCircle2, X } from 'lucide-react';
 
 const VALID_TABS = ['assistant', 'grocery', 'meals', 'recipes', 'calendar', 'settings', 'family', 'admin'];
@@ -59,14 +59,14 @@ function resolveInitialTab(): string {
     // 2. Explicit tab query parameter (e.g. /?tab=calendar)
     const tabParam = params.get('tab');
     if (tabParam && VALID_TABS.includes(tabParam)) {
-      return tabParam;
+      return tabParam === 'recipes' ? 'meals' : tabParam;
     }
 
     // 3. PWA recipe share target
     const shared = params.get('shared');
     const sharedUrl = params.get('url') || params.get('text');
     if (shared || sharedUrl || pathname.startsWith('/recipes')) {
-      return 'recipes';
+      return 'meals';
     }
 
     // 4. Specific known path shortcuts
@@ -77,7 +77,7 @@ function resolveInitialTab(): string {
     // 5. Restore user's last visited tab from previous session
     const saved = localStorage.getItem(LAST_TAB_KEY);
     if (saved && VALID_TABS.includes(saved)) {
-      return saved;
+      return saved === 'recipes' ? 'meals' : saved;
     }
   } catch {}
 
@@ -245,7 +245,7 @@ export const AppContent: React.FC = () => {
     const shared = params.get('shared');
     const sharedUrl = params.get('url') || params.get('text');
     if (shared || sharedUrl) {
-      setActiveTab('recipes');
+      setActiveTab('meals');
     }
 
     // Stripe checkout return verification
@@ -253,7 +253,7 @@ export const AppContent: React.FC = () => {
     const stripeStatus = params.get('stripe_status');
     if (stripeSessionId) {
       verifyCheckoutSession(stripeSessionId)
-        .then((res) => {
+        .then((res: any) => {
           if (res.success) {
             setOverlayView(null);
             setStripeSuccessMessage(res.message || 'Payment confirmed! Welcome to Homebase.');
@@ -261,7 +261,7 @@ export const AppContent: React.FC = () => {
             window.history.replaceState({}, document.title, '/');
           }
         })
-        .catch((err) => {
+        .catch((err: any) => {
           console.error('Failed to verify Stripe session:', err);
         });
     } else if (stripeStatus === 'success') {
@@ -404,8 +404,7 @@ export const AppContent: React.FC = () => {
       <main className="flex-1 w-full overflow-x-hidden">
         {activeTab === 'assistant' && <AssistantPage />}
         {activeTab === 'grocery' && <GroceryPage />}
-        {activeTab === 'meals' && <MealsPage />}
-        {activeTab === 'recipes' && <RecipesPage />}
+        {(activeTab === 'meals' || activeTab === 'recipes') && <MealsPage />}
         {activeTab === 'calendar' && <CalendarPage />}
         {(activeTab === 'settings' || activeTab === 'family') && (
           <SettingsPage onOpenPricing={handleOpenPricing} />
@@ -432,6 +431,7 @@ export function App() {
   return (
     <PWAProvider>
       <AppContent />
+      <AppUpdatingOverlay />
     </PWAProvider>
   );
 }

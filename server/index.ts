@@ -78,6 +78,10 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json({ limit: '15mb' }));
 
+app.get('/api/health', (_req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
 // Helper: Get active user from request headers
 function getAuthUser(req: express.Request) {
   const authHeader = req.headers['authorization'];

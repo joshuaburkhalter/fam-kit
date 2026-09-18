@@ -3,7 +3,6 @@ import {
   Sparkles,
   ShoppingCart,
   ChefHat,
-  BookOpen,
   Calendar,
 } from 'lucide-react';
 
@@ -17,7 +16,6 @@ export const MobileNav: React.FC<MobileNavProps> = ({ activeTab, setActiveTab })
     { id: 'assistant', label: 'Assistant', icon: Sparkles },
     { id: 'grocery', label: 'Lists', icon: ShoppingCart },
     { id: 'meals', label: 'Meals', icon: ChefHat },
-    { id: 'recipes', label: 'Recipes', icon: BookOpen },
     { id: 'calendar', label: 'Calendar', icon: Calendar },
   ];
 
