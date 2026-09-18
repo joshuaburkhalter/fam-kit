@@ -750,14 +750,33 @@ app.post('/api/subscription/stripe-webhook', express.raw({ type: 'application/js
 
 // 4. Generate new secure promo code (Owner/Admin tool)
 app.post('/api/subscription/generate-code', (req, res) => {
-  const { durationMonths, description, maxUses } = req.body;
+  const { durationMonths, description, maxUses, assignedTo, customCode } = req.body;
   const parsedDuration = durationMonths === 3 || durationMonths === 6 ? durationMonths : null;
-  const prefix = parsedDuration === 3 ? 'HB3' : parsedDuration === 6 ? 'HB6' : 'HBL';
-  const code = generateSecureVoucherCode(prefix);
+  const assigned = typeof assignedTo === 'string' && assignedTo.trim() ? assignedTo.trim() : null;
+
+  let code = '';
+  if (typeof customCode === 'string' && customCode.trim()) {
+    const raw = customCode.trim().toUpperCase();
+    const clean = raw.replace(/[\s\-_]/g, '');
+    const existing = queryOne<any>(
+      "SELECT code FROM promo_codes WHERE REPLACE(REPLACE(REPLACE(UPPER(code), '-', ''), ' ', ''), '_', '') = ?",
+      [clean]
+    );
+    if (existing) {
+      return res.status(400).json({ error: `Code "${customCode}" already exists. Please choose another code.` });
+    }
+    code = raw;
+  } else {
+    const prefix = parsedDuration === 3 ? 'HB3' : parsedDuration === 6 ? 'HB6' : 'HBL';
+    code = generateSecureVoucherCode(prefix);
+  }
+
   const now = new Date().toISOString();
   const desc =
     description && description.trim()
       ? description.trim()
+      : assigned
+      ? `${parsedDuration ? `${parsedDuration} Months` : 'Lifetime'} Access for ${assigned}`
       : parsedDuration
       ? `${parsedDuration} Months Complimentary Family Access`
       : 'Lifetime Complimentary Access';
@@ -766,8 +785,8 @@ app.post('/api/subscription/generate-code', (req, res) => {
   const authUser = getAuthUser(req);
 
   execute(
-    'INSERT INTO promo_codes (code, description, durationMonths, maxUses, timesUsed, isActive, createdByUserId, createdAt) VALUES (?, ?, ?, ?, 0, 1, ?, ?)',
-    [code, desc, parsedDuration, uses, authUser?.id || null, now]
+    'INSERT INTO promo_codes (code, description, durationMonths, maxUses, timesUsed, isActive, assignedTo, createdByUserId, createdAt) VALUES (?, ?, ?, ?, 0, 1, ?, ?, ?)',
+    [code, desc, parsedDuration, uses, assigned, authUser?.id || null, now]
   );
 
   res.json({
@@ -777,14 +796,78 @@ app.post('/api/subscription/generate-code', (req, res) => {
     maxUses: uses,
     timesUsed: 0,
     isActive: 1,
+    assignedTo: assigned,
     createdAt: now,
   });
 });
 
-// 5. List promo codes (for Settings management)
+// 5. List promo codes with assigned household and redemption tracking
 app.get('/api/subscription/promo-codes', (_req, res) => {
-  const codes = queryAll<any>('SELECT * FROM promo_codes ORDER BY createdAt DESC LIMIT 50');
+  const codes = queryAll<any>(`
+    SELECT p.*,
+      (
+        SELECT group_concat(h.name, ', ')
+        FROM households h
+        WHERE REPLACE(REPLACE(REPLACE(UPPER(h.promoCodeUsed), '-', ''), ' ', ''), '_', '') = REPLACE(REPLACE(REPLACE(UPPER(p.code), '-', ''), ' ', ''), '_', '')
+      ) as redeemedBy
+    FROM promo_codes p
+    ORDER BY p.createdAt DESC
+    LIMIT 100
+  `);
   res.json(codes);
+});
+
+// 6. Update promo code (assign recipient or toggle active)
+app.patch('/api/subscription/promo-codes/:code', (req, res) => {
+  const codeParam = req.params.code;
+  const { assignedTo, isActive } = req.body;
+
+  const row = queryOne<any>('SELECT * FROM promo_codes WHERE UPPER(code) = ?', [codeParam.toUpperCase()]);
+  if (!row) {
+    return res.status(404).json({ error: 'Promo code not found' });
+  }
+
+  const updates: string[] = [];
+  const params: any[] = [];
+
+  if (assignedTo !== undefined) {
+    updates.push('assignedTo = ?');
+    params.push(typeof assignedTo === 'string' && assignedTo.trim() ? assignedTo.trim() : null);
+  }
+
+  if (isActive !== undefined) {
+    updates.push('isActive = ?');
+    params.push(isActive ? 1 : 0);
+  }
+
+  if (updates.length > 0) {
+    params.push(row.code);
+    execute(`UPDATE promo_codes SET ${updates.join(', ')} WHERE code = ?`, params);
+  }
+
+  const updated = queryOne<any>(`
+    SELECT p.*,
+      (
+        SELECT group_concat(h.name, ', ')
+        FROM households h
+        WHERE REPLACE(REPLACE(REPLACE(UPPER(h.promoCodeUsed), '-', ''), ' ', ''), '_', '') = REPLACE(REPLACE(REPLACE(UPPER(p.code), '-', ''), ' ', ''), '_', '')
+      ) as redeemedBy
+    FROM promo_codes p
+    WHERE p.code = ?
+  `, [row.code]);
+
+  res.json(updated);
+});
+
+// 7. Delete promo code
+app.delete('/api/subscription/promo-codes/:code', (req, res) => {
+  const codeParam = req.params.code;
+  const row = queryOne<any>('SELECT * FROM promo_codes WHERE UPPER(code) = ?', [codeParam.toUpperCase()]);
+  if (!row) {
+    return res.status(404).json({ error: 'Promo code not found' });
+  }
+  execute('DELETE FROM promo_codes WHERE code = ?', [row.code]);
+  res.json({ success: true, message: `Promo code ${row.code} deleted` });
 });
 
 // 6. Test helper to toggle or set subscription state

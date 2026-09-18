@@ -408,10 +408,14 @@ function initSchema(db: Database) {
         maxUses INTEGER NOT NULL DEFAULT 1,
         timesUsed INTEGER NOT NULL DEFAULT 0,
         isActive INTEGER NOT NULL DEFAULT 1,
+        assignedTo TEXT,
         createdByUserId TEXT,
         createdAt TEXT NOT NULL
       );
     `);
+  } catch {}
+  try {
+    db.run(`ALTER TABLE promo_codes ADD COLUMN assignedTo TEXT`);
   } catch {}
   try {
     db.run(`
@@ -471,18 +475,18 @@ function initSchema(db: Database) {
     const promoCount = (promoCountRes[0]?.values[0]?.[0] as number) || 0;
     const now = new Date().toISOString();
     const defaultCodes = [
-      ['HB3-7X9K-2M4P', '3 Months Complimentary Full Access', 3, 100, now],
-      ['HB6-8W4R-9Q1Z', '6 Months Complimentary Full Access', 6, 100, now],
-      ['HBL-5T2N-8B7C', 'Lifetime VIP Complimentary Access', null, 100, now],
-      ['HOMEBASEVIP', 'Lifetime VIP Master Pass', null, 500, now],
-      ['FAMILYVIP', 'Lifetime VIP Family Access', null, 500, now],
-      ['VIP2026', 'Complimentary Family Access Pass', null, 500, now],
+      ['HB3-7X9K-2M4P', '3 Months Complimentary Full Access', 3, 100, now, '3 Month Master Pass'],
+      ['HB6-8W4R-9Q1Z', '6 Months Complimentary Full Access', 6, 100, now, '6 Month Master Pass'],
+      ['HBL-5T2N-8B7C', 'Lifetime VIP Complimentary Access', null, 100, now, 'Lifetime Master Pass'],
+      ['HOMEBASEVIP', 'Lifetime VIP Master Pass', null, 500, now, 'VIP Master Pass'],
+      ['FAMILYVIP', 'Lifetime VIP Family Access', null, 500, now, 'VIP Family Pass'],
+      ['VIP2026', 'Complimentary Family Access Pass', null, 500, now, 'VIP 2026 Pass'],
     ];
 
-    for (const [c, desc, dur, maxU, dt] of defaultCodes) {
+    for (const [c, desc, dur, maxU, dt, assigned] of defaultCodes) {
       db.run(
-        `INSERT OR IGNORE INTO promo_codes (code, description, durationMonths, maxUses, timesUsed, isActive, createdAt) VALUES (?, ?, ?, ?, 0, 1, ?)`,
-        [c, desc, dur, maxU, dt]
+        `INSERT OR IGNORE INTO promo_codes (code, description, durationMonths, maxUses, timesUsed, isActive, createdAt, assignedTo) VALUES (?, ?, ?, ?, 0, 1, ?, ?)`,
+        [c, desc, dur, maxU, dt, assigned]
       );
     }
   } catch (err) {

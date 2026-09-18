@@ -35,13 +35,15 @@ import {
   Gift,
   Sparkles,
   ShieldCheck,
+  Search,
+  Tag,
 } from 'lucide-react';
 import { usePWA } from '../context/PWAContext';
 import { api } from '../lib/api';
 import { AisleManagerModal } from '../components/AisleManagerModal';
 import { EditProfileModal } from '../components/EditProfileModal';
 import { Drawer } from '../components/ui/Drawer';
-import type { User, GoogleSyncStatus, GoogleCalendarEntry, NotificationPreferences } from '../types';
+import type { User, GoogleSyncStatus, GoogleCalendarEntry, NotificationPreferences, PromoCode } from '../types';
 
 const AVATAR_COLORS = [
   '#10b981', // Emerald
@@ -102,11 +104,22 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
   // Generator state for Admin/Owner
   const [genDuration, setGenDuration] = useState<3 | 6 | null>(6);
   const [genMaxUses, setGenMaxUses] = useState<number>(1);
+  const [genAssignedTo, setGenAssignedTo] = useState<string>('');
+  const [genCustomCode, setGenCustomCode] = useState<string>('');
   const [isGeneratingCode, setIsGeneratingCode] = useState(false);
-  const [generatedCodeResult, setGeneratedCodeResult] = useState<string | null>(null);
+  const [generatedCodeResult, setGeneratedCodeResult] = useState<PromoCode | null>(null);
   const [copiedGenCode, setCopiedGenCode] = useState(false);
   const [showCodeGenerator, setShowCodeGenerator] = useState(false);
   const [showTestControls, setShowTestControls] = useState(false);
+
+  // Promo code tracking list
+  const [promoCodesList, setPromoCodesList] = useState<PromoCode[]>([]);
+  const [isLoadingPromoCodes, setIsLoadingPromoCodes] = useState(false);
+  const [promoSearch, setPromoSearch] = useState('');
+  const [editingCode, setEditingCode] = useState<string | null>(null);
+  const [editAssignedTo, setEditAssignedTo] = useState('');
+  const [isUpdatingCode, setIsUpdatingCode] = useState(false);
+  const [copiedCodeKey, setCopiedCodeKey] = useState<string | null>(null);
 
   // Notification Preferences States
   const [notificationPrefs, setNotificationPrefs] = useState<NotificationPreferences>({
@@ -584,6 +597,24 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
     }
   };
 
+  const loadPromoCodes = async () => {
+    setIsLoadingPromoCodes(true);
+    try {
+      const list = await api.getPromoCodes();
+      setPromoCodesList(list);
+    } catch (err: any) {
+      console.error('Failed to load promo codes:', err);
+    } finally {
+      setIsLoadingPromoCodes(false);
+    }
+  };
+
+  useEffect(() => {
+    if (showCodeGenerator) {
+      loadPromoCodes();
+    }
+  }, [showCodeGenerator]);
+
   const handleGenerateCode = async () => {
     setIsGeneratingCode(true);
     setGeneratedCodeResult(null);
@@ -591,10 +622,19 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
       const res = await api.generatePromoCode({
         durationMonths: genDuration,
         maxUses: genMaxUses,
-        description: genDuration ? `${genDuration} Months Complimentary Access` : 'Lifetime Complimentary Access',
+        assignedTo: genAssignedTo.trim() || undefined,
+        customCode: genCustomCode.trim() || undefined,
+        description: genAssignedTo.trim()
+          ? `${genDuration ? `${genDuration} Months` : 'Lifetime'} Access for ${genAssignedTo.trim()}`
+          : genDuration
+          ? `${genDuration} Months Complimentary Access`
+          : 'Lifetime Complimentary Access',
       });
-      setGeneratedCodeResult(res.code);
-      setStatusMessage(`Created voucher code: ${res.code}`);
+      setGeneratedCodeResult(res);
+      setGenAssignedTo('');
+      setGenCustomCode('');
+      setStatusMessage(`Created voucher code: ${res.code}${res.assignedTo ? ` for ${res.assignedTo}` : ''}`);
+      await loadPromoCodes();
       setTimeout(() => setStatusMessage(null), 4000);
     } catch (err: any) {
       setErrorMessage(err.message || 'Failed to generate voucher code.');
@@ -605,9 +645,57 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
 
   const handleCopyGeneratedCode = () => {
     if (!generatedCodeResult) return;
-    navigator.clipboard.writeText(generatedCodeResult);
+    navigator.clipboard.writeText(generatedCodeResult.code);
     setCopiedGenCode(true);
     setTimeout(() => setCopiedGenCode(false), 2000);
+  };
+
+  const handleCopyCode = (code: string) => {
+    navigator.clipboard.writeText(code);
+    setCopiedCodeKey(code);
+    setTimeout(() => setCopiedCodeKey(null), 2000);
+  };
+
+  const handleSaveAssignedTo = async (code: string) => {
+    setIsUpdatingCode(true);
+    try {
+      const updated = await api.updatePromoCode(code, { assignedTo: editAssignedTo.trim() || null });
+      setPromoCodesList((prev) => prev.map((c) => (c.code === code ? { ...c, assignedTo: updated.assignedTo } : c)));
+      setEditingCode(null);
+      setStatusMessage(`Updated recipient for ${code}`);
+      setTimeout(() => setStatusMessage(null), 3000);
+    } catch (err: any) {
+      alert(err.message || 'Failed to update code assignment');
+    } finally {
+      setIsUpdatingCode(false);
+    }
+  };
+
+  const handleToggleCodeActive = async (codeItem: PromoCode) => {
+    const nextActive = !codeItem.isActive;
+    try {
+      const updated = await api.updatePromoCode(codeItem.code, { isActive: nextActive });
+      setPromoCodesList((prev) => prev.map((c) => (c.code === codeItem.code ? { ...c, isActive: updated.isActive } : c)));
+      setStatusMessage(`${codeItem.code} is now ${nextActive ? 'Active' : 'Disabled'}`);
+      setTimeout(() => setStatusMessage(null), 3000);
+    } catch (err: any) {
+      alert(err.message || 'Failed to update code status');
+    }
+  };
+
+  const handleDeleteCode = async (code: string) => {
+    if (!confirm(`Are you sure you want to delete promo code "${code}"?`)) return;
+    try {
+      await api.deletePromoCode(code);
+      setPromoCodesList((prev) => prev.filter((c) => c.code !== code));
+      if (generatedCodeResult?.code === code) {
+        setGeneratedCodeResult(null);
+      }
+      setStatusMessage(`Deleted promo code ${code}`);
+      setTimeout(() => setStatusMessage(null), 3000);
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete promo code');
+    }
   };
 
   const handleSetTestState = async (status: 'active' | 'unpaid' | 'expired') => {
@@ -760,57 +848,94 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
           </button>
 
           {showCodeGenerator && (
-            <div className="mt-3 p-3.5 rounded-2xl bg-indigo-950/20 border border-indigo-500/20 space-y-3 animate-in fade-in">
-              <p className="text-[11px] text-slate-400 leading-relaxed">
-                Generate secure, unguessable voucher codes to give friends, family, or beta testers 3 months, 6 months, or lifetime access.
-              </p>
+            <div className="mt-3 p-3.5 rounded-2xl bg-indigo-950/20 border border-indigo-500/20 space-y-4 animate-in fade-in">
+              <div>
+                <p className="text-[11px] text-slate-300 leading-relaxed font-medium">
+                  Create complimentary access vouchers assigned to a specific person or household so you can track who receives and redeems them.
+                </p>
+              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {/* Input Fields */}
+              <div className="space-y-2.5">
                 <div>
-                  <label className="text-[10px] font-bold text-slate-300 block mb-1">Duration</label>
-                  <select
-                    value={genDuration === null ? 'lifetime' : String(genDuration)}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setGenDuration(v === 'lifetime' ? null : (Number(v) as 3 | 6));
-                    }}
-                    className="w-full bg-slate-900 border border-white/15 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-400"
-                  >
-                    <option value="3">3 Months Free (HB3-XXXX-XXXX)</option>
-                    <option value="6">6 Months Free (HB6-XXXX-XXXX)</option>
-                    <option value="lifetime">Lifetime Complimentary (HBL-XXXX-XXXX)</option>
-                  </select>
+                  <label className="text-[10px] font-bold text-slate-300 block mb-1">
+                    Assign To Person or Household <span className="text-slate-500 font-normal">(for tracking)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={genAssignedTo}
+                    onChange={(e) => setGenAssignedTo(e.target.value)}
+                    placeholder="e.g. Sarah Miller, Household 608, Uncle Dave"
+                    className="w-full bg-slate-900 border border-white/15 focus:border-indigo-400 rounded-xl px-2.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none transition-all"
+                  />
                 </div>
 
-                <div>
-                  <label className="text-[10px] font-bold text-slate-300 block mb-1">Usage Limit</label>
-                  <select
-                    value={String(genMaxUses)}
-                    onChange={(e) => setGenMaxUses(Number(e.target.value))}
-                    className="w-full bg-slate-900 border border-white/15 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-400"
-                  >
-                    <option value="1">Single-use (1 household only)</option>
-                    <option value="5">5 households</option>
-                    <option value="50">50 households</option>
-                    <option value="100">Multi-use (100 households)</option>
-                  </select>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-300 block mb-1">Duration</label>
+                    <select
+                      value={genDuration === null ? 'lifetime' : String(genDuration)}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setGenDuration(v === 'lifetime' ? null : (Number(v) as 3 | 6));
+                      }}
+                      className="w-full bg-slate-900 border border-white/15 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-400"
+                    >
+                      <option value="3">3 Months Free (HB3-...)</option>
+                      <option value="6">6 Months Free (HB6-...)</option>
+                      <option value="lifetime">Lifetime VIP (HBL-...)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-300 block mb-1">Usage Limit</label>
+                    <select
+                      value={String(genMaxUses)}
+                      onChange={(e) => setGenMaxUses(Number(e.target.value))}
+                      className="w-full bg-slate-900 border border-white/15 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-400"
+                    >
+                      <option value="1">Single-use (1 household only)</option>
+                      <option value="5">5 households</option>
+                      <option value="50">50 households</option>
+                      <option value="100">Multi-use (100 households)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-300 block mb-1">
+                      Custom Code <span className="text-slate-500 font-normal">(optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={genCustomCode}
+                      onChange={(e) => setGenCustomCode(e.target.value.toUpperCase())}
+                      placeholder="Auto-generate"
+                      className="w-full bg-slate-900 border border-white/15 focus:border-indigo-400 rounded-xl px-2.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none uppercase transition-all"
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 pt-1">
+              {/* Action Button & Generated Result */}
+              <div className="flex flex-wrap items-center gap-2 pt-0.5">
                 <button
                   type="button"
                   onClick={handleGenerateCode}
                   disabled={isGeneratingCode}
-                  className="px-4 py-2 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-md shadow-indigo-500/20"
+                  className="px-4 py-2 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-md shadow-indigo-500/20 disabled:opacity-50"
                 >
                   {isGeneratingCode ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Gift className="w-3.5 h-3.5" />}
                   <span>Generate Voucher Code</span>
                 </button>
 
                 {generatedCodeResult && (
-                  <div className="flex items-center gap-1.5 bg-slate-900 border border-emerald-500/40 rounded-xl px-3 py-1.5">
-                    <span className="font-mono text-xs text-emerald-400 font-bold">{generatedCodeResult}</span>
+                  <div className="flex items-center gap-2 bg-slate-900 border border-emerald-500/40 rounded-xl px-3 py-1.5 animate-in fade-in">
+                    <span className="font-mono text-xs text-emerald-400 font-bold">{generatedCodeResult.code}</span>
+                    {generatedCodeResult.assignedTo && (
+                      <span className="text-[10px] text-slate-300 bg-white/10 px-1.5 py-0.5 rounded">
+                        For: {generatedCodeResult.assignedTo}
+                      </span>
+                    )}
                     <button
                       type="button"
                       onClick={handleCopyGeneratedCode}
@@ -819,6 +944,211 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
                     >
                       {copiedGenCode ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                     </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Live Tracked Codes List */}
+              <div className="border-t border-white/10 pt-3 space-y-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-white">Tracked Voucher Codes</span>
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-white/10 text-slate-300">
+                      {promoCodesList.length}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={loadPromoCodes}
+                    disabled={isLoadingPromoCodes}
+                    className="text-[11px] text-slate-400 hover:text-white flex items-center gap-1 transition-colors cursor-pointer"
+                    title="Refresh codes"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${isLoadingPromoCodes ? 'animate-spin' : ''}`} />
+                    <span>Refresh</span>
+                  </button>
+                </div>
+
+                {/* Filter / Search Input */}
+                {promoCodesList.length > 3 && (
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={promoSearch}
+                      onChange={(e) => setPromoSearch(e.target.value)}
+                      placeholder="Search by code, recipient name, or household..."
+                      className="w-full bg-slate-900/90 border border-white/10 rounded-xl pl-8 pr-3 py-1 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-400"
+                    />
+                  </div>
+                )}
+
+                {/* Codes List */}
+                {isLoadingPromoCodes && promoCodesList.length === 0 ? (
+                  <div className="p-4 text-center text-xs text-slate-500">Loading codes...</div>
+                ) : (
+                  <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                    {promoCodesList
+                      .filter((c) => {
+                        if (!promoSearch.trim()) return true;
+                        const q = promoSearch.toLowerCase();
+                        return (
+                          c.code.toLowerCase().includes(q) ||
+                          (c.assignedTo && c.assignedTo.toLowerCase().includes(q)) ||
+                          (c.description && c.description.toLowerCase().includes(q)) ||
+                          (c.redeemedBy && c.redeemedBy.toLowerCase().includes(q))
+                        );
+                      })
+                      .map((c) => {
+                        const isClaimed = c.timesUsed > 0;
+                        const isEditing = editingCode === c.code;
+                        const isCopied = copiedCodeKey === c.code;
+
+                        return (
+                          <div
+                            key={c.code}
+                            className={`p-2.5 rounded-xl border transition-all ${
+                              c.isActive
+                                ? 'bg-slate-900/80 border-white/10 hover:border-white/20'
+                                : 'bg-slate-950/40 border-red-500/20 opacity-60'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              {/* Left: Code badge & Copy */}
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono text-xs font-bold text-white tracking-wider bg-white/5 border border-white/10 px-2 py-0.5 rounded-md">
+                                  {c.code}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopyCode(c.code)}
+                                  className="p-1 text-slate-400 hover:text-white cursor-pointer transition-colors"
+                                  title="Copy code"
+                                >
+                                  {isCopied ? (
+                                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                  ) : (
+                                    <Copy className="w-3.5 h-3.5" />
+                                  )}
+                                </button>
+                                <span
+                                  className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                                    c.durationMonths === null
+                                      ? 'text-purple-300 bg-purple-500/15 border-purple-500/30'
+                                      : c.durationMonths === 6
+                                      ? 'text-blue-300 bg-blue-500/15 border-blue-500/30'
+                                      : 'text-emerald-300 bg-emerald-500/15 border-emerald-500/30'
+                                  }`}
+                                >
+                                  {c.durationMonths ? `${c.durationMonths} Mo` : 'Lifetime VIP'}
+                                </span>
+                              </div>
+
+                              {/* Right: Usage Status */}
+                              <div className="flex items-center gap-1.5">
+                                <span
+                                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                    isClaimed
+                                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                      : 'bg-amber-500/15 text-amber-300 border border-amber-500/25'
+                                  }`}
+                                >
+                                  {isClaimed
+                                    ? `Claimed (${c.timesUsed}/${c.maxUses})`
+                                    : `Unclaimed (0/${c.maxUses})`}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Assigned Recipient Row */}
+                            <div className="mt-2 pt-2 border-t border-white/5 flex flex-wrap items-center justify-between gap-1.5">
+                              {isEditing ? (
+                                <div className="flex items-center gap-1.5 w-full">
+                                  <input
+                                    type="text"
+                                    value={editAssignedTo}
+                                    onChange={(e) => setEditAssignedTo(e.target.value)}
+                                    placeholder="Person or household name..."
+                                    className="flex-1 bg-slate-950 border border-indigo-400 rounded-lg px-2 py-0.5 text-xs text-white focus:outline-none"
+                                    autoFocus
+                                  />
+                                  <button
+                                    type="button"
+                                    disabled={isUpdatingCode}
+                                    onClick={() => handleSaveAssignedTo(c.code)}
+                                    className="p-1 rounded bg-emerald-500 hover:bg-emerald-400 text-white cursor-pointer"
+                                    title="Save name"
+                                  >
+                                    <Check className="w-3 h-3" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingCode(null)}
+                                    className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 cursor-pointer"
+                                    title="Cancel"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="text-[11px] text-slate-400">Assigned to:</span>
+                                  {c.assignedTo ? (
+                                    <span className="text-[11px] font-bold text-indigo-300 bg-indigo-500/15 border border-indigo-500/30 px-2 py-0.5 rounded-md flex items-center gap-1">
+                                      <span>👤</span>
+                                      <span>{c.assignedTo}</span>
+                                    </span>
+                                  ) : (
+                                    <span className="text-[11px] text-slate-500 italic">Unassigned</span>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingCode(c.code);
+                                      setEditAssignedTo(c.assignedTo || '');
+                                    }}
+                                    className="p-0.5 text-slate-400 hover:text-indigo-300 cursor-pointer transition-colors"
+                                    title="Edit assignment"
+                                  >
+                                    <Edit3 className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              )}
+
+                              {/* Actions: Toggle Active & Delete */}
+                              <div className="flex items-center gap-1 ml-auto">
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleCodeActive(c)}
+                                  className={`text-[10px] font-semibold px-2 py-0.5 rounded cursor-pointer transition-colors ${
+                                    c.isActive
+                                      ? 'text-slate-400 hover:text-amber-400 hover:bg-white/5'
+                                      : 'text-emerald-400 bg-emerald-500/15 hover:bg-emerald-500/25'
+                                  }`}
+                                >
+                                  {c.isActive ? 'Disable' : 'Enable'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteCode(c.code)}
+                                  className="p-1 text-slate-500 hover:text-red-400 cursor-pointer transition-colors"
+                                  title="Delete code"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Redeemed By Info (if claimed) */}
+                            {c.redeemedBy && (
+                              <div className="mt-1.5 text-[10px] text-emerald-400 flex items-center gap-1 font-medium bg-emerald-500/10 px-2 py-1 rounded-md border border-emerald-500/20">
+                                <span>✓ Redeemed by household:</span>
+                                <span className="font-bold text-white">{c.redeemedBy}</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                   </div>
                 )}
               </div>

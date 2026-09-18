@@ -1081,7 +1081,13 @@ export const api = {
     );
   },
 
-  generatePromoCode: async (data: { durationMonths: 3 | 6 | null; description?: string; maxUses?: number }) => {
+  generatePromoCode: async (data: {
+    durationMonths: 3 | 6 | null;
+    description?: string;
+    assignedTo?: string;
+    customCode?: string;
+    maxUses?: number;
+  }) => {
     return fetchJson<PromoCode>('/subscription/generate-code', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -1090,6 +1096,19 @@ export const api = {
 
   getPromoCodes: async () => {
     return fetchJson<PromoCode[]>('/subscription/promo-codes');
+  },
+
+  updatePromoCode: async (code: string, data: { assignedTo?: string | null; isActive?: number | boolean }) => {
+    return fetchJson<PromoCode>(`/subscription/promo-codes/${encodeURIComponent(code)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  deletePromoCode: async (code: string) => {
+    return fetchJson<{ success: boolean; message?: string }>(`/subscription/promo-codes/${encodeURIComponent(code)}`, {
+      method: 'DELETE',
+    });
   },
 
   testSetSubscriptionState: async (data: { status: 'active' | 'unpaid' | 'expired'; plan?: string; expiresAt?: string | null }) => {

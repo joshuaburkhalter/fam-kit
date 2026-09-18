@@ -56,9 +56,28 @@ async function runTests() {
       throw new Error(`Lookup failed for "${inp}": expected "${expected}", got "${res?.code}"`);
     }
   }
-  console.log('5. Resilient promo code normalization verified for all test cases.');
+  // Test assignedTo voucher creation & query
+  const testCode = 'TEST-JOHNSON-VIP';
+  execute(
+    `INSERT OR REPLACE INTO promo_codes (code, description, durationMonths, maxUses, timesUsed, isActive, assignedTo, createdAt) VALUES (?, ?, ?, ?, 0, 1, ?, ?)`,
+    [testCode, 'Johnson Family Lifetime Pass', null, 1, 'The Johnson Family', new Date().toISOString()]
+  );
 
-  console.log('--- All subscription tests PASSED successfully! ---');
+  const tracked = queryOne(`
+    SELECT p.*,
+      (SELECT group_concat(h.name, ', ') FROM households h WHERE UPPER(h.promoCodeUsed) = UPPER(p.code)) as redeemedBy
+    FROM promo_codes p
+    WHERE p.code = ?
+  `, [testCode]);
+
+  console.log('6. Tracked promo code with assigned recipient:');
+  console.log('   ', { code: tracked.code, assignedTo: tracked.assignedTo, description: tracked.description });
+
+  if (!tracked || tracked.assignedTo !== 'The Johnson Family') {
+    throw new Error('AssignedTo column was not properly saved or retrieved');
+  }
+
+  console.log('--- All subscription & tracking tests PASSED successfully! ---');
 }
 
 runTests().catch(err => {

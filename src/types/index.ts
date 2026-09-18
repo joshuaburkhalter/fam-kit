@@ -33,6 +33,8 @@ export interface PromoCode {
   maxUses: number;
   timesUsed: number;
   isActive: number | boolean;
+  assignedTo?: string | null;
+  redeemedBy?: string | null;
   createdAt: string;
 }
 
