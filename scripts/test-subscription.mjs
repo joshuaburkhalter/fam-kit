@@ -252,6 +252,51 @@ async function runTests() {
   if (allUsers.length === 0) throw new Error('Expected registered users in database');
   console.log(`10. Verified Admin system checks: ${allUsers.length} users and admin role authorization validated.`);
 
+  // 11. Test /api/subscription/promo-codes exact query
+  const codesQuery = `
+    SELECT 
+      p.*,
+      COALESCE(
+        p.claimedByHouseholdName,
+        (
+          SELECT group_concat(DISTINCT h.name)
+          FROM households h
+          WHERE REPLACE(REPLACE(REPLACE(UPPER(h.promoCodeUsed), '-', ''), ' ', ''), '_', '') = REPLACE(REPLACE(REPLACE(UPPER(p.code), '-', ''), ' ', ''), '_', '')
+        )
+      ) as claimedByHouseholdName,
+      COALESCE(
+        p.claimedByUserName,
+        (
+          SELECT group_concat(DISTINCT u.name)
+          FROM households h
+          JOIN users u ON u.householdId = h.id
+          WHERE REPLACE(REPLACE(REPLACE(UPPER(h.promoCodeUsed), '-', ''), ' ', ''), '_', '') = REPLACE(REPLACE(REPLACE(UPPER(p.code), '-', ''), ' ', ''), '_', '')
+        )
+      ) as claimedByUserName,
+      COALESCE(
+        p.claimedByUserEmail,
+        (
+          SELECT group_concat(DISTINCT u.email)
+          FROM households h
+          JOIN users u ON u.householdId = h.id
+          WHERE u.email IS NOT NULL AND REPLACE(REPLACE(REPLACE(UPPER(h.promoCodeUsed), '-', ''), ' ', ''), '_', '') = REPLACE(REPLACE(REPLACE(UPPER(p.code), '-', ''), ' ', ''), '_', '')
+        )
+      ) as claimedByUserEmail,
+      COALESCE(
+        p.claimedByHouseholdName,
+        (
+          SELECT group_concat(DISTINCT h.name)
+          FROM households h
+          WHERE REPLACE(REPLACE(REPLACE(UPPER(h.promoCodeUsed), '-', ''), ' ', ''), '_', '') = REPLACE(REPLACE(REPLACE(UPPER(p.code), '-', ''), ' ', ''), '_', '')
+        )
+      ) as redeemedBy
+    FROM promo_codes p
+    ORDER BY p.createdAt DESC
+    LIMIT 100
+  `;
+  const fetchedCodes = queryAll(codesQuery);
+  console.log(`11. Fetched ${fetchedCodes.length} promo codes via endpoint query.`);
+
   console.log('--- All subscription & tracking tests PASSED successfully! ---');
 }
 

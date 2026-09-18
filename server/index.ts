@@ -844,70 +844,109 @@ app.post('/api/subscription/generate-code', (req, res) => {
 
 // 5. List promo codes with assigned household and redemption tracking
 app.get('/api/subscription/promo-codes', (_req, res) => {
-  const codes = queryAll<any>(`
-    SELECT 
-      p.*,
-      COALESCE(
-        p.claimedByHouseholdName,
-        (
-          SELECT group_concat(DISTINCT h.name, ', ')
-          FROM households h
-          WHERE REPLACE(REPLACE(REPLACE(UPPER(h.promoCodeUsed), '-', ''), ' ', ''), '_', '') = REPLACE(REPLACE(REPLACE(UPPER(p.code), '-', ''), ' ', ''), '_', '')
-        )
-      ) as claimedByHouseholdName,
-      COALESCE(
-        p.claimedByUserName,
-        (
-          SELECT group_concat(DISTINCT u.name, ', ')
-          FROM households h
-          JOIN users u ON u.householdId = h.id
-          WHERE REPLACE(REPLACE(REPLACE(UPPER(h.promoCodeUsed), '-', ''), ' ', ''), '_', '') = REPLACE(REPLACE(REPLACE(UPPER(p.code), '-', ''), ' ', ''), '_', '')
-        )
-      ) as claimedByUserName,
-      COALESCE(
-        p.claimedByUserEmail,
-        (
-          SELECT group_concat(DISTINCT u.email, ', ')
-          FROM households h
-          JOIN users u ON u.householdId = h.id
-          WHERE u.email IS NOT NULL AND REPLACE(REPLACE(REPLACE(UPPER(h.promoCodeUsed), '-', ''), ' ', ''), '_', '') = REPLACE(REPLACE(REPLACE(UPPER(p.code), '-', ''), ' ', ''), '_', '')
-        )
-      ) as claimedByUserEmail,
-      COALESCE(
-        p.claimedByHouseholdName,
-        (
-          SELECT group_concat(DISTINCT h.name, ', ')
-          FROM households h
-          WHERE REPLACE(REPLACE(REPLACE(UPPER(h.promoCodeUsed), '-', ''), ' ', ''), '_', '') = REPLACE(REPLACE(REPLACE(UPPER(p.code), '-', ''), ' ', ''), '_', '')
-        )
-      ) as redeemedBy
-    FROM promo_codes p
-    ORDER BY p.createdAt DESC
-    LIMIT 100
-  `);
-
-  let redemptions: any[] = [];
   try {
-    redemptions = queryAll<any>('SELECT * FROM promo_redemptions ORDER BY redeemedAt DESC');
-  } catch {}
+    // Auto-recover any claimed promo codes from households table that might be missing from promo_codes
+    try {
+      const claimedHouseholds = queryAll<any>(`
+        SELECT h.id as householdId, h.name as householdName, h.promoCodeUsed, h.createdAt,
+               (SELECT u.name FROM users u WHERE u.householdId = h.id ORDER BY u.id ASC LIMIT 1) as userName,
+               (SELECT u.email FROM users u WHERE u.householdId = h.id ORDER BY u.id ASC LIMIT 1) as userEmail
+        FROM households h
+        WHERE h.promoCodeUsed IS NOT NULL AND h.promoCodeUsed != ''
+      `);
 
-  const redemptionsByCode = new Map<string, any[]>();
-  for (const r of redemptions) {
-    const key = (r.promoCode || '').toUpperCase().replace(/[\s\-_]/g, '');
-    if (!redemptionsByCode.has(key)) redemptionsByCode.set(key, []);
-    redemptionsByCode.get(key)!.push(r);
+      for (const ch of claimedHouseholds) {
+        const cleanUsed = ch.promoCodeUsed.trim().toUpperCase();
+        execute(`
+          INSERT OR IGNORE INTO promo_codes (code, description, durationMonths, maxUses, timesUsed, isActive, createdAt, assignedTo, claimedByHouseholdName, claimedByUserName, claimedByUserEmail, claimedAt)
+          VALUES (?, ?, NULL, 1, 1, 1, ?, ?, ?, ?, ?, ?)
+        `, [
+          cleanUsed,
+          `Access Pass for ${ch.householdName || 'Family'}`,
+          ch.createdAt || new Date().toISOString(),
+          ch.householdName,
+          ch.householdName,
+          ch.userName,
+          ch.userEmail,
+          ch.createdAt || new Date().toISOString(),
+        ]);
+      }
+    } catch (e) {
+      console.warn('[PromoCodes] Auto-recovery warning:', e);
+    }
+
+    const codes = queryAll<any>(`
+      SELECT 
+        p.*,
+        COALESCE(
+          p.claimedByHouseholdName,
+          (
+            SELECT group_concat(DISTINCT h.name)
+            FROM households h
+            WHERE REPLACE(REPLACE(REPLACE(UPPER(h.promoCodeUsed), '-', ''), ' ', ''), '_', '') = REPLACE(REPLACE(REPLACE(UPPER(p.code), '-', ''), ' ', ''), '_', '')
+          )
+        ) as claimedByHouseholdName,
+        COALESCE(
+          p.claimedByUserName,
+          (
+            SELECT group_concat(DISTINCT u.name)
+            FROM households h
+            JOIN users u ON u.householdId = h.id
+            WHERE REPLACE(REPLACE(REPLACE(UPPER(h.promoCodeUsed), '-', ''), ' ', ''), '_', '') = REPLACE(REPLACE(REPLACE(UPPER(p.code), '-', ''), ' ', ''), '_', '')
+          )
+        ) as claimedByUserName,
+        COALESCE(
+          p.claimedByUserEmail,
+          (
+            SELECT group_concat(DISTINCT u.email)
+            FROM households h
+            JOIN users u ON u.householdId = h.id
+            WHERE u.email IS NOT NULL AND REPLACE(REPLACE(REPLACE(UPPER(h.promoCodeUsed), '-', ''), ' ', ''), '_', '') = REPLACE(REPLACE(REPLACE(UPPER(p.code), '-', ''), ' ', ''), '_', '')
+          )
+        ) as claimedByUserEmail,
+        COALESCE(
+          p.claimedByHouseholdName,
+          (
+            SELECT group_concat(DISTINCT h.name)
+            FROM households h
+            WHERE REPLACE(REPLACE(REPLACE(UPPER(h.promoCodeUsed), '-', ''), ' ', ''), '_', '') = REPLACE(REPLACE(REPLACE(UPPER(p.code), '-', ''), ' ', ''), '_', '')
+          )
+        ) as redeemedBy
+      FROM promo_codes p
+      ORDER BY p.createdAt DESC
+      LIMIT 200
+    `);
+
+    let redemptions: any[] = [];
+    try {
+      redemptions = queryAll<any>('SELECT * FROM promo_redemptions ORDER BY redeemedAt DESC');
+    } catch {}
+
+    const redemptionsByCode = new Map<string, any[]>();
+    for (const r of redemptions) {
+      const key = (r.promoCode || '').toUpperCase().replace(/[\s\-_]/g, '');
+      if (!redemptionsByCode.has(key)) redemptionsByCode.set(key, []);
+      redemptionsByCode.get(key)!.push(r);
+    }
+
+    const enriched = codes.map((c) => {
+      const key = (c.code || '').toUpperCase().replace(/[\s\-_]/g, '');
+      const items = redemptionsByCode.get(key) || [];
+      const isClaimed = items.length > 0 || !!c.claimedByHouseholdName || !!c.claimedByUserName || (c.timesUsed > 0);
+      const effectiveTimesUsed = Math.max(c.timesUsed || 0, items.length, isClaimed ? 1 : 0);
+
+      return {
+        ...c,
+        timesUsed: effectiveTimesUsed,
+        redemptions: items,
+      };
+    });
+
+    res.json(enriched);
+  } catch (err: any) {
+    console.error('Error fetching promo codes:', err);
+    res.status(500).json({ error: 'Failed to fetch promo codes', details: err?.message });
   }
-
-  const enriched = codes.map((c) => {
-    const key = (c.code || '').toUpperCase().replace(/[\s\-_]/g, '');
-    const items = redemptionsByCode.get(key) || [];
-    return {
-      ...c,
-      redemptions: items,
-    };
-  });
-
-  res.json(enriched);
 });
 
 // 6. Update promo code (assign recipient or toggle active)

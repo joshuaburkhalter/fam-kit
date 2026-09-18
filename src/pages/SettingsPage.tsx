@@ -610,6 +610,10 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
   };
 
   useEffect(() => {
+    loadPromoCodes();
+  }, []);
+
+  useEffect(() => {
     if (showCodeGenerator) {
       loadPromoCodes();
     }
@@ -985,7 +989,15 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
 
                 {/* Codes List */}
                 {isLoadingPromoCodes && promoCodesList.length === 0 ? (
-                  <div className="p-4 text-center text-xs text-slate-500">Loading codes...</div>
+                  <div className="p-5 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-emerald-400" />
+                    <span>Loading tracked codes...</span>
+                  </div>
+                ) : promoCodesList.length === 0 ? (
+                  <div className="p-5 text-center text-xs text-slate-400 bg-slate-900/40 rounded-xl border border-white/5 space-y-1">
+                    <p className="font-semibold text-slate-300">No voucher codes found.</p>
+                    <p className="text-[11px] text-slate-500">Generate a VIP pass above or tap Refresh to reload.</p>
+                  </div>
                 ) : (
                   <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
                     {promoCodesList
