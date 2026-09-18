@@ -314,6 +314,23 @@ app.post('/api/auth/register', (req, res) => {
     [userId, displayName, cleanUsername, cleanEmail, '👤', avatarColor || '#10b981', role || 'Member', targetHouseholdId, userPassword]
   );
 
+  if (initialPromoUsed) {
+    execute(
+      `UPDATE promo_codes 
+       SET claimedByUserName = COALESCE(claimedByUserName, ?),
+           claimedByUserEmail = COALESCE(claimedByUserEmail, ?),
+           claimedByHouseholdName = COALESCE(claimedByHouseholdName, ?),
+           claimedAt = COALESCE(claimedAt, ?)
+       WHERE code = ?`,
+      [displayName, cleanEmail, householdName.trim(), now, initialPromoUsed]
+    );
+    execute(
+      `INSERT OR IGNORE INTO promo_redemptions (id, promoCode, householdId, householdName, userId, userName, userEmail, redeemedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [`red_${initialPromoUsed}_${targetHouseholdId}`, initialPromoUsed, targetHouseholdId, householdName.trim(), userId, displayName, cleanEmail, now]
+    );
+  }
+
   const household = queryOne('SELECT * FROM households WHERE id = ?', [targetHouseholdId]);
   const user = {
     id: userId,
@@ -482,7 +499,30 @@ app.post('/api/subscription/redeem', (req, res) => {
     ['active', planName, expiresAt, promo.code, householdId]
   );
 
-  execute('UPDATE promo_codes SET timesUsed = timesUsed + 1 WHERE code = ?', [promo.code]);
+  const authUser = getAuthUser(req);
+  const targetHousehold = queryOne<any>('SELECT * FROM households WHERE id = ?', [householdId]);
+  const primaryUser = authUser || queryOne<any>('SELECT * FROM users WHERE householdId = ? ORDER BY id ASC LIMIT 1', [householdId]);
+  const personName = primaryUser?.name || null;
+  const personEmail = primaryUser?.email || null;
+  const houseName = targetHousehold?.name || 'Household';
+  const nowIso = new Date().toISOString();
+
+  execute(
+    `UPDATE promo_codes 
+     SET timesUsed = timesUsed + 1,
+         claimedByUserName = COALESCE(claimedByUserName, ?),
+         claimedByUserEmail = COALESCE(claimedByUserEmail, ?),
+         claimedByHouseholdName = COALESCE(claimedByHouseholdName, ?),
+         claimedAt = COALESCE(claimedAt, ?)
+     WHERE code = ?`,
+    [personName, personEmail, houseName, nowIso, promo.code]
+  );
+
+  execute(
+    `INSERT OR IGNORE INTO promo_redemptions (id, promoCode, householdId, householdName, userId, userName, userEmail, redeemedAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [`red_${promo.code}_${householdId}`, promo.code, householdId, houseName, primaryUser?.id || null, personName, personEmail, nowIso]
+  );
 
   const updatedHousehold = queryOne('SELECT * FROM households WHERE id = ?', [householdId]);
   const formatted = formatHousehold(updatedHousehold);
@@ -804,17 +844,69 @@ app.post('/api/subscription/generate-code', (req, res) => {
 // 5. List promo codes with assigned household and redemption tracking
 app.get('/api/subscription/promo-codes', (_req, res) => {
   const codes = queryAll<any>(`
-    SELECT p.*,
-      (
-        SELECT group_concat(h.name, ', ')
-        FROM households h
-        WHERE REPLACE(REPLACE(REPLACE(UPPER(h.promoCodeUsed), '-', ''), ' ', ''), '_', '') = REPLACE(REPLACE(REPLACE(UPPER(p.code), '-', ''), ' ', ''), '_', '')
+    SELECT 
+      p.*,
+      COALESCE(
+        p.claimedByHouseholdName,
+        (
+          SELECT group_concat(DISTINCT h.name, ', ')
+          FROM households h
+          WHERE REPLACE(REPLACE(REPLACE(UPPER(h.promoCodeUsed), '-', ''), ' ', ''), '_', '') = REPLACE(REPLACE(REPLACE(UPPER(p.code), '-', ''), ' ', ''), '_', '')
+        )
+      ) as claimedByHouseholdName,
+      COALESCE(
+        p.claimedByUserName,
+        (
+          SELECT group_concat(DISTINCT u.name, ', ')
+          FROM households h
+          JOIN users u ON u.householdId = h.id
+          WHERE REPLACE(REPLACE(REPLACE(UPPER(h.promoCodeUsed), '-', ''), ' ', ''), '_', '') = REPLACE(REPLACE(REPLACE(UPPER(p.code), '-', ''), ' ', ''), '_', '')
+        )
+      ) as claimedByUserName,
+      COALESCE(
+        p.claimedByUserEmail,
+        (
+          SELECT group_concat(DISTINCT u.email, ', ')
+          FROM households h
+          JOIN users u ON u.householdId = h.id
+          WHERE u.email IS NOT NULL AND REPLACE(REPLACE(REPLACE(UPPER(h.promoCodeUsed), '-', ''), ' ', ''), '_', '') = REPLACE(REPLACE(REPLACE(UPPER(p.code), '-', ''), ' ', ''), '_', '')
+        )
+      ) as claimedByUserEmail,
+      COALESCE(
+        p.claimedByHouseholdName,
+        (
+          SELECT group_concat(DISTINCT h.name, ', ')
+          FROM households h
+          WHERE REPLACE(REPLACE(REPLACE(UPPER(h.promoCodeUsed), '-', ''), ' ', ''), '_', '') = REPLACE(REPLACE(REPLACE(UPPER(p.code), '-', ''), ' ', ''), '_', '')
+        )
       ) as redeemedBy
     FROM promo_codes p
     ORDER BY p.createdAt DESC
     LIMIT 100
   `);
-  res.json(codes);
+
+  let redemptions: any[] = [];
+  try {
+    redemptions = queryAll<any>('SELECT * FROM promo_redemptions ORDER BY redeemedAt DESC');
+  } catch {}
+
+  const redemptionsByCode = new Map<string, any[]>();
+  for (const r of redemptions) {
+    const key = (r.promoCode || '').toUpperCase().replace(/[\s\-_]/g, '');
+    if (!redemptionsByCode.has(key)) redemptionsByCode.set(key, []);
+    redemptionsByCode.get(key)!.push(r);
+  }
+
+  const enriched = codes.map((c) => {
+    const key = (c.code || '').toUpperCase().replace(/[\s\-_]/g, '');
+    const items = redemptionsByCode.get(key) || [];
+    return {
+      ...c,
+      redemptions: items,
+    };
+  });
+
+  res.json(enriched);
 });
 
 // 6. Update promo code (assign recipient or toggle active)

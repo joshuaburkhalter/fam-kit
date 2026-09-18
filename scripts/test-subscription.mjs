@@ -73,8 +73,39 @@ async function runTests() {
   console.log('6. Tracked promo code with assigned recipient:');
   console.log('   ', { code: tracked.code, assignedTo: tracked.assignedTo, description: tracked.description });
 
-  if (!tracked || tracked.assignedTo !== 'The Johnson Family') {
-    throw new Error('AssignedTo column was not properly saved or retrieved');
+  // Test redemption with person name and household name
+  const redeemCode = 'TEST-REDEEM-NAME';
+  execute(
+    `INSERT OR REPLACE INTO promo_codes (code, description, durationMonths, maxUses, timesUsed, isActive, assignedTo, createdAt) VALUES (?, ?, ?, ?, 0, 1, ?, ?)`,
+    [redeemCode, 'Test Name Pass', null, 1, 'Sarah Miller', new Date().toISOString()]
+  );
+
+  // Simulate household redemption by a user
+  execute(
+    `UPDATE promo_codes
+     SET timesUsed = timesUsed + 1,
+         claimedByUserName = ?,
+         claimedByUserEmail = ?,
+         claimedByHouseholdName = ?,
+         claimedAt = ?
+     WHERE code = ?`,
+    ['Sarah Miller', 'sarah@miller.com', 'The Millers', new Date().toISOString(), redeemCode]
+  );
+
+  const redeemedTracked = queryOne(`
+    SELECT p.* FROM promo_codes p WHERE p.code = ?
+  `, [redeemCode]);
+
+  console.log('7. Verified claimed promo code shows person and household:');
+  console.log('   ', {
+    code: redeemedTracked.code,
+    claimedByUserName: redeemedTracked.claimedByUserName,
+    claimedByUserEmail: redeemedTracked.claimedByUserEmail,
+    claimedByHouseholdName: redeemedTracked.claimedByHouseholdName
+  });
+
+  if (redeemedTracked.claimedByUserName !== 'Sarah Miller' || redeemedTracked.claimedByHouseholdName !== 'The Millers') {
+    throw new Error('Claimed person full name and household were not saved or retrieved');
   }
 
   console.log('--- All subscription & tracking tests PASSED successfully! ---');

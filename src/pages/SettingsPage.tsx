@@ -995,8 +995,12 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
                         return (
                           c.code.toLowerCase().includes(q) ||
                           (c.assignedTo && c.assignedTo.toLowerCase().includes(q)) ||
+                          (c.claimedByUserName && c.claimedByUserName.toLowerCase().includes(q)) ||
+                          (c.claimedByUserEmail && c.claimedByUserEmail.toLowerCase().includes(q)) ||
+                          (c.claimedByHouseholdName && c.claimedByHouseholdName.toLowerCase().includes(q)) ||
                           (c.description && c.description.toLowerCase().includes(q)) ||
-                          (c.redeemedBy && c.redeemedBy.toLowerCase().includes(q))
+                          (c.redeemedBy && c.redeemedBy.toLowerCase().includes(q)) ||
+                          (c.redemptions && c.redemptions.some(r => (r.userName && r.userName.toLowerCase().includes(q)) || (r.householdName && r.householdName.toLowerCase().includes(q))))
                         );
                       })
                       .map((c) => {
@@ -1139,11 +1143,83 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
                               </div>
                             </div>
 
-                            {/* Redeemed By Info (if claimed) */}
-                            {c.redeemedBy && (
-                              <div className="mt-1.5 text-[10px] text-emerald-400 flex items-center gap-1 font-medium bg-emerald-500/10 px-2 py-1 rounded-md border border-emerald-500/20">
-                                <span>✓ Redeemed by household:</span>
-                                <span className="font-bold text-white">{c.redeemedBy}</span>
+                            {/* Detailed Claimed Info (Person Full Name, Email & Family Name) */}
+                            {isClaimed && (
+                              <div className="mt-2 pt-2 border-t border-emerald-500/15 space-y-1.5">
+                                {c.redemptions && c.redemptions.length > 0 ? (
+                                  <div className="space-y-1">
+                                    <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1">
+                                      <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                                      <span>Claimed by ({c.redemptions.length}):</span>
+                                    </div>
+                                    <div className="space-y-1 pl-1">
+                                      {c.redemptions.map((r, idx) => (
+                                        <div
+                                          key={r.id || idx}
+                                          className="text-[11px] bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-2.5 py-1.5 flex flex-wrap items-center justify-between gap-1 text-slate-200"
+                                        >
+                                          <div className="flex items-center gap-1.5 flex-wrap">
+                                            <span className="font-bold text-white flex items-center gap-1">
+                                              <span>👤</span>
+                                              <span>{r.userName || 'Member'}</span>
+                                            </span>
+                                            {r.userEmail && (
+                                              <span className="text-[10px] text-slate-400 font-mono">({r.userEmail})</span>
+                                            )}
+                                            <span className="text-slate-500">•</span>
+                                            <span className="text-emerald-300 font-medium">
+                                              Family: <strong className="text-white">{r.householdName || 'Household'}</strong>
+                                            </span>
+                                          </div>
+                                          {r.redeemedAt && (
+                                            <span className="text-[10px] text-slate-400">
+                                              {new Date(r.redeemedAt).toLocaleDateString(undefined, {
+                                                month: 'short',
+                                                day: 'numeric',
+                                                year: 'numeric',
+                                              })}
+                                            </span>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                ) : c.claimedByUserName || c.claimedByHouseholdName || c.redeemedBy ? (
+                                  <div className="text-[11px] bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-2.5 py-1.5 flex flex-wrap items-center justify-between gap-1 text-slate-200">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                                      {c.claimedByUserName ? (
+                                        <span className="font-bold text-white flex items-center gap-1">
+                                          <span>👤 Claimed by:</span>
+                                          <span>{c.claimedByUserName}</span>
+                                        </span>
+                                      ) : (
+                                        <span className="font-semibold text-emerald-300">✓ Claimed</span>
+                                      )}
+                                      {c.claimedByUserEmail && (
+                                        <span className="text-[10px] text-slate-400 font-mono">({c.claimedByUserEmail})</span>
+                                      )}
+                                      <span className="text-slate-500">•</span>
+                                      <span className="text-emerald-300 font-medium">
+                                        Family: <strong className="text-white">{c.claimedByHouseholdName || c.redeemedBy}</strong>
+                                      </span>
+                                    </div>
+                                    {c.claimedAt && (
+                                      <span className="text-[10px] text-slate-400">
+                                        {new Date(c.claimedAt).toLocaleDateString(undefined, {
+                                          month: 'short',
+                                          day: 'numeric',
+                                          year: 'numeric',
+                                        })}
+                                      </span>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <div className="text-[10px] text-emerald-400/80 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-2 py-1 flex items-center gap-1.5">
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
+                                    <span>Voucher redeemed ({c.timesUsed} / {c.maxUses} used)</span>
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>

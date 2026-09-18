@@ -26,6 +26,17 @@ export interface SubscriptionStatus {
   hasActiveAccess: boolean;
 }
 
+export interface PromoRedemption {
+  id: string;
+  promoCode: string;
+  householdId?: string | null;
+  householdName?: string | null;
+  userId?: string | null;
+  userName?: string | null;
+  userEmail?: string | null;
+  redeemedAt: string;
+}
+
 export interface PromoCode {
   code: string;
   description: string;
@@ -34,7 +45,12 @@ export interface PromoCode {
   timesUsed: number;
   isActive: number | boolean;
   assignedTo?: string | null;
+  claimedByUserName?: string | null;
+  claimedByUserEmail?: string | null;
+  claimedByHouseholdName?: string | null;
+  claimedAt?: string | null;
   redeemedBy?: string | null;
+  redemptions?: PromoRedemption[];
   createdAt: string;
 }
 

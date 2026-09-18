@@ -418,6 +418,32 @@ function initSchema(db: Database) {
     db.run(`ALTER TABLE promo_codes ADD COLUMN assignedTo TEXT`);
   } catch {}
   try {
+    db.run(`ALTER TABLE promo_codes ADD COLUMN claimedByUserName TEXT`);
+  } catch {}
+  try {
+    db.run(`ALTER TABLE promo_codes ADD COLUMN claimedByUserEmail TEXT`);
+  } catch {}
+  try {
+    db.run(`ALTER TABLE promo_codes ADD COLUMN claimedByHouseholdName TEXT`);
+  } catch {}
+  try {
+    db.run(`ALTER TABLE promo_codes ADD COLUMN claimedAt TEXT`);
+  } catch {}
+  try {
+    db.run(`
+      CREATE TABLE IF NOT EXISTS promo_redemptions (
+        id TEXT PRIMARY KEY,
+        promoCode TEXT NOT NULL,
+        householdId TEXT,
+        householdName TEXT,
+        userId TEXT,
+        userName TEXT,
+        userEmail TEXT,
+        redeemedAt TEXT NOT NULL
+      );
+    `);
+  } catch {}
+  try {
     db.run(`
       CREATE TABLE IF NOT EXISTS feedback_requests (
         id TEXT PRIMARY KEY,
@@ -488,6 +514,41 @@ function initSchema(db: Database) {
         `INSERT OR IGNORE INTO promo_codes (code, description, durationMonths, maxUses, timesUsed, isActive, createdAt, assignedTo) VALUES (?, ?, ?, ?, 0, 1, ?, ?)`,
         [c, desc, dur, maxU, dt, assigned]
       );
+    }
+
+    // Auto-heal / backfill promo code redemptions with household name and user full name
+    try {
+      const claimedHouseholds = db.exec(`
+        SELECT h.id as householdId, h.name as householdName, h.promoCodeUsed,
+               (SELECT u.name FROM users u WHERE u.householdId = h.id ORDER BY u.id ASC LIMIT 1) as userName,
+               (SELECT u.email FROM users u WHERE u.householdId = h.id ORDER BY u.id ASC LIMIT 1) as userEmail
+        FROM households h
+        WHERE h.promoCodeUsed IS NOT NULL AND h.promoCodeUsed != ''
+      `);
+      if (claimedHouseholds.length > 0 && claimedHouseholds[0].values) {
+        for (const row of claimedHouseholds[0].values) {
+          const hid = String(row[0]);
+          const hname = String(row[1] || 'Household');
+          const code = String(row[2]);
+          const uname = row[3] ? String(row[3]) : null;
+          const uemail = row[4] ? String(row[4]) : null;
+
+          db.run(`
+            UPDATE promo_codes
+            SET claimedByHouseholdName = COALESCE(claimedByHouseholdName, ?),
+                claimedByUserName = COALESCE(claimedByUserName, ?),
+                claimedByUserEmail = COALESCE(claimedByUserEmail, ?)
+            WHERE UPPER(code) = UPPER(?) OR REPLACE(REPLACE(REPLACE(UPPER(code), '-', ''), ' ', ''), '_', '') = REPLACE(REPLACE(REPLACE(UPPER(?), '-', ''), ' ', ''), '_', '')
+          `, [hname, uname, uemail, code, code]);
+
+          db.run(`
+            INSERT OR IGNORE INTO promo_redemptions (id, promoCode, householdId, householdName, userId, userName, userEmail, redeemedAt)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          `, [`red_${code}_${hid}`, code, hid, hname, null, uname, uemail, now]);
+        }
+      }
+    } catch (err) {
+      console.error('Error backfilling promo redemption details:', err);
     }
   } catch (err) {
     console.error('Error seeding promo codes:', err);
