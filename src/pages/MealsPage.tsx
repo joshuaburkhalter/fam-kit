@@ -1071,21 +1071,21 @@ export const MealsPage: React.FC = () => {
             </h1>
           </div>
 
-          {/* Full-width segmented sub-navigation */}
-          <div className="w-full flex items-center p-1 bg-slate-900/80 rounded-2xl border border-white/10 shadow-lg">
+          {/* Full-width compact segmented sub-navigation */}
+          <div className="w-full flex items-center p-1 bg-slate-900/80 rounded-xl border border-white/10 shadow-md">
             <button
               onClick={() => setActiveTab('planner')}
-              className={`flex-1 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+              className={`flex-1 py-1.5 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                 activeTab === 'planner'
                   ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
                   : 'text-slate-400 hover:text-white hover:bg-white/5'
               }`}
             >
-              <Utensils className="w-4 h-4" />
+              <Utensils className="w-3.5 h-3.5" />
               <span>Planner</span>
               {meals.length > 0 && (
                 <span
-                  className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
+                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
                     activeTab === 'planner' ? 'bg-slate-950/25 text-slate-950' : 'bg-emerald-500/20 text-emerald-400'
                   }`}
                 >
@@ -1096,17 +1096,17 @@ export const MealsPage: React.FC = () => {
 
             <button
               onClick={() => setActiveTab('recipes')}
-              className={`flex-1 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+              className={`flex-1 py-1.5 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                 activeTab === 'recipes'
                   ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
                   : 'text-slate-400 hover:text-white hover:bg-white/5'
               }`}
             >
-              <BookOpen className="w-4 h-4" />
+              <BookOpen className="w-3.5 h-3.5" />
               <span>Recipes</span>
               {recipes.length > 0 && (
                 <span
-                  className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
+                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
                     activeTab === 'recipes' ? 'bg-slate-950/25 text-slate-950' : 'bg-emerald-500/20 text-emerald-400'
                   }`}
                 >
@@ -1117,17 +1117,17 @@ export const MealsPage: React.FC = () => {
 
             <button
               onClick={() => setActiveTab('history')}
-              className={`flex-1 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+              className={`flex-1 py-1.5 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                 activeTab === 'history'
                   ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
                   : 'text-slate-400 hover:text-white hover:bg-white/5'
               }`}
             >
-              <History className="w-4 h-4" />
+              <History className="w-3.5 h-3.5" />
               <span>History</span>
               {mealLogs.length > 0 && (
                 <span
-                  className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
+                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
                     activeTab === 'history' ? 'bg-slate-950/25 text-slate-950' : 'bg-emerald-500/20 text-emerald-400'
                   }`}
                 >
@@ -1623,11 +1623,10 @@ export const MealsPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setIsRecipePickerOpen(true)}
-                className="pointer-events-auto h-[50px] px-5 rounded-full border border-emerald-400/40 bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 font-bold text-xs sm:text-sm shadow-xl shadow-emerald-500/30 hover:scale-105 active:scale-95 flex items-center gap-2 transition-all cursor-pointer"
+                className="pointer-events-auto w-[50px] h-[50px] rounded-full border border-emerald-400/40 bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 cursor-pointer shadow-xl shadow-emerald-500/30 hover:scale-105 active:scale-95 flex items-center justify-center transition-all"
                 title="Quick Add Meal to Planner"
               >
-                <Plus className="w-5 h-5 stroke-[2.5]" />
-                <span>Quick Add</span>
+                <Plus className="w-6 h-6 stroke-[2.5]" />
               </button>
             )}
 
@@ -1636,19 +1635,18 @@ export const MealsPage: React.FC = () => {
                 ref={recipeFabRef}
                 className={`fab-dock-transition pointer-events-auto h-[50px] border shadow-2xl flex items-center overflow-hidden transition-all duration-200 ${
                   isRecipeFabOpen
-                    ? 'rounded-3xl border-white/20 bg-slate-900/95 backdrop-blur-xl px-2.5 gap-2 shadow-emerald-500/10'
-                    : 'rounded-full border-emerald-400/40 bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 cursor-pointer shadow-xl shadow-emerald-500/30 hover:scale-105 active:scale-95 px-5'
+                    ? 'rounded-3xl border-white/25 bg-slate-900/95 backdrop-blur-xl px-2.5 gap-2 shadow-emerald-500/10'
+                    : 'w-[50px] rounded-full border-emerald-400/40 bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 cursor-pointer shadow-xl shadow-emerald-500/30 hover:scale-105 active:scale-95 justify-center'
                 }`}
               >
                 {!isRecipeFabOpen ? (
                   <button
                     type="button"
                     onClick={() => setIsRecipeFabOpen(true)}
-                    className="w-full h-full flex items-center gap-2 font-bold text-xs sm:text-sm text-slate-950 cursor-pointer"
+                    className="w-full h-full flex items-center justify-center text-slate-950 cursor-pointer"
                     title="Add or Import Recipe"
                   >
-                    <Plus className="w-5 h-5 stroke-[2.5]" />
-                    <span>Add Recipe</span>
+                    <Plus className="w-6 h-6 stroke-[2.5]" />
                   </button>
                 ) : (
                   <div className="flex items-center gap-2">
@@ -1694,11 +1692,10 @@ export const MealsPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setIsLogModalOpen(true)}
-                className="pointer-events-auto h-[50px] px-5 rounded-full border border-emerald-400/40 bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 font-bold text-xs sm:text-sm shadow-xl shadow-emerald-500/30 hover:scale-105 active:scale-95 flex items-center gap-2 transition-all cursor-pointer"
+                className="pointer-events-auto w-[50px] h-[50px] rounded-full border border-emerald-400/40 bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 cursor-pointer shadow-xl shadow-emerald-500/30 hover:scale-105 active:scale-95 flex items-center justify-center transition-all"
                 title="Log a Cooked Meal"
               >
-                <Plus className="w-5 h-5 stroke-[2.5]" />
-                <span>Log Meal</span>
+                <Plus className="w-6 h-6 stroke-[2.5]" />
               </button>
             )}
           </div>

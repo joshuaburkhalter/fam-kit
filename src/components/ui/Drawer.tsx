@@ -33,7 +33,14 @@ export const Drawer: React.FC<DrawerProps> = ({
   maxWidth,
   contentClassName = 'p-4 sm:p-6 space-y-4',
 }) => {
-  const panelWidth = width || maxWidth || 'w-full max-w-full sm:max-w-xl md:max-w-2xl';
+  const getResponsiveWidth = () => {
+    const raw = width || maxWidth;
+    if (!raw) return 'w-full sm:max-w-xl md:max-w-2xl';
+    const parts = raw.split(' ').map((p) => p.trim()).filter(Boolean);
+    const smParts = parts.map((p) => (p.includes(':') ? p : `sm:${p}`));
+    return `w-full max-w-full ${smParts.join(' ')}`;
+  };
+  const panelWidth = getResponsiveWidth();
   const [isRendered, setIsRendered] = useState(isOpen);
   const [isClosing, setIsClosing] = useState(false);
   const historyPushedRef = React.useRef(false);
@@ -127,7 +134,7 @@ export const Drawer: React.FC<DrawerProps> = ({
 
       {/* Slide-out Drawer Panel with fluid hardware-accelerated spring slide */}
       <div
-        className={`relative z-10 ${panelWidth} h-full bg-[#0a0f1d] border-l border-white/10 shadow-2xl shadow-black flex flex-col overflow-hidden ${
+        className={`relative z-10 ${panelWidth} h-full h-[100dvh] bg-[#0a0f1d] border-l-0 sm:border-l border-white/10 shadow-2xl shadow-black flex flex-col overflow-hidden ${
           isClosing ? 'animate-drawer-out' : 'animate-drawer-in'
         }`}
         onClick={(e) => e.stopPropagation()}
