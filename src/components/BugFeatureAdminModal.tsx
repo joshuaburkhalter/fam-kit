@@ -15,6 +15,8 @@ import {
   Flame,
   Check,
   ChevronUp,
+  Pencil,
+  Filter,
 } from 'lucide-react';
 import type { FeedbackRequest } from '../types';
 import { isUserAdmin } from '../types';
@@ -40,11 +42,23 @@ export const BugFeatureAdminModal: React.FC<BugFeatureAdminModalProps> = ({
 
   const isAdmin = isUserAdmin(currentUser);
 
-  // Active Response Editor
+  // Filters State: Defaults to 'active' which hides closed and resolved requests!
+  const [statusFilter, setStatusFilter] = useState<'active' | 'all' | 'open' | 'in_progress' | 'planned' | 'resolved' | 'closed'>('active');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'bug' | 'feature'>('all');
+
+  // Active Response Editor (Admin response)
   const [editingId, setEditingId] = useState<string | null>(null);
   const [replyText, setReplyText] = useState('');
   const [replyStatus, setReplyStatus] = useState<'open' | 'in_progress' | 'planned' | 'resolved' | 'closed'>('in_progress');
   const [isSubmittingReply, setIsSubmittingReply] = useState(false);
+
+  // User Content Editor (for user editing their own request)
+  const [userEditingId, setUserEditingId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editType, setEditType] = useState<'bug' | 'feature'>('bug');
+  const [editPriority, setEditPriority] = useState<'low' | 'medium' | 'high' | 'critical'>('medium');
+  const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
 
   // New Request Form State
   const [isCreatingNew, setIsCreatingNew] = useState(false);
@@ -184,6 +198,39 @@ export const BugFeatureAdminModal: React.FC<BugFeatureAdminModalProps> = ({
     }
   };
 
+  const handleStartUserEdit = (req: FeedbackRequest) => {
+    setUserEditingId(req.id);
+    setEditTitle(req.title);
+    setEditDescription(req.description);
+    setEditType(req.type);
+    setEditPriority(req.priority);
+    setEditingId(null);
+  };
+
+  const handleSaveUserEdit = async (id: string) => {
+    if (!editTitle.trim() || !editDescription.trim()) {
+      alert('Please provide both a title and a description.');
+      return;
+    }
+    setIsSubmittingEdit(true);
+    try {
+      const updated = await api.updateFeedbackRequest(id, {
+        title: editTitle.trim(),
+        description: editDescription.trim(),
+        type: editType,
+        priority: editPriority,
+      });
+      setRequests((prev) => prev.map((r) => (r.id === id ? updated : r)));
+      setUserEditingId(null);
+      showToast('Your request has been updated!');
+    } catch (err: any) {
+      console.error('Failed to update request:', err);
+      alert(err?.message || 'Failed to update request.');
+    } finally {
+      setIsSubmittingEdit(false);
+    }
+  };
+
   const handleDeleteRequest = async (id: string, title: string) => {
     if (!confirm(`Delete "${title}"? This cannot be undone.`)) return;
     try {
@@ -258,12 +305,29 @@ export const BugFeatureAdminModal: React.FC<BugFeatureAdminModalProps> = ({
     }
   };
 
-  // Sorted list of requests (most upvoted first, then newest)
-  const filteredRequests = [...requests].sort((a, b) => {
-    const diff = (b.upvotes || 0) - (a.upvotes || 0);
-    if (diff !== 0) return diff;
-    return new Date(b.created_at || b.createdAt || 0).getTime() - new Date(a.created_at || a.createdAt || 0).getTime();
-  });
+  // Filtered & Sorted list of requests (Active by default: hides closed & resolved unless explicitly filtered)
+  const filteredRequests = requests
+    .filter((req) => {
+      // 1. Type filter
+      if (typeFilter !== 'all' && req.type !== typeFilter) return false;
+
+      // 2. Status filter: 'active' hides closed and resolved items
+      if (statusFilter === 'active') {
+        return req.status !== 'resolved' && req.status !== 'closed';
+      }
+      if (statusFilter === 'all') return true;
+      return req.status === statusFilter;
+    })
+    .sort((a, b) => {
+      const diff = (b.upvotes || 0) - (a.upvotes || 0);
+      if (diff !== 0) return diff;
+      return new Date(b.created_at || (b as any).createdAt || 0).getTime() - new Date(a.created_at || (a as any).createdAt || 0).getTime();
+    });
+
+  const totalCount = requests.length;
+  const activeCount = requests.filter((r) => r.status !== 'resolved' && r.status !== 'closed').length;
+  const resolvedCount = requests.filter((r) => r.status === 'resolved').length;
+  const closedCount = requests.filter((r) => r.status === 'closed').length;
 
   const getPriorityBadge = (priority: string) => {
     switch (priority) {
@@ -550,6 +614,88 @@ export const BugFeatureAdminModal: React.FC<BugFeatureAdminModalProps> = ({
         ) : (
           /* List & Management View */
           <div className="flex-1 flex flex-col min-h-0">
+            {/* Filter Controls: Category pills & Status filter */}
+            <div className="px-4 pt-3 pb-2 border-b border-white/5 space-y-2 bg-slate-950/40 shrink-0">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                {/* Category switch */}
+                <div className="flex items-center bg-slate-900 rounded-xl p-0.5 border border-white/10 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setTypeFilter('all')}
+                    className={`px-2.5 py-1 rounded-lg font-semibold transition-all cursor-pointer ${
+                      typeFilter === 'all'
+                        ? 'bg-slate-800 text-white shadow-xs'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTypeFilter('feature')}
+                    className={`px-2.5 py-1 rounded-lg font-semibold transition-all flex items-center gap-1 cursor-pointer ${
+                      typeFilter === 'feature'
+                        ? 'bg-purple-500/25 text-purple-300 border border-purple-500/30'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <Sparkles className="w-3 h-3 text-purple-400" />
+                    <span>Features</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTypeFilter('bug')}
+                    className={`px-2.5 py-1 rounded-lg font-semibold transition-all flex items-center gap-1 cursor-pointer ${
+                      typeFilter === 'bug'
+                        ? 'bg-rose-500/25 text-rose-300 border border-rose-500/30'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <Bug className="w-3 h-3 text-rose-400" />
+                    <span>Bugs</span>
+                  </button>
+                </div>
+
+                {/* Status Filter */}
+                <div className="flex items-center gap-1.5">
+                  <label className="text-[11px] font-semibold text-slate-400 hidden sm:inline">Status:</label>
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value as any)}
+                    className={`px-2.5 py-1 rounded-xl text-xs font-semibold border transition-all cursor-pointer focus:outline-none ${
+                      statusFilter !== 'active'
+                        ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
+                        : 'bg-slate-900 border-white/10 text-slate-300 hover:text-white'
+                    }`}
+                  >
+                    <option value="active">Active ({activeCount})</option>
+                    <option value="all">All Statuses ({totalCount})</option>
+                    <option value="resolved">Resolved ({resolvedCount})</option>
+                    <option value="closed">Closed ({closedCount})</option>
+                    <option value="open">Open</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="planned">Planned</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Notice when closed/resolved items are hidden */}
+              {statusFilter === 'active' && (resolvedCount > 0 || closedCount > 0) && (
+                <div className="flex items-center justify-between text-[11px] text-slate-500 px-1 pt-0.5">
+                  <span>
+                    {resolvedCount + closedCount} resolved / closed {resolvedCount + closedCount === 1 ? 'item' : 'items'} hidden
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setStatusFilter('all')}
+                    className="text-emerald-400 hover:underline font-medium cursor-pointer"
+                  >
+                    Show all
+                  </button>
+                </div>
+              )}
+            </div>
+
             {/* Cards List */}
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
               {isLoading ? (
@@ -566,22 +712,44 @@ export const BugFeatureAdminModal: React.FC<BugFeatureAdminModalProps> = ({
                   <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center mx-auto">
                     <CheckCircle2 className="w-6 h-6" />
                   </div>
-                  <h3 className="text-base font-bold text-white">No requests yet</h3>
+                  <h3 className="text-base font-bold text-white">
+                    {statusFilter === 'active' && (resolvedCount > 0 || closedCount > 0)
+                      ? 'No active requests'
+                      : 'No requests found'}
+                  </h3>
                   <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                    All caught up! No feature requests logged yet.
+                    {statusFilter === 'active' && (resolvedCount > 0 || closedCount > 0)
+                      ? `All current requests are resolved or closed (${resolvedCount + closedCount} hidden).`
+                      : 'All caught up! No requests logged yet.'}
                   </p>
-                  <button
-                    onClick={() => setIsCreatingNew(true)}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold shadow-md shadow-emerald-500/20 cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-                    <span>Log First Request</span>
-                  </button>
+                  {statusFilter === 'active' && (resolvedCount > 0 || closedCount > 0) ? (
+                    <button
+                      onClick={() => setStatusFilter('all')}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold cursor-pointer"
+                    >
+                      <span>View Resolved & Closed</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setIsCreatingNew(true)}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold shadow-md shadow-emerald-500/20 cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                      <span>Log First Request</span>
+                    </button>
+                  )}
                 </div>
               ) : (
                 filteredRequests.map((req) => {
                   const isEditing = editingId === req.id;
+                  const isUserEditing = userEditingId === req.id;
                   const isBug = req.type === 'bug';
+                  const isCreator = Boolean(
+                    currentUser?.id &&
+                    (req.submitted_by_user_id === currentUser.id || (req as any).submittedByUserId === currentUser.id)
+                  );
+                  const canEditContent = isCreator || isAdmin;
+
                   return (
                     <div
                       key={req.id}
@@ -634,25 +802,145 @@ export const BugFeatureAdminModal: React.FC<BugFeatureAdminModalProps> = ({
                               {getPriorityBadge(req.priority)}
                             </div>
 
-                            {/* Only admin can delete */}
-                            {isAdmin && (
-                              <button
-                                onClick={() => handleDeleteRequest(req.id, req.title)}
-                                title="Delete Request (Admin Only)"
-                                className="p-1 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer shrink-0"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            )}
+                            {/* Actions: Edit (for creator/admin) & Delete (for creator/admin) */}
+                            <div className="flex items-center gap-1 shrink-0">
+                              {canEditContent && !isUserEditing && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleStartUserEdit(req)}
+                                  title="Edit this request"
+                                  className="px-2 py-1 text-slate-400 hover:text-emerald-400 bg-white/5 hover:bg-white/10 rounded-lg text-[11px] font-semibold flex items-center gap-1 transition-colors cursor-pointer border border-white/5"
+                                >
+                                  <Pencil className="w-3 h-3" />
+                                  <span>Edit</span>
+                                </button>
+                              )}
+
+                              {(isAdmin || isCreator) && !isUserEditing && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteRequest(req.id, req.title)}
+                                  title={isAdmin ? "Delete Request (Admin Only)" : "Delete your request"}
+                                  className="p-1 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer shrink-0"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
                           </div>
 
-                          {/* Title & Description */}
-                          <div>
-                            <h4 className="text-sm font-bold text-white tracking-tight">{req.title}</h4>
-                            <p className="text-xs text-slate-300 mt-1 leading-relaxed whitespace-pre-wrap selectable-text">
-                              {req.description}
-                            </p>
-                          </div>
+                          {/* Title & Description or In-Place User Editor */}
+                          {isUserEditing ? (
+                            <div className="space-y-3 pt-1 border-t border-white/5 mt-2">
+                              <div className="flex items-center justify-between flex-wrap gap-2">
+                                {/* Category selector */}
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Category:</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditType('bug')}
+                                    className={`px-2 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer ${
+                                      editType === 'bug'
+                                        ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                                        : 'bg-slate-900 text-slate-400 border border-white/5 hover:text-slate-200'
+                                    }`}
+                                  >
+                                    <Bug className="w-3 h-3" />
+                                    <span>Bug</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditType('feature')}
+                                    className={`px-2 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer ${
+                                      editType === 'feature'
+                                        ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
+                                        : 'bg-slate-900 text-slate-400 border border-white/5 hover:text-slate-200'
+                                    }`}
+                                  >
+                                    <Sparkles className="w-3 h-3" />
+                                    <span>Feature</span>
+                                  </button>
+                                </div>
+
+                                {/* Priority selector */}
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mr-1">Priority:</span>
+                                  {(['low', 'medium', 'high', 'critical'] as const).map((p) => (
+                                    <button
+                                      key={p}
+                                      type="button"
+                                      onClick={() => setEditPriority(p)}
+                                      className={`px-2 py-0.5 rounded-md text-[11px] font-bold capitalize transition-all cursor-pointer ${
+                                        editPriority === p
+                                          ? p === 'critical'
+                                            ? 'bg-rose-500 text-slate-950'
+                                            : p === 'high'
+                                            ? 'bg-amber-500 text-slate-950'
+                                            : p === 'medium'
+                                            ? 'bg-blue-500 text-slate-950'
+                                            : 'bg-slate-700 text-white'
+                                          : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-white/5'
+                                      }`}
+                                    >
+                                      {p}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              <div>
+                                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                                  Title
+                                </label>
+                                <input
+                                  type="text"
+                                  value={editTitle}
+                                  onChange={(e) => setEditTitle(e.target.value)}
+                                  placeholder="Brief summary..."
+                                  className="w-full bg-slate-950 border border-white/15 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                                  Description
+                                </label>
+                                <textarea
+                                  rows={3}
+                                  value={editDescription}
+                                  onChange={(e) => setEditDescription(e.target.value)}
+                                  placeholder="Details and context..."
+                                  className="w-full bg-slate-950 border border-white/15 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 resize-none leading-relaxed"
+                                />
+                              </div>
+
+                              <div className="flex items-center justify-end gap-2 pt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setUserEditingId(null)}
+                                  className="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white cursor-pointer"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={isSubmittingEdit || !editTitle.trim() || !editDescription.trim()}
+                                  onClick={() => handleSaveUserEdit(req.id)}
+                                  className="bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 px-4 py-1.5 rounded-xl text-xs font-bold shadow-md shadow-emerald-500/20 flex items-center gap-1.5 cursor-pointer"
+                                >
+                                  {isSubmittingEdit ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5 stroke-[2.5]" />}
+                                  <span>Save Changes</span>
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div>
+                              <h4 className="text-sm font-bold text-white tracking-tight">{req.title}</h4>
+                              <p className="text-xs text-slate-300 mt-1 leading-relaxed whitespace-pre-wrap selectable-text">
+                                {req.description}
+                              </p>
+                            </div>
+                          )}
                         </div>
                       </div>
 

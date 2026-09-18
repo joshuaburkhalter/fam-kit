@@ -1224,6 +1224,9 @@ export const api = {
   updateFeedbackRequest: async (
     id: string,
     data: {
+      title?: string;
+      description?: string;
+      type?: 'bug' | 'feature';
       status?: 'open' | 'in_progress' | 'planned' | 'resolved' | 'closed';
       adminResponse?: string;
       adminRespondedBy?: string;

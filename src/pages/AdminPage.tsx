@@ -71,7 +71,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onBack }) => {
 
   const [feedbackSearch, setFeedbackSearch] = useState('');
   const [feedbackTypeFilter, setFeedbackTypeFilter] = useState<'all' | 'bug' | 'feature'>('all');
-  const [feedbackStatusFilter, setFeedbackStatusFilter] = useState('all');
+  const [feedbackStatusFilter, setFeedbackStatusFilter] = useState('active');
 
   const [householdSearch, setHouseholdSearch] = useState('');
 
@@ -416,7 +416,12 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onBack }) => {
         f.householdName?.toLowerCase().includes(term);
 
       const matchesType = feedbackTypeFilter === 'all' || f.type === feedbackTypeFilter;
-      const matchesStatus = feedbackStatusFilter === 'all' || f.status === feedbackStatusFilter;
+      const matchesStatus =
+        feedbackStatusFilter === 'all'
+          ? true
+          : feedbackStatusFilter === 'active'
+          ? f.status !== 'resolved' && f.status !== 'closed'
+          : f.status === feedbackStatusFilter;
 
       return matchesSearch && matchesType && matchesStatus;
     });
@@ -1273,7 +1278,8 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onBack }) => {
                     onChange={(e) => setFeedbackStatusFilter(e.target.value)}
                     className="px-3 py-2 rounded-xl bg-slate-800/80 border border-white/10 text-xs text-slate-200 focus:outline-none focus:border-emerald-400 cursor-pointer"
                   >
-                    <option value="all">All Statuses</option>
+                    <option value="active">Active (Hide Closed & Resolved)</option>
+                    <option value="all">All Statuses ({feedbackList.length})</option>
                     <option value="open">Open</option>
                     <option value="in_progress">In Progress</option>
                     <option value="planned">Planned</option>

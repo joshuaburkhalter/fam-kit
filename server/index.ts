@@ -3061,28 +3061,48 @@ app.post('/api/feedback', (req, res) => {
 
 app.patch('/api/feedback', async (req, res) => {
   const user = getAuthUser(req);
-  if (!user || !isServerAdmin(user)) {
-    return res.status(403).json({ error: 'Admin access required to respond to or update status of requests' });
+  if (!user) {
+    return res.status(401).json({ error: 'Authentication required' });
   }
 
-  const { id, status, adminResponse, priority } = req.body;
+  const { id, title, description, type, priority, status, adminResponse } = req.body;
   if (!id) return res.status(400).json({ error: 'ID is required' });
 
   const existing = queryOne<any>('SELECT * FROM feedback_requests WHERE id = ?', [id]);
   if (!existing) return res.status(404).json({ error: 'Request not found' });
 
+  const isAdmin = isServerAdmin(user);
+  const isCreator = user.id === existing.submittedByUserId || user.id === existing.submitted_by_user_id;
+
+  if (!isAdmin && !isCreator) {
+    return res.status(403).json({ error: 'You can only edit requests that you created' });
+  }
+
   const now = new Date().toISOString();
-  const nextStatus = status || existing.status;
-  const nextPriority = priority || existing.priority;
-  const nextResponse = adminResponse !== undefined ? adminResponse : existing.adminResponse;
-  const respondedAt = adminResponse !== undefined ? now : existing.adminRespondedAt;
-  const respondedBy = adminResponse !== undefined ? user.name : existing.adminRespondedBy;
+
+  // Title, description, type, and priority can be edited by creator or admin
+  const nextTitle = (title !== undefined && typeof title === 'string' && title.trim().length > 0) ? title.trim() : existing.title;
+  const nextDescription = (description !== undefined && typeof description === 'string' && description.trim().length > 0) ? description.trim() : existing.description;
+  const nextType = (type === 'bug' || type === 'feature') ? type : existing.type;
+  const nextPriority = (priority && ['low', 'medium', 'high', 'critical'].includes(priority)) ? priority : existing.priority;
+
+  // Status and official admin response are managed by admin (or creator can mark closed)
+  let nextStatus = existing.status;
+  if (isAdmin && status) {
+    nextStatus = status;
+  } else if (isCreator && status === 'closed') {
+    nextStatus = 'closed';
+  }
+
+  const nextResponse = isAdmin && adminResponse !== undefined ? adminResponse : existing.adminResponse;
+  const respondedAt = isAdmin && adminResponse !== undefined ? now : existing.adminRespondedAt;
+  const respondedBy = isAdmin && adminResponse !== undefined ? user.name : existing.adminRespondedBy;
 
   execute(
     `UPDATE feedback_requests 
-     SET status = ?, priority = ?, adminResponse = ?, adminRespondedAt = ?, adminRespondedBy = ?, updatedAt = ?
+     SET title = ?, description = ?, type = ?, priority = ?, status = ?, adminResponse = ?, adminRespondedAt = ?, adminRespondedBy = ?, updatedAt = ?
      WHERE id = ?`,
-    [nextStatus, nextPriority, nextResponse, respondedAt, respondedBy, now, id]
+    [nextTitle, nextDescription, nextType, nextPriority, nextStatus, nextResponse, respondedAt, respondedBy, now, id]
   );
   saveDb();
 
@@ -3192,12 +3212,22 @@ app.patch('/api/feedback', async (req, res) => {
 
 app.delete('/api/feedback', (req, res) => {
   const user = getAuthUser(req);
-  if (!user || !isServerAdmin(user)) {
-    return res.status(403).json({ error: 'Admin access required to delete requests' });
+  if (!user) {
+    return res.status(401).json({ error: 'Authentication required' });
   }
 
   const id = req.query.id as string;
   if (!id) return res.status(400).json({ error: 'ID is required' });
+
+  const existing = queryOne<any>('SELECT * FROM feedback_requests WHERE id = ?', [id]);
+  if (!existing) return res.status(404).json({ error: 'Request not found' });
+
+  const isAdmin = isServerAdmin(user);
+  const isCreator = user.id === existing.submittedByUserId || user.id === existing.submitted_by_user_id;
+
+  if (!isAdmin && !isCreator) {
+    return res.status(403).json({ error: 'You can only delete requests that you created' });
+  }
 
   execute('DELETE FROM feedback_requests WHERE id = ?', [id]);
   saveDb();
