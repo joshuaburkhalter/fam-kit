@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Plus,
   Link2,
@@ -83,19 +83,33 @@ export const RecipesPage: React.FC = () => {
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
   const [regenerateMode, setRegenerateMode] = useState<'imagen' | 'search' | null>(null);
   const [imageFeedback, setImageFeedback] = useState<string | null>(null);
+  const seenImageUrlsRef = useRef<Record<string, string[]>>({});
 
   const handleRegenerateImage = async (recipeId: string, options: { mode?: 'imagen' | 'search'; customUrl?: string }) => {
     setRegeneratingId(recipeId);
     setRegenerateMode(options.mode || 'search');
     setImageFeedback(null);
+
+    // Track previously seen photos so user never gets stuck in a 2-image loop
+    if (!seenImageUrlsRef.current[recipeId]) {
+      seenImageUrlsRef.current[recipeId] = [];
+    }
+    if (selectedRecipe?.image_url && !seenImageUrlsRef.current[recipeId].includes(selectedRecipe.image_url)) {
+      seenImageUrlsRef.current[recipeId].push(selectedRecipe.image_url);
+    }
+
     try {
       const res = await api.regenerateRecipeImage(recipeId, {
         mode: options.mode || 'search',
         customUrl: options.customUrl,
         currentImageUrl: selectedRecipe?.image_url,
+        seenImageUrls: seenImageUrlsRef.current[recipeId],
         apiKey: apiKey || undefined,
       });
       if (res.success && res.imageUrl) {
+        if (!seenImageUrlsRef.current[recipeId].includes(res.imageUrl)) {
+          seenImageUrlsRef.current[recipeId].push(res.imageUrl);
+        }
         setSelectedRecipe((prev) => (prev && prev.id === recipeId ? { ...prev, image_url: res.imageUrl } : prev));
         setRecipes((prev) =>
           prev.map((r) => (r.id === recipeId ? { ...r, image_url: res.imageUrl } : r))

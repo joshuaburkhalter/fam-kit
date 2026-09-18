@@ -1235,14 +1235,21 @@ ${contextString}
           }
           const tagsString = Array.from(tagSet).join(', ');
 
-          // Determine photo: toolArgs.imageUrl or accurate matching food photo (signature/Wikipedia/AI)
+          // Determine photo: toolArgs.imageUrl or accurate matching food photo (signature/Wikipedia/curated)
           let imageUrl = toolArgs.imageUrl;
           if (!imageUrl || typeof imageUrl !== 'string' || !imageUrl.startsWith('http') || usedImagesInBatch.has(imageUrl)) {
+            let imageQuery = toolArgs.imageQuery;
+            if (!imageQuery) {
+              const keyIngredients = formattedIngredients.slice(0, 4).map((i: any) => i.item).filter(Boolean);
+              if (keyIngredients.length > 0) {
+                imageQuery = `${toolArgs.title} with ${keyIngredients.join(', ')}`;
+              }
+            }
             imageUrl = await findAccurateRecipePhoto(
               toolArgs.title,
               toolArgs.description || '',
               Array.from(tagSet),
-              toolArgs.imageQuery,
+              imageQuery,
               usedImagesInBatch,
               formattedIngredients
             );
@@ -1737,7 +1744,7 @@ app.post('/api/recipes/:id/regenerate-image', async (req, res) => {
       if (recipe.ingredients) parsedIngredients = JSON.parse(recipe.ingredients);
     } catch {}
 
-    const { mode, customApiKey, customUrl, currentImageUrl } = req.body;
+    const { mode, customApiKey, customUrl, currentImageUrl, seenImageUrls } = req.body;
     const apiKey = customApiKey || process.env.GEMINI_API_KEY;
 
     let newImageUrl: string;
@@ -1759,14 +1766,26 @@ app.post('/api/recipes/:id/regenerate-image', async (req, res) => {
     } else {
       const tagList = (recipe.tags || '').split(',').map((t) => t.trim()).filter(Boolean);
       const used = new Set<string>();
-      if (currentImageUrl) used.add(currentImageUrl);
-      if (recipe.imageUrl) used.add(recipe.imageUrl);
+      if (Array.isArray(seenImageUrls)) {
+        for (const u of seenImageUrls) {
+          if (typeof u === 'string' && u.trim()) used.add(u.trim());
+        }
+      }
+      if (currentImageUrl) used.add(currentImageUrl.trim());
+      if (recipe.imageUrl) used.add(recipe.imageUrl.trim());
+
+      const topIngredients = parsedIngredients
+        .slice(0, 4)
+        .map((i: any) => (typeof i === 'string' ? i : i.item || i.name))
+        .filter(Boolean);
+      const synthesizedQuery =
+        topIngredients.length > 0 ? `${recipe.title} with ${topIngredients.join(' ')}` : undefined;
 
       newImageUrl = await findAccurateRecipePhoto(
         recipe.title,
         recipe.description || '',
         tagList,
-        undefined,
+        synthesizedQuery,
         used,
         parsedIngredients
       );
@@ -2904,6 +2923,27 @@ getDb().then(() => {
        SET imageUrl = 'https://upload.wikimedia.org/wikipedia/commons/7/78/Porcini_Wild_Rice_Soup_%28140491721%29.jpeg'
        WHERE (LOWER(title) LIKE '%wild rice%' OR LOWER(title) LIKE '%mushroom soup%')
          AND (imageUrl LIKE '%Chicken_Noodle_Soup%' OR imageUrl LIKE '%547592166%' OR imageUrl LIKE '%pollinations%')`
+    );
+    // Self-heal: update Tuscan or Creamy Garlic Chicken recipes that mistakenly got the whole roast chicken carcass
+    execute(
+      `UPDATE recipes
+       SET imageUrl = 'https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?w=800&auto=format&fit=crop&q=80'
+       WHERE (LOWER(title) LIKE '%tuscan%' OR LOWER(title) LIKE '%creamy garlic%' OR LOWER(title) LIKE '%garlic chicken%')
+         AND (imageUrl LIKE '%1598103442097%')`
+    );
+    // Self-heal: update Salmon / Tzatziki / Poke / Mediterranean bowls that got plain fillet or carcass
+    execute(
+      `UPDATE recipes
+       SET imageUrl = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800&auto=format&fit=crop&q=80'
+       WHERE (LOWER(title) LIKE '%bowl%' AND LOWER(title) LIKE '%salmon%')
+         AND (imageUrl LIKE '%1519708227418%' OR imageUrl LIKE '%1598103442097%')`
+    );
+    // Self-heal: update Fajitas that mistakenly got the whole roast chicken carcass
+    execute(
+      `UPDATE recipes
+       SET imageUrl = 'https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?w=800&auto=format&fit=crop&q=80'
+       WHERE LOWER(title) LIKE '%fajita%'
+         AND (imageUrl LIKE '%1598103442097%')`
     );
     saveDb();
   } catch {}

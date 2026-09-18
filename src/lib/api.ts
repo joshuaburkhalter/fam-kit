@@ -518,7 +518,7 @@ export const api = {
 
   regenerateRecipeImage: async (
     recipeId: string,
-    options: { mode?: 'imagen' | 'search'; customUrl?: string; currentImageUrl?: string; apiKey?: string }
+    options: { mode?: 'imagen' | 'search'; customUrl?: string; currentImageUrl?: string; seenImageUrls?: string[]; apiKey?: string }
   ): Promise<{ success: boolean; imageUrl: string }> => {
     return fetchJson<{ success: boolean; imageUrl: string }>(`/recipes/${recipeId}/regenerate-image`, {
       method: 'POST',
@@ -526,6 +526,7 @@ export const api = {
         mode: options.mode || 'search',
         customUrl: options.customUrl,
         currentImageUrl: options.currentImageUrl,
+        seenImageUrls: options.seenImageUrls,
         customApiKey: options.apiKey,
       }),
     });
