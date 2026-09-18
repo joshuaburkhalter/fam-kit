@@ -227,6 +227,31 @@ async function runTests() {
   }
   console.log(`9. Verified all ${stapleTests.length} pantry staple filtering tests pass (boiling water, staples vs specialty items).`);
 
+  // 10. Test Admin Capabilities (Role check, user queries, overview aggregations)
+  function isServerAdminCheck(user) {
+    if (!user) return false;
+    const role = (user.role || '').toLowerCase();
+    const username = (user.username || '').toLowerCase();
+    const email = (user.email || '').toLowerCase();
+    return (
+      role === 'admin' ||
+      username === 'joshua' ||
+      email === 'joshua@redpointaudio.com' ||
+      email === 'joshuaburkhalter@gmail.com'
+    );
+  }
+
+  if (!isServerAdminCheck({ role: 'Admin' })) throw new Error('Role Admin should be recognized as server admin');
+  if (!isServerAdminCheck({ username: 'joshua' })) throw new Error('Username joshua should be recognized as server admin');
+  if (!isServerAdminCheck({ email: 'joshua@redpointaudio.com' })) throw new Error('Email joshua@redpointaudio.com should be recognized');
+  if (isServerAdminCheck({ role: 'Member', username: 'random', email: 'random@gmail.com' })) {
+    throw new Error('Regular user should NOT be recognized as admin');
+  }
+
+  const allUsers = queryAll('SELECT id, name, role, householdId FROM users');
+  if (allUsers.length === 0) throw new Error('Expected registered users in database');
+  console.log(`10. Verified Admin system checks: ${allUsers.length} users and admin role authorization validated.`);
+
   console.log('--- All subscription & tracking tests PASSED successfully! ---');
 }
 

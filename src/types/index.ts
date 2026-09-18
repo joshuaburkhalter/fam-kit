@@ -273,3 +273,63 @@ export const isUserAdmin = (user?: { role?: string; username?: string; email?: s
   );
 };
 
+export interface AdminOverviewStats {
+  totalUsers: number;
+  totalHouseholds: number;
+  activeHouseholds: number;
+  totalRecipes: number;
+  aiRecipes: number;
+  totalGroceryItems: number;
+  checkedGroceryItems: number;
+  totalMealPlans: number;
+  totalCalendarEvents: number;
+  totalFeedbackRequests: number;
+  openFeedbackRequests: number;
+  totalPromoCodes: number;
+  claimedPromoCodes: number;
+}
+
+export interface AdminOverviewData {
+  stats: AdminOverviewStats;
+  recentUsers: AdminUser[];
+  recentRedemptions: any[];
+  recentFeedback: any[];
+  recentRecipes: any[];
+}
+
+export interface AdminUser {
+  id: string;
+  name: string;
+  username?: string;
+  email?: string;
+  avatar?: string;
+  color?: string;
+  role: string;
+  householdId: string;
+  householdName?: string;
+  householdInviteCode?: string;
+  subscriptionStatus?: string;
+  subscriptionPlan?: string;
+  subscriptionExpiresAt?: string;
+  createdAt?: string;
+  householdRecipeCount?: number;
+  householdGroceryCount?: number;
+  householdEventCount?: number;
+}
+
+export interface AdminHousehold {
+  id: string;
+  name: string;
+  inviteCode: string;
+  createdAt: string;
+  subscriptionStatus: string;
+  subscriptionPlan?: string;
+  subscriptionExpiresAt?: string;
+  promoCodeUsed?: string;
+  memberCount: number;
+  memberNames?: string;
+  recipeCount: number;
+  groceryCount: number;
+  eventCount: number;
+}
+

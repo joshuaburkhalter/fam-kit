@@ -311,8 +311,8 @@ app.post('/api/auth/register', (req, res) => {
 
   const userId = `u_${Date.now()}`;
   execute(
-    'INSERT INTO users (id, name, username, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    [userId, displayName, cleanUsername, cleanEmail, '👤', avatarColor || '#10b981', role || 'Member', targetHouseholdId, userPassword]
+    'INSERT INTO users (id, name, username, email, avatar, color, role, householdId, password, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [userId, displayName, cleanUsername, cleanEmail, '👤', avatarColor || '#10b981', role || 'Member', targetHouseholdId, userPassword, now]
   );
 
   if (initialPromoUsed) {
@@ -3066,6 +3066,200 @@ app.delete('/api/feedback', (req, res) => {
   saveDb();
 
   res.json({ success: true, id });
+});
+
+// ---------------- ADMIN API ROUTES ----------------
+
+// Admin: Overview & Platform Analytics
+app.get('/api/admin/overview', (req, res) => {
+  const user = getAuthUser(req);
+  if (!user || !isServerAdmin(user)) {
+    return res.status(403).json({ error: 'Admin access required.' });
+  }
+
+  const totalUsersRow = queryOne<{ count: number }>('SELECT COUNT(*) as count FROM users');
+  const totalHouseholdsRow = queryOne<{ count: number }>('SELECT COUNT(*) as count FROM households');
+  const activeHouseholdsRow = queryOne<{ count: number }>(
+    "SELECT COUNT(*) as count FROM households WHERE subscriptionStatus IN ('active', 'lifetime_founder')"
+  );
+  const totalRecipesRow = queryOne<{ count: number }>('SELECT COUNT(*) as count FROM recipes');
+  const aiRecipesRow = queryOne<{ count: number }>(
+    "SELECT COUNT(*) as count FROM recipes WHERE tags LIKE '%ai%'"
+  );
+  const totalGroceryRow = queryOne<{ count: number }>('SELECT COUNT(*) as count FROM grocery_items');
+  const checkedGroceryRow = queryOne<{ count: number }>('SELECT COUNT(*) as count FROM grocery_items WHERE checked = 1');
+  const totalMealsRow = queryOne<{ count: number }>('SELECT COUNT(*) as count FROM meal_plans');
+  const totalWeeklyMealsRow = queryOne<{ count: number }>('SELECT COUNT(*) as count FROM weekly_meals');
+  const totalEventsRow = queryOne<{ count: number }>('SELECT COUNT(*) as count FROM calendar_events');
+  const totalFeedbackRow = queryOne<{ count: number }>('SELECT COUNT(*) as count FROM feedback_requests');
+  const openFeedbackRow = queryOne<{ count: number }>(
+    "SELECT COUNT(*) as count FROM feedback_requests WHERE status IN ('open', 'in_progress')"
+  );
+  const totalPromoRow = queryOne<{ count: number }>('SELECT COUNT(*) as count FROM promo_codes');
+  const claimedPromoRow = queryOne<{ count: number }>(
+    'SELECT COUNT(*) as count FROM promo_codes WHERE timesUsed > 0 OR claimedByUserName IS NOT NULL'
+  );
+
+  // Recent 10 users
+  const recentUsers = queryAll<any>(`
+    SELECT u.id, u.name, u.username, u.email, u.avatar, u.color, u.role, u.householdId,
+           COALESCE(u.createdAt, h.createdAt, '') as createdAt,
+           h.name as householdName, h.subscriptionStatus
+    FROM users u
+    LEFT JOIN households h ON u.householdId = h.id
+    ORDER BY u.rowid DESC
+    LIMIT 10
+  `);
+
+  // Recent 10 redemptions
+  let recentRedemptions: any[] = [];
+  try {
+    recentRedemptions = queryAll<any>(`
+      SELECT r.*, p.description as promoDescription, p.durationMonths
+      FROM promo_redemptions r
+      LEFT JOIN promo_codes p ON REPLACE(REPLACE(REPLACE(UPPER(p.code), '-', ''), ' ', ''), '_', '') = REPLACE(REPLACE(REPLACE(UPPER(r.promoCode), '-', ''), ' ', ''), '_', '')
+      ORDER BY r.redeemedAt DESC
+      LIMIT 10
+    `);
+  } catch {}
+
+  // Recent 10 feedback requests
+  const recentFeedback = queryAll<any>(`
+    SELECT id, type, title, description, status, priority, submittedByUserName, householdName, upvotes, createdAt
+    FROM feedback_requests
+    ORDER BY createdAt DESC
+    LIMIT 10
+  `);
+
+  // Recent 10 recipes created
+  const recentRecipes = queryAll<any>(`
+    SELECT r.id, r.title, r.imageUrl, r.tags, r.createdAt, h.name as householdName
+    FROM recipes r
+    LEFT JOIN households h ON r.householdId = h.id
+    ORDER BY r.rowid DESC
+    LIMIT 10
+  `);
+
+  res.json({
+    stats: {
+      totalUsers: totalUsersRow?.count || 0,
+      totalHouseholds: totalHouseholdsRow?.count || 0,
+      activeHouseholds: activeHouseholdsRow?.count || 0,
+      totalRecipes: totalRecipesRow?.count || 0,
+      aiRecipes: aiRecipesRow?.count || 0,
+      totalGroceryItems: totalGroceryRow?.count || 0,
+      checkedGroceryItems: checkedGroceryRow?.count || 0,
+      totalMealPlans: (totalMealsRow?.count || 0) + (totalWeeklyMealsRow?.count || 0),
+      totalCalendarEvents: totalEventsRow?.count || 0,
+      totalFeedbackRequests: totalFeedbackRow?.count || 0,
+      openFeedbackRequests: openFeedbackRow?.count || 0,
+      totalPromoCodes: totalPromoRow?.count || 0,
+      claimedPromoCodes: claimedPromoRow?.count || 0,
+    },
+    recentUsers,
+    recentRedemptions,
+    recentFeedback,
+    recentRecipes,
+  });
+});
+
+// Admin: Users List
+app.get('/api/admin/users', (req, res) => {
+  const user = getAuthUser(req);
+  if (!user || !isServerAdmin(user)) {
+    return res.status(403).json({ error: 'Admin access required.' });
+  }
+
+  const users = queryAll<any>(`
+    SELECT 
+      u.id, u.name, u.username, u.email, u.avatar, u.color, u.role, u.householdId,
+      COALESCE(u.createdAt, h.createdAt, '') as createdAt,
+      h.name as householdName, h.inviteCode as householdInviteCode,
+      h.subscriptionStatus, h.subscriptionPlan, h.subscriptionExpiresAt,
+      (SELECT COUNT(*) FROM recipes WHERE householdId = u.householdId) as householdRecipeCount,
+      (SELECT COUNT(*) FROM grocery_items WHERE householdId = u.householdId) as householdGroceryCount,
+      (SELECT COUNT(*) FROM calendar_events WHERE householdId = u.householdId) as householdEventCount
+    FROM users u
+    LEFT JOIN households h ON u.householdId = h.id
+    ORDER BY u.rowid DESC
+  `);
+
+  res.json(users);
+});
+
+// Admin: Update User (e.g. role, name, email)
+app.patch('/api/admin/users/:id', (req, res) => {
+  const user = getAuthUser(req);
+  if (!user || !isServerAdmin(user)) {
+    return res.status(403).json({ error: 'Admin access required.' });
+  }
+
+  const targetId = req.params.id;
+  const { role, name, email } = req.body;
+
+  const targetUser = queryOne<any>('SELECT * FROM users WHERE id = ?', [targetId]);
+  if (!targetUser) {
+    return res.status(404).json({ error: 'User not found.' });
+  }
+
+  const updates: string[] = [];
+  const params: any[] = [];
+
+  if (role !== undefined && typeof role === 'string' && role.trim()) {
+    updates.push('role = ?');
+    params.push(role.trim());
+  }
+
+  if (name !== undefined && typeof name === 'string' && name.trim()) {
+    updates.push('name = ?');
+    params.push(name.trim());
+  }
+
+  if (email !== undefined) {
+    updates.push('email = ?');
+    params.push(typeof email === 'string' && email.trim() ? email.trim() : null);
+  }
+
+  if (updates.length > 0) {
+    params.push(targetId);
+    execute(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, params);
+    saveDb();
+  }
+
+  const updated = queryOne<any>(`
+    SELECT 
+      u.id, u.name, u.username, u.email, u.avatar, u.color, u.role, u.householdId,
+      COALESCE(u.createdAt, h.createdAt, '') as createdAt,
+      h.name as householdName, h.inviteCode as householdInviteCode,
+      h.subscriptionStatus, h.subscriptionPlan, h.subscriptionExpiresAt
+    FROM users u
+    LEFT JOIN households h ON u.householdId = h.id
+    WHERE u.id = ?
+  `, [targetId]);
+
+  res.json(updated);
+});
+
+// Admin: Households Directory
+app.get('/api/admin/households', (req, res) => {
+  const user = getAuthUser(req);
+  if (!user || !isServerAdmin(user)) {
+    return res.status(403).json({ error: 'Admin access required.' });
+  }
+
+  const households = queryAll<any>(`
+    SELECT 
+      h.*,
+      (SELECT COUNT(*) FROM users WHERE householdId = h.id) as memberCount,
+      (SELECT group_concat(name, ', ') FROM users WHERE householdId = h.id) as memberNames,
+      (SELECT COUNT(*) FROM recipes WHERE householdId = h.id) as recipeCount,
+      (SELECT COUNT(*) FROM grocery_items WHERE householdId = h.id) as groceryCount,
+      (SELECT COUNT(*) FROM calendar_events WHERE householdId = h.id) as eventCount
+    FROM households h
+    ORDER BY h.createdAt DESC
+  `);
+
+  res.json(households);
 });
 
 // Public Privacy Policy & Terms (for Google OAuth verification & branding)

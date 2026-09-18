@@ -474,6 +474,20 @@ function initSchema(db: Database) {
     db.run(`ALTER TABLE feedback_requests ADD COLUMN upvoters TEXT NOT NULL DEFAULT '[]';`);
   } catch {}
   try {
+    db.run(`ALTER TABLE users ADD COLUMN createdAt TEXT;`);
+  } catch {}
+  try {
+    db.run(`
+      UPDATE users 
+      SET createdAt = (
+        SELECT COALESCE(h.createdAt, datetime('now'))
+        FROM households h 
+        WHERE h.id = users.householdId
+      )
+      WHERE createdAt IS NULL OR createdAt = '';
+    `);
+  } catch {}
+  try {
     // Ensure Joshua is set as Admin role
     db.run(`
       UPDATE users 

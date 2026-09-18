@@ -16,6 +16,7 @@ import {
   ChevronDown,
   User,
   Bug,
+  ShieldCheck,
 } from 'lucide-react';
 import { usePWA } from '../context/PWAContext';
 import { HomebaseLogo } from './HomebaseLogo';
@@ -316,6 +317,25 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
                       )
                     )}
                   </button>
+
+                  {/* Admin Command Center */}
+                  {isAdmin && (
+                    <button
+                      onClick={() => {
+                        setShowUserDropdown(false);
+                        setActiveTab('admin');
+                      }}
+                      className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 border border-emerald-500/20 transition-all cursor-pointer group"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <ShieldCheck className="w-4 h-4 text-emerald-400 group-hover:scale-110 transition-transform" />
+                        <span>Admin Dashboard</span>
+                      </div>
+                      <span className="text-[9px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded font-mono font-bold uppercase tracking-wider">
+                        Admin
+                      </span>
+                    </button>
+                  )}
                 </div>
 
                 {/* Quick Profile Switcher for other family members */}

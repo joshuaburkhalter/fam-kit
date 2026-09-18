@@ -15,6 +15,9 @@ import type {
   SubscriptionStatus,
   PromoCode,
   FeedbackRequest,
+  AdminOverviewData,
+  AdminUser,
+  AdminHousehold,
 } from '../types';
 import { filterRecipeIngredientsForGrocery } from './groceryStaples';
 
@@ -1095,7 +1098,7 @@ export const api = {
   },
 
   generatePromoCode: async (data: {
-    durationMonths: 3 | 6 | null;
+    durationMonths: number | null;
     description?: string;
     assignedTo?: string;
     customCode?: string;
@@ -1223,6 +1226,7 @@ export const api = {
     data: {
       status?: 'open' | 'in_progress' | 'planned' | 'resolved' | 'closed';
       adminResponse?: string;
+      adminRespondedBy?: string;
       priority?: 'low' | 'medium' | 'high' | 'critical';
     }
   ): Promise<FeedbackRequest> => {
@@ -1257,5 +1261,25 @@ export const api = {
     return fetchJson<{ success: boolean; id: string }>(`/feedback?id=${encodeURIComponent(id)}`, {
       method: 'DELETE',
     });
+  },
+
+  // Admin Endpoints
+  getAdminOverview: async (): Promise<AdminOverviewData> => {
+    return fetchJson<AdminOverviewData>('/admin/overview');
+  },
+
+  getAdminUsers: async (): Promise<AdminUser[]> => {
+    return fetchJson<AdminUser[]>('/admin/users');
+  },
+
+  updateAdminUserRole: async (userId: string, role: string): Promise<AdminUser> => {
+    return fetchJson<AdminUser>(`/admin/users/${encodeURIComponent(userId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ role }),
+    });
+  },
+
+  getAdminHouseholds: async (): Promise<AdminHousehold[]> => {
+    return fetchJson<AdminHousehold[]>('/admin/households');
   },
 };

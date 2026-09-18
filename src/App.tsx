@@ -8,6 +8,7 @@ import { MealsPage } from './pages/MealsPage';
 import { RecipesPage } from './pages/RecipesPage';
 import { CalendarPage } from './pages/CalendarPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { AdminPage } from './pages/AdminPage';
 import { LandingPage } from './pages/LandingPage';
 import { LegalPage } from './pages/LegalPage';
 import { PricingPage } from './pages/PricingPage';
@@ -16,7 +17,7 @@ import { AuthPage } from './components/AuthPage';
 import { usePWA } from './context/PWAContext';
 import { Loader2, ArrowRight, CheckCircle2, X } from 'lucide-react';
 
-const VALID_TABS = ['assistant', 'grocery', 'meals', 'recipes', 'calendar', 'settings', 'family'];
+const VALID_TABS = ['assistant', 'grocery', 'meals', 'recipes', 'calendar', 'settings', 'family', 'admin'];
 const LAST_TAB_KEY = 'homebase_last_active_tab';
 
 function resolveInitialOverlayView(): 'privacy' | 'terms' | 'pricing' | null {
@@ -333,6 +334,9 @@ export const AppContent: React.FC = () => {
         {activeTab === 'calendar' && <CalendarPage />}
         {(activeTab === 'settings' || activeTab === 'family') && (
           <SettingsPage onOpenPricing={handleOpenPricing} />
+        )}
+        {activeTab === 'admin' && (
+          <AdminPage onBack={() => setActiveTab('assistant')} />
         )}
       </main>
 
