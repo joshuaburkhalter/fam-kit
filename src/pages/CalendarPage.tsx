@@ -594,24 +594,6 @@ export const CalendarPage: React.FC = () => {
 
       {/* Clean Synchronous Timeline List */}
       <div className="relative pt-1">
-        {/* Banner indicator when viewing Past Events */}
-        {showPastEvents && (
-          <div className="flex items-center justify-between px-3.5 py-2 mb-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs">
-            <div className="flex items-center gap-2">
-              <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-              <span>
-                Viewing <strong>Past Events</strong> (most recent first)
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowPastEvents(false)}
-              className="text-amber-300 hover:text-white font-semibold underline text-[11px] cursor-pointer ml-2 shrink-0"
-            >
-              Back to Today
-            </button>
-          </div>
-        )}
 
         {showPastEvents && pastEventsCount === 0 && (
           <div className="text-center py-12 px-4 rounded-2xl bg-slate-900/40 border border-white/5 my-4">
