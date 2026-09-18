@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   ChefHat,
   Utensils,
@@ -79,6 +79,19 @@ export const MealsPage: React.FC = () => {
 
   // Sub-views: 'planner' (On deck & ready to shop) | 'recipes' (Recipe Box) | 'history' (Cooked log)
   const [activeTab, setActiveTab] = useState<'planner' | 'recipes' | 'history'>(resolveInitialSubTab);
+
+  // Keep visited tabs mounted with CSS display:none for instant 0ms switching without DOM thrashing
+  const [visitedTabs, setVisitedTabs] = useState<Record<string, boolean>>(() => ({
+    [resolveInitialSubTab()]: true,
+  }));
+
+  const handleTabChange = (tab: 'planner' | 'recipes' | 'history') => {
+    setActiveTab(tab);
+    setVisitedTabs((prev) => (prev[tab] ? prev : { ...prev, [tab]: true }));
+    if (tab !== 'recipes') {
+      setIsRecipeFabOpen(false);
+    }
+  };
 
   const [meals, setMeals] = useState<WeeklyMeal[]>(() => {
     return mealsDataCache && mealsDataCache.householdId === householdId
@@ -189,12 +202,12 @@ export const MealsPage: React.FC = () => {
         setScraperInitialUrl(sharedUrl);
         setScraperAutoImport(true);
         setIsScraperOpen(true);
-        setActiveTab('recipes');
+        handleTabChange('recipes');
         const cleanPath = window.location.pathname;
         window.history.replaceState({}, '', cleanPath);
       } else if (isShared || params.has('import')) {
         setIsScraperOpen(true);
-        setActiveTab('recipes');
+        handleTabChange('recipes');
         const cleanPath = window.location.pathname;
         window.history.replaceState({}, '', cleanPath);
       }
@@ -251,8 +264,11 @@ export const MealsPage: React.FC = () => {
   }, [householdId]);
 
   // Map recipeId -> Recipe for fast lookup
-  const recipeMap = new Map<string, Recipe>();
-  recipes.forEach((r) => recipeMap.set(r.id, r));
+  const recipeMap = useMemo(() => {
+    const map = new Map<string, Recipe>();
+    recipes.forEach((r) => map.set(r.id, r));
+    return map;
+  }, [recipes]);
 
   // Check URL parameter for initial recipe selection
   useEffect(() => {
@@ -711,38 +727,45 @@ export const MealsPage: React.FC = () => {
     });
   };
 
-  // Recipe filtering for Recipe Box
-  const filteredRecipes = recipes.filter((r) => {
-    const matchesSearch =
-      !searchQuery.trim() ||
-      r.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      r.tags?.some((t) => t.toLowerCase().includes(searchQuery.toLowerCase()));
+  // Recipe filtering for Recipe Box (memoized)
+  const filteredRecipes = useMemo(() => {
+    return recipes.filter((r) => {
+      const matchesSearch =
+        !searchQuery.trim() ||
+        r.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        r.tags?.some((t) => t.toLowerCase().includes(searchQuery.toLowerCase()));
 
-    const matchesTag =
-      !selectedTag ||
-      (selectedTag === 'ai'
-        ? isAiRecipe(r)
-        : r.tags?.some((t) => t.toLowerCase().trim().replace(/^#/, '') === selectedTag.toLowerCase().trim().replace(/^#/, '')));
+      const matchesTag =
+        !selectedTag ||
+        (selectedTag === 'ai'
+          ? isAiRecipe(r)
+          : r.tags?.some((t) => t.toLowerCase().trim().replace(/^#/, '') === selectedTag.toLowerCase().trim().replace(/^#/, '')));
 
-    return matchesSearch && matchesTag;
-  });
+      return matchesSearch && matchesTag;
+    });
+  }, [recipes, searchQuery, selectedTag]);
 
-  const allUniqueTags = Array.from(
-    new Set(
-      recipes.flatMap((r) => r.tags || []).map((t) => t.trim().replace(/^#/, ''))
-    )
-  ).filter(Boolean);
+  const allUniqueTags = useMemo(() => {
+    return Array.from(
+      new Set(
+        recipes.flatMap((r) => r.tags || []).map((t) => t.trim().replace(/^#/, ''))
+      )
+    ).filter(Boolean);
+  }, [recipes]);
 
-  const hasAiRecipes = recipes.some((r) => isAiRecipe(r));
+  const hasAiRecipes = useMemo(() => recipes.some((r) => isAiRecipe(r)), [recipes]);
 
-  // Group Meal Logs by date for History
-  const groupedLogs = mealLogs.reduce<Record<string, MealLog[]>>((acc, log) => {
-    const d = log.date || 'Unknown Date';
-    if (!acc[d]) acc[d] = [];
-    acc[d].push(log);
-    return acc;
-  }, {});
-  const sortedDates = Object.keys(groupedLogs).sort((a, b) => b.localeCompare(a));
+  // Group Meal Logs by date for History (memoized)
+  const { groupedLogs, sortedDates } = useMemo(() => {
+    const logs = mealLogs.reduce<Record<string, MealLog[]>>((acc, log) => {
+      const d = log.date || 'Unknown Date';
+      if (!acc[d]) acc[d] = [];
+      acc[d].push(log);
+      return acc;
+    }, {});
+    const dates = Object.keys(logs).sort((a, b) => b.localeCompare(a));
+    return { groupedLogs: logs, sortedDates: dates };
+  }, [mealLogs]);
 
   const hasProgress =
     Object.values(checkedIngredients).some(Boolean) ||
@@ -1074,8 +1097,8 @@ export const MealsPage: React.FC = () => {
           {/* Full-width compact segmented sub-navigation */}
           <div className="w-full flex items-center p-1 bg-slate-900/80 rounded-xl border border-white/10 shadow-md">
             <button
-              onClick={() => setActiveTab('planner')}
-              className={`flex-1 py-1.5 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+              onClick={() => handleTabChange('planner')}
+              className={`flex-1 py-1.5 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors duration-150 cursor-pointer ${
                 activeTab === 'planner'
                   ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
                   : 'text-slate-400 hover:text-white hover:bg-white/5'
@@ -1085,7 +1108,7 @@ export const MealsPage: React.FC = () => {
               <span>Planner</span>
               {meals.length > 0 && (
                 <span
-                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                  className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
                     activeTab === 'planner' ? 'bg-slate-950/25 text-slate-950' : 'bg-emerald-500/20 text-emerald-400'
                   }`}
                 >
@@ -1095,8 +1118,8 @@ export const MealsPage: React.FC = () => {
             </button>
 
             <button
-              onClick={() => setActiveTab('recipes')}
-              className={`flex-1 py-1.5 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+              onClick={() => handleTabChange('recipes')}
+              className={`flex-1 py-1.5 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors duration-150 cursor-pointer ${
                 activeTab === 'recipes'
                   ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
                   : 'text-slate-400 hover:text-white hover:bg-white/5'
@@ -1106,7 +1129,7 @@ export const MealsPage: React.FC = () => {
               <span>Recipes</span>
               {recipes.length > 0 && (
                 <span
-                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                  className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
                     activeTab === 'recipes' ? 'bg-slate-950/25 text-slate-950' : 'bg-emerald-500/20 text-emerald-400'
                   }`}
                 >
@@ -1116,8 +1139,8 @@ export const MealsPage: React.FC = () => {
             </button>
 
             <button
-              onClick={() => setActiveTab('history')}
-              className={`flex-1 py-1.5 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+              onClick={() => handleTabChange('history')}
+              className={`flex-1 py-1.5 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors duration-150 cursor-pointer ${
                 activeTab === 'history'
                   ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
                   : 'text-slate-400 hover:text-white hover:bg-white/5'
@@ -1127,7 +1150,7 @@ export const MealsPage: React.FC = () => {
               <span>History</span>
               {mealLogs.length > 0 && (
                 <span
-                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                  className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
                     activeTab === 'history' ? 'bg-slate-950/25 text-slate-950' : 'bg-emerald-500/20 text-emerald-400'
                   }`}
                 >
@@ -1138,8 +1161,8 @@ export const MealsPage: React.FC = () => {
           </div>
 
           {/* ================= 1. PLANNER TAB ================= */}
-          {activeTab === 'planner' && (
-            <div className="space-y-4">
+          {visitedTabs['planner'] && (
+            <div className={activeTab === 'planner' ? 'space-y-4' : 'hidden'}>
               {isLoading ? (
                 <div className="py-12 text-center text-xs text-slate-400">Loading planner...</div>
               ) : meals.length === 0 ? (
@@ -1283,8 +1306,8 @@ export const MealsPage: React.FC = () => {
           )}
 
           {/* ================= 2. RECIPE BOX TAB ================= */}
-          {activeTab === 'recipes' && (
-            <div className="space-y-4">
+          {visitedTabs['recipes'] && (
+            <div className={activeTab === 'recipes' ? 'space-y-4' : 'hidden'}>
               {/* Search Bar & Tag Filters */}
               <div className="space-y-3">
                 <div className="relative">
@@ -1483,8 +1506,8 @@ export const MealsPage: React.FC = () => {
           )}
 
           {/* ================= 3. HISTORY TAB ================= */}
-          {activeTab === 'history' && (
-            <div className="space-y-4">
+          {visitedTabs['history'] && (
+            <div className={activeTab === 'history' ? 'space-y-4' : 'hidden'}>
               {isLoading ? (
                 <div className="py-12 text-center text-xs text-slate-400">Loading history...</div>
               ) : mealLogs.length === 0 ? (
@@ -1623,7 +1646,7 @@ export const MealsPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setIsRecipePickerOpen(true)}
-                className="pointer-events-auto w-[50px] h-[50px] rounded-full border border-emerald-400/40 bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 cursor-pointer shadow-xl shadow-emerald-500/30 hover:scale-105 active:scale-95 flex items-center justify-center transition-all"
+                className="pointer-events-auto w-[50px] h-[50px] rounded-full border border-emerald-400/40 bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 cursor-pointer shadow-xl shadow-emerald-500/30 hover:scale-105 active:scale-95 flex items-center justify-center transition-transform"
                 title="Quick Add Meal to Planner"
               >
                 <Plus className="w-6 h-6 stroke-[2.5]" />
@@ -1633,9 +1656,9 @@ export const MealsPage: React.FC = () => {
             {activeTab === 'recipes' && (
               <div
                 ref={recipeFabRef}
-                className={`fab-dock-transition pointer-events-auto h-[50px] border shadow-2xl flex items-center overflow-hidden transition-all duration-200 ${
+                className={`fab-dock-transition pointer-events-auto h-[50px] border shadow-2xl flex items-center overflow-hidden ${
                   isRecipeFabOpen
-                    ? 'rounded-3xl border-white/25 bg-slate-900/95 backdrop-blur-xl px-2.5 gap-2 shadow-emerald-500/10'
+                    ? 'w-[270px] rounded-3xl border-white/25 bg-slate-900/95 backdrop-blur-xl px-2.5 shadow-emerald-500/10'
                     : 'w-[50px] rounded-full border-emerald-400/40 bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 cursor-pointer shadow-xl shadow-emerald-500/30 hover:scale-105 active:scale-95 justify-center'
                 }`}
               >
@@ -1649,11 +1672,11 @@ export const MealsPage: React.FC = () => {
                     <Plus className="w-6 h-6 stroke-[2.5]" />
                   </button>
                 ) : (
-                  <div className="flex items-center gap-2">
+                  <div className="w-full flex items-center justify-between gap-1.5 animate-in fade-in duration-200">
                     <button
                       type="button"
                       onClick={() => setIsRecipeFabOpen(false)}
-                      className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                      className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer shrink-0"
                       title="Close"
                     >
                       <X className="w-4 h-4" />
@@ -1665,7 +1688,7 @@ export const MealsPage: React.FC = () => {
                         setIsRecipeFabOpen(false);
                         setIsScraperOpen(true);
                       }}
-                      className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                      className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
                     >
                       <Link2 className="w-3.5 h-3.5 text-emerald-400" />
                       <span>Import Web</span>
@@ -1678,7 +1701,7 @@ export const MealsPage: React.FC = () => {
                         setEditingRecipe(null);
                         setIsEditRecipeModalOpen(true);
                       }}
-                      className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer"
+                      className="px-2.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center gap-1 transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer shrink-0"
                     >
                       <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
                       <span>New Recipe</span>
@@ -1692,7 +1715,7 @@ export const MealsPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setIsLogModalOpen(true)}
-                className="pointer-events-auto w-[50px] h-[50px] rounded-full border border-emerald-400/40 bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 cursor-pointer shadow-xl shadow-emerald-500/30 hover:scale-105 active:scale-95 flex items-center justify-center transition-all"
+                className="pointer-events-auto w-[50px] h-[50px] rounded-full border border-emerald-400/40 bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 cursor-pointer shadow-xl shadow-emerald-500/30 hover:scale-105 active:scale-95 flex items-center justify-center transition-transform"
                 title="Log a Cooked Meal"
               >
                 <Plus className="w-6 h-6 stroke-[2.5]" />
