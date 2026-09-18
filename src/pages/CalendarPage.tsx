@@ -537,49 +537,30 @@ export const CalendarPage: React.FC = () => {
           })}
         </div>
 
-        {/* Smaller & Simpler View Mode Toggle + Past Events Quick Toggle */}
-        <div className="flex items-center gap-1.5 shrink-0">
+        {/* Smaller & Simpler View Mode Toggle */}
+        <div className="flex items-center bg-slate-900 rounded-lg p-0.5 border border-white/10 shrink-0 text-[11px]">
           <button
             type="button"
-            onClick={() => setShowPastEvents((prev) => !prev)}
-            className={`px-2 py-1 rounded-lg text-[11px] font-semibold transition-all flex items-center gap-1.5 cursor-pointer border ${
-              showPastEvents
-                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-xs'
-                : 'bg-slate-900 text-slate-400 hover:text-slate-200 border-white/10'
+            onClick={() => setViewMode('all')}
+            className={`px-2 py-0.5 rounded-md font-medium transition-all ${
+              viewMode === 'all'
+                ? 'bg-slate-800 text-white font-semibold'
+                : 'text-slate-400 hover:text-slate-200'
             }`}
-            title={showPastEvents ? 'Hide past events' : 'Show past events'}
           >
-            <Clock className={`w-3 h-3 ${showPastEvents ? 'text-amber-400' : 'text-slate-400'}`} />
-            <span>Past</span>
-            {pastEventsCount > 0 && (
-              <span className="text-[10px] opacity-80 font-mono">({pastEventsCount})</span>
-            )}
+            All
           </button>
-
-          <div className="flex items-center bg-slate-900 rounded-lg p-0.5 border border-white/10 shrink-0 text-[11px]">
-            <button
-              type="button"
-              onClick={() => setViewMode('all')}
-              className={`px-2 py-0.5 rounded-md font-medium transition-all ${
-                viewMode === 'all'
-                  ? 'bg-slate-800 text-white font-semibold'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              All
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode('events-only')}
-              className={`px-2 py-0.5 rounded-md font-medium transition-all ${
-                viewMode === 'events-only'
-                  ? 'bg-slate-800 text-white font-semibold'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Events
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => setViewMode('events-only')}
+            className={`px-2 py-0.5 rounded-md font-medium transition-all ${
+              viewMode === 'events-only'
+                ? 'bg-slate-800 text-white font-semibold'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            Events
+          </button>
         </div>
       </div>
 
