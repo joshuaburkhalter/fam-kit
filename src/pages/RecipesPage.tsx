@@ -85,6 +85,126 @@ export const RecipesPage: React.FC = () => {
   const [imageFeedback, setImageFeedback] = useState<string | null>(null);
   const seenImageUrlsRef = useRef<Record<string, string[]>>({});
 
+  const recipeHistoryPushedRef = useRef(false);
+  const cookModeHistoryPushedRef = useRef(false);
+  const isNavigatingBackRef = useRef(false);
+
+  const handleSelectRecipe = (recipe: Recipe) => {
+    setSelectedRecipe(recipe);
+    setIsCookMode(false);
+    setCheckedIngredients({});
+    setCompletedSteps({});
+
+    if (typeof window !== 'undefined') {
+      recipeHistoryPushedRef.current = true;
+      const url = new URL(window.location.href);
+      url.searchParams.set('recipe', recipe.id);
+      window.history.pushState(
+        { type: 'recipe_detail', recipeId: recipe.id, tab: 'recipes' },
+        '',
+        url.pathname + (url.search ? url.search : '')
+      );
+    }
+  };
+
+  const handleToggleCookMode = (enable?: boolean) => {
+    const nextMode = enable !== undefined ? enable : !isCookMode;
+    if (nextMode === isCookMode) return;
+
+    if (nextMode) {
+      setIsCookMode(true);
+      if (typeof window !== 'undefined') {
+        cookModeHistoryPushedRef.current = true;
+        window.history.pushState(
+          { type: 'cook_mode', recipeId: selectedRecipe?.id, tab: 'recipes' },
+          '',
+          window.location.href
+        );
+      }
+    } else {
+      setIsCookMode(false);
+      if (cookModeHistoryPushedRef.current) {
+        cookModeHistoryPushedRef.current = false;
+        isNavigatingBackRef.current = true;
+        window.history.back();
+      }
+    }
+  };
+
+  const handleCloseRecipe = () => {
+    const hadCookMode = cookModeHistoryPushedRef.current;
+    const hadRecipeDetail = recipeHistoryPushedRef.current;
+
+    cookModeHistoryPushedRef.current = false;
+    recipeHistoryPushedRef.current = false;
+    setSelectedRecipe(null);
+    setIsCookMode(false);
+    setCheckedIngredients({});
+    setCompletedSteps({});
+
+    if (typeof window !== 'undefined') {
+      if (hadCookMode && hadRecipeDetail) {
+        isNavigatingBackRef.current = true;
+        window.history.go(-2);
+      } else if (hadRecipeDetail) {
+        isNavigatingBackRef.current = true;
+        window.history.back();
+      }
+    }
+  };
+
+  // Popstate listener for mobile phone back button / swipe back gesture
+  useEffect(() => {
+    const handlePopState = (e: PopStateEvent) => {
+      // If back navigation was already performed by an in-app UI click, consume flag and return
+      if (isNavigatingBackRef.current) {
+        isNavigatingBackRef.current = false;
+        return;
+      }
+
+      // If a child drawer or modal triggered this popstate, do not close recipe
+      if (e.state?.type === 'drawer' || e.state?.type === 'admin_modal') {
+        return;
+      }
+
+      // 1. If currently in cook mode and popped state is not cook mode, exit cook mode
+      if (cookModeHistoryPushedRef.current && e.state?.type !== 'cook_mode') {
+        cookModeHistoryPushedRef.current = false;
+        setIsCookMode(false);
+        return;
+      }
+
+      // 2. If in recipe detail and popped state is not recipe detail, return to Recipe Box
+      if (recipeHistoryPushedRef.current && e.state?.type !== 'recipe_detail' && e.state?.type !== 'cook_mode') {
+        recipeHistoryPushedRef.current = false;
+        cookModeHistoryPushedRef.current = false;
+        setSelectedRecipe(null);
+        setIsCookMode(false);
+        setCheckedIngredients({});
+        setCompletedSteps({});
+        return;
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // Restore recipe from URL query parameter on initial load if present
+  useEffect(() => {
+    if (recipes.length > 0 && !selectedRecipe && typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const recipeId = params.get('recipe');
+      if (recipeId) {
+        const found = recipes.find((r) => r.id === recipeId);
+        if (found) {
+          setSelectedRecipe(found);
+          recipeHistoryPushedRef.current = true;
+        }
+      }
+    }
+  }, [recipes]);
+
   const handleRegenerateImage = async (recipeId: string, options: { mode?: 'imagen' | 'search'; customUrl?: string }) => {
     setRegeneratingId(recipeId);
     setRegenerateMode(options.mode || 'search');
@@ -233,7 +353,7 @@ export const RecipesPage: React.FC = () => {
     if (confirm(`Are you sure you want to delete "${title}"?`)) {
       try {
         await api.deleteRecipe(id);
-        setSelectedRecipe(null);
+        handleCloseRecipe();
         await loadRecipes();
       } catch (err) {
         console.error('Failed to delete recipe:', err);
@@ -301,12 +421,7 @@ export const RecipesPage: React.FC = () => {
           {/* Back button & Actions Bar */}
           <div className="flex flex-wrap items-center justify-between gap-2.5 glass-panel p-3 rounded-2xl border border-white/10">
             <button
-              onClick={() => {
-                setSelectedRecipe(null);
-                setIsCookMode(false);
-                setCheckedIngredients({});
-                setCompletedSteps({});
-              }}
+              onClick={handleCloseRecipe}
               className="flex items-center gap-1.5 text-xs font-semibold text-slate-300 hover:text-white bg-slate-900/90 hover:bg-slate-850 px-3 py-2 rounded-xl border border-white/10 transition-colors shrink-0"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
@@ -315,7 +430,7 @@ export const RecipesPage: React.FC = () => {
 
             <div className="flex items-center gap-1.5 sm:gap-2 ml-auto">
               <button
-                onClick={() => setIsCookMode(!isCookMode)}
+                onClick={() => handleToggleCookMode()}
                 className={`px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all shrink-0 ${
                   isCookMode
                     ? 'bg-amber-500 text-slate-950 font-bold ring-2 ring-amber-400 shadow-md shadow-amber-500/20'
@@ -778,7 +893,7 @@ export const RecipesPage: React.FC = () => {
               {filteredRecipes.map((recipe) => (
                 <div
                   key={recipe.id}
-                  onClick={() => setSelectedRecipe(recipe)}
+                  onClick={() => handleSelectRecipe(recipe)}
                   className="glass-panel rounded-3xl border border-white/10 hover:border-emerald-500/40 overflow-hidden cursor-pointer transition-all hover:scale-[1.01] shadow-lg flex flex-col group"
                 >
                   {/* Picture container with Assistant AI icon in bottom right-hand corner */}
@@ -959,7 +1074,7 @@ export const RecipesPage: React.FC = () => {
               const exists = prev.some((r) => r.id === newRec.id);
               return exists ? prev.map((r) => (r.id === newRec.id ? newRec : r)) : [newRec, ...prev];
             });
-            setSelectedRecipe(newRec);
+            handleSelectRecipe(newRec);
             setIsScraperOpen(false);
             setScraperInitialUrl('');
             setScraperAutoImport(false);

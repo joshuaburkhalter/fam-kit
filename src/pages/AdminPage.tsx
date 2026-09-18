@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   ShieldCheck,
   Users,
@@ -101,6 +101,38 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onBack }) => {
   const [householdToDelete, setHouseholdToDelete] = useState<AdminHousehold | null>(null);
   const [isDeletingHousehold, setIsDeletingHousehold] = useState(false);
 
+  const deleteModalPushedRef = useRef(false);
+
+  const handleCloseDeleteModals = () => {
+    if (deleteModalPushedRef.current) {
+      deleteModalPushedRef.current = false;
+      window.history.back();
+    }
+    setUserToDelete(null);
+    setHouseholdToDelete(null);
+  };
+
+  useEffect(() => {
+    const isModalOpen = Boolean(userToDelete || householdToDelete);
+    if (isModalOpen) {
+      if (!deleteModalPushedRef.current) {
+        deleteModalPushedRef.current = true;
+        window.history.pushState({ type: 'admin_modal', timestamp: Date.now() }, '', window.location.href);
+      }
+
+      const handlePopState = () => {
+        if (deleteModalPushedRef.current) {
+          deleteModalPushedRef.current = false;
+          setUserToDelete(null);
+          setHouseholdToDelete(null);
+        }
+      };
+
+      window.addEventListener('popstate', handlePopState);
+      return () => window.removeEventListener('popstate', handlePopState);
+    }
+  }, [userToDelete, householdToDelete]);
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3000);
@@ -166,7 +198,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onBack }) => {
       await api.deleteAdminUser(userToDelete.id);
       setUsersList((prev) => prev.filter((u) => u.id !== userToDelete.id));
       showToast(`User "${userToDelete.name}" deleted successfully.`);
-      setUserToDelete(null);
+      handleCloseDeleteModals();
       // Refresh overview and households in background
       api.getAdminOverview().then((ov) => { if (ov) setOverview(ov); }).catch(() => {});
       api.getAdminHouseholds().then((h) => { if (h) setHouseholdsList(h); }).catch(() => {});
@@ -187,7 +219,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onBack }) => {
       setHouseholdsList((prev) => prev.filter((h) => h.id !== householdToDelete.id));
       setUsersList((prev) => prev.filter((u) => u.householdId !== householdToDelete.id));
       showToast(`Household "${householdToDelete.name}" and all members deleted.`);
-      setHouseholdToDelete(null);
+      handleCloseDeleteModals();
       // Refresh overview in background
       api.getAdminOverview().then((ov) => { if (ov) setOverview(ov); }).catch(() => {});
     } catch (err: any) {
@@ -1534,7 +1566,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onBack }) => {
 
             <div className="flex items-center justify-end gap-3 pt-2">
               <button
-                onClick={() => setUserToDelete(null)}
+                onClick={handleCloseDeleteModals}
                 disabled={isDeletingUser}
                 className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
               >
@@ -1591,7 +1623,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onBack }) => {
 
             <div className="flex items-center justify-end gap-3 pt-2">
               <button
-                onClick={() => setHouseholdToDelete(null)}
+                onClick={handleCloseDeleteModals}
                 disabled={isDeletingHousehold}
                 className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
               >

@@ -116,17 +116,92 @@ export const AppContent: React.FC = () => {
     return false;
   });
 
-  const setActiveTab = (tab: string) => {
+  const setActiveTab = (tab: string, replace: boolean = false) => {
+    if (!VALID_TABS.includes(tab)) return;
+    if (tab === activeTab) return;
+
     setActiveTabState(tab);
     try {
       localStorage.setItem(LAST_TAB_KEY, tab);
     } catch {}
+
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      if (tab === 'assistant') {
+        url.searchParams.delete('tab');
+      } else {
+        url.searchParams.set('tab', tab);
+      }
+      url.searchParams.delete('recipe');
+
+      const newPath = url.pathname + (url.search ? url.search : '') + (url.hash ? url.hash : '');
+      if (replace) {
+        window.history.replaceState({ tab, type: 'tab' }, '', newPath);
+      } else {
+        window.history.pushState({ tab, type: 'tab' }, '', newPath);
+      }
+    }
   };
 
-  // Intercept global link clicks to /privacy, /terms, /pricing and handle browser back/forward
+  // Sync initial root state in history
   useEffect(() => {
-    const handleLocationChange = () => {
-      setOverlayView(resolveInitialOverlayView());
+    if (typeof window === 'undefined') return;
+    const currentTab = resolveInitialTab();
+    const url = new URL(window.location.href);
+    if (currentTab !== 'assistant' && !url.searchParams.has('tab')) {
+      url.searchParams.set('tab', currentTab);
+    }
+    const newPath = url.pathname + (url.search ? url.search : '') + (url.hash ? url.hash : '');
+    if (!window.history.state || !window.history.state.tab) {
+      window.history.replaceState({ tab: currentTab, type: 'root' }, '', newPath);
+    }
+  }, []);
+
+  // Intercept global link clicks to /privacy, /terms, /pricing and handle browser back/forward (phone back button)
+  useEffect(() => {
+    const handleLocationChange = (e: PopStateEvent) => {
+      // 1. If popstate was triggered by an open drawer, cook mode, or recipe detail,
+      // let their respective popstate handlers handle closing the view without shifting tabs.
+      if (
+        e.state?.type === 'drawer' ||
+        e.state?.type === 'cook_mode' ||
+        e.state?.type === 'recipe_detail' ||
+        e.state?.type === 'admin_modal'
+      ) {
+        return;
+      }
+
+      // 2. Overlay views (privacy, terms, pricing)
+      const overlay = resolveInitialOverlayView();
+      setOverlayView(overlay);
+
+      // 3. Modals (auth modal, landing)
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('landing') === 'true' || params.get('view') === 'about' || e.state?.type === 'user_landing') {
+        setShowLandingForUser(true);
+      } else {
+        setShowLandingForUser(false);
+      }
+
+      if (params.has('auth') || params.has('login') || params.has('register') || params.has('join') || e.state?.type === 'auth_modal') {
+        setShowAuthModal(true);
+      } else {
+        setShowAuthModal(false);
+      }
+
+      // 4. Tab navigation from history state or URL parameter
+      const stateTab = e.state?.tab;
+      const urlTab = params.get('tab');
+      const targetTab = stateTab || (urlTab && VALID_TABS.includes(urlTab) ? urlTab : 'assistant');
+      setActiveTabState((prev) => {
+        if (prev !== targetTab) {
+          try {
+            localStorage.setItem(LAST_TAB_KEY, targetTab);
+          } catch {}
+          return targetTab;
+        }
+        return prev;
+      });
     };
 
     const handleLinkClick = (e: MouseEvent) => {
@@ -135,15 +210,15 @@ export const AppContent: React.FC = () => {
       const href = target.getAttribute('href');
       if (href === '/privacy' || href?.startsWith('/privacy')) {
         e.preventDefault();
-        window.history.pushState({}, '', '/privacy');
+        window.history.pushState({ type: 'overlay', overlay: 'privacy' }, '', '/privacy');
         setOverlayView('privacy');
       } else if (href === '/terms' || href?.startsWith('/terms')) {
         e.preventDefault();
-        window.history.pushState({}, '', '/terms');
+        window.history.pushState({ type: 'overlay', overlay: 'terms' }, '', '/terms');
         setOverlayView('terms');
       } else if (href === '/pricing' || href?.startsWith('/pricing')) {
         e.preventDefault();
-        window.history.pushState({}, '', '/pricing');
+        window.history.pushState({ type: 'overlay', overlay: 'pricing' }, '', '/pricing');
         setOverlayView('pricing');
       }
     };
@@ -155,7 +230,7 @@ export const AppContent: React.FC = () => {
       window.removeEventListener('popstate', handleLocationChange);
       document.removeEventListener('click', handleLinkClick);
     };
-  }, []);
+  }, [activeTab]);
 
   // Handle URL parameters for PWA share_target, OAuth callbacks, and Stripe Checkout returns
   useEffect(() => {
@@ -336,7 +411,15 @@ export const AppContent: React.FC = () => {
           <SettingsPage onOpenPricing={handleOpenPricing} />
         )}
         {activeTab === 'admin' && (
-          <AdminPage onBack={() => setActiveTab('assistant')} />
+          <AdminPage
+            onBack={() => {
+              if (window.history.length > 1) {
+                window.history.back();
+              } else {
+                setActiveTab('assistant');
+              }
+            }}
+          />
         )}
       </main>
 

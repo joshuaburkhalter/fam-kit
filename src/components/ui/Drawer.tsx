@@ -36,6 +36,8 @@ export const Drawer: React.FC<DrawerProps> = ({
   const panelWidth = width || maxWidth || 'w-full max-w-full sm:max-w-xl md:max-w-2xl';
   const [isRendered, setIsRendered] = useState(isOpen);
   const [isClosing, setIsClosing] = useState(false);
+  const historyPushedRef = React.useRef(false);
+  const closedByPopstateRef = React.useRef(false);
 
   // Sync render state immediately when isOpen becomes true
   if (isOpen && !isRendered) {
@@ -43,13 +45,21 @@ export const Drawer: React.FC<DrawerProps> = ({
     setIsClosing(false);
   }
 
-  const handleClose = () => {
+  const handleClose = (fromPopState: boolean = false) => {
     if (isClosing) return;
     setIsClosing(true);
+
+    if (!fromPopState && historyPushedRef.current) {
+      historyPushedRef.current = false;
+      closedByPopstateRef.current = true;
+      window.history.back();
+    }
+
     setTimeout(() => {
       onClose();
       setIsRendered(false);
       setIsClosing(false);
+      closedByPopstateRef.current = false;
     }, 260);
   };
 
@@ -57,16 +67,42 @@ export const Drawer: React.FC<DrawerProps> = ({
     if (isOpen) {
       document.body.style.overflow = 'hidden';
 
-      const handleKeyDown = (e: KeyboardEvent) => {
-        if (e.key === 'Escape') handleClose();
+      // Push history state so the phone back button closes the drawer instead of closing the app
+      if (!historyPushedRef.current) {
+        historyPushedRef.current = true;
+        closedByPopstateRef.current = false;
+        window.history.pushState({ type: 'drawer', timestamp: Date.now() }, '', window.location.href);
+      }
+
+      const handlePopState = () => {
+        if (historyPushedRef.current) {
+          historyPushedRef.current = false;
+          closedByPopstateRef.current = true;
+          handleClose(true);
+        }
       };
+
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') handleClose(false);
+      };
+
+      window.addEventListener('popstate', handlePopState);
       window.addEventListener('keydown', handleKeyDown);
 
       return () => {
+        window.removeEventListener('popstate', handlePopState);
         window.removeEventListener('keydown', handleKeyDown);
         document.body.style.overflow = '';
+        if (historyPushedRef.current && !closedByPopstateRef.current) {
+          historyPushedRef.current = false;
+          window.history.back();
+        }
       };
     } else if (isRendered && !isClosing) {
+      if (historyPushedRef.current && !closedByPopstateRef.current) {
+        historyPushedRef.current = false;
+        window.history.back();
+      }
       setIsClosing(true);
       const timer = setTimeout(() => {
         setIsRendered(false);
@@ -86,7 +122,7 @@ export const Drawer: React.FC<DrawerProps> = ({
         className={`fixed inset-0 bg-black/65 backdrop-blur-xs cursor-pointer ${
           isClosing ? 'animate-backdrop-out pointer-events-none' : 'animate-backdrop-in'
         }`}
-        onClick={handleClose}
+        onClick={() => handleClose(false)}
       />
 
       {/* Slide-out Drawer Panel with fluid hardware-accelerated spring slide */}
@@ -126,7 +162,7 @@ export const Drawer: React.FC<DrawerProps> = ({
               {headerRight}
               <button
                 type="button"
-                onClick={handleClose}
+                onClick={() => handleClose(false)}
                 aria-label="Close drawer"
                 className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
               >

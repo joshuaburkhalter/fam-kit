@@ -78,6 +78,7 @@ export const BugFeatureAdminModal: React.FC<BugFeatureAdminModalProps> = ({
 
   const [isRendered, setIsRendered] = useState(isOpen);
   const [isClosing, setIsClosing] = useState(false);
+  const historyPushedRef = React.useRef(false);
 
   // Sync render state immediately when isOpen becomes true
   if (isOpen && !isRendered) {
@@ -85,9 +86,15 @@ export const BugFeatureAdminModal: React.FC<BugFeatureAdminModalProps> = ({
     setIsClosing(false);
   }
 
-  const handleClose = () => {
+  const handleClose = (fromPopState: boolean = false) => {
     if (isClosing) return;
     setIsClosing(true);
+
+    if (!fromPopState && historyPushedRef.current) {
+      historyPushedRef.current = false;
+      window.history.back();
+    }
+
     setTimeout(() => {
       onClose();
       setIsRendered(false);
@@ -102,12 +109,26 @@ export const BugFeatureAdminModal: React.FC<BugFeatureAdminModalProps> = ({
       setEditingId(null);
       document.body.style.overflow = 'hidden';
 
-      const handleKeyDown = (e: KeyboardEvent) => {
-        if (e.key === 'Escape') handleClose();
+      if (!historyPushedRef.current) {
+        historyPushedRef.current = true;
+        window.history.pushState({ type: 'admin_modal', timestamp: Date.now() }, '', window.location.href);
+      }
+
+      const handlePopState = () => {
+        if (historyPushedRef.current) {
+          historyPushedRef.current = false;
+          handleClose(true);
+        }
       };
+
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') handleClose(false);
+      };
+      window.addEventListener('popstate', handlePopState);
       window.addEventListener('keydown', handleKeyDown);
 
       return () => {
+        window.removeEventListener('popstate', handlePopState);
         window.removeEventListener('keydown', handleKeyDown);
         document.body.style.overflow = '';
       };
@@ -317,7 +338,7 @@ export const BugFeatureAdminModal: React.FC<BugFeatureAdminModalProps> = ({
         className={`fixed inset-0 bg-black/65 backdrop-blur-xs cursor-pointer ${
           isClosing ? 'animate-backdrop-out pointer-events-none' : 'animate-backdrop-in'
         }`}
-        onClick={handleClose}
+        onClick={() => handleClose(false)}
       />
 
       {/* Slide-out Drawer Panel with fluid cubic-bezier spring slide */}
@@ -368,7 +389,7 @@ export const BugFeatureAdminModal: React.FC<BugFeatureAdminModalProps> = ({
             </button>
             <button
               type="button"
-              onClick={handleClose}
+              onClick={() => handleClose(false)}
               className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
             >
               <X className="w-4 h-4" />
@@ -748,7 +769,7 @@ export const BugFeatureAdminModal: React.FC<BugFeatureAdminModalProps> = ({
             Logged in as: <strong className="text-slate-300">{currentUser?.name}</strong> ({currentUser?.email || currentUser?.username})
           </span>
           <button
-            onClick={handleClose}
+            onClick={() => handleClose(false)}
             className="px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold transition-colors cursor-pointer"
           >
             Close Drawer
