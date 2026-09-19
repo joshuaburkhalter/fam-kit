@@ -1878,6 +1878,19 @@ app.delete('/api/grocery', (req, res) => {
     return res.json({ success: true });
   }
 
+  const recipeTitle = req.query.recipeTitle as string;
+
+  if (recipeTitle) {
+    const trimmed = recipeTitle.trim();
+    const pattern = `for: ${trimmed.toLowerCase()}%`;
+    execute(
+      'DELETE FROM grocery_items WHERE householdId = ? AND (LOWER(note) = ? OR LOWER(note) LIKE ?)',
+      [householdId, `for: ${trimmed.toLowerCase()}`, pattern]
+    );
+    saveDb();
+    return res.json({ success: true });
+  }
+
   if (id) {
     execute('DELETE FROM grocery_items WHERE id = ?', [id]);
     return res.json({ success: true });

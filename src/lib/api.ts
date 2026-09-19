@@ -609,8 +609,17 @@ export const api = {
       success: true,
       addedCount: count,
       skippedStaplesCount: skippedStaples.length,
-      skippedStaples: skippedStaples.map((s) => s.item),
     };
+  },
+
+  removeRecipeFromGrocery: async (recipeTitle: string, householdId?: string) => {
+    return fetchJson<{ success: boolean }>(
+      `/grocery?recipeTitle=${encodeURIComponent(recipeTitle.trim())}`,
+      {
+        method: 'DELETE',
+        headers: householdId ? { 'x-household-id': householdId } : undefined,
+      }
+    );
   },
 
   exportRecipeToGrocery: async (

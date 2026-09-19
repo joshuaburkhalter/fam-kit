@@ -20,7 +20,7 @@ import {
   BookOpen,
   Pencil,
 } from 'lucide-react';
-import type { Recipe } from '../types';
+import type { Recipe, GroceryItem } from '../types';
 import { usePWA } from '../context/PWAContext';
 import { api } from '../lib/api';
 import { RecipeScraperModal, extractSharedUrl } from '../components/RecipeScraperModal';
@@ -31,6 +31,7 @@ import { CheckSparkle, CelebrationConfetti, triggerHapticCheck } from '../compon
 export const RecipesPage: React.FC = () => {
   const { household, apiKey } = usePWA();
   const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [groceryItems, setGroceryItems] = useState<GroceryItem[]>([]);
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [isScraperOpen, setIsScraperOpen] = useState(false);
   const [scraperInitialUrl, setScraperInitialUrl] = useState('');
@@ -257,8 +258,12 @@ export const RecipesPage: React.FC = () => {
     if (!household) return;
     setIsLoading(true);
     try {
-      const data = await api.getRecipes(household.id);
+      const [data, grocery] = await Promise.all([
+        api.getRecipes(household.id),
+        api.getGroceryItems(household.id),
+      ]);
       setRecipes(data);
+      setGroceryItems(grocery);
     } catch (err) {
       console.error('Failed to load recipes:', err);
     } finally {
@@ -270,15 +275,49 @@ export const RecipesPage: React.FC = () => {
     loadRecipes();
   }, [household]);
 
+  const isRecipeInGrocery = (recipeTitle?: string) => {
+    if (!recipeTitle) return false;
+    const prefix = `for: ${recipeTitle.trim().toLowerCase()}`;
+    return groceryItems.some(
+      (item) => !item.is_completed && item.notes && item.notes.trim().toLowerCase().startsWith(prefix)
+    );
+  };
+
   const handleAddAllToGrocery = async (recipe: Recipe) => {
     if (!household) return;
+    const inGrocery = isRecipeInGrocery(recipe.title);
+    const prefix = `for: ${recipe.title.trim().toLowerCase()}`;
+
+    if (inGrocery) {
+      const prevItems = groceryItems;
+      setGroceryItems((prev) =>
+        prev.filter((item) => !item.notes || !item.notes.trim().toLowerCase().startsWith(prefix))
+      );
+      setAddedGroceryFeedback(`Removed "${recipe.title}" ingredients from Grocery List`);
+      setTimeout(() => setAddedGroceryFeedback(null), 3500);
+
+      try {
+        triggerHapticCheck();
+        await api.removeRecipeFromGrocery(recipe.title, household.id);
+      } catch (err: any) {
+        console.error('Remove from grocery failed:', err);
+        setGroceryItems(prevItems);
+        alert(err.message || 'Failed to remove ingredients from grocery list');
+      }
+      return;
+    }
+
     try {
+      triggerHapticCheck();
       const res = await api.addRecipeToGrocery(recipe, household.id);
       // Also add to Shopped Recipes list
       await api.addWeeklyMeal(household.id, {
         title: recipe.title,
         recipe_id: recipe.id,
       }).catch((e) => console.warn('Auto-add to shopped meals:', e));
+
+      const refreshed = await api.getGroceryItems(household.id);
+      setGroceryItems(refreshed);
 
       const feedback = (res as any).skippedStaplesCount > 0
         ? `Added ${res.addedCount} ingredients (filtered ${(res as any).skippedStaplesCount} pantry staples: water, salt, etc.)!`
@@ -464,15 +503,37 @@ export const RecipesPage: React.FC = () => {
                 <span className="sm:hidden">Edit</span>
               </button>
 
-              <button
-                onClick={() => handleAddAllToGrocery(selectedRecipe)}
-                className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20 shrink-0"
-                title="Add all ingredients to Grocery List"
-              >
-                <ShoppingCart className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Add to Grocery List</span>
-                <span className="sm:hidden">Add to List</span>
-              </button>
+              {(() => {
+                const inGrocery = isRecipeInGrocery(selectedRecipe.title);
+                return (
+                  <button
+                    onClick={() => handleAddAllToGrocery(selectedRecipe)}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-md shrink-0 cursor-pointer group ${
+                      inGrocery
+                        ? 'text-emerald-400 hover:text-rose-300 bg-emerald-500/15 hover:bg-rose-500/20 border border-emerald-500/30 hover:border-rose-500/40'
+                        : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/20'
+                    }`}
+                    title={inGrocery ? 'Click to remove ingredients from Grocery List' : 'Add all ingredients to Grocery List'}
+                  >
+                    {inGrocery ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 stroke-[2.5] group-hover:hidden" />
+                        <X className="w-3.5 h-3.5 stroke-[2.5] hidden group-hover:inline text-rose-400" />
+                        <span className="hidden sm:inline group-hover:hidden">In Grocery List</span>
+                        <span className="hidden sm:inline hidden group-hover:inline">Remove from List</span>
+                        <span className="sm:hidden group-hover:hidden">In List</span>
+                        <span className="sm:hidden hidden group-hover:inline">Remove</span>
+                      </>
+                    ) : (
+                      <>
+                        <ShoppingCart className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Add to Grocery List</span>
+                        <span className="sm:hidden">Add to List</span>
+                      </>
+                    )}
+                  </button>
+                );
+              })()}
 
               <button
                 onClick={() => handleDeleteRecipe(selectedRecipe.id, selectedRecipe.title)}

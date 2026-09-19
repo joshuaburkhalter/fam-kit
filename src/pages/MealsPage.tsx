@@ -32,7 +32,7 @@ import {
   isYesterday,
   parseISO,
 } from 'date-fns';
-import type { WeeklyMeal, MealLog, Recipe } from '../types';
+import type { WeeklyMeal, MealLog, Recipe, GroceryItem } from '../types';
 import { usePWA } from '../context/PWAContext';
 import { api } from '../lib/api';
 import { CheckSparkle, CelebrationConfetti, triggerHapticCheck } from '../components/CheckSparkle';
@@ -46,6 +46,7 @@ interface MealsDataCache {
   meals: WeeklyMeal[];
   mealLogs: MealLog[];
   recipes: Recipe[];
+  groceryItems?: GroceryItem[];
 }
 
 let mealsDataCache: MealsDataCache | null = null;
@@ -109,6 +110,11 @@ export const MealsPage: React.FC = () => {
   const [recipes, setRecipes] = useState<Recipe[]>(() => {
     return mealsDataCache && mealsDataCache.householdId === householdId
       ? mealsDataCache.recipes
+      : [];
+  });
+  const [groceryItems, setGroceryItems] = useState<GroceryItem[]>(() => {
+    return mealsDataCache && mealsDataCache.householdId === householdId && mealsDataCache.groceryItems
+      ? mealsDataCache.groceryItems
       : [];
   });
   const [isLoading, setIsLoading] = useState<boolean>(() => {
@@ -228,16 +234,20 @@ export const MealsPage: React.FC = () => {
       setMeals(mealsDataCache.meals);
       setMealLogs(mealsDataCache.mealLogs);
       setRecipes(mealsDataCache.recipes);
+      if (mealsDataCache.groceryItems) {
+        setGroceryItems(mealsDataCache.groceryItems);
+      }
       setIsLoading(false);
     } else {
       setIsLoading(true);
     }
 
     try {
-      const [weeklyRes, logsRes, recRes] = await Promise.all([
+      const [weeklyRes, logsRes, recRes, groceryRes] = await Promise.all([
         api.getWeeklyMeals(householdId),
         api.getMealLogs(householdId),
         api.getRecipes(householdId),
+        api.getGroceryItems(householdId),
       ]);
 
       if (!isMountedRef.current) return;
@@ -246,12 +256,14 @@ export const MealsPage: React.FC = () => {
       setMeals(unmadeMeals);
       setMealLogs(logsRes);
       setRecipes(recRes);
+      setGroceryItems(groceryRes);
 
       mealsDataCache = {
         householdId,
         meals: unmadeMeals,
         mealLogs: logsRes,
         recipes: recRes,
+        groceryItems: groceryRes,
       };
     } catch (err) {
       console.error('Failed to load meals data', err);
@@ -272,6 +284,15 @@ export const MealsPage: React.FC = () => {
     recipes.forEach((r) => map.set(r.id, r));
     return map;
   }, [recipes]);
+
+  // Helper to check if a recipe's ingredients are currently on the grocery list
+  const isRecipeInGrocery = (recipeTitle?: string) => {
+    if (!recipeTitle) return false;
+    const prefix = `for: ${recipeTitle.trim().toLowerCase()}`;
+    return groceryItems.some(
+      (item) => !item.is_completed && item.notes && item.notes.trim().toLowerCase().startsWith(prefix)
+    );
+  };
 
   // Check URL parameter for initial recipe selection
   useEffect(() => {
@@ -384,16 +405,41 @@ export const MealsPage: React.FC = () => {
   };
 
   /**
-   * CORE ACTION: Add a recipe to Planner (puts on deck ready to shop and cook)
-   * Only changes the button state (optimistically) with zero visual popups or toasts.
+   * CORE ACTION: Toggle a recipe in Planner (add or remove from on-deck list)
    */
-  const handleAddRecipeToPlanner = async (recipe: Recipe, e?: React.MouseEvent) => {
+  const handleToggleRecipePlanner = async (recipe: Recipe, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     if (!householdId) return;
 
-    // If already in planner, do nothing
     const existing = meals.find((m) => m.recipe_id === recipe.id);
-    if (existing) return;
+
+    if (existing) {
+      // Optimistically remove from planner
+      const mealIdToRemove = existing.id;
+      const previousMeals = meals;
+      setMeals((prev) => prev.filter((m) => m.recipe_id !== recipe.id));
+      if (mealsDataCache && mealsDataCache.householdId === householdId) {
+        mealsDataCache.meals = mealsDataCache.meals.filter((m) => m.recipe_id !== recipe.id);
+      }
+      showToast(`Removed "${recipe.title}" from Planner`);
+
+      if (mealIdToRemove.startsWith('temp-')) {
+        return;
+      }
+
+      try {
+        triggerHapticCheck();
+        await api.deleteWeeklyMeal(mealIdToRemove);
+      } catch (err) {
+        console.error('Failed to remove recipe from planner', err);
+        setMeals(previousMeals);
+        if (mealsDataCache && mealsDataCache.householdId === householdId) {
+          mealsDataCache.meals = previousMeals;
+        }
+        showToast(`Failed to remove "${recipe.title}" from Planner`);
+      }
+      return;
+    }
 
     // Optimistic temporary meal so the button flips to "In Planner" instantly
     const tempId = `temp-${Date.now()}`;
@@ -411,6 +457,7 @@ export const MealsPage: React.FC = () => {
     if (mealsDataCache && mealsDataCache.householdId === householdId) {
       mealsDataCache.meals = [tempMeal, ...mealsDataCache.meals];
     }
+    showToast(`Added "${recipe.title}" to Planner!`);
 
     try {
       triggerHapticCheck();
@@ -419,8 +466,15 @@ export const MealsPage: React.FC = () => {
         recipe_id: recipe.id,
       });
 
-      // Replace temp record with server record
-      setMeals((prev) => prev.map((m) => (m.id === tempId ? added : m)));
+      // Replace temp record with server record, unless user removed it while request was in-flight
+      setMeals((prev) => {
+        const stillPresent = prev.some((m) => m.id === tempId || m.recipe_id === recipe.id);
+        if (!stillPresent) {
+          api.deleteWeeklyMeal(added.id).catch(console.error);
+          return prev;
+        }
+        return prev.map((m) => (m.id === tempId ? added : m));
+      });
       if (mealsDataCache && mealsDataCache.householdId === householdId) {
         mealsDataCache.meals = mealsDataCache.meals.map((m) => (m.id === tempId ? added : m));
       }
@@ -431,8 +485,11 @@ export const MealsPage: React.FC = () => {
       if (mealsDataCache && mealsDataCache.householdId === householdId) {
         mealsDataCache.meals = mealsDataCache.meals.filter((m) => m.id !== tempId);
       }
+      showToast(`Failed to add "${recipe.title}" to Planner`);
     }
   };
+
+  const handleAddRecipeToPlanner = handleToggleRecipePlanner;
 
   /**
    * CORE ACTION: Mark meal as cooked on a given day.
@@ -554,21 +611,62 @@ export const MealsPage: React.FC = () => {
     }
   };
 
-  // Shop Ingredients to Grocery List
-  const handleShopIngredients = async (recipe: Recipe, e?: React.MouseEvent) => {
+  // Shop / Remove Ingredients to/from Grocery List
+  const handleToggleShopIngredients = async (recipe: Recipe, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     if (!householdId) return;
+
+    const inGrocery = isRecipeInGrocery(recipe.title);
+    const prefix = `for: ${recipe.title.trim().toLowerCase()}`;
+
+    if (inGrocery) {
+      // Optimistically remove from grocery items
+      const previousItems = groceryItems;
+      const updated = groceryItems.filter(
+        (item) => !item.notes || !item.notes.trim().toLowerCase().startsWith(prefix)
+      );
+      setGroceryItems(updated);
+      if (mealsDataCache && mealsDataCache.householdId === householdId) {
+        mealsDataCache.groceryItems = updated;
+      }
+      showToast(`Removed "${recipe.title}" ingredients from Grocery list`);
+
+      try {
+        triggerHapticCheck();
+        await api.removeRecipeFromGrocery(recipe.title, householdId);
+      } catch (err) {
+        console.error('Failed to remove ingredients', err);
+        setGroceryItems(previousItems);
+        if (mealsDataCache && mealsDataCache.householdId === householdId) {
+          mealsDataCache.groceryItems = previousItems;
+        }
+        showToast('Error removing ingredients');
+      }
+      return;
+    }
+
+    // Add ingredients to grocery list
     try {
+      triggerHapticCheck();
       const res = await api.addRecipeToGrocery(recipe, householdId);
-      const msg = (res as any).skippedStaplesCount > 0
-        ? `Added ${res.addedCount} ingredients (filtered ${(res as any).skippedStaplesCount} pantry staples: water, salt, etc.)!`
-        : `Added ${res.addedCount} ingredients to Grocery list!`;
+      const refreshedItems = await api.getGroceryItems(householdId);
+      setGroceryItems(refreshedItems);
+      if (mealsDataCache && mealsDataCache.householdId === householdId) {
+        mealsDataCache.groceryItems = refreshedItems;
+      }
+
+      const msg =
+        (res as any).skippedStaplesCount > 0
+          ? `Added ${res.addedCount} ingredients (filtered ${(res as any).skippedStaplesCount} pantry staples: water, salt, etc.)!`
+          : `Added ${res.addedCount} ingredients to Grocery list!`;
       showToast(msg);
     } catch (err) {
       console.error('Failed to add ingredients', err);
       showToast('Error adding ingredients');
     }
   };
+
+  const handleShopIngredients = handleToggleShopIngredients;
 
   // Submit Manual Log Form
   const handleSubmitManualLog = async (e: React.FormEvent) => {
@@ -824,20 +922,34 @@ export const MealsPage: React.FC = () => {
 
             <div className="flex items-center gap-1.5 sm:gap-2 ml-auto">
               {/* Add to Planner / In Planner Button */}
-              {meals.some((m) => m.recipe_id === selectedRecipe.id) ? (
-                <span className="px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 shrink-0">
-                  <Check className="w-3.5 h-3.5 stroke-[3]" />
-                  <span>In Planner</span>
-                </span>
-              ) : (
-                <button
-                  onClick={(e) => handleAddRecipeToPlanner(selectedRecipe, e)}
-                  className="px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all text-slate-950 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 shadow-md shadow-emerald-500/20 active:scale-95 shrink-0 cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-                  <span>Add to Planner</span>
-                </button>
-              )}
+              {(() => {
+                const inPlanner = meals.some((m) => m.recipe_id === selectedRecipe.id);
+                return (
+                  <button
+                    onClick={(e) => handleToggleRecipePlanner(selectedRecipe, e)}
+                    className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shrink-0 cursor-pointer group ${
+                      inPlanner
+                        ? 'text-emerald-400 hover:text-rose-300 bg-emerald-500/15 hover:bg-rose-500/20 border border-emerald-500/30 hover:border-rose-500/40'
+                        : 'text-slate-950 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 shadow-md shadow-emerald-500/20'
+                    }`}
+                    title={inPlanner ? 'Click to remove from Planner' : 'Add to Planner'}
+                  >
+                    {inPlanner ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 stroke-[3] group-hover:hidden" />
+                        <X className="w-3.5 h-3.5 stroke-[3] hidden group-hover:inline text-rose-400" />
+                        <span className="group-hover:hidden">In Planner</span>
+                        <span className="hidden group-hover:inline">Remove</span>
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                        <span>Add to Planner</span>
+                      </>
+                    )}
+                  </button>
+                );
+              })()}
 
               {/* Cook Mode Button */}
               <button
@@ -855,14 +967,35 @@ export const MealsPage: React.FC = () => {
               </button>
 
               {/* Shop Ingredients Button */}
-              <button
-                onClick={(e) => handleShopIngredients(selectedRecipe, e)}
-                className="px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all text-slate-200 hover:text-white bg-slate-850 hover:bg-slate-800 border border-white/10 shrink-0 cursor-pointer"
-                title="Add ingredients to grocery list"
-              >
-                <ShoppingCart className="w-3.5 h-3.5 text-pink-400" />
-                <span className="hidden sm:inline">Shop Ingredients</span>
-              </button>
+              {(() => {
+                const inGrocery = isRecipeInGrocery(selectedRecipe.title);
+                return (
+                  <button
+                    onClick={(e) => handleToggleShopIngredients(selectedRecipe, e)}
+                    className={`px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all shrink-0 cursor-pointer group ${
+                      inGrocery
+                        ? 'text-emerald-400 hover:text-rose-300 bg-emerald-500/15 hover:bg-rose-500/20 border border-emerald-500/30 hover:border-rose-500/40'
+                        : 'text-slate-200 hover:text-white bg-slate-850 hover:bg-slate-800 border border-white/10'
+                    }`}
+                    title={inGrocery ? 'Click to remove ingredients from Grocery List' : 'Add ingredients to grocery list'}
+                  >
+                    {inGrocery ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 stroke-[2.5] group-hover:hidden text-emerald-400" />
+                        <X className="w-3.5 h-3.5 stroke-[2.5] hidden group-hover:inline text-rose-400" />
+                        <span className="group-hover:hidden">In Grocery</span>
+                        <span className="hidden group-hover:inline">Remove</span>
+                      </>
+                    ) : (
+                      <>
+                        <ShoppingCart className="w-3.5 h-3.5 text-pink-400" />
+                        <span className="hidden sm:inline">Shop Ingredients</span>
+                        <span className="sm:hidden">Shop</span>
+                      </>
+                    )}
+                  </button>
+                );
+              })()}
 
               {hasProgress && (
                 <button
@@ -1003,13 +1136,34 @@ export const MealsPage: React.FC = () => {
                   ({Object.values(checkedIngredients).filter(Boolean).length}/{selectedRecipe.ingredients.length})
                 </span>
               </h3>
-              <button
-                onClick={(e) => handleShopIngredients(selectedRecipe, e)}
-                className="text-xs font-bold text-pink-400 hover:text-pink-300 flex items-center gap-1 bg-pink-500/10 hover:bg-pink-500/20 border border-pink-500/20 px-3 py-1.5 rounded-xl transition-all cursor-pointer"
-              >
-                <ShoppingCart className="w-3.5 h-3.5" />
-                <span>Shop Ingredients</span>
-              </button>
+              {(() => {
+                const inGrocery = isRecipeInGrocery(selectedRecipe.title);
+                return (
+                  <button
+                    onClick={(e) => handleToggleShopIngredients(selectedRecipe, e)}
+                    className={`text-xs font-bold flex items-center gap-1 px-3 py-1.5 rounded-xl transition-all cursor-pointer group ${
+                      inGrocery
+                        ? 'text-emerald-400 hover:text-rose-300 bg-emerald-500/15 hover:bg-rose-500/20 border border-emerald-500/30 hover:border-rose-500/40'
+                        : 'text-pink-400 hover:text-pink-300 bg-pink-500/10 hover:bg-pink-500/20 border border-pink-500/20'
+                    }`}
+                    title={inGrocery ? 'Click to remove ingredients from Grocery List' : 'Add ingredients to grocery list'}
+                  >
+                    {inGrocery ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 stroke-[2.5] group-hover:hidden" />
+                        <X className="w-3.5 h-3.5 stroke-[2.5] hidden group-hover:inline text-rose-400" />
+                        <span className="group-hover:hidden">In Grocery</span>
+                        <span className="hidden group-hover:inline">Remove</span>
+                      </>
+                    ) : (
+                      <>
+                        <ShoppingCart className="w-3.5 h-3.5" />
+                        <span>Shop Ingredients</span>
+                      </>
+                    )}
+                  </button>
+                );
+              })()}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
@@ -1346,21 +1500,30 @@ export const MealsPage: React.FC = () => {
                             </div>
 
                             {/* Front of Card Planner Button */}
-                            {isAlreadyInPlanner ? (
-                              <span className="inline-flex items-center gap-1 text-emerald-400 font-bold bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-1 rounded-xl text-[11px]">
-                                <Check className="w-3 h-3 stroke-[2.5]" />
-                                <span>In Planner</span>
-                              </span>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={(e) => handleAddRecipeToPlanner(recipe, e)}
-                                className="inline-flex items-center gap-1 text-emerald-400 hover:text-white bg-emerald-500/10 hover:bg-emerald-500 border border-emerald-500/30 hover:border-emerald-500 px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all shadow-sm active:scale-95 cursor-pointer"
-                              >
-                                <Plus className="w-3 h-3 stroke-[2.5]" />
-                                <span>Add to Planner</span>
-                              </button>
-                            )}
+                            <button
+                              type="button"
+                              onClick={(e) => handleToggleRecipePlanner(recipe, e)}
+                              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all shadow-sm active:scale-95 cursor-pointer group ${
+                                isAlreadyInPlanner
+                                  ? 'text-emerald-400 hover:text-rose-300 bg-emerald-500/15 hover:bg-rose-500/20 border border-emerald-500/30 hover:border-rose-500/40'
+                                  : 'text-emerald-400 hover:text-white bg-emerald-500/10 hover:bg-emerald-500 border border-emerald-500/30 hover:border-emerald-500'
+                              }`}
+                              title={isAlreadyInPlanner ? 'Click to remove from Planner' : 'Add to Planner'}
+                            >
+                              {isAlreadyInPlanner ? (
+                                <>
+                                  <Check className="w-3 h-3 stroke-[2.5] group-hover:hidden" />
+                                  <X className="w-3 h-3 stroke-[2.5] hidden group-hover:inline text-rose-400" />
+                                  <span className="group-hover:hidden">In Planner</span>
+                                  <span className="hidden group-hover:inline">Remove</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Plus className="w-3 h-3 stroke-[2.5]" />
+                                  <span>Add to Planner</span>
+                                </>
+                              )}
+                            </button>
                           </div>
                         </div>
                       </div>
@@ -1453,14 +1616,34 @@ export const MealsPage: React.FC = () => {
                           <div className="flex items-center gap-1.5">
                             {linkedRecipe && (
                               <>
-                                <button
-                                  onClick={(e) => handleShopIngredients(linkedRecipe, e)}
-                                  className="px-2.5 py-1.5 rounded-xl bg-pink-500/10 hover:bg-pink-500/20 text-pink-400 hover:text-pink-300 font-semibold text-[11px] border border-pink-500/20 flex items-center gap-1 transition-all cursor-pointer"
-                                  title="Add ingredients to grocery list"
-                                >
-                                  <ShoppingCart className="w-3 h-3" />
-                                  <span>Shop</span>
-                                </button>
+                                {(() => {
+                                  const inGrocery = isRecipeInGrocery(linkedRecipe.title);
+                                  return (
+                                    <button
+                                      onClick={(e) => handleToggleShopIngredients(linkedRecipe, e)}
+                                      className={`px-2.5 py-1.5 rounded-xl font-semibold text-[11px] flex items-center gap-1 transition-all cursor-pointer group ${
+                                        inGrocery
+                                          ? 'bg-emerald-500/15 hover:bg-rose-500/20 text-emerald-400 hover:text-rose-300 border border-emerald-500/30 hover:border-rose-500/40'
+                                          : 'bg-pink-500/10 hover:bg-pink-500/20 text-pink-400 hover:text-pink-300 border border-pink-500/20'
+                                      }`}
+                                      title={inGrocery ? 'Click to remove ingredients from Grocery List' : 'Add ingredients to grocery list'}
+                                    >
+                                      {inGrocery ? (
+                                        <>
+                                          <Check className="w-3 h-3 stroke-[2.5] group-hover:hidden" />
+                                          <X className="w-3 h-3 stroke-[2.5] hidden group-hover:inline text-rose-400" />
+                                          <span className="group-hover:hidden">Shopped</span>
+                                          <span className="hidden group-hover:inline">Remove</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <ShoppingCart className="w-3 h-3" />
+                                          <span>Shop</span>
+                                        </>
+                                      )}
+                                    </button>
+                                  );
+                                })()}
                                 <button
                                   onClick={() => handleSelectRecipe(linkedRecipe)}
                                   className="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-200 font-semibold text-[11px] border border-white/10 flex items-center gap-1 transition-all cursor-pointer"
@@ -1870,16 +2053,21 @@ export const MealsPage: React.FC = () => {
                     </div>
 
                     <button
-                      onClick={(e) => handleAddRecipeToPlanner(r, e)}
-                      disabled={isAlreadyInPlanner}
-                      className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1 shrink-0 transition-all active:scale-95 cursor-pointer ${
+                      onClick={(e) => handleToggleRecipePlanner(r, e)}
+                      className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1 shrink-0 transition-all active:scale-95 cursor-pointer group ${
                         isAlreadyInPlanner
-                          ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                          ? 'bg-emerald-500/15 hover:bg-rose-500/20 text-emerald-400 hover:text-rose-300 border border-emerald-500/30 hover:border-rose-500/40'
                           : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-md shadow-emerald-500/20'
                       }`}
+                      title={isAlreadyInPlanner ? 'Click to remove from Planner' : 'Add to Planner'}
                     >
                       {isAlreadyInPlanner ? (
-                        <span>In Planner</span>
+                        <>
+                          <Check className="w-3.5 h-3.5 stroke-[2.5] group-hover:hidden" />
+                          <X className="w-3.5 h-3.5 stroke-[2.5] hidden group-hover:inline text-rose-400" />
+                          <span className="group-hover:hidden">In Planner</span>
+                          <span className="hidden group-hover:inline">Remove</span>
+                        </>
                       ) : (
                         <>
                           <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
