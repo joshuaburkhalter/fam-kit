@@ -848,7 +848,7 @@ export const GroceryPage: React.FC = () => {
                       </span>
                       {isDragging ? (
                         <span className="text-[10px] font-mono font-bold bg-emerald-400/25 text-emerald-300 border border-emerald-400/40 px-2 py-0.5 rounded-full animate-pulse shrink-0">
-                          Slot #{dragTargetIndex + 1}
+                          Slot #{idx + 1}
                         </span>
                       ) : (
                         <span className="text-[10px] font-mono bg-white/5 px-2 py-0.5 rounded-full text-slate-400 shrink-0">
