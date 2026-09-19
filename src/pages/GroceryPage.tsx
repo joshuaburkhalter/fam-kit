@@ -463,6 +463,7 @@ export const GroceryPage: React.FC = () => {
   const [dragStartIndex, setDragStartIndex] = useState<number>(-1);
   const [dragTargetIndex, setDragTargetIndex] = useState<number>(-1);
   const [dragOffsetY, setDragOffsetY] = useState<number>(0);
+  const [dragShiftAmount, setDragShiftAmount] = useState<number>(0);
   const dragStartYRef = useRef<number>(0);
   const initialMidpointsRef = useRef<number[]>([]);
   const cardElementsRef = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -478,9 +479,10 @@ export const GroceryPage: React.FC = () => {
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     } catch {}
 
-    // Record initial midpoints of all cards at rest
-    const midpoints: number[] = [];
     const list = itemsByAisleRef.current;
+
+    // Record initial resting midpoints of all cards
+    const midpoints: number[] = [];
     for (let i = 0; i < list.length; i++) {
       const el = cardElementsRef.current.get(list[i]?.aisle.id);
       if (el) {
@@ -491,6 +493,24 @@ export const GroceryPage: React.FC = () => {
       }
     }
     initialMidpointsRef.current = midpoints;
+
+    // Measure dragged card height and inter-card gap
+    const draggedEl = cardElementsRef.current.get(aisleId);
+    const draggedRect = draggedEl?.getBoundingClientRect();
+    const draggedHeight = draggedRect ? draggedRect.height : 60;
+
+    let measuredGap = 16;
+    if (list.length > 1) {
+      const el0 = cardElementsRef.current.get(list[0]?.aisle.id);
+      const el1 = cardElementsRef.current.get(list[1]?.aisle.id);
+      if (el0 && el1) {
+        const r0 = el0.getBoundingClientRect();
+        const r1 = el1.getBoundingClientRect();
+        const g = r1.top - r0.bottom;
+        if (g > 0 && g < 80) measuredGap = g;
+      }
+    }
+    setDragShiftAmount(draggedHeight + measuredGap);
 
     setDraggingAisleId(aisleId);
     setDragStartIndex(index);
@@ -513,17 +533,20 @@ export const GroceryPage: React.FC = () => {
     const midpoints = initialMidpointsRef.current;
     if (midpoints.length <= 1) return;
 
-    // Calculate nearest initial card slot midpoint
+    // Compare dragged card's current center to initial resting slot midpoints
+    const currentCenter = (midpoints[dragStartIndex] ?? currentY) + offset;
     let closestIdx = dragStartIndex;
     let minDistance = Infinity;
 
     for (let i = 0; i < midpoints.length; i++) {
-      const dist = Math.abs(currentY - midpoints[i]);
+      const dist = Math.abs(currentCenter - midpoints[i]);
       if (dist < minDistance) {
         minDistance = dist;
         closestIdx = i;
       }
     }
+
+    closestIdx = Math.max(0, Math.min(midpoints.length - 1, closestIdx));
 
     if (closestIdx !== dragTargetIndex) {
       setDragTargetIndex(closestIdx);
@@ -547,6 +570,7 @@ export const GroceryPage: React.FC = () => {
     setDragStartIndex(-1);
     setDragTargetIndex(-1);
     setDragOffsetY(0);
+    setDragShiftAmount(0);
 
     if (toIdx >= 0 && toIdx !== fromIdx) {
       const currentList = itemsByAisleRef.current;
@@ -772,93 +796,105 @@ export const GroceryPage: React.FC = () => {
           itemsByAisle.map(({ aisle, items: aisleItems }, idx) => {
             const isCollapsed = collapsedAisles[aisle.id];
             const isDragging = draggingAisleId === aisle.id;
+            const isDraggingAny = draggingAisleId !== null;
 
-            // Show drop indicator above this card if target is before this card
-            const showDropAbove =
-              draggingAisleId !== null &&
-              dragTargetIndex === idx &&
-              dragTargetIndex < dragStartIndex;
-
-            // Show drop indicator below this card if target is after this card
-            const showDropBelow =
-              draggingAisleId !== null &&
-              dragTargetIndex === idx &&
-              dragTargetIndex > dragStartIndex;
+            // Optimistic shift displacement for lists not being dragged
+            let cardTranslateY = 0;
+            if (isDragging) {
+              cardTranslateY = dragOffsetY;
+            } else if (isDraggingAny && dragShiftAmount > 0) {
+              if (dragStartIndex < dragTargetIndex) {
+                // Dragging DOWN: lists between (dragStartIndex, dragTargetIndex] move UP
+                if (idx > dragStartIndex && idx <= dragTargetIndex) {
+                  cardTranslateY = -dragShiftAmount;
+                }
+              } else if (dragStartIndex > dragTargetIndex) {
+                // Dragging UP: lists between [dragTargetIndex, dragStartIndex) move DOWN
+                if (idx >= dragTargetIndex && idx < dragStartIndex) {
+                  cardTranslateY = dragShiftAmount;
+                }
+              }
+            }
 
             return (
-              <React.Fragment key={aisle.id}>
-                {showDropAbove && (
-                  <div className="flex items-center gap-2 py-1.5 px-3 my-1 animate-in fade-in zoom-in-95 duration-150">
-                    <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-md shadow-emerald-400/80 shrink-0 animate-pulse" />
-                    <div className="h-0.5 flex-1 bg-gradient-to-r from-emerald-400 via-emerald-400/70 to-emerald-400/20 rounded-full shadow-sm shadow-emerald-400/50" />
-                    <span className="text-[10px] font-mono font-bold text-emerald-400 uppercase tracking-wider shrink-0 bg-slate-950/95 px-2.5 py-0.5 rounded-full border border-emerald-500/50 shadow-lg shadow-emerald-950/60">
-                      Drop Here
-                    </span>
-                  </div>
-                )}
-
+              <div
+                key={aisle.id}
+                ref={(el) => {
+                  if (el) {
+                    cardElementsRef.current.set(aisle.id, el);
+                  } else {
+                    cardElementsRef.current.delete(aisle.id);
+                  }
+                }}
+                style={{
+                  transform:
+                    isDragging || cardTranslateY !== 0
+                      ? `translateY(${cardTranslateY}px)`
+                      : undefined,
+                  zIndex: isDragging ? 50 : undefined,
+                  transition: isDragging
+                    ? 'none'
+                    : isDraggingAny
+                    ? 'transform 220ms cubic-bezier(0.2, 0, 0, 1)'
+                    : undefined,
+                }}
+                className={`glass-panel rounded-3xl border overflow-hidden relative ${
+                  isDragging
+                    ? 'border-emerald-400 ring-2 ring-emerald-400/80 shadow-2xl shadow-emerald-950/90 scale-[1.02] bg-slate-900/98 z-50 opacity-95'
+                    : 'border-white/10 shadow-sm'
+                }`}
+              >
+                {/* Aisle Category Header */}
                 <div
-                  ref={(el) => {
-                    if (el) {
-                      cardElementsRef.current.set(aisle.id, el);
-                    } else {
-                      cardElementsRef.current.delete(aisle.id);
-                    }
-                  }}
-                  style={{
-                    transform: isDragging ? `translateY(${dragOffsetY}px)` : undefined,
-                  }}
-                  className={`glass-panel rounded-3xl border overflow-hidden relative ${
-                    isDragging
-                      ? 'border-emerald-400 ring-2 ring-emerald-400/80 shadow-2xl shadow-emerald-950/90 scale-[1.02] bg-slate-900/98 z-50 opacity-95 transition-none'
-                      : 'border-white/10 shadow-sm transition-all duration-200'
+                  className={`w-full flex items-center justify-between px-3 py-2.5 sm:px-3.5 sm:py-3 border-b border-white/5 transition-colors select-none ${
+                    isDragging ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-slate-900/40 hover:bg-slate-900/60'
                   }`}
                 >
-                  {/* Aisle Category Header */}
-                  <div
-                    className={`w-full flex items-center justify-between px-3 py-2.5 sm:px-3.5 sm:py-3 border-b border-white/5 transition-colors select-none ${
-                      isDragging ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-slate-900/40 hover:bg-slate-900/60'
-                    }`}
-                  >
-                    {/* Drag Handle */}
-                    {itemsByAisle.length > 1 && (
-                      <div
-                        onPointerDown={(e) => handleDragStart(e, aisle.id, idx)}
-                        onPointerMove={handleDragMove}
-                        onPointerUp={handleDragEnd}
-                        onPointerCancel={handleDragEnd}
-                        className={`p-1.5 -ml-1 cursor-grab active:cursor-grabbing touch-none select-none rounded-lg transition-colors shrink-0 ${
-                          isDragging
-                            ? 'text-emerald-400 bg-emerald-500/20'
-                            : 'text-slate-500 hover:text-slate-200 hover:bg-white/5'
-                        }`}
-                        title="Drag to reorder category"
-                      >
-                        <GripVertical className="w-4 h-4" />
-                      </div>
-                    )}
-
-                    {/* Category Title & Collapse Trigger */}
-                    <button
-                      type="button"
-                      disabled={isDragging}
-                      onClick={() => !isDragging && toggleAisleCollapse(aisle.id)}
-                      className="flex-1 min-w-0 flex items-center justify-between ml-1.5 py-0.5 text-left cursor-pointer disabled:cursor-grabbing"
+                  {/* Drag Handle */}
+                  {itemsByAisle.length > 1 && (
+                    <div
+                      onPointerDown={(e) => handleDragStart(e, aisle.id, idx)}
+                      onPointerMove={handleDragMove}
+                      onPointerUp={handleDragEnd}
+                      onPointerCancel={handleDragEnd}
+                      className={`p-1.5 -ml-1 cursor-grab active:cursor-grabbing touch-none select-none rounded-lg transition-colors shrink-0 ${
+                        isDragging
+                          ? 'text-emerald-400 bg-emerald-500/20 ring-1 ring-emerald-400/50'
+                          : 'text-slate-500 hover:text-slate-200 hover:bg-white/5'
+                      }`}
+                      title="Drag to reorder category"
                     >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div
-                          className="w-3 h-3 rounded-full shadow-sm shrink-0"
-                          style={{ backgroundColor: aisle.color || '#10b981' }}
-                        />
-                        <span className="text-xs font-bold uppercase tracking-wider text-slate-200 truncate">
-                          {aisle.name}
+                      <GripVertical className="w-4 h-4" />
+                    </div>
+                  )}
+
+                  {/* Category Title & Collapse Trigger */}
+                  <button
+                    type="button"
+                    disabled={isDragging}
+                    onClick={() => !isDragging && toggleAisleCollapse(aisle.id)}
+                    className="flex-1 min-w-0 flex items-center justify-between ml-1.5 py-0.5 text-left cursor-pointer disabled:cursor-grabbing"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div
+                        className="w-3 h-3 rounded-full shadow-sm shrink-0"
+                        style={{ backgroundColor: aisle.color || '#10b981' }}
+                      />
+                      <span className="text-xs font-bold uppercase tracking-wider text-slate-200 truncate">
+                        {aisle.name}
+                      </span>
+                      {isDragging ? (
+                        <span className="text-[10px] font-mono font-bold bg-emerald-400/25 text-emerald-300 border border-emerald-400/40 px-2 py-0.5 rounded-full animate-pulse shrink-0">
+                          Slot #{dragTargetIndex + 1}
                         </span>
+                      ) : (
                         <span className="text-[10px] font-mono bg-white/5 px-2 py-0.5 rounded-full text-slate-400 shrink-0">
                           {aisleItems.length}
                         </span>
-                      </div>
+                      )}
+                    </div>
 
-                      <div className="text-slate-500 hover:text-slate-300 transition-colors shrink-0">
+                    <div className="text-slate-500 hover:text-slate-300 transition-colors shrink-0">
                         {isCollapsed ? (
                           <ChevronRight className="w-4 h-4" />
                         ) : (
@@ -956,19 +992,8 @@ export const GroceryPage: React.FC = () => {
                   </div>
                 )}
               </div>
-
-              {showDropBelow && (
-                <div className="flex items-center gap-2 py-1.5 px-3 my-1 animate-in fade-in zoom-in-95 duration-150">
-                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-md shadow-emerald-400/80 shrink-0 animate-pulse" />
-                  <div className="h-0.5 flex-1 bg-gradient-to-r from-emerald-400 via-emerald-400/70 to-emerald-400/20 rounded-full shadow-sm shadow-emerald-400/50" />
-                  <span className="text-[10px] font-mono font-bold text-emerald-400 uppercase tracking-wider shrink-0 bg-slate-950/95 px-2.5 py-0.5 rounded-full border border-emerald-500/50 shadow-lg shadow-emerald-950/60">
-                    Drop Here
-                  </span>
-                </div>
-              )}
-            </React.Fragment>
-          );
-        })}
+            );
+          })}
 
         {/* Uncategorized Items (if Grocery list) */}
         {isGroceryList && uncategorizedItems.length > 0 && (
