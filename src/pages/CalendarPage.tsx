@@ -810,20 +810,22 @@ export const CalendarPage: React.FC = () => {
                                   {/* Top row: Time & Member */}
                                   <div className="flex items-center justify-between gap-2">
                                     <div
-                                      className={`inline-flex items-center gap-1.5 text-[11px] font-mono font-medium ${
+                                      className={`inline-flex items-center gap-1.5 text-[11px] font-mono font-medium shrink-0 ${
                                         isActive ? 'text-emerald-300 font-bold' : isPast ? 'text-slate-400' : 'text-emerald-400'
                                       }`}
                                     >
-                                      <Clock className={`w-3 h-3 ${isActive ? 'text-emerald-300' : isPast ? 'text-slate-400' : 'text-emerald-400'}`} />
-                                      <span>{formatTimeRange(ev)}</span>
+                                      <Clock className={`w-3 h-3 shrink-0 ${isActive ? 'text-emerald-300' : isPast ? 'text-slate-400' : 'text-emerald-400'}`} />
+                                      <span className="whitespace-nowrap">{formatTimeRange(ev)}</span>
                                     </div>
 
                                     <div className="flex items-center gap-1.5 shrink-0">
                                       {isActive && (
-                                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-[10px] text-emerald-300 font-bold shadow-sm">
+                                        <span
+                                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-500/20 border border-emerald-500/30 text-[10px] text-emerald-300 font-bold shrink-0"
+                                          title={`Active now (${format(currentTime, 'h:mm a')})`}
+                                        >
                                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                                          <span>{format(currentTime, 'h:mm a')}</span>
-                                          <span className="text-emerald-400/70 font-semibold text-[9px] uppercase tracking-wider">Now</span>
+                                          <span>Active</span>
                                         </span>
                                       )}
 
