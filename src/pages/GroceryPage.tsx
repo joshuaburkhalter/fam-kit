@@ -461,11 +461,25 @@ export const GroceryPage: React.FC = () => {
   // Draggable category sorting state
   const [draggingAisleId, setDraggingAisleId] = useState<string | null>(null);
   const [dragOffsetY, setDragOffsetY] = useState<number>(0);
-  const dragCurrentIndexRef = useRef<number>(-1);
+  const [dragStartIndex, setDragStartIndex] = useState<number>(-1);
+  const [dragTargetIndex, setDragTargetIndex] = useState<number>(-1);
+  const [dragSlotHeight, setDragSlotHeight] = useState<number>(0);
+
+  const dragStartIndexRef = useRef<number>(-1);
+  const dragTargetIndexRef = useRef<number>(-1);
   const dragStartYRef = useRef<number>(0);
   const cardElementsRef = useRef<Map<string, HTMLDivElement>>(new Map());
   const itemsByAisleRef = useRef<{ aisle: Aisle; items: GroceryItem[] }[]>([]);
   itemsByAisleRef.current = itemsByAisle;
+
+  interface CategoryLayout {
+    id: string;
+    top: number;
+    bottom: number;
+    height: number;
+    midY: number;
+  }
+  const initialLayoutsRef = useRef<CategoryLayout[]>([]);
 
   const handleDragStart = (e: React.PointerEvent, aisleId: string, index: number) => {
     if (e.button !== 0) return;
@@ -476,98 +490,91 @@ export const GroceryPage: React.FC = () => {
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     } catch {}
 
-    setDraggingAisleId(aisleId);
-    dragCurrentIndexRef.current = index;
-    dragStartYRef.current = e.clientY;
-    setDragOffsetY(0);
-
-    try {
-      if ('vibrate' in navigator) navigator.vibrate(15);
-    } catch {}
-  };
-
-  const performSwap = (fromIdx: number, toIdx: number) => {
-    dragCurrentIndexRef.current = toIdx;
-
-    try {
-      if ('vibrate' in navigator) navigator.vibrate(12);
-    } catch {}
-
     const currentList = itemsByAisleRef.current;
-    const fromAisle = currentList[fromIdx]?.aisle;
-    const toAisle = currentList[toIdx]?.aisle;
-    if (!fromAisle || !toAisle) return;
+    if (currentList.length <= 1) return;
 
-    // Adjust dragStartY so dragged element stays smoothly under finger
-    const fromEl = cardElementsRef.current.get(fromAisle.id);
-    const toEl = cardElementsRef.current.get(toAisle.id);
-    if (fromEl && toEl) {
-      const delta = toEl.getBoundingClientRect().top - fromEl.getBoundingClientRect().top;
-      dragStartYRef.current += delta;
+    // Pre-measure all resting card positions before any transforms are applied
+    const layouts: CategoryLayout[] = [];
+    for (let i = 0; i < currentList.length; i++) {
+      const el = cardElementsRef.current.get(currentList[i].aisle.id);
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        layouts.push({
+          id: currentList[i].aisle.id,
+          top: rect.top,
+          bottom: rect.bottom,
+          height: rect.height,
+          midY: rect.top + rect.height / 2,
+        });
+      }
     }
 
-    setLocalAisles((prevAisles) => {
-      const base = prevAisles.length > 0 ? [...prevAisles] : [...aisles];
-      const fromAisleIndex = base.findIndex((a) => a.id === fromAisle.id);
-      const toAisleIndex = base.findIndex((a) => a.id === toAisle.id);
-      if (fromAisleIndex === -1 || toAisleIndex === -1) return prevAisles;
+    if (layouts.length === 0 || !layouts[index]) return;
 
-      const currentFromOrder = base[fromAisleIndex].display_order;
-      const currentToOrder = base[toAisleIndex].display_order;
+    // Measure gap between cards
+    let gap = 16;
+    if (layouts.length > 1) {
+      const measuredGap = layouts[1].top - layouts[0].bottom;
+      if (measuredGap > 0 && measuredGap < 80) {
+        gap = measuredGap;
+      }
+    }
 
-      base[fromAisleIndex] = { ...base[fromAisleIndex], display_order: currentToOrder };
-      base[toAisleIndex] = { ...base[toAisleIndex], display_order: currentFromOrder };
+    const slotH = layouts[index].height + gap;
 
-      return [...base]
-        .sort((a, b) => a.display_order - b.display_order)
-        .map((a, i) => ({
-          ...a,
-          display_order: i,
-        }));
-    });
+    initialLayoutsRef.current = layouts;
+    dragStartIndexRef.current = index;
+    dragTargetIndexRef.current = index;
+    dragStartYRef.current = e.clientY;
+
+    setDraggingAisleId(aisleId);
+    setDragStartIndex(index);
+    setDragTargetIndex(index);
+    setDragSlotHeight(slotH);
+    setDragOffsetY(0);
+
+    // Crisp pickup haptic vibration
+    try {
+      if ('vibrate' in navigator) navigator.vibrate(20);
+    } catch {}
   };
 
   const handleDragMove = (e: React.PointerEvent) => {
     if (!draggingAisleId) return;
 
     const currentY = e.clientY;
-    setDragOffsetY(currentY - dragStartYRef.current);
+    const offsetY = currentY - dragStartYRef.current;
+    setDragOffsetY(offsetY);
 
-    const currentIndex = dragCurrentIndexRef.current;
-    if (currentIndex < 0) return;
+    const layouts = initialLayoutsRef.current;
+    const startIdx = dragStartIndexRef.current;
+    if (layouts.length === 0 || startIdx < 0 || !layouts[startIdx]) return;
 
-    const currentList = itemsByAisleRef.current;
+    // Dragged card's center in viewport
+    const draggedMidY = layouts[startIdx].midY + offsetY;
+    const currentTarget = dragTargetIndexRef.current;
 
-    // Check item above
-    if (currentIndex > 0) {
-      const prevAisle = currentList[currentIndex - 1]?.aisle;
-      if (prevAisle) {
-        const prevEl = cardElementsRef.current.get(prevAisle.id);
-        if (prevEl) {
-          const rect = prevEl.getBoundingClientRect();
-          const midpoint = rect.top + rect.height / 2;
-          if (currentY < midpoint) {
-            performSwap(currentIndex, currentIndex - 1);
-            return;
-          }
-        }
+    // Find candidate target index based on boundary thresholds between resting midpoints
+    let targetIdx = 0;
+    for (let i = 0; i < layouts.length - 1; i++) {
+      const boundary = (layouts[i].midY + layouts[i + 1].midY) / 2;
+      // Add 6px hysteresis margin to prevent boundary flutter
+      const hysteresis = i < currentTarget ? -6 : 6;
+      if (draggedMidY > boundary + hysteresis) {
+        targetIdx = i + 1;
       }
     }
 
-    // Check item below
-    if (currentIndex < currentList.length - 1) {
-      const nextAisle = currentList[currentIndex + 1]?.aisle;
-      if (nextAisle) {
-        const nextEl = cardElementsRef.current.get(nextAisle.id);
-        if (nextEl) {
-          const rect = nextEl.getBoundingClientRect();
-          const midpoint = rect.top + rect.height / 2;
-          if (currentY > midpoint) {
-            performSwap(currentIndex, currentIndex + 1);
-            return;
-          }
-        }
-      }
+    targetIdx = Math.max(0, Math.min(layouts.length - 1, targetIdx));
+
+    if (targetIdx !== dragTargetIndexRef.current) {
+      dragTargetIndexRef.current = targetIdx;
+      setDragTargetIndex(targetIdx);
+
+      // Crisp haptic feedback on crossing into each new slot!
+      try {
+        if ('vibrate' in navigator) navigator.vibrate(15);
+      } catch {}
     }
   };
 
@@ -578,34 +585,76 @@ export const GroceryPage: React.FC = () => {
       (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
     } catch {}
 
+    // Drop haptic buzz
     try {
       if ('vibrate' in navigator) navigator.vibrate([15, 30, 20]);
     } catch {}
 
+    const fromIdx = dragStartIndexRef.current;
+    const toIdx = dragTargetIndexRef.current;
+    const currentList = itemsByAisleRef.current;
+
+    // Reset drag tracking immediately
     setDraggingAisleId(null);
     setDragOffsetY(0);
-    dragCurrentIndexRef.current = -1;
+    setDragStartIndex(-1);
+    setDragTargetIndex(-1);
+    setDragSlotHeight(0);
+    dragStartIndexRef.current = -1;
+    dragTargetIndexRef.current = -1;
+    initialLayoutsRef.current = [];
 
-    // Persist to server
-    setLocalAisles((currentAisles) => {
-      const sorted = [...currentAisles].sort((a, b) => a.display_order - b.display_order);
-      const sortedIds = sorted.map((a) => a.id);
+    // If slot actually changed, reorder and persist
+    if (
+      fromIdx !== toIdx &&
+      fromIdx >= 0 &&
+      toIdx >= 0 &&
+      fromIdx < currentList.length &&
+      toIdx < currentList.length
+    ) {
+      const reorderedVisibleAisles = currentList.map((x) => x.aisle);
+      const [movedAisle] = reorderedVisibleAisles.splice(fromIdx, 1);
+      reorderedVisibleAisles.splice(toIdx, 0, movedAisle);
 
-      if (groceryDataCache && householdId && groceryDataCache.householdId === householdId) {
-        groceryDataCache.aisles = sorted;
-      }
+      setLocalAisles((prevAisles) => {
+        const base = prevAisles.length > 0 ? [...prevAisles] : [...aisles];
+        const sortedBase = [...base].sort((a, b) => a.display_order - b.display_order);
 
-      api.reorderAisles(householdId, sortedIds)
-        .then(() => {
-          refreshAisles();
-          showToast('Category order saved');
-        })
-        .catch((err) => {
-          console.error('Failed to save category order:', err);
+        const visibleIdSet = new Set(reorderedVisibleAisles.map((a) => a.id));
+        let visibleIdx = 0;
+        const newFullList = sortedBase.map((a) => {
+          if (visibleIdSet.has(a.id)) {
+            const replacement = reorderedVisibleAisles[visibleIdx];
+            visibleIdx++;
+            return replacement;
+          }
+          return a;
         });
 
-      return currentAisles;
-    });
+        const updated = newFullList.map((a, i) => ({
+          ...a,
+          display_order: i,
+        }));
+
+        const sortedIds = updated.map((a) => a.id);
+
+        if (groceryDataCache && householdId && groceryDataCache.householdId === householdId) {
+          groceryDataCache.aisles = updated;
+        }
+
+        api.reorderAisles(householdId, sortedIds)
+          .then(() => {
+            refreshAisles();
+            showToast('Category order saved');
+          })
+          .catch((err) => {
+            console.error('Failed to save category order:', err);
+            showToast('Failed to save category order');
+          });
+
+        return updated;
+      });
+    }
   };
 
   const currentList = customLists.find((l) => l.id === activeListType);
@@ -787,6 +836,31 @@ export const GroceryPage: React.FC = () => {
             const isCollapsed = collapsedAisles[aisle.id];
             const isDragging = draggingAisleId === aisle.id;
 
+            // Calculate optimistic displacement for stationary cards
+            let cardTranslateY = 0;
+            if (isDragging) {
+              cardTranslateY = dragOffsetY;
+            } else if (
+              draggingAisleId &&
+              dragStartIndex !== -1 &&
+              dragTargetIndex !== -1 &&
+              dragSlotHeight > 0
+            ) {
+              if (dragStartIndex < dragTargetIndex) {
+                // Dragging DOWN: cards between (start, target] shift UP
+                if (idx > dragStartIndex && idx <= dragTargetIndex) {
+                  cardTranslateY = -dragSlotHeight;
+                }
+              } else if (dragStartIndex > dragTargetIndex) {
+                // Dragging UP: cards between [target, start) shift DOWN
+                if (idx >= dragTargetIndex && idx < dragStartIndex) {
+                  cardTranslateY = dragSlotHeight;
+                }
+              }
+            }
+
+            const displaySlot = isDragging ? dragTargetIndex + 1 : idx + 1;
+
             return (
               <div
                 key={aisle.id}
@@ -798,13 +872,14 @@ export const GroceryPage: React.FC = () => {
                   }
                 }}
                 style={{
-                  transform: isDragging ? `translateY(${dragOffsetY}px)` : undefined,
+                  transform: cardTranslateY !== 0 ? `translateY(${cardTranslateY}px)` : undefined,
+                  transition: isDragging ? 'none' : 'transform 200ms cubic-bezier(0.2, 0, 0, 1)',
                   zIndex: isDragging ? 50 : undefined,
                 }}
                 className={`glass-panel rounded-3xl border overflow-hidden relative ${
                   isDragging
-                    ? 'border-emerald-400 ring-2 ring-emerald-400/80 shadow-2xl shadow-emerald-950/90 scale-[1.02] bg-slate-900/98 z-50 opacity-95 transition-none'
-                    : 'border-white/10 shadow-sm transition-all duration-200'
+                    ? 'border-emerald-400 ring-2 ring-emerald-400/80 shadow-2xl shadow-emerald-950/90 scale-[1.02] bg-slate-900/98 z-50 opacity-95'
+                    : 'border-white/10 shadow-sm'
                 }`}
               >
                 {/* Aisle Category Header */}
@@ -820,6 +895,7 @@ export const GroceryPage: React.FC = () => {
                       onPointerMove={handleDragMove}
                       onPointerUp={handleDragEnd}
                       onPointerCancel={handleDragEnd}
+                      onLostPointerCapture={handleDragEnd}
                       className={`p-1.5 -ml-1 cursor-grab active:cursor-grabbing touch-none select-none rounded-lg transition-colors shrink-0 ${
                         isDragging
                           ? 'text-emerald-400 bg-emerald-500/20 ring-1 ring-emerald-400/50'
@@ -848,7 +924,7 @@ export const GroceryPage: React.FC = () => {
                       </span>
                       {isDragging ? (
                         <span className="text-[10px] font-mono font-bold bg-emerald-400/25 text-emerald-300 border border-emerald-400/40 px-2 py-0.5 rounded-full animate-pulse shrink-0">
-                          Slot #{idx + 1}
+                          Slot #{displaySlot}
                         </span>
                       ) : (
                         <span className="text-[10px] font-mono bg-white/5 px-2 py-0.5 rounded-full text-slate-400 shrink-0">
