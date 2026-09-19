@@ -468,20 +468,6 @@ export const RecipesPage: React.FC = () => {
             </button>
 
             <div className="flex items-center gap-1.5 sm:gap-2 ml-auto">
-              <button
-                onClick={() => handleToggleCookMode()}
-                className={`px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all shrink-0 ${
-                  isCookMode
-                    ? 'bg-amber-500 text-slate-950 font-bold ring-2 ring-amber-400 shadow-md shadow-amber-500/20'
-                    : 'bg-slate-850 hover:bg-slate-800 text-slate-200 border border-white/10'
-                }`}
-                title={isCookMode ? 'Exit Cook Mode' : 'Start Step-by-Step Cook Mode'}
-              >
-                <Flame className="w-3.5 h-3.5 text-amber-400" />
-                <span className="hidden sm:inline">{isCookMode ? 'Exit Cook Mode' : 'Cook Mode'}</span>
-                <span className="sm:hidden">{isCookMode ? 'Exit' : 'Cook'}</span>
-              </button>
-
               {hasProgress && (
                 <button
                   onClick={handleResetProgress}

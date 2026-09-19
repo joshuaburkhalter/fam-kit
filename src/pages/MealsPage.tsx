@@ -936,48 +936,34 @@ export const MealsPage: React.FC = () => {
                   >
                     {inPlanner ? (
                       <>
-                        <Check className="w-3.5 h-3.5 stroke-[3] group-hover:hidden" />
-                        <X className="w-3.5 h-3.5 stroke-[3] hidden group-hover:inline text-rose-400" />
+                        <Check className="w-3.5 h-3.5 stroke-[2.5] group-hover:hidden" />
+                        <X className="w-3.5 h-3.5 stroke-[2.5] hidden group-hover:inline text-rose-400" />
                         <span className="group-hover:hidden">In Planner</span>
                         <span className="hidden group-hover:inline">Remove</span>
                       </>
                     ) : (
                       <>
                         <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-                        <span>Add to Planner</span>
+                        <span className="hidden sm:inline">Add to </span>
+                        <span>Planner</span>
                       </>
                     )}
                   </button>
                 );
               })()}
 
-              {/* Cook Mode Button */}
-              <button
-                onClick={() => handleToggleCookMode()}
-                className={`px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all shrink-0 cursor-pointer ${
-                  isCookMode
-                    ? 'bg-amber-500 text-slate-950 font-bold ring-2 ring-amber-400 shadow-md shadow-amber-500/20'
-                    : 'bg-slate-850 hover:bg-slate-800 text-slate-200 border border-white/10'
-                }`}
-                title={isCookMode ? 'Exit Cook Mode' : 'Start Step-by-Step Cook Mode'}
-              >
-                <Flame className="w-3.5 h-3.5 text-amber-400" />
-                <span className="hidden sm:inline">{isCookMode ? 'Exit Cook Mode' : 'Cook Mode'}</span>
-                <span className="sm:hidden">{isCookMode ? 'Exit' : 'Cook'}</span>
-              </button>
-
-              {/* Shop Ingredients Button */}
+              {/* Add to Grocery / In Grocery Button */}
               {(() => {
                 const inGrocery = isRecipeInGrocery(selectedRecipe.title);
                 return (
                   <button
                     onClick={(e) => handleToggleShopIngredients(selectedRecipe, e)}
-                    className={`px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all shrink-0 cursor-pointer group ${
+                    className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shrink-0 cursor-pointer group ${
                       inGrocery
                         ? 'text-emerald-400 hover:text-rose-300 bg-emerald-500/15 hover:bg-rose-500/20 border border-emerald-500/30 hover:border-rose-500/40'
-                        : 'text-slate-200 hover:text-white bg-slate-850 hover:bg-slate-800 border border-white/10'
+                        : 'text-slate-950 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 shadow-md shadow-emerald-500/20'
                     }`}
-                    title={inGrocery ? 'Click to remove ingredients from Grocery List' : 'Add ingredients to grocery list'}
+                    title={inGrocery ? 'Click to remove ingredients from Grocery List' : 'Add to Grocery List'}
                   >
                     {inGrocery ? (
                       <>
@@ -988,9 +974,9 @@ export const MealsPage: React.FC = () => {
                       </>
                     ) : (
                       <>
-                        <ShoppingCart className="w-3.5 h-3.5 text-pink-400" />
-                        <span className="hidden sm:inline">Shop Ingredients</span>
-                        <span className="sm:hidden">Shop</span>
+                        <ShoppingCart className="w-3.5 h-3.5 stroke-[2.5]" />
+                        <span className="hidden sm:inline">Add to </span>
+                        <span>Grocery</span>
                       </>
                     )}
                   </button>
@@ -1141,12 +1127,12 @@ export const MealsPage: React.FC = () => {
                 return (
                   <button
                     onClick={(e) => handleToggleShopIngredients(selectedRecipe, e)}
-                    className={`text-xs font-bold flex items-center gap-1 px-3 py-1.5 rounded-xl transition-all cursor-pointer group ${
+                    className={`text-xs font-bold flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all cursor-pointer group shadow-sm active:scale-95 ${
                       inGrocery
                         ? 'text-emerald-400 hover:text-rose-300 bg-emerald-500/15 hover:bg-rose-500/20 border border-emerald-500/30 hover:border-rose-500/40'
-                        : 'text-pink-400 hover:text-pink-300 bg-pink-500/10 hover:bg-pink-500/20 border border-pink-500/20'
+                        : 'text-slate-950 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 shadow-emerald-500/20'
                     }`}
-                    title={inGrocery ? 'Click to remove ingredients from Grocery List' : 'Add ingredients to grocery list'}
+                    title={inGrocery ? 'Click to remove ingredients from Grocery List' : 'Add ingredients to Grocery List'}
                   >
                     {inGrocery ? (
                       <>
@@ -1157,8 +1143,8 @@ export const MealsPage: React.FC = () => {
                       </>
                     ) : (
                       <>
-                        <ShoppingCart className="w-3.5 h-3.5" />
-                        <span>Shop Ingredients</span>
+                        <ShoppingCart className="w-3.5 h-3.5 stroke-[2.5]" />
+                        <span>Add to Grocery</span>
                       </>
                     )}
                   </button>
