@@ -289,31 +289,100 @@ export const RecipeScraperModal: React.FC<RecipeScraperModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       title="Add & Import Recipe"
-      subtitle="Scan cookbook pages, snap photos, paste web links, or enter text"
+      subtitle="Scan photos, import links, or paste recipe text"
       icon={<Sparkles className="w-5 h-5 text-emerald-400" />}
+      maxWidth="max-w-xl"
       footer={
-        <div className="w-full flex items-center justify-between">
-          <button
-            type="button"
-            onClick={onClose}
-            className="bg-slate-800 hover:bg-slate-700 text-white px-5 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
-          >
-            Close
-          </button>
-          {importedRecipe && (
+        importedRecipe ? (
+          <div className="w-full flex items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 font-semibold text-xs transition-colors cursor-pointer"
+            >
+              Close
+            </button>
             <button
               type="button"
               onClick={() => {
                 onRecipeImported(importedRecipe);
                 onClose();
               }}
-              className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-5 py-2 rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-500/20 flex items-center gap-1.5 cursor-pointer"
+              className="flex-1 sm:flex-none px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/20 active:scale-95 transition-all cursor-pointer"
             >
               <span>View Recipe</span>
               <ArrowRight className="w-3.5 h-3.5 stroke-[2.5]" />
             </button>
-          )}
-        </div>
+          </div>
+        ) : activeTab === 'scan' && capturedImages.length > 0 ? (
+          <div className="w-full flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isLoading}
+              className="px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white font-semibold text-xs transition-colors cursor-pointer disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleScanPhotos}
+              disabled={isLoading || isCompressingImages || capturedImages.length === 0}
+              className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 shadow-md shadow-emerald-500/20 active:scale-95 transition-all cursor-pointer disabled:opacity-50"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Scanning Recipe...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Scan & Save Recipe ({capturedImages.length})</span>
+                </>
+              )}
+            </button>
+          </div>
+        ) : activeTab === 'text' && rawText.trim() ? (
+          <div className="w-full flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isLoading}
+              className="px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white font-semibold text-xs transition-colors cursor-pointer disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleImportText}
+              disabled={isLoading || !rawText.trim()}
+              className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 shadow-md shadow-emerald-500/20 active:scale-95 transition-all cursor-pointer disabled:opacity-50"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Parsing Recipe Text...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Parse & Save Recipe</span>
+                </>
+              )}
+            </button>
+          </div>
+        ) : (
+          <div className="w-full flex items-center justify-end">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white font-semibold text-xs transition-colors cursor-pointer"
+            >
+              Close
+            </button>
+          </div>
+        )
       }
     >
       {/* Hidden file inputs for camera and gallery */}
@@ -419,7 +488,7 @@ export const RecipeScraperModal: React.FC<RecipeScraperModalProps> = ({
                     type="button"
                     onClick={() => galleryInputRef.current?.click()}
                     disabled={isCompressingImages}
-                    className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs flex items-center justify-center gap-2 border border-white/10 transition-colors cursor-pointer"
+                    className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-200 font-semibold text-xs flex items-center justify-center gap-2 border border-white/10 transition-colors cursor-pointer"
                   >
                     <ImageIcon className="w-4 h-4 text-emerald-400" />
                     <span>Choose from Library</span>
@@ -435,117 +504,94 @@ export const RecipeScraperModal: React.FC<RecipeScraperModalProps> = ({
               </div>
             ) : (
               <div className="space-y-3">
-                {/* Photo Grid */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-white">
+                {/* Photo Grid Header */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-xs font-bold text-white shrink-0">
                       Recipe Photos ({capturedImages.length})
                     </span>
-                    <span className="text-[10px] text-slate-400 font-medium">
-                      (Tap a photo to set as cover picture)
+                    <span className="text-[11px] text-emerald-400/90 font-medium truncate">
+                      • Tap photo for cover
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 shrink-0">
                     <button
                       type="button"
                       onClick={() => cameraInputRef.current?.click()}
-                      className="text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1 rounded-lg border border-white/10 flex items-center gap-1 font-semibold cursor-pointer"
+                      className="text-[11px] bg-slate-800 hover:bg-slate-750 text-slate-200 px-2.5 py-1.5 rounded-xl border border-white/10 flex items-center gap-1 font-semibold cursor-pointer active:scale-95 transition-all"
                       title="Take another photo"
                     >
-                      <Camera className="w-3 h-3 text-emerald-400" />
-                      <span>+ Camera</span>
+                      <Camera className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Camera</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => galleryInputRef.current?.click()}
-                      className="text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1 rounded-lg border border-white/10 flex items-center gap-1 font-semibold cursor-pointer"
+                      className="text-[11px] bg-slate-800 hover:bg-slate-750 text-slate-200 px-2.5 py-1.5 rounded-xl border border-white/10 flex items-center gap-1 font-semibold cursor-pointer active:scale-95 transition-all"
                       title="Add more photos from library"
                     >
-                      <ImageIcon className="w-3 h-3 text-emerald-400" />
-                      <span>+ Library</span>
+                      <ImageIcon className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Gallery</span>
                     </button>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-64 overflow-y-auto pr-1">
+                {/* Thumbnails Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                   {capturedImages.map((img, idx) => {
                     const isCover = idx === selectedCoverIndex;
                     return (
                       <div
                         key={idx}
-                        className={`relative rounded-2xl overflow-hidden border transition-all group aspect-[4/3] bg-slate-950 ${
+                        onClick={() => setSelectedCoverIndex(idx)}
+                        className={`relative rounded-2xl overflow-hidden border-2 transition-all cursor-pointer aspect-[4/3] bg-slate-950 group select-none ${
                           isCover
-                            ? 'border-emerald-400 ring-2 ring-emerald-400/40 shadow-lg shadow-emerald-500/20'
-                            : 'border-white/15 hover:border-white/30'
+                            ? 'border-emerald-400 ring-2 ring-emerald-500/40 shadow-lg shadow-emerald-500/20'
+                            : 'border-white/10 hover:border-white/30'
                         }`}
                       >
                         <img
                           src={img.dataUrl}
-                          alt={`Page ${idx + 1}`}
-                          className="w-full h-full object-cover cursor-pointer"
-                          onClick={() => setSelectedCoverIndex(idx)}
+                          alt={`Photo ${idx + 1}`}
+                          className="w-full h-full object-cover"
                         />
 
-                        {/* Top: Delete button */}
+                        {/* Top Left: Photo Number */}
+                        <span className="absolute top-2 left-2 px-2 py-0.5 rounded-lg bg-slate-950/80 font-mono text-[10px] text-white font-bold border border-white/10 backdrop-blur-xs">
+                          #{idx + 1}
+                        </span>
+
+                        {/* Top Right: Delete Button */}
                         <button
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
                             handleRemovePhoto(idx);
                           }}
-                          className="absolute top-1.5 right-1.5 p-1 rounded-lg bg-slate-950/80 hover:bg-rose-500 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                          className="absolute top-2 right-2 w-6 h-6 rounded-lg bg-slate-950/80 hover:bg-rose-500 text-slate-300 hover:text-white flex items-center justify-center transition-colors cursor-pointer border border-white/10 backdrop-blur-xs"
                           title="Remove photo"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
 
-                        {/* Page label */}
-                        <span className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-md bg-slate-950/80 font-mono text-[10px] text-white font-bold border border-white/10">
-                          #{idx + 1}
-                        </span>
-
-                        {/* Bottom: Cover Badge / Selector */}
-                        <div className="absolute bottom-1.5 inset-x-1.5 flex justify-center">
+                        {/* Bottom: Cover Badge */}
+                        <div className="absolute bottom-2 inset-x-2 flex justify-center">
                           {isCover ? (
-                            <span className="bg-emerald-500 text-slate-950 font-black text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1 shadow-md">
-                              <Star className="w-3 h-3 fill-slate-950" />
+                            <span className="bg-emerald-500 text-slate-950 font-black text-[10px] px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-md shadow-emerald-950/50">
+                              <Star className="w-3 h-3 fill-slate-950 stroke-none" />
                               <span>Recipe Cover</span>
                             </span>
                           ) : (
-                            <button
-                              type="button"
-                              onClick={() => setSelectedCoverIndex(idx)}
-                              className="bg-slate-950/80 hover:bg-emerald-500 hover:text-slate-950 text-slate-300 text-[10px] font-semibold px-2 py-0.5 rounded-full border border-white/20 transition-all cursor-pointer"
-                            >
+                            <span className="bg-slate-950/80 hover:bg-slate-900 text-slate-300 hover:text-white text-[10px] font-medium px-2 py-0.5 rounded-full border border-white/20 backdrop-blur-xs transition-colors">
                               Set as Cover
-                            </button>
+                            </span>
                           )}
                         </div>
                       </div>
                     );
                   })}
                 </div>
-
-                {/* Scan Action Button */}
-                <button
-                  type="button"
-                  onClick={handleScanPhotos}
-                  disabled={isLoading || isCompressingImages || capturedImages.length === 0}
-                  className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 disabled:opacity-50 text-slate-950 font-black text-xs sm:text-sm flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-500/20 cursor-pointer"
-                >
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Scanning & Parsing Recipe...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-4 h-4" />
-                      <span>Scan & Save Recipe ({capturedImages.length} {capturedImages.length === 1 ? 'photo' : 'photos'})</span>
-                    </>
-                  )}
-                </button>
               </div>
             )}
           </div>
@@ -646,21 +692,34 @@ export const RecipeScraperModal: React.FC<RecipeScraperModalProps> = ({
 
         {/* Error Alert */}
         {error && (
-          <div className="p-3.5 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-start gap-2.5 text-red-400 text-xs animate-in fade-in">
-            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-            <div>
-              <p className="font-semibold">Import Failed</p>
-              <p className="text-slate-400 mt-0.5">{error}</p>
+          <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-start gap-2.5 text-rose-300 text-xs animate-in fade-in">
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-rose-300">
+                {activeTab === 'scan' ? 'Scan Failed' : 'Import Failed'}
+              </p>
+              <p className="text-slate-300 mt-0.5 leading-relaxed">{error}</p>
             </div>
+            <button
+              type="button"
+              onClick={() => setError(null)}
+              className="text-slate-400 hover:text-white p-0.5 rounded cursor-pointer transition-colors"
+              title="Dismiss error"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
         )}
 
         {/* Loading Indicator */}
         {isLoading && (
-          <div className="py-8 text-center space-y-3 bg-slate-950/40 rounded-2xl border border-white/5">
-            <Loader2 className="w-8 h-8 animate-spin text-emerald-400 mx-auto" />
-            <p className="text-xs text-slate-300 font-medium">
+          <div className="py-6 px-4 text-center space-y-2.5 bg-emerald-500/5 rounded-2xl border border-emerald-500/20 animate-in fade-in">
+            <Loader2 className="w-7 h-7 animate-spin text-emerald-400 mx-auto" />
+            <p className="text-xs text-emerald-300 font-semibold">
               {loadingMessage || 'Processing recipe with Gemini AI...'}
+            </p>
+            <p className="text-[11px] text-slate-400 max-w-xs mx-auto">
+              Reading ingredients, directions, times, and choosing your cover photo...
             </p>
           </div>
         )}

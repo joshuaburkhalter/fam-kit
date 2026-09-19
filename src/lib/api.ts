@@ -53,15 +53,16 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   if (userId) authHeaders['x-user-id'] = userId;
   if (householdId) authHeaders['x-household-id'] = householdId;
 
+  const customHeaders = options?.headers ? (options.headers as Record<string, string>) : {};
   let res: Response;
   try {
     res = await fetch(`${BASE_URL}${url}`, {
+      ...options,
       headers: {
         'Content-Type': 'application/json',
         ...authHeaders,
-        ...options?.headers,
+        ...customHeaders,
       },
-      ...options,
     });
   } catch (err: any) {
     if (typeof navigator !== 'undefined' && navigator.onLine !== false && !url.startsWith('/health')) {

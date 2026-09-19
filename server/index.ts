@@ -2079,12 +2079,20 @@ app.post('/api/recipes/import-images', async (req, res) => {
     // 2. Gemini's detected dish photo (parsed.dishPhotoIndex)
     // 3. Fallback to first uploaded photo
     let chosenCoverImage: string | null = null;
+    let chosenMime: string = 'image/jpeg';
     if (typeof coverImageIndex === 'number' && coverImageIndex >= 0 && coverImageIndex < images.length) {
       chosenCoverImage = images[coverImageIndex].base64;
+      chosenMime = images[coverImageIndex].mimeType || 'image/jpeg';
     } else if (typeof parsed.dishPhotoIndex === 'number' && parsed.dishPhotoIndex >= 0 && parsed.dishPhotoIndex < images.length) {
       chosenCoverImage = images[parsed.dishPhotoIndex].base64;
+      chosenMime = images[parsed.dishPhotoIndex].mimeType || 'image/jpeg';
     } else if (images[0]?.base64) {
       chosenCoverImage = images[0].base64;
+      chosenMime = images[0].mimeType || 'image/jpeg';
+    }
+
+    if (chosenCoverImage && !chosenCoverImage.startsWith('http') && !chosenCoverImage.startsWith('data:')) {
+      chosenCoverImage = `data:${chosenMime};base64,${chosenCoverImage}`;
     }
 
     const id = `r_${Date.now()}`;
