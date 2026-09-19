@@ -458,6 +458,17 @@ app.post('/api/subscription/redeem', (req, res) => {
 
   const cleanCode = rawCode.replace(/[\s\-_]/g, '');
 
+  try {
+    const isDeleted = queryOne<any>(
+      'SELECT code FROM deleted_promo_codes WHERE UPPER(code) = ? OR REPLACE(REPLACE(REPLACE(UPPER(code), "-", ""), " ", ""), "_", "") = ?',
+      [rawCode, cleanCode]
+    );
+    if (isDeleted) {
+      recordFailedPromoAttempt(clientKey);
+      return res.status(400).json({ error: 'This invite code is no longer valid or has been deleted.' });
+    }
+  } catch {}
+
   let promo = queryOne<any>(
     'SELECT * FROM promo_codes WHERE UPPER(code) = ?',
     [rawCode]
@@ -833,6 +844,15 @@ app.post('/api/subscription/generate-code', (req, res) => {
 
   const authUser = getAuthUser(req);
 
+  // If this code was previously deleted, unmark it so it can be used afresh
+  try {
+    const cleanCode = code.replace(/[\s\-_]/g, '').toUpperCase();
+    execute(
+      'DELETE FROM deleted_promo_codes WHERE UPPER(code) = ? OR REPLACE(REPLACE(REPLACE(UPPER(code), "-", ""), " ", ""), "_", "") = ?',
+      [code.toUpperCase(), cleanCode]
+    );
+  } catch {}
+
   execute(
     'INSERT INTO promo_codes (code, description, durationMonths, maxUses, timesUsed, isActive, assignedTo, createdByUserId, createdAt) VALUES (?, ?, ?, ?, 0, 1, ?, ?, ?)',
     [code, desc, parsedDuration, uses, assigned, authUser?.id || null, now]
@@ -853,36 +873,6 @@ app.post('/api/subscription/generate-code', (req, res) => {
 // 5. List promo codes with assigned household and redemption tracking
 app.get('/api/subscription/promo-codes', (_req, res) => {
   try {
-    // Auto-recover any claimed promo codes from households table that might be missing from promo_codes
-    try {
-      const claimedHouseholds = queryAll<any>(`
-        SELECT h.id as householdId, h.name as householdName, h.promoCodeUsed, h.createdAt,
-               (SELECT u.name FROM users u WHERE u.householdId = h.id ORDER BY u.id ASC LIMIT 1) as userName,
-               (SELECT u.email FROM users u WHERE u.householdId = h.id ORDER BY u.id ASC LIMIT 1) as userEmail
-        FROM households h
-        WHERE h.promoCodeUsed IS NOT NULL AND h.promoCodeUsed != ''
-      `);
-
-      for (const ch of claimedHouseholds) {
-        const cleanUsed = ch.promoCodeUsed.trim().toUpperCase();
-        execute(`
-          INSERT OR IGNORE INTO promo_codes (code, description, durationMonths, maxUses, timesUsed, isActive, createdAt, assignedTo, claimedByHouseholdName, claimedByUserName, claimedByUserEmail, claimedAt)
-          VALUES (?, ?, NULL, 1, 1, 1, ?, ?, ?, ?, ?, ?)
-        `, [
-          cleanUsed,
-          `Access Pass for ${ch.householdName || 'Family'}`,
-          ch.createdAt || new Date().toISOString(),
-          ch.householdName,
-          ch.householdName,
-          ch.userName,
-          ch.userEmail,
-          ch.createdAt || new Date().toISOString(),
-        ]);
-      }
-    } catch (e) {
-      console.warn('[PromoCodes] Auto-recovery warning:', e);
-    }
-
     const codes = queryAll<any>(`
       SELECT 
         p.*,
@@ -921,6 +911,7 @@ app.get('/api/subscription/promo-codes', (_req, res) => {
           )
         ) as redeemedBy
       FROM promo_codes p
+      WHERE UPPER(p.code) NOT IN (SELECT UPPER(code) FROM deleted_promo_codes)
       ORDER BY p.createdAt DESC
       LIMIT 200
     `);
@@ -1003,15 +994,54 @@ app.patch('/api/subscription/promo-codes/:code', (req, res) => {
   });
 });
 
-// 7. Delete promo code
+// 7. Delete promo code permanently
 app.delete('/api/subscription/promo-codes/:code', (req, res) => {
   const codeParam = req.params.code;
-  const row = queryOne<any>('SELECT * FROM promo_codes WHERE UPPER(code) = ?', [codeParam.toUpperCase()]);
-  if (!row) {
-    return res.status(404).json({ error: 'Promo code not found' });
+  const rawCode = (codeParam || '').trim().toUpperCase();
+  const cleanCode = rawCode.replace(/[\s\-_]/g, '');
+
+  const row = queryOne<any>(
+    'SELECT * FROM promo_codes WHERE UPPER(code) = ? OR REPLACE(REPLACE(REPLACE(UPPER(code), "-", ""), " ", ""), "_", "") = ?',
+    [rawCode, cleanCode]
+  );
+
+  const targetCode = row ? row.code : rawCode;
+  const targetClean = targetCode.toUpperCase().replace(/[\s\-_]/g, '');
+  const now = new Date().toISOString();
+
+  // 1. Permanently record in deleted_promo_codes so it never gets resurrected by seeds or background scripts
+  try {
+    execute('INSERT OR REPLACE INTO deleted_promo_codes (code, deletedAt) VALUES (?, ?)', [targetCode.toUpperCase(), now]);
+    if (targetClean !== targetCode.toUpperCase()) {
+      execute('INSERT OR REPLACE INTO deleted_promo_codes (code, deletedAt) VALUES (?, ?)', [targetClean, now]);
+    }
+  } catch (e) {
+    console.error('Error tracking deleted promo code:', e);
   }
-  execute('DELETE FROM promo_codes WHERE code = ?', [row.code]);
-  res.json({ success: true, message: `Promo code ${row.code} deleted` });
+
+  // 2. Delete from promo_codes table
+  execute(
+    'DELETE FROM promo_codes WHERE UPPER(code) = ? OR REPLACE(REPLACE(REPLACE(UPPER(code), "-", ""), " ", ""), "_", "") = ?',
+    [targetCode.toUpperCase(), targetClean]
+  );
+
+  // 3. Delete from promo_redemptions table
+  try {
+    execute(
+      'DELETE FROM promo_redemptions WHERE UPPER(promoCode) = ? OR REPLACE(REPLACE(REPLACE(UPPER(promoCode), "-", ""), " ", ""), "_", "") = ?',
+      [targetCode.toUpperCase(), targetClean]
+    );
+  } catch {}
+
+  // 4. Detach from households so no background queries or references reconstruct the code
+  try {
+    execute(
+      'UPDATE households SET promoCodeUsed = NULL WHERE UPPER(promoCodeUsed) = ? OR REPLACE(REPLACE(REPLACE(UPPER(promoCodeUsed), "-", ""), " ", ""), "_", "") = ?',
+      [targetCode.toUpperCase(), targetClean]
+    );
+  } catch {}
+
+  res.json({ success: true, message: `Promo code ${targetCode} permanently deleted` });
 });
 
 // 6. Test helper to toggle or set subscription state

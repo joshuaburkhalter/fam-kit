@@ -445,6 +445,22 @@ function initSchema(db: Database) {
   } catch {}
   try {
     db.run(`
+      CREATE TABLE IF NOT EXISTS deleted_promo_codes (
+        code TEXT PRIMARY KEY,
+        deletedAt TEXT NOT NULL
+      );
+    `);
+  } catch {}
+  try {
+    db.run(`
+      CREATE TABLE IF NOT EXISTS app_metadata (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+    `);
+  } catch {}
+  try {
+    db.run(`
       CREATE TABLE IF NOT EXISTS feedback_requests (
         id TEXT PRIMARY KEY,
         type TEXT NOT NULL,
@@ -509,10 +525,17 @@ function initSchema(db: Database) {
     `);
   } catch {}
 
-  // Seed sample secure promo codes if none exist
+  // Seed sample secure promo codes ONLY on initial fresh install if none exist
   try {
     const promoCountRes = db.exec('SELECT COUNT(*) FROM promo_codes');
     const promoCount = (promoCountRes[0]?.values[0]?.[0] as number) || 0;
+
+    let isSeeded = false;
+    try {
+      const metadataRes = db.exec("SELECT value FROM app_metadata WHERE key = 'promo_codes_seeded'");
+      isSeeded = metadataRes.length > 0 && !!metadataRes[0].values && metadataRes[0].values.length > 0;
+    } catch {}
+
     const now = new Date().toISOString();
     const defaultCodes = [
       ['HB3-7X9K-2M4P', '3 Months Complimentary Full Access', 3, 100, now, '3 Month Master Pass'],
@@ -525,14 +548,25 @@ function initSchema(db: Database) {
       ['BETA', 'Closed Beta Tester Pass', null, 1000, now, 'Beta Tester Pass'],
     ];
 
-    for (const [c, desc, dur, maxU, dt, assigned] of defaultCodes) {
-      db.run(
-        `INSERT OR IGNORE INTO promo_codes (code, description, durationMonths, maxUses, timesUsed, isActive, createdAt, assignedTo) VALUES (?, ?, ?, ?, 0, 1, ?, ?)`,
-        [c, desc, dur, maxU, dt, assigned]
-      );
+    if (!isSeeded && promoCount === 0) {
+      for (const [c, desc, dur, maxU, dt, assigned] of defaultCodes) {
+        db.run(
+          `INSERT OR IGNORE INTO promo_codes (code, description, durationMonths, maxUses, timesUsed, isActive, createdAt, assignedTo) VALUES (?, ?, ?, ?, 0, 1, ?, ?)`,
+          [c, desc, dur, maxU, dt, assigned]
+        );
+      }
+      try {
+        db.run("INSERT OR REPLACE INTO app_metadata (key, value) VALUES ('promo_codes_seeded', '1')");
+      } catch {}
+    } else if (!isSeeded) {
+      // Database already has codes from past usage; record seeded marker so deleted default codes are never resurrected
+      try {
+        db.run("INSERT OR REPLACE INTO app_metadata (key, value) VALUES ('promo_codes_seeded', '1')");
+      } catch {}
     }
 
     // Auto-heal / backfill promo code redemptions with household name and user full name
+    // (Only for promo codes that have not been permanently deleted)
     try {
       const claimedHouseholds = db.exec(`
         SELECT h.id as householdId, h.name as householdName, h.promoCodeUsed,
@@ -540,6 +574,7 @@ function initSchema(db: Database) {
                (SELECT u.email FROM users u WHERE u.householdId = h.id ORDER BY u.id ASC LIMIT 1) as userEmail
         FROM households h
         WHERE h.promoCodeUsed IS NOT NULL AND h.promoCodeUsed != ''
+          AND UPPER(h.promoCodeUsed) NOT IN (SELECT UPPER(code) FROM deleted_promo_codes)
       `);
       if (claimedHouseholds.length > 0 && claimedHouseholds[0].values) {
         for (const row of claimedHouseholds[0].values) {
@@ -554,7 +589,8 @@ function initSchema(db: Database) {
             SET claimedByHouseholdName = COALESCE(claimedByHouseholdName, ?),
                 claimedByUserName = COALESCE(claimedByUserName, ?),
                 claimedByUserEmail = COALESCE(claimedByUserEmail, ?)
-            WHERE UPPER(code) = UPPER(?) OR REPLACE(REPLACE(REPLACE(UPPER(code), '-', ''), ' ', ''), '_', '') = REPLACE(REPLACE(REPLACE(UPPER(?), '-', ''), ' ', ''), '_', '')
+            WHERE (UPPER(code) = UPPER(?) OR REPLACE(REPLACE(REPLACE(UPPER(code), '-', ''), ' ', ''), '_', '') = REPLACE(REPLACE(REPLACE(UPPER(?), '-', ''), ' ', ''), '_', ''))
+              AND UPPER(code) NOT IN (SELECT UPPER(code) FROM deleted_promo_codes)
           `, [hname, uname, uemail, code, code]);
 
           db.run(`
