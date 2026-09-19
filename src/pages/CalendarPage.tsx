@@ -630,9 +630,14 @@ export const CalendarPage: React.FC = () => {
           const prevDay = idx > 0 ? timelineDays[idx - 1] : null;
           const isFirstOfMonth = !prevDay || format(prevDay, 'M') !== format(day, 'M');
 
-          // Determine chronological placement index for Now indicator among Today's events
-          let nowIndex = 0;
-          if (isCurrentDay) {
+          // Find if any event today is currently active
+          const activeEvent = dayEvents.find((ev) => !ev.is_all_day && isEventActive(ev));
+          const hasActiveEvent = Boolean(activeEvent);
+
+          // Determine chronological placement index for Now indicator among Today's events when no event is currently active
+          let nowIndex = -1;
+          if (isCurrentDay && !hasActiveEvent) {
+            nowIndex = 0;
             for (let i = 0; i < dayEvents.length; i++) {
               const ev = dayEvents[i];
               if (ev.is_all_day) {
@@ -653,7 +658,7 @@ export const CalendarPage: React.FC = () => {
           }
 
           const renderCurrentTimeMarker = () => (
-            <div className="relative flex items-center py-2 my-1 pointer-events-none select-none z-10">
+            <div className="relative flex items-center py-1.5 my-0.5 pointer-events-none select-none z-10">
               {/* Pulsing Green Dot on the Continuous Rail Spine */}
               <div className="absolute -left-[24px] -translate-x-1/2 flex items-center justify-center pointer-events-none">
                 <span className="absolute w-4 h-4 rounded-full bg-emerald-400/40 animate-ping" />
@@ -738,7 +743,7 @@ export const CalendarPage: React.FC = () => {
 
                 {/* 2. Timeline Rail Node */}
                 <div className="w-6 shrink-0 flex flex-col items-center pt-2 relative z-10">
-                  {isCurrentDay && nowIndex === 0 ? (
+                  {isCurrentDay && !hasActiveEvent && nowIndex === 0 ? (
                     <div className="w-2.5 h-2.5 rounded-full opacity-0" />
                   ) : (
                     <div
@@ -761,104 +766,124 @@ export const CalendarPage: React.FC = () => {
                         const assignedUser = users.find((u) => u.id === ev.assigned_user_id);
                         const isPast = isEventPast(ev);
                         const isActive = isCurrentDay && isEventActive(ev);
+                        const isPrimaryActive = isActive && ev.id === activeEvent?.id;
 
                         return (
                           <React.Fragment key={ev.id}>
-                            {isCurrentDay && evIdx === nowIndex && renderCurrentTimeMarker()}
-                            <div
-                              onClick={() => handleOpenEditModal(ev)}
-                              className={`relative overflow-hidden p-2.5 sm:p-3 rounded-xl transition-all cursor-pointer group active:scale-[0.99] shadow-xs ${
-                                isActive
-                                  ? 'bg-slate-900/95 border-2 border-emerald-500/60 shadow-lg shadow-emerald-950/40 ring-1 ring-emerald-400/20'
-                                  : isPast
-                                  ? 'bg-slate-900/60 border border-white/5 grayscale opacity-60 hover:grayscale-0 hover:opacity-100 hover:border-emerald-500/30'
-                                  : 'bg-slate-900 border border-white/10 hover:border-emerald-500/40'
-                              }`}
-                            >
-                              {/* Member Color Stripe */}
-                              <div
-                                className="absolute left-0 top-0 bottom-0 w-1"
-                                style={{
-                                  backgroundColor: assignedUser?.avatar_color || '#10b981',
-                                }}
-                              />
+                            {isCurrentDay && !hasActiveEvent && evIdx === nowIndex && renderCurrentTimeMarker()}
+                            <div className="relative">
+                              {/* Pulsing Green Dot on Rail Spine & Bridge Line directly next to Active Event */}
+                              {isPrimaryActive && (
+                                <>
+                                  <div className="absolute -left-[24px] top-1/2 -translate-y-1/2 -translate-x-1/2 flex items-center justify-center pointer-events-none z-20">
+                                    <span className="absolute w-4 h-4 rounded-full bg-emerald-400/40 animate-ping" />
+                                    <div className="w-3.5 h-3.5 rounded-full bg-emerald-400 ring-4 ring-emerald-400/20 ring-offset-2 ring-offset-slate-950 shadow-sm shadow-emerald-500/60" />
+                                  </div>
+                                  <div className="absolute -left-[24px] top-1/2 -translate-y-1/2 w-[24px] h-[2px] bg-emerald-500/60 pointer-events-none z-10" />
+                                </>
+                              )}
 
-                              <div className="pl-1 space-y-1">
-                                {/* Top row: Time & Member */}
-                                <div className="flex items-center justify-between gap-2">
-                                  <div
-                                    className={`inline-flex items-center gap-1.5 text-[11px] font-mono font-medium ${
-                                      isActive ? 'text-emerald-300 font-bold' : isPast ? 'text-slate-400' : 'text-emerald-400'
+                              <div
+                                onClick={() => handleOpenEditModal(ev)}
+                                className={`relative overflow-hidden p-2.5 sm:p-3 rounded-xl transition-all cursor-pointer group active:scale-[0.99] shadow-xs ${
+                                  isActive
+                                    ? 'bg-slate-900/95 border-2 border-emerald-500/60 shadow-lg shadow-emerald-950/40 ring-1 ring-emerald-400/20'
+                                    : isPast
+                                    ? 'bg-slate-900/60 border border-white/5 grayscale opacity-60 hover:grayscale-0 hover:opacity-100 hover:border-emerald-500/30'
+                                    : 'bg-slate-900 border border-white/10 hover:border-emerald-500/40'
+                                }`}
+                              >
+                                {/* Overlay Indicator Line across the Active Event Card */}
+                                {isPrimaryActive && (
+                                  <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-px bg-gradient-to-r from-emerald-500/50 via-emerald-500/20 to-transparent pointer-events-none z-10" />
+                                )}
+
+                                {/* Member Color Stripe */}
+                                <div
+                                  className="absolute left-0 top-0 bottom-0 w-1"
+                                  style={{
+                                    backgroundColor: assignedUser?.avatar_color || '#10b981',
+                                  }}
+                                />
+
+                                <div className="pl-1 space-y-1 relative z-10">
+                                  {/* Top row: Time & Member */}
+                                  <div className="flex items-center justify-between gap-2">
+                                    <div
+                                      className={`inline-flex items-center gap-1.5 text-[11px] font-mono font-medium ${
+                                        isActive ? 'text-emerald-300 font-bold' : isPast ? 'text-slate-400' : 'text-emerald-400'
+                                      }`}
+                                    >
+                                      <Clock className={`w-3 h-3 ${isActive ? 'text-emerald-300' : isPast ? 'text-slate-400' : 'text-emerald-400'}`} />
+                                      <span>{formatTimeRange(ev)}</span>
+                                    </div>
+
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                      {isActive && (
+                                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-[10px] text-emerald-300 font-bold shadow-sm">
+                                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                          <span>{format(currentTime, 'h:mm a')}</span>
+                                          <span className="text-emerald-400/70 font-semibold text-[9px] uppercase tracking-wider">Now</span>
+                                        </span>
+                                      )}
+
+                                      {ev.is_google_event && (
+                                        <span
+                                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-blue-500/10 border border-blue-500/20 text-[10px] text-blue-400 font-medium"
+                                          title="Synced from Google Calendar"
+                                        >
+                                          <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11zM9 11H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2zm-8 4H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2z" />
+                                          </svg>
+                                          <span className="hidden sm:inline">Google</span>
+                                        </span>
+                                      )}
+
+                                      {assignedUser && (
+                                        <div className="flex items-center gap-1 shrink-0">
+                                          <div
+                                            className="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white"
+                                            style={{
+                                              backgroundColor: assignedUser.avatar_color || '#10b981',
+                                            }}
+                                          >
+                                            {assignedUser.name.charAt(0).toUpperCase()}
+                                          </div>
+                                          <span className="text-[11px] text-slate-400 font-medium hidden sm:inline">
+                                            {assignedUser.name}
+                                          </span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Event Title */}
+                                  <h3
+                                    className={`text-sm font-semibold transition-colors ${
+                                      isActive
+                                        ? 'text-white font-bold'
+                                        : isPast
+                                        ? 'text-slate-300 group-hover:text-white'
+                                        : 'text-white group-hover:text-emerald-200'
                                     }`}
                                   >
-                                    <Clock className={`w-3 h-3 ${isActive ? 'text-emerald-300' : isPast ? 'text-slate-400' : 'text-emerald-400'}`} />
-                                    <span>{formatTimeRange(ev)}</span>
-                                  </div>
+                                    {ev.title}
+                                  </h3>
 
-                                  <div className="flex items-center gap-1.5 shrink-0">
-                                    {isActive && (
-                                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-500/20 border border-emerald-500/30 text-[10px] text-emerald-300 font-bold">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                                        <span>Active</span>
-                                      </span>
-                                    )}
-
-                                    {ev.is_google_event && (
-                                      <span
-                                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-blue-500/10 border border-blue-500/20 text-[10px] text-blue-400 font-medium"
-                                        title="Synced from Google Calendar"
-                                      >
-                                        <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="currentColor">
-                                          <path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11zM9 11H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2zm-8 4H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2z" />
-                                        </svg>
-                                        <span className="hidden sm:inline">Google</span>
-                                      </span>
-                                    )}
-
-                                    {assignedUser && (
-                                      <div className="flex items-center gap-1 shrink-0">
-                                        <div
-                                          className="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white"
-                                          style={{
-                                            backgroundColor: assignedUser.avatar_color || '#10b981',
-                                          }}
-                                        >
-                                          {assignedUser.name.charAt(0).toUpperCase()}
-                                        </div>
-                                        <span className="text-[11px] text-slate-400 font-medium hidden sm:inline">
-                                          {assignedUser.name}
-                                        </span>
-                                      </div>
-                                    )}
-                                  </div>
+                                  {/* Location */}
+                                  {ev.location && (
+                                    <div className="flex items-center gap-1 text-[11px] text-slate-400 pt-0.5">
+                                      <MapPin className="w-3 h-3 text-slate-500 shrink-0" />
+                                      <span className="truncate">{ev.location}</span>
+                                    </div>
+                                  )}
                                 </div>
-
-                                {/* Event Title */}
-                                <h3
-                                  className={`text-sm font-semibold transition-colors ${
-                                    isActive
-                                      ? 'text-white font-bold'
-                                      : isPast
-                                      ? 'text-slate-300 group-hover:text-white'
-                                      : 'text-white group-hover:text-emerald-200'
-                                  }`}
-                                >
-                                  {ev.title}
-                                </h3>
-
-                                {/* Location */}
-                                {ev.location && (
-                                  <div className="flex items-center gap-1 text-[11px] text-slate-400 pt-0.5">
-                                    <MapPin className="w-3 h-3 text-slate-500 shrink-0" />
-                                    <span className="truncate">{ev.location}</span>
-                                  </div>
-                                )}
                               </div>
                             </div>
                           </React.Fragment>
                         );
                       })}
-                      {isCurrentDay && nowIndex >= dayEvents.length && renderCurrentTimeMarker()}
+                      {isCurrentDay && !hasActiveEvent && nowIndex >= dayEvents.length && renderCurrentTimeMarker()}
                     </div>
                   ) : (
                     /* Minimalist Empty Day Row */
