@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Sparkles, X } from 'lucide-react';
 
 export interface ToastProps {
@@ -52,16 +53,16 @@ export const Toast: React.FC<ToastProps> = ({
     }, 320);
   };
 
-  if (!renderedMessage) return null;
+  if (!renderedMessage || typeof document === 'undefined') return null;
 
-  return (
-    <div className="fixed top-4 sm:top-6 left-0 right-0 z-50 pointer-events-none flex justify-center px-3 sm:px-4">
+  return createPortal(
+    <div className="fixed top-[max(0.75rem,env(safe-area-inset-top))] sm:top-[max(1.25rem,env(safe-area-inset-top))] left-0 right-0 z-[9999] pointer-events-none flex justify-center px-3 sm:px-4">
       <div
         onClick={handleDismiss}
         className={`pointer-events-auto w-[94vw] sm:w-full max-w-xl md:max-w-2xl bg-slate-900/95 border border-emerald-500/40 text-emerald-200 px-4 sm:px-5 py-3 sm:py-3.5 rounded-2xl sm:rounded-3xl shadow-2xl shadow-emerald-500/15 backdrop-blur-xl flex items-center justify-between gap-3 text-xs sm:text-sm font-semibold transition-all duration-300 ease-out cursor-pointer select-none active:scale-[0.99] ${
           isShowing
             ? 'translate-y-0 opacity-100 scale-100'
-            : '-translate-y-20 sm:-translate-y-24 opacity-0 scale-95'
+            : '-translate-y-24 opacity-0 scale-95'
         }`}
       >
         <div className="flex items-center gap-2.5 min-w-0 flex-1">
@@ -82,6 +83,7 @@ export const Toast: React.FC<ToastProps> = ({
           <X className="w-4 h-4" />
         </button>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
