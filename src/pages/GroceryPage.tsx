@@ -462,6 +462,7 @@ export const GroceryPage: React.FC = () => {
   const [draggingAisleId, setDraggingAisleId] = useState<string | null>(null);
   const [dragStartIndex, setDragStartIndex] = useState<number>(-1);
   const [dragTargetIndex, setDragTargetIndex] = useState<number>(-1);
+  const dragTargetIndexRef = useRef<number>(-1);
   const [dragOffsetY, setDragOffsetY] = useState<number>(0);
   const [dragShiftAmount, setDragShiftAmount] = useState<number>(0);
   const dragStartYRef = useRef<number>(0);
@@ -469,6 +470,14 @@ export const GroceryPage: React.FC = () => {
   const cardElementsRef = useRef<Map<string, HTMLDivElement>>(new Map());
   const itemsByAisleRef = useRef<{ aisle: Aisle; items: GroceryItem[] }[]>([]);
   itemsByAisleRef.current = itemsByAisle;
+
+  const triggerHaptic = (pattern: number | number[]) => {
+    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+      try {
+        navigator.vibrate(pattern);
+      } catch {}
+    }
+  };
 
   const handleDragStart = (e: React.PointerEvent, aisleId: string, index: number) => {
     if (e.button !== 0) return;
@@ -515,12 +524,12 @@ export const GroceryPage: React.FC = () => {
     setDraggingAisleId(aisleId);
     setDragStartIndex(index);
     setDragTargetIndex(index);
+    dragTargetIndexRef.current = index;
     setDragOffsetY(0);
     dragStartYRef.current = e.clientY;
 
-    try {
-      if ('vibrate' in navigator) navigator.vibrate(15);
-    } catch {}
+    // Crisp pick-up haptic buzz
+    triggerHaptic(24);
   };
 
   const handleDragMove = (e: React.PointerEvent) => {
@@ -548,11 +557,11 @@ export const GroceryPage: React.FC = () => {
 
     closestIdx = Math.max(0, Math.min(midpoints.length - 1, closestIdx));
 
-    if (closestIdx !== dragTargetIndex) {
+    if (closestIdx !== dragTargetIndexRef.current) {
+      dragTargetIndexRef.current = closestIdx;
       setDragTargetIndex(closestIdx);
-      try {
-        if ('vibrate' in navigator) navigator.vibrate(10);
-      } catch {}
+      // Punchy haptic tick on every slot transition
+      triggerHaptic(16);
     }
   };
 
@@ -564,15 +573,18 @@ export const GroceryPage: React.FC = () => {
     } catch {}
 
     const fromIdx = dragStartIndex;
-    const toIdx = dragTargetIndex;
+    const toIdx = dragTargetIndexRef.current >= 0 ? dragTargetIndexRef.current : dragTargetIndex;
 
     setDraggingAisleId(null);
     setDragStartIndex(-1);
     setDragTargetIndex(-1);
+    dragTargetIndexRef.current = -1;
     setDragOffsetY(0);
     setDragShiftAmount(0);
 
     if (toIdx >= 0 && toIdx !== fromIdx) {
+      // Rewarding double-tap haptic confirmation upon successful reorder
+      triggerHaptic([20, 35, 24]);
       const currentList = itemsByAisleRef.current;
       const reorderedVisible = [...currentList];
       const [moved] = reorderedVisible.splice(fromIdx, 1);
