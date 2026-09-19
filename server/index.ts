@@ -275,10 +275,13 @@ app.post('/api/auth/register', (req, res) => {
     const promoInput = (req.body.promoCode || '').trim().toUpperCase();
     if (promoInput) {
       const cleanPromo = promoInput.replace(/[\s\-_]/g, '');
-      let promoRow = queryOne<any>('SELECT * FROM promo_codes WHERE UPPER(code) = ? AND isActive = 1', [promoInput]);
+      let promoRow = queryOne<any>(
+        'SELECT * FROM promo_codes WHERE UPPER(code) = ? AND (isActive = 1 OR isActive = true)',
+        [promoInput]
+      );
       if (!promoRow) {
         promoRow = queryOne<any>(
-          "SELECT * FROM promo_codes WHERE REPLACE(REPLACE(REPLACE(UPPER(code), '-', ''), ' ', ''), '_', '') = ? AND isActive = 1",
+          "SELECT * FROM promo_codes WHERE REPLACE(REPLACE(REPLACE(UPPER(code), '-', ''), ' ', ''), '_', '') = ? AND (isActive = 1 OR isActive = true)",
           [cleanPromo]
         );
       }
@@ -482,9 +485,9 @@ app.post('/api/subscription/redeem', (req, res) => {
     return res.status(400).json({ error: 'Invalid or expired beta invite code.' });
   }
 
-  if (promo.isActive !== 1) {
+  if (promo.isActive !== 1 && promo.isActive !== true && promo.isActive !== '1') {
     recordFailedPromoAttempt(clientKey);
-    return res.status(400).json({ error: 'This invite code is no longer active.' });
+    return res.status(400).json({ error: 'This invite code is currently disabled.' });
   }
 
   if (promo.maxUses && promo.maxUses > 0 && promo.timesUsed >= promo.maxUses) {
@@ -841,7 +844,7 @@ app.post('/api/subscription/generate-code', (req, res) => {
     durationMonths: parsedDuration,
     maxUses: uses,
     timesUsed: 0,
-    isActive: 1,
+    isActive: true,
     assignedTo: assigned,
     createdAt: now,
   });
@@ -942,6 +945,7 @@ app.get('/api/subscription/promo-codes', (_req, res) => {
 
       return {
         ...c,
+        isActive: c.isActive === 1 || c.isActive === true || c.isActive === '1',
         timesUsed: effectiveTimesUsed,
         redemptions: items,
       };
@@ -974,7 +978,7 @@ app.patch('/api/subscription/promo-codes/:code', (req, res) => {
 
   if (isActive !== undefined) {
     updates.push('isActive = ?');
-    params.push(isActive ? 1 : 0);
+    params.push((isActive === true || isActive === 1 || isActive === '1') ? 1 : 0);
   }
 
   if (updates.length > 0) {
@@ -993,7 +997,10 @@ app.patch('/api/subscription/promo-codes/:code', (req, res) => {
     WHERE p.code = ?
   `, [row.code]);
 
-  res.json(updated);
+  res.json({
+    ...updated,
+    isActive: updated ? (updated.isActive === 1 || updated.isActive === true || updated.isActive === '1') : true,
+  });
 });
 
 // 7. Delete promo code

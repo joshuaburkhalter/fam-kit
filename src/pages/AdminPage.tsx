@@ -262,11 +262,17 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onBack }) => {
 
   // Toggle Code Status
   const handleToggleCodeActive = async (code: string, currentStatus: boolean) => {
+    const nextStatus = !currentStatus;
+    // Optimistic UI update
+    setCodesList((prev) => prev.map((c) => (c.code === code ? { ...c, isActive: nextStatus } : c)));
     try {
-      const updated = await api.updatePromoCode(code, { isActive: !currentStatus });
-      setCodesList((prev) => prev.map((c) => (c.code === code ? { ...c, isActive: updated.isActive } : c)));
-      showToast(`Code ${code} is now ${!currentStatus ? 'Active' : 'Disabled'}`);
+      const updated = await api.updatePromoCode(code, { isActive: nextStatus });
+      const activeBool = updated.isActive === true || updated.isActive === 1;
+      setCodesList((prev) => prev.map((c) => (c.code === code ? { ...c, isActive: activeBool } : c)));
+      showToast(`Code ${code} is now ${nextStatus ? 'Active' : 'Disabled'}`);
     } catch (err: any) {
+      // Revert on error
+      setCodesList((prev) => prev.map((c) => (c.code === code ? { ...c, isActive: currentStatus } : c)));
       console.error(err);
       showToast('Failed to update code');
     }
@@ -394,12 +400,13 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onBack }) => {
         c.claimedByUserEmail?.toLowerCase().includes(term);
 
       const isClaimed = (c.timesUsed || 0) > 0 || !!c.claimedByUserName;
+      const isCodeActive = c.isActive === true || c.isActive === 1;
       const matchesStatus =
         codeStatusFilter === 'all' ||
         (codeStatusFilter === 'claimed' && isClaimed) ||
         (codeStatusFilter === 'unclaimed' && !isClaimed) ||
-        (codeStatusFilter === 'active' && c.isActive !== false) ||
-        (codeStatusFilter === 'disabled' && c.isActive === false);
+        (codeStatusFilter === 'active' && isCodeActive) ||
+        (codeStatusFilter === 'disabled' && !isCodeActive);
 
       return matchesSearch && matchesStatus;
     });
@@ -1124,11 +1131,16 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onBack }) => {
                 {filteredCodes.map((c) => {
                   const isClaimed = (c.timesUsed || 0) > 0 || !!c.claimedByUserName;
                   const isEditingThis = editingCodeString === c.code;
+                  const isCodeActive = c.isActive === true || c.isActive === 1;
 
                   return (
                     <div
                       key={c.code}
-                      className="bg-slate-900/90 border border-white/10 rounded-2xl p-4 shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-white/20 transition-all"
+                      className={`border rounded-2xl p-4 shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all ${
+                        isCodeActive
+                          ? 'bg-slate-900/90 border-white/10 hover:border-white/20'
+                          : 'bg-slate-950/60 border-rose-500/20 opacity-75'
+                      }`}
                     >
                       <div className="min-w-0 space-y-1">
                         <div className="flex items-center gap-2.5 flex-wrap">
@@ -1149,10 +1161,12 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onBack }) => {
                           <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-white/5 text-slate-300">
                             {c.durationMonths ? `${c.durationMonths} Months` : 'Lifetime VIP'}
                           </span>
-                          <span className={`text-[10px] font-mono uppercase px-2 py-0.5 rounded font-bold ${
-                            c.isActive !== false ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'
+                          <span className={`text-[10px] font-mono uppercase px-2 py-0.5 rounded font-bold border ${
+                            isCodeActive
+                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                              : 'bg-rose-500/20 text-rose-300 border-rose-500/30'
                           }`}>
-                            {c.isActive !== false ? 'Active' : 'Disabled'}
+                            {isCodeActive ? 'Active' : 'Disabled'}
                           </span>
                         </div>
 
@@ -1226,10 +1240,14 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onBack }) => {
                       {/* Code Actions */}
                       <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
                         <button
-                          onClick={() => handleToggleCodeActive(c.code, c.isActive !== false)}
-                          className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-white/10 transition-colors cursor-pointer"
+                          onClick={() => handleToggleCodeActive(c.code, isCodeActive)}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                            isCodeActive
+                              ? 'bg-slate-800 hover:bg-amber-500/20 text-slate-300 hover:text-amber-300 border-white/10 hover:border-amber-500/30'
+                              : 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border-emerald-500/30'
+                          }`}
                         >
-                          {c.isActive !== false ? 'Disable' : 'Enable'}
+                          {isCodeActive ? 'Disable' : 'Enable'}
                         </button>
                         <button
                           onClick={() => handleDeleteCode(c.code)}

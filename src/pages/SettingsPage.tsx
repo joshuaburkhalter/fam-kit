@@ -676,13 +676,34 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
   };
 
   const handleToggleCodeActive = async (codeItem: PromoCode) => {
-    const nextActive = !codeItem.isActive;
+    const isCurrentlyActive = codeItem.isActive === true || codeItem.isActive === 1;
+    const nextActive = !isCurrentlyActive;
+    // Optimistic UI update
+    setPromoCodesList((prev) =>
+      prev.map((c) => (c.code === codeItem.code ? { ...c, isActive: nextActive } : c))
+    );
+    if (generatedCodeResult && generatedCodeResult.code === codeItem.code) {
+      setGeneratedCodeResult((prev) => (prev ? { ...prev, isActive: nextActive } : null));
+    }
     try {
       const updated = await api.updatePromoCode(codeItem.code, { isActive: nextActive });
-      setPromoCodesList((prev) => prev.map((c) => (c.code === codeItem.code ? { ...c, isActive: updated.isActive } : c)));
+      const activeBool = updated.isActive === true || updated.isActive === 1;
+      setPromoCodesList((prev) =>
+        prev.map((c) => (c.code === codeItem.code ? { ...c, isActive: activeBool } : c))
+      );
+      if (generatedCodeResult && generatedCodeResult.code === codeItem.code) {
+        setGeneratedCodeResult((prev) => (prev ? { ...prev, isActive: activeBool } : null));
+      }
       setStatusMessage(`${codeItem.code} is now ${nextActive ? 'Active' : 'Disabled'}`);
       setTimeout(() => setStatusMessage(null), 3000);
     } catch (err: any) {
+      // Revert optimistic update
+      setPromoCodesList((prev) =>
+        prev.map((c) => (c.code === codeItem.code ? { ...c, isActive: isCurrentlyActive } : c))
+      );
+      if (generatedCodeResult && generatedCodeResult.code === codeItem.code) {
+        setGeneratedCodeResult((prev) => (prev ? { ...prev, isActive: isCurrentlyActive } : null));
+      }
       alert(err.message || 'Failed to update code status');
     }
   };
@@ -916,13 +937,22 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
                 </button>
 
                 {generatedCodeResult && (
-                  <div className="flex items-center gap-2 bg-slate-900 border border-emerald-500/40 rounded-xl px-3 py-1.5 animate-in fade-in">
+                  <div className="flex items-center gap-2 bg-slate-900 border border-emerald-500/40 rounded-xl px-3 py-1.5 animate-in fade-in flex-wrap">
                     <span className="font-mono text-xs text-emerald-400 font-bold">{generatedCodeResult.code}</span>
                     {generatedCodeResult.assignedTo && (
                       <span className="text-[10px] text-slate-300 bg-white/10 px-1.5 py-0.5 rounded">
                         For: {generatedCodeResult.assignedTo}
                       </span>
                     )}
+                    <span
+                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase font-mono border ${
+                        generatedCodeResult.isActive === true || generatedCodeResult.isActive === 1
+                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                          : 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                      }`}
+                    >
+                      {generatedCodeResult.isActive === true || generatedCodeResult.isActive === 1 ? 'Active' : 'Disabled'}
+                    </span>
                     <button
                       type="button"
                       onClick={handleCopyGeneratedCode}
@@ -930,6 +960,17 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
                       title="Copy code"
                     >
                       {copiedGenCode ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleCodeActive(generatedCodeResult)}
+                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-lg cursor-pointer transition-all border ml-1 ${
+                        generatedCodeResult.isActive === true || generatedCodeResult.isActive === 1
+                          ? 'text-slate-300 hover:text-amber-300 bg-slate-800 border-white/10 hover:border-amber-500/30'
+                          : 'text-emerald-300 bg-emerald-500/20 border-emerald-500/30 hover:bg-emerald-500/30'
+                      }`}
+                    >
+                      {generatedCodeResult.isActive === true || generatedCodeResult.isActive === 1 ? 'Disable' : 'Enable'}
                     </button>
                   </div>
                 )}
@@ -1002,14 +1043,15 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
                         const isClaimed = c.timesUsed > 0;
                         const isEditing = editingCode === c.code;
                         const isCopied = copiedCodeKey === c.code;
+                        const isCodeActive = c.isActive === true || c.isActive === 1;
 
                         return (
                           <div
                             key={c.code}
                             className={`p-2.5 rounded-xl border transition-all ${
-                              c.isActive
+                              isCodeActive
                                 ? 'bg-slate-900/80 border-white/10 hover:border-white/20'
-                                : 'bg-slate-950/40 border-red-500/20 opacity-60'
+                                : 'bg-slate-950/60 border-rose-500/20 opacity-75'
                             }`}
                           >
                             <div className="flex items-center justify-between gap-2">
@@ -1043,8 +1085,17 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
                                 </span>
                               </div>
 
-                              {/* Right: Usage Status */}
-                              <div className="flex items-center gap-1.5">
+                              {/* Right: Active/Disabled Status & Usage Status */}
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span
+                                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase ${
+                                    isCodeActive
+                                      ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                                      : 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+                                  }`}
+                                >
+                                  {isCodeActive ? 'Active' : 'Disabled'}
+                                </span>
                                 <span
                                   className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                                     isClaimed
@@ -1119,13 +1170,13 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
                                 <button
                                   type="button"
                                   onClick={() => handleToggleCodeActive(c)}
-                                  className={`text-[10px] font-semibold px-2 py-0.5 rounded cursor-pointer transition-colors ${
-                                    c.isActive
-                                      ? 'text-slate-400 hover:text-amber-400 hover:bg-white/5'
-                                      : 'text-emerald-400 bg-emerald-500/15 hover:bg-emerald-500/25'
+                                  className={`text-[10px] font-semibold px-2.5 py-1 rounded-lg cursor-pointer transition-all border ${
+                                    isCodeActive
+                                      ? 'text-slate-300 hover:text-amber-300 bg-slate-800/80 hover:bg-amber-500/15 border-white/10 hover:border-amber-500/30'
+                                      : 'text-emerald-300 bg-emerald-500/20 hover:bg-emerald-500/30 border-emerald-500/30'
                                   }`}
                                 >
-                                  {c.isActive ? 'Disable' : 'Enable'}
+                                  {isCodeActive ? 'Disable' : 'Enable'}
                                 </button>
                                 <button
                                   type="button"
