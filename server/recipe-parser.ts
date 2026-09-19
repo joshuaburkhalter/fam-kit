@@ -1261,7 +1261,7 @@ export async function parseRecipeFromImages(
   }
 
   const genAI = new GoogleGenerativeAI(activeKey);
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+  const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' });
 
   const parts: any[] = [];
   for (const img of images) {
@@ -1322,10 +1322,23 @@ Return ONLY a valid JSON object matching this schema (do NOT include markdown co
     const res = await model.generateContent(parts);
     text = res.response.text().trim();
   } catch (err: any) {
-    console.warn('Gemini 2.5 flash parse failed, attempting fallback:', err?.message);
-    const fallbackModel = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-    const res = await fallbackModel.generateContent(parts);
-    text = res.response.text().trim();
+    console.warn('Gemini 3.6 flash parse failed, attempting fallback:', err?.message);
+    const fallbacks = ['gemini-2.0-flash', 'gemini-1.5-flash-latest'];
+    let succeeded = false;
+    for (const fbName of fallbacks) {
+      try {
+        const fallbackModel = genAI.getGenerativeModel({ model: fbName });
+        const res = await fallbackModel.generateContent(parts);
+        text = res.response.text().trim();
+        succeeded = true;
+        break;
+      } catch (fbErr: any) {
+        console.warn(`Fallback ${fbName} failed:`, fbErr?.message);
+      }
+    }
+    if (!succeeded) {
+      throw err;
+    }
   }
 
   const cleanedJson = text.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '');
