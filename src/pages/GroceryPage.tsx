@@ -20,6 +20,7 @@ import { api } from '../lib/api';
 import { useFabAutoClose } from '../hooks/useFabAutoClose';
 import { CheckSparkle, triggerHapticCheck } from '../components/CheckSparkle';
 import { Drawer } from '../components/ui/Drawer';
+import { triggerHaptic, attachIosHapticTouch } from '../lib/haptics';
 
 interface GroceryDataCache {
   householdId: string;
@@ -471,18 +472,13 @@ export const GroceryPage: React.FC = () => {
   const itemsByAisleRef = useRef<{ aisle: Aisle; items: GroceryItem[] }[]>([]);
   itemsByAisleRef.current = itemsByAisle;
 
-  const triggerHaptic = (pattern: number | number[]) => {
-    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
-      try {
-        navigator.vibrate(pattern);
-      } catch {}
-    }
-  };
-
   const handleDragStart = (e: React.PointerEvent, aisleId: string, index: number) => {
     if (e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
+
+    // Trigger instant pick-up haptic buzz
+    triggerHaptic(25);
 
     try {
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -527,9 +523,6 @@ export const GroceryPage: React.FC = () => {
     dragTargetIndexRef.current = index;
     setDragOffsetY(0);
     dragStartYRef.current = e.clientY;
-
-    // Crisp pick-up haptic buzz
-    triggerHaptic(24);
   };
 
   const handleDragMove = (e: React.PointerEvent) => {
@@ -865,6 +858,7 @@ export const GroceryPage: React.FC = () => {
                   {/* Drag Handle */}
                   {itemsByAisle.length > 1 && (
                     <div
+                      ref={attachIosHapticTouch}
                       onPointerDown={(e) => handleDragStart(e, aisle.id, idx)}
                       onPointerMove={handleDragMove}
                       onPointerUp={handleDragEnd}

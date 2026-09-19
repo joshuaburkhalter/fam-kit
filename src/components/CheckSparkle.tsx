@@ -18,15 +18,13 @@ const SPARKLE_COLORS = [
   '#a855f7', // purple-500
 ];
 
+import { triggerHaptic } from '../lib/haptics';
+
 /**
- * Triggers subtle mobile haptic vibration if supported by the browser/PWA
+ * Triggers subtle mobile haptic vibration if supported by the browser/PWA (iOS Taptics + Android)
  */
 export function triggerHapticCheck() {
-  if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
-    try {
-      navigator.vibrate([16, 28, 22]);
-    } catch {}
-  }
+  triggerHaptic([16, 28, 22]);
 }
 
 /**
