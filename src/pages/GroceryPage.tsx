@@ -468,6 +468,7 @@ export const GroceryPage: React.FC = () => {
   const dragStartIndexRef = useRef<number>(-1);
   const dragTargetIndexRef = useRef<number>(-1);
   const dragStartYRef = useRef<number>(0);
+  const initialMidpointsRef = useRef<number[]>([]);
   const cardElementsRef = useRef<Map<string, HTMLDivElement>>(new Map());
   const itemsByAisleRef = useRef<{ aisle: Aisle; items: GroceryItem[] }[]>([]);
   itemsByAisleRef.current = itemsByAisle;
@@ -484,6 +485,19 @@ export const GroceryPage: React.FC = () => {
     const list = itemsByAisleRef.current;
     if (list.length <= 1) return;
 
+    // Record initial resting midpoints of all cards
+    const midpoints: number[] = [];
+    for (let i = 0; i < list.length; i++) {
+      const el = cardElementsRef.current.get(list[i]?.aisle.id);
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        midpoints.push(rect.top + rect.height / 2);
+      } else {
+        midpoints.push(0);
+      }
+    }
+    initialMidpointsRef.current = midpoints;
+
     // Measure dragged card height
     const draggedEl = cardElementsRef.current.get(aisleId);
     const draggedHeight = draggedEl ? draggedEl.getBoundingClientRect().height : 60;
@@ -498,7 +512,7 @@ export const GroceryPage: React.FC = () => {
     dragStartYRef.current = e.clientY;
 
     try {
-      if ('vibrate' in navigator) navigator.vibrate(15);
+      if ('vibrate' in navigator) navigator.vibrate(20);
     } catch {}
   };
 
@@ -509,49 +523,32 @@ export const GroceryPage: React.FC = () => {
     const offset = currentY - dragStartYRef.current;
     setDragOffsetY(offset);
 
-    const currentIndex = dragTargetIndexRef.current;
-    if (currentIndex < 0) return;
+    const midpoints = initialMidpointsRef.current;
+    if (midpoints.length <= 1) return;
 
-    const currentList = itemsByAisleRef.current;
+    const startIdx = dragStartIndexRef.current;
+    const currentCenter = (midpoints[startIdx] || currentY) + offset;
+    let closestIdx = startIdx >= 0 ? startIdx : 0;
+    let minDistance = Infinity;
 
-    // Check item above
-    if (currentIndex > 0) {
-      const prevAisle = currentList[currentIndex - 1]?.aisle;
-      if (prevAisle) {
-        const prevEl = cardElementsRef.current.get(prevAisle.id);
-        if (prevEl) {
-          const rect = prevEl.getBoundingClientRect();
-          const midpoint = rect.top + rect.height / 2;
-          if (currentY < midpoint) {
-            dragTargetIndexRef.current = currentIndex - 1;
-            setDragTargetIndex(currentIndex - 1);
-            try {
-              if ('vibrate' in navigator) navigator.vibrate(10);
-            } catch {}
-            return;
-          }
-        }
+    for (let i = 0; i < midpoints.length; i++) {
+      if (midpoints[i] === 0) continue;
+      const dist = Math.abs(currentCenter - midpoints[i]);
+      if (dist < minDistance) {
+        minDistance = dist;
+        closestIdx = i;
       }
     }
 
-    // Check item below
-    if (currentIndex < currentList.length - 1) {
-      const nextAisle = currentList[currentIndex + 1]?.aisle;
-      if (nextAisle) {
-        const nextEl = cardElementsRef.current.get(nextAisle.id);
-        if (nextEl) {
-          const rect = nextEl.getBoundingClientRect();
-          const midpoint = rect.top + rect.height / 2;
-          if (currentY > midpoint) {
-            dragTargetIndexRef.current = currentIndex + 1;
-            setDragTargetIndex(currentIndex + 1);
-            try {
-              if ('vibrate' in navigator) navigator.vibrate(10);
-            } catch {}
-            return;
-          }
-        }
-      }
+    closestIdx = Math.max(0, Math.min(midpoints.length - 1, closestIdx));
+
+    if (closestIdx !== dragTargetIndexRef.current) {
+      dragTargetIndexRef.current = closestIdx;
+      setDragTargetIndex(closestIdx);
+
+      try {
+        if ('vibrate' in navigator) navigator.vibrate(15);
+      } catch {}
     }
   };
 
