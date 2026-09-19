@@ -16,6 +16,7 @@ import { AuthPage } from './components/AuthPage';
 import { usePWA } from './context/PWAContext';
 import { AppUpdatingOverlay } from './components/AppUpdatingOverlay';
 import { Loader2, ArrowRight, CheckCircle2, X } from 'lucide-react';
+import { Toast } from './components/ui/Toast';
 
 const VALID_TABS = ['assistant', 'grocery', 'meals', 'recipes', 'calendar', 'settings', 'family', 'admin'];
 const LAST_TAB_KEY = 'homebase_last_active_tab';
@@ -379,20 +380,11 @@ export const AppContent: React.FC = () => {
     <div className="min-h-screen bg-background text-slate-100 flex flex-col selection:bg-emerald-500/30 selection:text-emerald-300">
       <Navbar activeTab={activeTab} setActiveTab={setActiveTab} onOpenPricing={handleOpenPricing} />
 
-      {stripeSuccessMessage && (
-        <div className="fixed top-20 right-4 z-50 max-w-md bg-emerald-500 text-slate-950 px-4 py-3 rounded-2xl shadow-2xl backdrop-blur-md flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top duration-300">
-          <div className="flex items-center gap-2 text-xs font-bold">
-            <CheckCircle2 className="w-5 h-5 shrink-0" />
-            <span>{stripeSuccessMessage}</span>
-          </div>
-          <button
-            onClick={() => setStripeSuccessMessage(null)}
-            className="p-1 rounded-lg hover:bg-black/10 transition-colors cursor-pointer"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
+      <Toast
+        message={stripeSuccessMessage}
+        onClose={() => setStripeSuccessMessage(null)}
+        icon={<CheckCircle2 className="w-4 h-4 text-emerald-400" />}
+      />
 
       <main className="flex-1 w-full overflow-x-hidden">
         {activeTab === 'assistant' && <AssistantPage />}

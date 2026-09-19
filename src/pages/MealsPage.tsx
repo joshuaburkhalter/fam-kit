@@ -40,6 +40,7 @@ import { Drawer } from '../components/ui/Drawer';
 import { RecipeScraperModal, extractSharedUrl } from '../components/RecipeScraperModal';
 import { EditRecipeModal } from '../components/EditRecipeModal';
 import { useFabAutoClose } from '../hooks/useFabAutoClose';
+import { Toast } from '../components/ui/Toast';
 
 interface MealsDataCache {
   householdId: string;
@@ -645,23 +646,47 @@ export const MealsPage: React.FC = () => {
       return;
     }
 
-    // Add ingredients to grocery list
+    // Optimistically add ingredients to grocery list immediately
+    const previousItems = groceryItems;
+    const ingredientsToAdd = recipe.ingredients && recipe.ingredients.length > 0
+      ? recipe.ingredients
+      : [{ item: recipe.title, amount: '', unit: '', category: 'Other' }];
+
+    const optimisticItems: GroceryItem[] = ingredientsToAdd.map((ing, idx) => ({
+      id: `temp-g-${Date.now()}-${idx}`,
+      household_id: householdId,
+      aisle_id: '',
+      name: ing.item,
+      quantity: ing.amount,
+      unit: ing.unit,
+      notes: `For: ${recipe.title}`,
+      is_completed: false,
+      list_type: 'grocery',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }));
+
+    const nextGrocery = [...optimisticItems, ...groceryItems];
+    setGroceryItems(nextGrocery);
+    if (mealsDataCache && mealsDataCache.householdId === householdId) {
+      mealsDataCache.groceryItems = nextGrocery;
+    }
+    showToast(`Added "${recipe.title}" ingredients to Grocery list!`);
+    triggerHapticCheck();
+
     try {
-      triggerHapticCheck();
       const res = await api.addRecipeToGrocery(recipe, householdId);
       const refreshedItems = await api.getGroceryItems(householdId);
       setGroceryItems(refreshedItems);
       if (mealsDataCache && mealsDataCache.householdId === householdId) {
         mealsDataCache.groceryItems = refreshedItems;
       }
-
-      const msg =
-        (res as any).skippedStaplesCount > 0
-          ? `Added ${res.addedCount} ingredients (filtered ${(res as any).skippedStaplesCount} pantry staples: water, salt, etc.)!`
-          : `Added ${res.addedCount} ingredients to Grocery list!`;
-      showToast(msg);
     } catch (err) {
       console.error('Failed to add ingredients', err);
+      setGroceryItems(previousItems);
+      if (mealsDataCache && mealsDataCache.householdId === householdId) {
+        mealsDataCache.groceryItems = previousItems;
+      }
       showToast('Error adding ingredients');
     }
   };
@@ -898,12 +923,7 @@ export const MealsPage: React.FC = () => {
   return (
     <div className="max-w-4xl mx-auto px-3 sm:px-6 pt-3 pb-36 md:pb-28 space-y-4">
       {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-slate-900/95 border border-emerald-500/40 text-emerald-300 text-xs sm:text-sm font-semibold px-4 py-2.5 rounded-2xl shadow-xl backdrop-blur-md animate-in fade-in slide-in-from-top-2 duration-200 pointer-events-none flex items-center gap-2 max-w-[90vw] text-center">
-          <Sparkles className="w-4 h-4 text-emerald-400 shrink-0" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
+      <Toast message={toastMessage} onClose={() => setToastMessage(null)} />
 
       {/* ================= IF RECIPE DETAIL IS OPEN ================= */}
       {selectedRecipe ? (

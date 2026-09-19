@@ -40,6 +40,7 @@ import type {
   FeedbackRequest,
 } from '../types';
 import { api } from '../lib/api';
+import { Toast } from '../components/ui/Toast';
 
 interface AdminPageProps {
   onBack?: () => void;
@@ -468,12 +469,11 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onBack }) => {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-24 space-y-6">
       {/* Toast Alert */}
-      {toastMessage && (
-        <div className="fixed top-20 right-4 z-50 max-w-md bg-emerald-500 text-slate-950 px-4 py-3 rounded-2xl shadow-2xl backdrop-blur-md flex items-center gap-3 animate-in fade-in slide-in-from-top duration-300">
-          <CheckCircle2 className="w-5 h-5 shrink-0" />
-          <span className="text-xs font-bold">{toastMessage}</span>
-        </div>
-      )}
+      <Toast
+        message={toastMessage}
+        onClose={() => setToastMessage(null)}
+        icon={<CheckCircle2 className="w-4 h-4 text-emerald-400" />}
+      />
 
       {/* Header Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900/90 border border-white/10 rounded-3xl p-5 backdrop-blur-xl shadow-xl">

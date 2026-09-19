@@ -20,6 +20,7 @@ import { api } from '../lib/api';
 import { useFabAutoClose } from '../hooks/useFabAutoClose';
 import { CheckSparkle, triggerHapticCheck } from '../components/CheckSparkle';
 import { Drawer } from '../components/ui/Drawer';
+import { Toast } from '../components/ui/Toast';
 
 interface GroceryDataCache {
   householdId: string;
@@ -1416,13 +1417,7 @@ export const GroceryPage: React.FC = () => {
         </form>
       </Drawer>
       {/* Floating Toast Notification */}
-      {toastMessage && (
-        <div className="fixed bottom-[calc(76px+4.5rem+env(safe-area-inset-bottom,0px))] md:bottom-20 left-4 right-4 z-50 flex justify-center pointer-events-none animate-in fade-in slide-in-from-bottom-2 duration-200">
-          <div className="px-4 py-2 rounded-2xl bg-slate-900/95 border border-emerald-500/40 text-emerald-300 text-xs font-semibold shadow-xl shadow-emerald-500/20 pointer-events-auto backdrop-blur-xl">
-            {toastMessage}
-          </div>
-        </div>
-      )}
+      <Toast message={toastMessage} onClose={() => setToastMessage(null)} />
 
       {/* Animated Expanding Quick Add Dock & FAB */}
       <div className="fixed bottom-[calc(76px+1rem+env(safe-area-inset-bottom,0px))] md:bottom-8 left-0 right-0 z-40 px-4 pointer-events-none">

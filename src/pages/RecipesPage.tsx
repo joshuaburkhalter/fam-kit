@@ -27,6 +27,7 @@ import { RecipeScraperModal, extractSharedUrl } from '../components/RecipeScrape
 import { EditRecipeModal } from '../components/EditRecipeModal';
 import { useFabAutoClose } from '../hooks/useFabAutoClose';
 import { CheckSparkle, CelebrationConfetti, triggerHapticCheck } from '../components/CheckSparkle';
+import { Toast } from '../components/ui/Toast';
 
 export const RecipesPage: React.FC = () => {
   const { household, apiKey } = usePWA();
@@ -307,8 +308,30 @@ export const RecipesPage: React.FC = () => {
       return;
     }
 
+    const prevItems = groceryItems;
+    const ingredientsToAdd = recipe.ingredients && recipe.ingredients.length > 0
+      ? recipe.ingredients
+      : [{ item: recipe.title, amount: '', unit: '', category: 'Other' }];
+
+    const optimisticItems: GroceryItem[] = ingredientsToAdd.map((ing, idx) => ({
+      id: `temp-g-${Date.now()}-${idx}`,
+      household_id: household.id,
+      aisle_id: '',
+      name: ing.item,
+      quantity: ing.amount,
+      unit: ing.unit,
+      notes: `For: ${recipe.title}`,
+      is_completed: false,
+      list_type: 'grocery',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }));
+
+    setGroceryItems((prev) => [...optimisticItems, ...prev]);
+    setAddedGroceryFeedback(`Added "${recipe.title}" ingredients to Grocery List!`);
+    triggerHapticCheck();
+
     try {
-      triggerHapticCheck();
       const res = await api.addRecipeToGrocery(recipe, household.id);
       // Also add to Shopped Recipes list
       await api.addWeeklyMeal(household.id, {
@@ -318,14 +341,9 @@ export const RecipesPage: React.FC = () => {
 
       const refreshed = await api.getGroceryItems(household.id);
       setGroceryItems(refreshed);
-
-      const feedback = (res as any).skippedStaplesCount > 0
-        ? `Added ${res.addedCount} ingredients (filtered ${(res as any).skippedStaplesCount} pantry staples: water, salt, etc.)!`
-        : `Added ${res.addedCount} ingredients to Grocery List & Meals on Deck!`;
-      setAddedGroceryFeedback(feedback);
-      setTimeout(() => setAddedGroceryFeedback(null), 3500);
     } catch (err: any) {
       console.error('Add to grocery failed:', err);
+      setGroceryItems(prevItems);
       alert(err.message || 'Failed to add ingredients to grocery list');
     }
   };
@@ -531,12 +549,7 @@ export const RecipesPage: React.FC = () => {
             </div>
           </div>
 
-          {addedGroceryFeedback && (
-            <div className="p-3.5 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center gap-2 text-emerald-400 text-xs font-semibold animate-in fade-in">
-              <Check className="w-4 h-4" />
-              {addedGroceryFeedback}
-            </div>
-          )}
+          <Toast message={addedGroceryFeedback} onClose={() => setAddedGroceryFeedback(null)} />
 
           {/* Recipe Content Card */}
           <div className="glass-panel rounded-3xl p-6 border border-white/10 space-y-6">
