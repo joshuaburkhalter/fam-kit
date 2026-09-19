@@ -591,6 +591,24 @@ export const api = {
     return normalizeDbRecipe(res.recipe);
   },
 
+  importRecipeFromImages: async (
+    householdId: string,
+    images: Array<{ base64: string; mimeType?: string }>,
+    coverImageIndex?: number,
+    apiKey?: string
+  ): Promise<Recipe> => {
+    const res = await fetchJson<{ success: boolean; recipe: any; detectedDishIndex?: number }>('/recipes/import-images', {
+      method: 'POST',
+      body: JSON.stringify({
+        images,
+        coverImageIndex,
+        apiKey,
+      }),
+      headers: householdId ? { 'x-household-id': householdId } : undefined,
+    });
+    return normalizeDbRecipe(res.recipe);
+  },
+
   addRecipeToGrocery: async (recipeOrId: string | Recipe, householdId: string) => {
     const recipe = typeof recipeOrId === 'string' ? await api.getRecipe(recipeOrId) : recipeOrId;
     const { toAdd, skippedStaples } = filterRecipeIngredientsForGrocery(recipe.ingredients || []);

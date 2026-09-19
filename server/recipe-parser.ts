@@ -1242,3 +1242,110 @@ ${cleanText}`;
     tags: ['Imported'],
   };
 }
+
+export interface ParsedRecipeFromImages extends ParsedRecipe {
+  dishPhotoIndex?: number;
+}
+
+export async function parseRecipeFromImages(
+  images: Array<{ base64: string; mimeType?: string }>,
+  apiKey?: string
+): Promise<ParsedRecipeFromImages> {
+  const activeKey = apiKey || process.env.GEMINI_API_KEY;
+  if (!activeKey) {
+    throw new Error('Gemini API key is required to scan recipes from photos. Please configure your API key in Settings.');
+  }
+
+  if (!images || images.length === 0) {
+    throw new Error('At least one recipe photo must be provided.');
+  }
+
+  const genAI = new GoogleGenerativeAI(activeKey);
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+
+  const parts: any[] = [];
+  for (const img of images) {
+    const rawData = img.base64.replace(/^data:image\/\w+;base64,/, '');
+    parts.push({
+      inlineData: {
+        data: rawData,
+        mimeType: img.mimeType || 'image/jpeg',
+      },
+    });
+  }
+
+  const prompt = `You are an expert culinary AI and recipe parser.
+The user has provided ${images.length} photo(s) of a recipe. These photos may be:
+- Pages from a cookbook, food magazine, or binder
+- Handwritten family recipe cards or printed printouts
+- A picture of the completed, plated dish in the book or from the dining table
+- Multiple photos covering ingredients on one page and cooking instructions on another
+
+Carefully analyze ALL provided images together to extract the complete recipe:
+1. Title: The clean, descriptive name of the dish.
+2. Description: A concise, appetizing 1-2 sentence summary of what makes this recipe delicious.
+3. Prep Time & Cook Time: In human-readable format (e.g., "15 min", "45 min", "1 hr 10 min").
+4. Servings: The number or yield (e.g. "4", "6-8", "12 cookies").
+5. Ingredients: An array of all ingredients with exact item names, quantities, and units.
+   - Assign each ingredient to an appropriate grocery aisle category:
+     'Produce', 'Bakery & Bread', 'Deli & Prepared', 'Meat & Seafood', 'Dairy & Eggs', 'Pantry & Dry Goods', 'Snacks & Sweets', 'Frozen', 'Beverages', 'Other'.
+   - Preserve exact ingredient specificity (e.g. "almond flour", not "flour"; "boneless skinless chicken thighs", not just "chicken").
+6. Instructions: Step-by-step chronological preparation and cooking directions as an array of strings.
+7. Tags: 2 to 5 relevant culinary tags (e.g. "Dinner", "Italian", "Dessert", "Quick", "Baking").
+8. dishPhotoIndex: Look closely at the ${images.length} photos provided (indices 0 to ${images.length - 1}).
+   - If one of the photos shows a photograph of the plated, cooked dish (such as a full-page or inset photo of the food in the cookbook, or a photo of the finished meal), set "dishPhotoIndex" to the 0-based index of that photo.
+   - If multiple photos show the dish, pick the clearest/most appetizing food photo index.
+   - If all photos are purely text or recipe cards with no food photo, set "dishPhotoIndex" to null or 0.
+
+Return ONLY a valid JSON object matching this schema (do NOT include markdown code blocks, backticks, or other text):
+{
+  "title": "Recipe Title",
+  "description": "Appetizing description of the dish",
+  "prepTime": "15 min",
+  "cookTime": "30 min",
+  "servings": "4",
+  "ingredients": [
+    { "item": "2 cups all-purpose flour", "amount": "2", "unit": "cups", "category": "Pantry & Dry Goods" }
+  ],
+  "instructions": [
+    "Preheat oven to 375°F (190°C)...",
+    "In a large bowl, combine..."
+  ],
+  "tags": ["Dinner"],
+  "dishPhotoIndex": 0
+}`;
+
+  parts.push({ text: prompt });
+
+  let text = '';
+  try {
+    const res = await model.generateContent(parts);
+    text = res.response.text().trim();
+  } catch (err: any) {
+    console.warn('Gemini 2.5 flash parse failed, attempting fallback:', err?.message);
+    const fallbackModel = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const res = await fallbackModel.generateContent(parts);
+    text = res.response.text().trim();
+  }
+
+  const cleanedJson = text.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '');
+  const parsed = JSON.parse(cleanedJson);
+
+  let dishIdx: number | undefined = undefined;
+  if (typeof parsed.dishPhotoIndex === 'number' && parsed.dishPhotoIndex >= 0 && parsed.dishPhotoIndex < images.length) {
+    dishIdx = parsed.dishPhotoIndex;
+  }
+
+  return {
+    title: parsed.title || 'Scanned Recipe',
+    description: parsed.description || undefined,
+    prepTime: parsed.prepTime ? formatDuration(parsed.prepTime) : undefined,
+    cookTime: parsed.cookTime ? formatDuration(parsed.cookTime) : undefined,
+    servings: parsed.servings ? String(parsed.servings) : undefined,
+    ingredients: Array.isArray(parsed.ingredients) ? parsed.ingredients : [],
+    instructions: Array.isArray(parsed.instructions) ? parsed.instructions : [],
+    tags: Array.isArray(parsed.tags) ? parsed.tags : ['Scanned'],
+    dishPhotoIndex: dishIdx,
+  };
+}
+

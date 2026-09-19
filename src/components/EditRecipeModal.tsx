@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Drawer } from './ui/Drawer';
-import { Plus, Trash2, Loader2, ChefHat, Check } from 'lucide-react';
+import { Plus, Trash2, Loader2, ChefHat, Check, Camera, ImageIcon, Link2 } from 'lucide-react';
 import type { Recipe } from '../types';
 import { api } from '../lib/api';
+import { compressImageFile } from '../lib/imageCompression';
 
 interface EditRecipeModalProps {
   isOpen: boolean;
@@ -19,6 +20,10 @@ export const EditRecipeModal: React.FC<EditRecipeModalProps> = ({
 }) => {
   const [title, setTitle] = useState(recipe.title);
   const [description, setDescription] = useState(recipe.description || '');
+  const [imageUrl, setImageUrl] = useState(recipe.image_url || '');
+  const [isCompressingPhoto, setIsCompressingPhoto] = useState(false);
+  const [showUrlInput, setShowUrlInput] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
   const [prepTime, setPrepTime] = useState(recipe.prep_time_minutes?.toString() || '');
   const [cookTime, setCookTime] = useState(recipe.cook_time_minutes?.toString() || '');
   const [servings, setServings] = useState(recipe.servings?.toString() || '');
@@ -39,6 +44,8 @@ export const EditRecipeModal: React.FC<EditRecipeModalProps> = ({
   useEffect(() => {
     setTitle(recipe.title);
     setDescription(recipe.description || '');
+    setImageUrl(recipe.image_url || '');
+    setShowUrlInput(false);
     setPrepTime(recipe.prep_time_minutes?.toString() || '');
     setCookTime(recipe.cook_time_minutes?.toString() || '');
     setServings(recipe.servings?.toString() || '');
@@ -113,6 +120,7 @@ export const EditRecipeModal: React.FC<EditRecipeModalProps> = ({
         savedRecipe = await api.updateRecipe(recipe.id, {
           title: title.trim(),
           description: description.trim() || undefined,
+          image_url: imageUrl ? imageUrl.trim() : null,
           prep_time_minutes: prepTime ? parseInt(prepTime, 10) : undefined,
           cook_time_minutes: cookTime ? parseInt(cookTime, 10) : undefined,
           servings: servings ? parseInt(servings, 10) : undefined,
@@ -124,6 +132,7 @@ export const EditRecipeModal: React.FC<EditRecipeModalProps> = ({
         savedRecipe = await api.createRecipe(recipe.household_id, {
           title: title.trim(),
           description: description.trim() || undefined,
+          image_url: imageUrl ? imageUrl.trim() : undefined,
           prep_time_minutes: prepTime ? parseInt(prepTime, 10) : undefined,
           cook_time_minutes: cookTime ? parseInt(cookTime, 10) : undefined,
           servings: servings ? parseInt(servings, 10) : undefined,
@@ -187,8 +196,137 @@ export const EditRecipeModal: React.FC<EditRecipeModalProps> = ({
       )}
 
       <form id="edit-recipe-form" onSubmit={handleSubmit} className="space-y-6">
-          {/* Title & Description */}
-          <div className="space-y-3.5">
+        {/* Recipe Photo */}
+        <div>
+          <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+            Recipe Photo
+          </label>
+
+          <input
+            ref={photoInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              setIsCompressingPhoto(true);
+              try {
+                const res = await compressImageFile(file, { maxWidth: 1280, maxHeight: 1280, quality: 0.82 });
+                setImageUrl(res.dataUrl);
+              } catch (err: any) {
+                console.error('Failed to process image:', err);
+                setError('Failed to process image: ' + (err.message || 'Unknown error'));
+              } finally {
+                setIsCompressingPhoto(false);
+                if (e.target) e.target.value = '';
+              }
+            }}
+          />
+
+          {imageUrl ? (
+            <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-slate-900 group">
+              <img
+                src={imageUrl}
+                alt="Recipe preview"
+                className="w-full h-44 object-cover"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-black/30 flex items-end p-3 justify-between">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={isCompressingPhoto}
+                    onClick={() => photoInputRef.current?.click()}
+                    className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold flex items-center gap-1.5 shadow-md shadow-emerald-500/20 transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    {isCompressingPhoto ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Camera className="w-3.5 h-3.5" />
+                    )}
+                    <span>Replace Photo</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowUrlInput(!showUrlInput)}
+                    className="px-2.5 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white border border-white/20 text-xs font-medium flex items-center gap-1 backdrop-blur-sm transition-all cursor-pointer"
+                  >
+                    <Link2 className="w-3.5 h-3.5" />
+                    <span>URL</span>
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setImageUrl('')}
+                  className="p-1.5 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/30 text-xs font-medium flex items-center gap-1 backdrop-blur-sm transition-all cursor-pointer"
+                  title="Remove photo"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="border border-dashed border-white/15 hover:border-emerald-500/40 rounded-2xl p-4 bg-slate-900/40 hover:bg-slate-900/60 transition-all text-center">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto mb-2.5">
+                {isCompressingPhoto ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Camera className="w-5 h-5" />
+                )}
+              </div>
+              <p className="text-xs font-semibold text-white mb-1">
+                {isCompressingPhoto ? 'Compressing photo...' : 'Add a dish photo'}
+              </p>
+              <p className="text-[11px] text-slate-400 mb-3">
+                Take a picture with your camera or select from your photo library
+              </p>
+              <div className="flex items-center justify-center gap-2">
+                <button
+                  type="button"
+                  disabled={isCompressingPhoto}
+                  onClick={() => photoInputRef.current?.click()}
+                  className="px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold flex items-center gap-1.5 shadow-md shadow-emerald-500/20 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  <Camera className="w-3.5 h-3.5" />
+                  <span>Take / Upload Photo</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowUrlInput(!showUrlInput)}
+                  className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 text-xs font-medium flex items-center gap-1 transition-all cursor-pointer"
+                >
+                  <Link2 className="w-3.5 h-3.5" />
+                  <span>Image Link</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {showUrlInput && (
+            <div className="mt-2.5 flex items-center gap-2 animate-in fade-in">
+              <input
+                type="url"
+                value={imageUrl}
+                onChange={(e) => setImageUrl(e.target.value)}
+                placeholder="https://images.unsplash.com/..."
+                className="flex-1 bg-slate-900/80 border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/50"
+              />
+              {imageUrl && (
+                <button
+                  type="button"
+                  onClick={() => setShowUrlInput(false)}
+                  className="px-3 py-2 rounded-xl bg-emerald-500 text-slate-950 text-xs font-bold cursor-pointer"
+                >
+                  Done
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Title & Description */}
+        <div className="space-y-3.5">
             <div>
               <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
                 Recipe Title

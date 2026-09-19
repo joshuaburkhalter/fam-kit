@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { getDb, queryAll, queryOne, execute, saveDb, createDefaultAisles, generateSecureVoucherCode } from './db.js';
 import { getGeminiModel } from './gemini.js';
-import { parseRecipeFromUrl, parseRecipeFromHtml, getCuratedFoodImage, findAccurateRecipePhoto, generateRecipeImageWithImagen } from './recipe-parser.js';
+import { parseRecipeFromUrl, parseRecipeFromHtml, parseRecipeFromImages, getCuratedFoodImage, findAccurateRecipePhoto, generateRecipeImageWithImagen } from './recipe-parser.js';
 import {
   sendPushNotificationToHousehold,
   sendPushNotificationToUser,
@@ -76,7 +76,7 @@ export const app = express();
 const PORT = process.env.PORT || 3001;
 
 app.use(cors());
-app.use(express.json({ limit: '15mb' }));
+app.use(express.json({ limit: '50mb' }));
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -1973,6 +1973,44 @@ app.get('/api/recipes', (req, res) => {
   res.json(recipes);
 });
 
+app.post('/api/recipes', (req, res) => {
+  try {
+    const householdId = getHouseholdId(req);
+    const { title, description, imageUrl, prepTime, cookTime, servings, sourceUrl, ingredients, instructions, tags } = req.body;
+    if (!title || !title.trim()) {
+      return res.status(400).json({ error: 'Recipe title is required' });
+    }
+    const id = `r_${Date.now()}`;
+    const now = new Date().toISOString();
+    const tagStr = Array.isArray(tags) ? tags.join(', ') : (tags || '');
+    execute(
+      `INSERT INTO recipes (id, title, description, imageUrl, prepTime, cookTime, servings, sourceUrl, ingredients, instructions, tags, householdId, createdAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id,
+        title.trim(),
+        description?.trim() || null,
+        imageUrl || null,
+        prepTime ? String(prepTime) : null,
+        cookTime ? String(cookTime) : null,
+        servings ? String(servings) : null,
+        sourceUrl || null,
+        typeof ingredients === 'string' ? ingredients : JSON.stringify(ingredients || []),
+        typeof instructions === 'string' ? instructions : JSON.stringify(instructions || []),
+        tagStr,
+        householdId,
+        now,
+      ]
+    );
+    saveDb();
+    const saved = queryOne('SELECT * FROM recipes WHERE id = ?', [id]);
+    res.json(saved);
+  } catch (err: any) {
+    console.error('Create recipe error:', err);
+    res.status(500).json({ error: err.message || 'Failed to create recipe' });
+  }
+});
+
 app.post('/api/recipes/import', async (req, res) => {
   try {
     const householdId = getHouseholdId(req);
@@ -2022,6 +2060,61 @@ app.post('/api/recipes/import', async (req, res) => {
   } catch (err: any) {
     console.error('Import error:', err);
     res.status(500).json({ error: err.message || 'Failed to import recipe' });
+  }
+});
+
+// Import recipe from multiple photos / images using Gemini Vision
+app.post('/api/recipes/import-images', async (req, res) => {
+  try {
+    const householdId = getHouseholdId(req);
+    const { images, coverImageIndex, apiKey } = req.body;
+    if (!images || !Array.isArray(images) || images.length === 0) {
+      return res.status(400).json({ error: 'At least one recipe image is required.' });
+    }
+
+    const parsed = await parseRecipeFromImages(images, apiKey);
+
+    // Determine the cover photo:
+    // 1. User manual selection (coverImageIndex)
+    // 2. Gemini's detected dish photo (parsed.dishPhotoIndex)
+    // 3. Fallback to first uploaded photo
+    let chosenCoverImage: string | null = null;
+    if (typeof coverImageIndex === 'number' && coverImageIndex >= 0 && coverImageIndex < images.length) {
+      chosenCoverImage = images[coverImageIndex].base64;
+    } else if (typeof parsed.dishPhotoIndex === 'number' && parsed.dishPhotoIndex >= 0 && parsed.dishPhotoIndex < images.length) {
+      chosenCoverImage = images[parsed.dishPhotoIndex].base64;
+    } else if (images[0]?.base64) {
+      chosenCoverImage = images[0].base64;
+    }
+
+    const id = `r_${Date.now()}`;
+    const now = new Date().toISOString();
+
+    execute(
+      `INSERT INTO recipes (id, title, description, imageUrl, prepTime, cookTime, servings, sourceUrl, ingredients, instructions, tags, householdId, createdAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id,
+        parsed.title,
+        parsed.description || null,
+        chosenCoverImage,
+        parsed.prepTime || null,
+        parsed.cookTime || null,
+        parsed.servings || null,
+        'Scanned from Photos',
+        JSON.stringify(parsed.ingredients),
+        JSON.stringify(parsed.instructions),
+        (parsed.tags || ['Scanned']).join(', '),
+        householdId,
+        now,
+      ]
+    );
+
+    const saved = queryOne('SELECT * FROM recipes WHERE id = ?', [id]);
+    res.json({ success: true, recipe: saved, detectedDishIndex: parsed.dishPhotoIndex });
+  } catch (err: any) {
+    console.error('Import images error:', err);
+    res.status(500).json({ error: err.message || 'Failed to scan recipe from photos' });
   }
 });
 

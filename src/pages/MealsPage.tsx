@@ -25,7 +25,9 @@ import {
   Link2,
   Pencil,
   ImageIcon,
+  Camera,
 } from 'lucide-react';
+import { compressImageFile } from '../lib/imageCompression';
 import {
   format,
   isToday,
@@ -131,10 +133,13 @@ export const MealsPage: React.FC = () => {
   const [justCheckedIngredient, setJustCheckedIngredient] = useState<number | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
 
-  // Image regeneration
+  // Image regeneration & photo replacement
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
   const [regenerateMode, setRegenerateMode] = useState<'imagen' | 'search' | null>(null);
   const [imageFeedback, setImageFeedback] = useState<string | null>(null);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [scraperInitialMode, setScraperInitialMode] = useState<'scan' | 'url' | 'text'>('scan');
+  const photoFileInputRef = useRef<HTMLInputElement | null>(null);
   const seenImageUrlsRef = useRef<Record<string, string[]>>({});
 
   // Modals & Drawers
@@ -863,6 +868,32 @@ export const MealsPage: React.FC = () => {
     }
   };
 
+  const handleTakeOrReplacePhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedRecipe) return;
+    setIsUploadingPhoto(true);
+    try {
+      const compressed = await compressImageFile(file, { maxWidth: 1280, maxHeight: 1280, quality: 0.82 });
+      const updated = await api.updateRecipe(selectedRecipe.id, { image_url: compressed.dataUrl });
+      setSelectedRecipe(updated);
+      setRecipes((prev) => {
+        const next = prev.map((r) => (r.id === updated.id ? updated : r));
+        if (mealsDataCache && mealsDataCache.householdId === householdId) {
+          mealsDataCache.recipes = next;
+        }
+        return next;
+      });
+      setImageFeedback('Photo updated!');
+      setTimeout(() => setImageFeedback(null), 3000);
+    } catch (err: any) {
+      console.error('Failed to update photo:', err);
+      alert('Failed to update photo: ' + (err.message || 'Unknown error'));
+    } finally {
+      setIsUploadingPhoto(false);
+      if (e.target) e.target.value = '';
+    }
+  };
+
   const isAiRecipe = (recipe?: { tags?: string[] } | null): boolean => {
     if (!recipe || !recipe.tags) return false;
     return recipe.tags.some((t) => {
@@ -1058,11 +1089,37 @@ export const MealsPage: React.FC = () => {
             <div className="absolute top-3 right-3 flex items-center gap-2">
               {imageFeedback && (
                 <span className="text-[11px] font-bold bg-emerald-500 text-slate-950 px-2.5 py-1 rounded-xl shadow-lg animate-in fade-in">
-                  {imageFeedback}
+                  ✓ {imageFeedback}
                 </span>
               )}
+              <input
+                ref={photoFileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleTakeOrReplacePhoto}
+              />
               <button
-                disabled={Boolean(regeneratingId)}
+                type="button"
+                disabled={isUploadingPhoto || Boolean(regeneratingId)}
+                onClick={() => photoFileInputRef.current?.click()}
+                className="px-2.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 border border-emerald-400/50 text-[11px] font-bold flex items-center gap-1.5 backdrop-blur-md shadow-md shadow-emerald-500/20 transition-all cursor-pointer disabled:opacity-50"
+                title="Take a photo with your camera or select from your gallery"
+              >
+                {isUploadingPhoto ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-950" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <Camera className="w-3.5 h-3.5" />
+                    <span>{selectedRecipe.image_url ? 'Replace Photo' : 'Add Photo'}</span>
+                  </>
+                )}
+              </button>
+              <button
+                disabled={Boolean(regeneratingId) || isUploadingPhoto}
                 onClick={() => handleRegenerateImage(selectedRecipe.id, { mode: 'search' })}
                 className="px-2.5 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-850 text-slate-300 hover:text-white border border-white/20 text-[11px] font-semibold flex items-center gap-1.5 backdrop-blur-md transition-all cursor-pointer"
                 title="Find a new photograph for this dish"
@@ -1072,7 +1129,7 @@ export const MealsPage: React.FC = () => {
                 ) : (
                   <ImageIcon className="w-3.5 h-3.5 text-emerald-400" />
                 )}
-                <span>Change Photo</span>
+                <span>Search</span>
               </button>
             </div>
 
@@ -1273,6 +1330,35 @@ export const MealsPage: React.FC = () => {
               </div>
               Meals
             </h1>
+
+            {activeTab === 'recipes' && (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setScraperInitialMode('scan');
+                    setIsScraperOpen(true);
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-slate-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer"
+                  title="Scan recipe from photos"
+                >
+                  <Camera className="w-3.5 h-3.5 stroke-[2.5]" />
+                  <span>Scan</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setScraperInitialMode('url');
+                    setIsScraperOpen(true);
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-slate-200 text-xs font-bold transition-all border border-white/10 active:scale-95 cursor-pointer"
+                  title="Import recipe from link or text"
+                >
+                  <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                  <span>Import</span>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Full-width compact segmented sub-navigation: Recipes -> Planner -> History */}
@@ -1908,6 +1994,20 @@ export const MealsPage: React.FC = () => {
                         type="button"
                         onClick={() => {
                           setIsRecipeFabOpen(false);
+                          setScraperInitialMode('scan');
+                          setIsScraperOpen(true);
+                        }}
+                        className="w-8 h-8 rounded-xl bg-white/5 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-400 border border-white/10 hover:border-emerald-500/30 flex items-center justify-center transition-all cursor-pointer"
+                        title="Scan Recipe from Photos"
+                      >
+                        <Camera className="w-4 h-4 text-emerald-400" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsRecipeFabOpen(false);
+                          setScraperInitialMode('url');
                           setIsScraperOpen(true);
                         }}
                         className="w-8 h-8 rounded-xl bg-white/5 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-400 border border-white/10 hover:border-emerald-500/30 flex items-center justify-center transition-all cursor-pointer"
@@ -2188,6 +2288,7 @@ export const MealsPage: React.FC = () => {
       {householdId && (
         <RecipeScraperModal
           isOpen={isScraperOpen}
+          initialMode={scraperInitialMode}
           onClose={() => {
             setIsScraperOpen(false);
             setScraperInitialUrl('');
