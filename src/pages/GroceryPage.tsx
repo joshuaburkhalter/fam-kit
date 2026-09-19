@@ -468,18 +468,9 @@ export const GroceryPage: React.FC = () => {
   const dragStartIndexRef = useRef<number>(-1);
   const dragTargetIndexRef = useRef<number>(-1);
   const dragStartYRef = useRef<number>(0);
-  const initialMidpointsRef = useRef<number[]>([]);
   const cardElementsRef = useRef<Map<string, HTMLDivElement>>(new Map());
   const itemsByAisleRef = useRef<{ aisle: Aisle; items: GroceryItem[] }[]>([]);
   itemsByAisleRef.current = itemsByAisle;
-
-  const triggerHaptic = (pattern: number | number[]) => {
-    try {
-      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-        navigator.vibrate(pattern);
-      }
-    } catch {}
-  };
 
   const handleDragStart = (e: React.PointerEvent, aisleId: string, index: number) => {
     if (e.button !== 0) return;
@@ -493,36 +484,10 @@ export const GroceryPage: React.FC = () => {
     const list = itemsByAisleRef.current;
     if (list.length <= 1) return;
 
-    // Record initial resting midpoints of all cards
-    const midpoints: number[] = [];
-    for (let i = 0; i < list.length; i++) {
-      const el = cardElementsRef.current.get(list[i]?.aisle.id);
-      if (el) {
-        const rect = el.getBoundingClientRect();
-        midpoints.push(rect.top + rect.height / 2);
-      } else {
-        midpoints.push(0);
-      }
-    }
-    initialMidpointsRef.current = midpoints;
-
-    // Measure dragged card height and inter-card gap
+    // Measure dragged card height
     const draggedEl = cardElementsRef.current.get(aisleId);
-    const draggedRect = draggedEl?.getBoundingClientRect();
-    const draggedHeight = draggedRect ? draggedRect.height : 60;
-
-    let measuredGap = 16;
-    if (list.length > 1) {
-      const el0 = cardElementsRef.current.get(list[0]?.aisle.id);
-      const el1 = cardElementsRef.current.get(list[1]?.aisle.id);
-      if (el0 && el1) {
-        const r0 = el0.getBoundingClientRect();
-        const r1 = el1.getBoundingClientRect();
-        const g = r1.top - r0.bottom;
-        if (g > 0 && g < 80) measuredGap = g;
-      }
-    }
-    setDragShiftAmount(draggedHeight + measuredGap);
+    const draggedHeight = draggedEl ? draggedEl.getBoundingClientRect().height : 60;
+    setDragShiftAmount(draggedHeight + 16);
 
     setDraggingAisleId(aisleId);
     setDragStartIndex(index);
@@ -532,8 +497,9 @@ export const GroceryPage: React.FC = () => {
     setDragOffsetY(0);
     dragStartYRef.current = e.clientY;
 
-    // Crisp pick-up haptic pulse (40ms)
-    triggerHaptic(40);
+    try {
+      if ('vibrate' in navigator) navigator.vibrate(15);
+    } catch {}
   };
 
   const handleDragMove = (e: React.PointerEvent) => {
@@ -543,30 +509,49 @@ export const GroceryPage: React.FC = () => {
     const offset = currentY - dragStartYRef.current;
     setDragOffsetY(offset);
 
-    const midpoints = initialMidpointsRef.current;
-    if (midpoints.length <= 1) return;
+    const currentIndex = dragTargetIndexRef.current;
+    if (currentIndex < 0) return;
 
-    // Compare dragged card's current center to initial resting slot midpoints
-    const currentCenter = (midpoints[dragStartIndexRef.current] ?? currentY) + offset;
-    let closestIdx = dragStartIndexRef.current;
-    let minDistance = Infinity;
+    const currentList = itemsByAisleRef.current;
 
-    for (let i = 0; i < midpoints.length; i++) {
-      const dist = Math.abs(currentCenter - midpoints[i]);
-      if (dist < minDistance) {
-        minDistance = dist;
-        closestIdx = i;
+    // Check item above
+    if (currentIndex > 0) {
+      const prevAisle = currentList[currentIndex - 1]?.aisle;
+      if (prevAisle) {
+        const prevEl = cardElementsRef.current.get(prevAisle.id);
+        if (prevEl) {
+          const rect = prevEl.getBoundingClientRect();
+          const midpoint = rect.top + rect.height / 2;
+          if (currentY < midpoint) {
+            dragTargetIndexRef.current = currentIndex - 1;
+            setDragTargetIndex(currentIndex - 1);
+            try {
+              if ('vibrate' in navigator) navigator.vibrate(10);
+            } catch {}
+            return;
+          }
+        }
       }
     }
 
-    closestIdx = Math.max(0, Math.min(midpoints.length - 1, closestIdx));
-
-    if (closestIdx !== dragTargetIndexRef.current) {
-      dragTargetIndexRef.current = closestIdx;
-      setDragTargetIndex(closestIdx);
-
-      // Distinct haptic bump on crossing into each new slot (35ms)
-      triggerHaptic(35);
+    // Check item below
+    if (currentIndex < currentList.length - 1) {
+      const nextAisle = currentList[currentIndex + 1]?.aisle;
+      if (nextAisle) {
+        const nextEl = cardElementsRef.current.get(nextAisle.id);
+        if (nextEl) {
+          const rect = nextEl.getBoundingClientRect();
+          const midpoint = rect.top + rect.height / 2;
+          if (currentY > midpoint) {
+            dragTargetIndexRef.current = currentIndex + 1;
+            setDragTargetIndex(currentIndex + 1);
+            try {
+              if ('vibrate' in navigator) navigator.vibrate(10);
+            } catch {}
+            return;
+          }
+        }
+      }
     }
   };
 
@@ -577,8 +562,9 @@ export const GroceryPage: React.FC = () => {
       (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
     } catch {}
 
-    // Double-tap haptic bump on drop
-    triggerHaptic([35, 40, 35]);
+    try {
+      if ('vibrate' in navigator) navigator.vibrate(15);
+    } catch {}
 
     const fromIdx = dragStartIndexRef.current;
     const toIdx = dragTargetIndexRef.current;
@@ -590,7 +576,6 @@ export const GroceryPage: React.FC = () => {
     setDragShiftAmount(0);
     dragStartIndexRef.current = -1;
     dragTargetIndexRef.current = -1;
-    initialMidpointsRef.current = [];
 
     if (toIdx >= 0 && toIdx !== fromIdx) {
       const currentList = itemsByAisleRef.current;
