@@ -460,7 +460,11 @@ export const GroceryPage: React.FC = () => {
 
   // Draggable category sorting state
   const [draggingAisleId, setDraggingAisleId] = useState<string | null>(null);
-  const dragCurrentIndexRef = useRef<number>(-1);
+  const [dragStartIndex, setDragStartIndex] = useState<number>(-1);
+  const [dragTargetIndex, setDragTargetIndex] = useState<number>(-1);
+  const [dragOffsetY, setDragOffsetY] = useState<number>(0);
+  const dragStartYRef = useRef<number>(0);
+  const initialMidpointsRef = useRef<number[]>([]);
   const cardElementsRef = useRef<Map<string, HTMLDivElement>>(new Map());
   const itemsByAisleRef = useRef<{ aisle: Aisle; items: GroceryItem[] }[]>([]);
   itemsByAisleRef.current = itemsByAisle;
@@ -474,86 +478,58 @@ export const GroceryPage: React.FC = () => {
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     } catch {}
 
+    // Record initial midpoints of all cards at rest
+    const midpoints: number[] = [];
+    const list = itemsByAisleRef.current;
+    for (let i = 0; i < list.length; i++) {
+      const el = cardElementsRef.current.get(list[i]?.aisle.id);
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        midpoints.push(rect.top + rect.height / 2);
+      } else {
+        midpoints.push(0);
+      }
+    }
+    initialMidpointsRef.current = midpoints;
+
     setDraggingAisleId(aisleId);
-    dragCurrentIndexRef.current = index;
+    setDragStartIndex(index);
+    setDragTargetIndex(index);
+    setDragOffsetY(0);
+    dragStartYRef.current = e.clientY;
 
     try {
       if ('vibrate' in navigator) navigator.vibrate(15);
     } catch {}
   };
 
-  const performSwap = (fromIdx: number, toIdx: number) => {
-    dragCurrentIndexRef.current = toIdx;
-
-    try {
-      if ('vibrate' in navigator) navigator.vibrate(10);
-    } catch {}
-
-    const currentList = itemsByAisleRef.current;
-    const fromAisle = currentList[fromIdx]?.aisle;
-    const toAisle = currentList[toIdx]?.aisle;
-    if (!fromAisle || !toAisle) return;
-
-    setLocalAisles((prevAisles) => {
-      const base = prevAisles.length > 0 ? [...prevAisles] : [...aisles];
-      const fromAisleIndex = base.findIndex((a) => a.id === fromAisle.id);
-      const toAisleIndex = base.findIndex((a) => a.id === toAisle.id);
-      if (fromAisleIndex === -1 || toAisleIndex === -1) return prevAisles;
-
-      const currentFromOrder = base[fromAisleIndex].display_order;
-      const currentToOrder = base[toAisleIndex].display_order;
-
-      base[fromAisleIndex] = { ...base[fromAisleIndex], display_order: currentToOrder };
-      base[toAisleIndex] = { ...base[toAisleIndex], display_order: currentFromOrder };
-
-      return [...base]
-        .sort((a, b) => a.display_order - b.display_order)
-        .map((a, i) => ({
-          ...a,
-          display_order: i,
-        }));
-    });
-  };
-
   const handleDragMove = (e: React.PointerEvent) => {
     if (!draggingAisleId) return;
 
     const currentY = e.clientY;
-    const currentIndex = dragCurrentIndexRef.current;
-    if (currentIndex < 0) return;
+    const offset = currentY - dragStartYRef.current;
+    setDragOffsetY(offset);
 
-    const currentList = itemsByAisleRef.current;
+    const midpoints = initialMidpointsRef.current;
+    if (midpoints.length <= 1) return;
 
-    // Check item above
-    if (currentIndex > 0) {
-      const prevAisle = currentList[currentIndex - 1]?.aisle;
-      if (prevAisle) {
-        const prevEl = cardElementsRef.current.get(prevAisle.id);
-        if (prevEl) {
-          const rect = prevEl.getBoundingClientRect();
-          const midpoint = rect.top + rect.height / 2;
-          if (currentY < midpoint) {
-            performSwap(currentIndex, currentIndex - 1);
-            return;
-          }
-        }
+    // Calculate nearest initial card slot midpoint
+    let closestIdx = dragStartIndex;
+    let minDistance = Infinity;
+
+    for (let i = 0; i < midpoints.length; i++) {
+      const dist = Math.abs(currentY - midpoints[i]);
+      if (dist < minDistance) {
+        minDistance = dist;
+        closestIdx = i;
       }
     }
 
-    // Check item below
-    if (currentIndex < currentList.length - 1) {
-      const nextAisle = currentList[currentIndex + 1]?.aisle;
-      if (nextAisle) {
-        const nextEl = cardElementsRef.current.get(nextAisle.id);
-        if (nextEl) {
-          const rect = nextEl.getBoundingClientRect();
-          const midpoint = rect.top + rect.height / 2;
-          if (currentY > midpoint) {
-            performSwap(currentIndex, currentIndex + 1);
-            return;
-          }
-        }
-      }
+    if (closestIdx !== dragTargetIndex) {
+      setDragTargetIndex(closestIdx);
+      try {
+        if ('vibrate' in navigator) navigator.vibrate(10);
+      } catch {}
     }
   };
 
@@ -564,29 +540,58 @@ export const GroceryPage: React.FC = () => {
       (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
     } catch {}
 
+    const fromIdx = dragStartIndex;
+    const toIdx = dragTargetIndex;
+
     setDraggingAisleId(null);
-    dragCurrentIndexRef.current = -1;
+    setDragStartIndex(-1);
+    setDragTargetIndex(-1);
+    setDragOffsetY(0);
 
-    // Persist to server
-    setLocalAisles((currentAisles) => {
-      const sorted = [...currentAisles].sort((a, b) => a.display_order - b.display_order);
-      const sortedIds = sorted.map((a) => a.id);
+    if (toIdx >= 0 && toIdx !== fromIdx) {
+      const currentList = itemsByAisleRef.current;
+      const reorderedVisible = [...currentList];
+      const [moved] = reorderedVisible.splice(fromIdx, 1);
+      reorderedVisible.splice(toIdx, 0, moved);
 
-      if (groceryDataCache && householdId && groceryDataCache.householdId === householdId) {
-        groceryDataCache.aisles = sorted;
-      }
+      const reorderedIds = reorderedVisible.map((entry) => entry.aisle.id);
 
-      api.reorderAisles(householdId, sortedIds)
-        .then(() => {
-          refreshAisles();
-          showToast('Category order saved');
-        })
-        .catch((err) => {
-          console.error('Failed to save category order:', err);
+      setLocalAisles((prevAisles) => {
+        const base = prevAisles.length > 0 ? [...prevAisles] : [...aisles];
+        const visibleSet = new Set(reorderedIds);
+
+        reorderedIds.forEach((id, idx) => {
+          const match = base.find((a) => a.id === id);
+          if (match) {
+            match.display_order = idx;
+          }
         });
 
-      return currentAisles;
-    });
+        let nextOrder = reorderedIds.length;
+        base.forEach((a) => {
+          if (!visibleSet.has(a.id)) {
+            a.display_order = nextOrder++;
+          }
+        });
+
+        const sorted = [...base].sort((a, b) => a.display_order - b.display_order);
+
+        if (groceryDataCache && householdId && groceryDataCache.householdId === householdId) {
+          groceryDataCache.aisles = sorted;
+        }
+
+        api.reorderAisles(householdId, sorted.map((a) => a.id))
+          .then(() => {
+            refreshAisles();
+            showToast('Category order saved');
+          })
+          .catch((err) => {
+            console.error('Failed to save category order:', err);
+          });
+
+        return sorted;
+      });
+    }
   };
 
   const currentList = customLists.find((l) => l.id === activeListType);
@@ -767,70 +772,101 @@ export const GroceryPage: React.FC = () => {
           itemsByAisle.map(({ aisle, items: aisleItems }, idx) => {
             const isCollapsed = collapsedAisles[aisle.id];
             const isDragging = draggingAisleId === aisle.id;
+
+            // Show drop indicator above this card if target is before this card
+            const showDropAbove =
+              draggingAisleId !== null &&
+              dragTargetIndex === idx &&
+              dragTargetIndex < dragStartIndex;
+
+            // Show drop indicator below this card if target is after this card
+            const showDropBelow =
+              draggingAisleId !== null &&
+              dragTargetIndex === idx &&
+              dragTargetIndex > dragStartIndex;
+
             return (
-              <div
-                key={aisle.id}
-                ref={(el) => {
-                  if (el) {
-                    cardElementsRef.current.set(aisle.id, el);
-                  } else {
-                    cardElementsRef.current.delete(aisle.id);
-                  }
-                }}
-                className={`glass-panel rounded-3xl border overflow-hidden transition-all duration-200 ${
-                  isDragging
-                    ? 'border-emerald-500/60 ring-2 ring-emerald-500/50 shadow-2xl scale-[1.01] bg-slate-900/95 z-20 opacity-95'
-                    : 'border-white/10 shadow-sm'
-                }`}
-              >
-                {/* Aisle Category Header */}
+              <React.Fragment key={aisle.id}>
+                {showDropAbove && (
+                  <div className="flex items-center gap-2 py-1.5 px-3 my-1 animate-in fade-in zoom-in-95 duration-150">
+                    <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-md shadow-emerald-400/80 shrink-0 animate-pulse" />
+                    <div className="h-0.5 flex-1 bg-gradient-to-r from-emerald-400 via-emerald-400/70 to-emerald-400/20 rounded-full shadow-sm shadow-emerald-400/50" />
+                    <span className="text-[10px] font-mono font-bold text-emerald-400 uppercase tracking-wider shrink-0 bg-slate-950/95 px-2.5 py-0.5 rounded-full border border-emerald-500/50 shadow-lg shadow-emerald-950/60">
+                      Drop Here
+                    </span>
+                  </div>
+                )}
+
                 <div
-                  className={`w-full flex items-center justify-between px-3 py-2.5 sm:px-3.5 sm:py-3 border-b border-white/5 transition-colors select-none ${
-                    isDragging ? 'bg-slate-850' : 'bg-slate-900/40 hover:bg-slate-900/60'
+                  ref={(el) => {
+                    if (el) {
+                      cardElementsRef.current.set(aisle.id, el);
+                    } else {
+                      cardElementsRef.current.delete(aisle.id);
+                    }
+                  }}
+                  style={{
+                    transform: isDragging ? `translateY(${dragOffsetY}px)` : undefined,
+                  }}
+                  className={`glass-panel rounded-3xl border overflow-hidden relative ${
+                    isDragging
+                      ? 'border-emerald-400 ring-2 ring-emerald-400/80 shadow-2xl shadow-emerald-950/90 scale-[1.02] bg-slate-900/98 z-50 opacity-95 transition-none'
+                      : 'border-white/10 shadow-sm transition-all duration-200'
                   }`}
                 >
-                  {/* Drag Handle */}
-                  {itemsByAisle.length > 1 && (
-                    <div
-                      onPointerDown={(e) => handleDragStart(e, aisle.id, idx)}
-                      onPointerMove={handleDragMove}
-                      onPointerUp={handleDragEnd}
-                      onPointerCancel={handleDragEnd}
-                      className="p-1 -ml-1 text-slate-500 hover:text-slate-300 active:text-emerald-400 cursor-grab active:cursor-grabbing touch-none select-none rounded-md hover:bg-white/5 transition-colors shrink-0"
-                      title="Drag to reorder category"
-                    >
-                      <GripVertical className="w-4 h-4" />
-                    </div>
-                  )}
-
-                  {/* Category Title & Collapse Trigger */}
-                  <button
-                    type="button"
-                    onClick={() => toggleAisleCollapse(aisle.id)}
-                    className="flex-1 min-w-0 flex items-center justify-between ml-1.5 py-0.5 text-left cursor-pointer"
+                  {/* Aisle Category Header */}
+                  <div
+                    className={`w-full flex items-center justify-between px-3 py-2.5 sm:px-3.5 sm:py-3 border-b border-white/5 transition-colors select-none ${
+                      isDragging ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-slate-900/40 hover:bg-slate-900/60'
+                    }`}
                   >
-                    <div className="flex items-center gap-2.5 min-w-0">
+                    {/* Drag Handle */}
+                    {itemsByAisle.length > 1 && (
                       <div
-                        className="w-3 h-3 rounded-full shadow-sm shrink-0"
-                        style={{ backgroundColor: aisle.color || '#10b981' }}
-                      />
-                      <span className="text-xs font-bold uppercase tracking-wider text-slate-200 truncate">
-                        {aisle.name}
-                      </span>
-                      <span className="text-[10px] font-mono bg-white/5 px-2 py-0.5 rounded-full text-slate-400 shrink-0">
-                        {aisleItems.length}
-                      </span>
-                    </div>
+                        onPointerDown={(e) => handleDragStart(e, aisle.id, idx)}
+                        onPointerMove={handleDragMove}
+                        onPointerUp={handleDragEnd}
+                        onPointerCancel={handleDragEnd}
+                        className={`p-1.5 -ml-1 cursor-grab active:cursor-grabbing touch-none select-none rounded-lg transition-colors shrink-0 ${
+                          isDragging
+                            ? 'text-emerald-400 bg-emerald-500/20'
+                            : 'text-slate-500 hover:text-slate-200 hover:bg-white/5'
+                        }`}
+                        title="Drag to reorder category"
+                      >
+                        <GripVertical className="w-4 h-4" />
+                      </div>
+                    )}
 
-                    <div className="text-slate-500 hover:text-slate-300 transition-colors shrink-0">
-                      {isCollapsed ? (
-                        <ChevronRight className="w-4 h-4" />
-                      ) : (
-                        <ChevronDown className="w-4 h-4" />
-                      )}
-                    </div>
-                  </button>
-                </div>
+                    {/* Category Title & Collapse Trigger */}
+                    <button
+                      type="button"
+                      disabled={isDragging}
+                      onClick={() => !isDragging && toggleAisleCollapse(aisle.id)}
+                      className="flex-1 min-w-0 flex items-center justify-between ml-1.5 py-0.5 text-left cursor-pointer disabled:cursor-grabbing"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div
+                          className="w-3 h-3 rounded-full shadow-sm shrink-0"
+                          style={{ backgroundColor: aisle.color || '#10b981' }}
+                        />
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-200 truncate">
+                          {aisle.name}
+                        </span>
+                        <span className="text-[10px] font-mono bg-white/5 px-2 py-0.5 rounded-full text-slate-400 shrink-0">
+                          {aisleItems.length}
+                        </span>
+                      </div>
+
+                      <div className="text-slate-500 hover:text-slate-300 transition-colors shrink-0">
+                        {isCollapsed ? (
+                          <ChevronRight className="w-4 h-4" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4" />
+                        )}
+                      </div>
+                    </button>
+                  </div>
 
                 {/* Items in this Aisle */}
                 {!isCollapsed && (
@@ -920,8 +956,19 @@ export const GroceryPage: React.FC = () => {
                   </div>
                 )}
               </div>
-            );
-          })}
+
+              {showDropBelow && (
+                <div className="flex items-center gap-2 py-1.5 px-3 my-1 animate-in fade-in zoom-in-95 duration-150">
+                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-md shadow-emerald-400/80 shrink-0 animate-pulse" />
+                  <div className="h-0.5 flex-1 bg-gradient-to-r from-emerald-400 via-emerald-400/70 to-emerald-400/20 rounded-full shadow-sm shadow-emerald-400/50" />
+                  <span className="text-[10px] font-mono font-bold text-emerald-400 uppercase tracking-wider shrink-0 bg-slate-950/95 px-2.5 py-0.5 rounded-full border border-emerald-500/50 shadow-lg shadow-emerald-950/60">
+                    Drop Here
+                  </span>
+                </div>
+              )}
+            </React.Fragment>
+          );
+        })}
 
         {/* Uncategorized Items (if Grocery list) */}
         {isGroceryList && uncategorizedItems.length > 0 && (
