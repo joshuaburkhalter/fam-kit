@@ -96,6 +96,7 @@ export const MealsPage: React.FC = () => {
   const handleTabChange = (tab: 'recipes' | 'planner' | 'history') => {
     setActiveTab(tab);
     setVisitedTabs((prev) => (prev[tab] ? prev : { ...prev, [tab]: true }));
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
     if (tab !== 'recipes') {
       setIsRecipeFabOpen(false);
     }
@@ -354,6 +355,7 @@ export const MealsPage: React.FC = () => {
     setIsCookMode(false);
     setCheckedIngredients({});
     setCompletedSteps({});
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
 
     if (typeof window !== 'undefined') {
       recipeHistoryPushedRef.current = true;
@@ -366,6 +368,13 @@ export const MealsPage: React.FC = () => {
       );
     }
   };
+
+  // Always ensure window is scrolled to top whenever a recipe is opened
+  useEffect(() => {
+    if (selectedRecipe) {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
+    }
+  }, [selectedRecipe?.id]);
 
   const handleToggleCookMode = (enable?: boolean) => {
     const nextMode = typeof enable === 'boolean' ? enable : !isCookMode;
