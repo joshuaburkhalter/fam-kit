@@ -351,6 +351,57 @@ export const MealsPage: React.FC = () => {
     );
   };
 
+  // Helper to find an active grocery item matching a specific recipe ingredient
+  const findGroceryItemForIngredient = (recipeTitle: string, ingredientName: string) => {
+    if (!recipeTitle || !ingredientName) return null;
+    const normIng = ingredientName.trim().toLowerCase();
+    const prefix = `for: ${recipeTitle.trim().toLowerCase()}`;
+
+    // 1. Tagged with note for this recipe, matching ingredient name exactly
+    const forThisRecipeExact = groceryItems.find(
+      (item) =>
+        !item.is_completed &&
+        item.notes &&
+        item.notes.trim().toLowerCase().startsWith(prefix) &&
+        item.name.trim().toLowerCase() === normIng
+    );
+    if (forThisRecipeExact) return forThisRecipeExact;
+
+    // 2. Tagged with note for this recipe, matching ingredient name partially
+    const forThisRecipePartial = groceryItems.find(
+      (item) =>
+        !item.is_completed &&
+        item.notes &&
+        item.notes.trim().toLowerCase().startsWith(prefix) &&
+        (item.name.trim().toLowerCase().includes(normIng) || normIng.includes(item.name.trim().toLowerCase()))
+    );
+    if (forThisRecipePartial) return forThisRecipePartial;
+
+    // 3. Fallback: Any active grocery item with exact same ingredient name
+    return (
+      groceryItems.find(
+        (item) => !item.is_completed && item.name.trim().toLowerCase() === normIng
+      ) || null
+    );
+  };
+
+  const checkedIngredientsRef = useRef(checkedIngredients);
+  useEffect(() => {
+    checkedIngredientsRef.current = checkedIngredients;
+  }, [checkedIngredients]);
+
+  // Synchronize checked ingredients with grocery list membership
+  useEffect(() => {
+    if (!selectedRecipe) return;
+    const nextChecked: Record<number, boolean> = {};
+    selectedRecipe.ingredients.forEach((ing, idx) => {
+      if (findGroceryItemForIngredient(selectedRecipe.title, ing.item)) {
+        nextChecked[idx] = true;
+      }
+    });
+    setCheckedIngredients(nextChecked);
+  }, [selectedRecipe?.id, groceryItems]);
+
   // Check URL parameter for initial recipe selection
   useEffect(() => {
     if (recipes.length > 0 && !selectedRecipe && typeof window !== 'undefined') {
@@ -926,16 +977,98 @@ export const MealsPage: React.FC = () => {
     }
   };
 
-  const handleToggleIngredient = (index: number) => {
-    const isNowChecked = !checkedIngredients[index];
-    if (isNowChecked) {
-      triggerHapticCheck();
-      setJustCheckedIngredient(index);
-    }
+  const handleToggleIngredient = async (index: number) => {
+    if (!selectedRecipe || !householdId) return;
+    const ing = selectedRecipe.ingredients[index];
+    if (!ing || !ing.item) return;
+
+    const currentlyChecked = Boolean(checkedIngredients[index]);
+    const isNowChecked = !currentlyChecked;
+
+    // Optimistically update checked state
     setCheckedIngredients((prev) => ({
       ...prev,
       [index]: isNowChecked,
     }));
+
+    if (isNowChecked) {
+      triggerHapticCheck();
+      setJustCheckedIngredient(index);
+
+      // Optimistically add to grocery items
+      const tempId = `temp-g-${Date.now()}-${index}`;
+      const optimisticItem: GroceryItem = {
+        id: tempId,
+        household_id: householdId,
+        aisle_id: '',
+        name: ing.item,
+        quantity: ing.amount || '',
+        unit: ing.unit || '',
+        notes: `For: ${selectedRecipe.title}`,
+        is_completed: false,
+        list_type: 'grocery',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      const nextGrocery = [optimisticItem, ...groceryItems];
+      setGroceryItems(nextGrocery);
+      if (mealsDataCache && mealsDataCache.householdId === householdId) {
+        mealsDataCache.groceryItems = nextGrocery;
+      }
+      showToast(`Added "${ing.item}" to Grocery list`);
+
+      try {
+        const created = await api.addGroceryItem(householdId, {
+          name: ing.item,
+          quantity: ing.amount,
+          unit: ing.unit,
+          category: ing.category,
+          notes: `For: ${selectedRecipe.title}`,
+        });
+
+        // If the user unchecked it while the request was in-flight, delete it immediately
+        if (!checkedIngredientsRef.current[index]) {
+          await api.deleteGroceryItem(created.id);
+          return;
+        }
+
+        setGroceryItems((prev) =>
+          prev.map((item) => (item.id === tempId ? created : item))
+        );
+        if (mealsDataCache && mealsDataCache.householdId === householdId) {
+          mealsDataCache.groceryItems = mealsDataCache.groceryItems?.map((item) =>
+            item.id === tempId ? created : item
+          );
+        }
+      } catch (err) {
+        console.error('Failed to add ingredient to grocery', err);
+        setGroceryItems((prev) => prev.filter((item) => item.id !== tempId));
+        setCheckedIngredients((prev) => ({ ...prev, [index]: false }));
+        showToast(`Failed to add "${ing.item}"`);
+      }
+    } else {
+      // Find matching item in grocery list to delete
+      const match = findGroceryItemForIngredient(selectedRecipe.title, ing.item);
+      if (match) {
+        const previousGrocery = groceryItems;
+        const nextGrocery = groceryItems.filter((item) => item.id !== match.id);
+        setGroceryItems(nextGrocery);
+        if (mealsDataCache && mealsDataCache.householdId === householdId) {
+          mealsDataCache.groceryItems = nextGrocery;
+        }
+        showToast(`Removed "${ing.item}" from Grocery list`);
+
+        try {
+          await api.deleteGroceryItem(match.id);
+        } catch (err) {
+          console.error('Failed to remove grocery item', err);
+          setGroceryItems(previousGrocery);
+          setCheckedIngredients((prev) => ({ ...prev, [index]: true }));
+          showToast(`Failed to remove "${ing.item}"`);
+        }
+      }
+    }
   };
 
   const handleResetProgress = () => {
@@ -1351,30 +1484,41 @@ export const MealsPage: React.FC = () => {
                     onClick={() => handleToggleIngredient(idx)}
                     className={`p-2.5 rounded-2xl border transition-all cursor-pointer flex items-center gap-2.5 ${
                       isChecked
-                        ? 'bg-emerald-500/10 border-emerald-500/30 text-slate-500'
+                        ? 'bg-emerald-500/15 border-emerald-500/35 text-white shadow-xs'
                         : 'bg-slate-900/60 border-white/5 hover:border-white/10 text-slate-200'
                     }`}
+                    title={isChecked ? 'On Grocery list (click to remove)' : 'Click to add to Grocery list'}
                   >
                     <div
-                      className={`w-5 h-5 rounded-lg flex items-center justify-center text-xs transition-colors shrink-0 ${
+                      className={`w-5 h-5 rounded-lg flex items-center justify-center text-xs transition-all shrink-0 ${
                         isChecked
-                          ? 'bg-emerald-500 text-slate-950 font-bold'
+                          ? 'bg-emerald-500 text-slate-950 font-black shadow-xs'
                           : 'bg-slate-800 border border-slate-700 text-transparent'
                       }`}
                     >
                       <Check className="w-3.5 h-3.5 stroke-[3]" />
                     </div>
-                    <span className={`text-xs leading-tight flex-1 ${isChecked ? 'line-through text-slate-500' : ''}`}>
+                    <span className="text-xs leading-tight flex-1">
                       {ing.amount && <strong className="font-semibold text-emerald-400 mr-1">{ing.amount} {ing.unit || ''}</strong>}
-                      {ing.item}
+                      <span className={isChecked ? 'text-white font-medium' : 'text-slate-300'}>{ing.item}</span>
                     </span>
-                    {pantryMatch && (
+                    {isChecked ? (
                       <span
-                        className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 flex items-center gap-1 shrink-0 font-medium"
-                        title={`In pantry: ${pantryMatch.name} (${pantryMatch.quantity || 'Available'})`}
+                        className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 flex items-center gap-1 shrink-0 font-bold"
+                        title="Item is on your Grocery list"
                       >
-                        <span>✓ In Pantry</span>
+                        <ShoppingCart className="w-2.5 h-2.5" />
+                        <span>In Grocery</span>
                       </span>
+                    ) : (
+                      pantryMatch && (
+                        <span
+                          className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800/80 text-emerald-400 border border-emerald-500/20 flex items-center gap-1 shrink-0 font-medium"
+                          title={`In pantry: ${pantryMatch.name} (${pantryMatch.quantity || 'Available'})`}
+                        >
+                          <span>✓ In Pantry</span>
+                        </span>
+                      )
                     )}
                   </div>
                 );
