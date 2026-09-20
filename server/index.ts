@@ -75,11 +75,33 @@ const __dirname = path.dirname(__filename);
 export const app = express();
 const PORT = process.env.PORT || 3001;
 
+export const APP_BUILD_ID =
+  process.env.RENDER_GIT_COMMIT ||
+  process.env.COMMIT_REF ||
+  process.env.SOURCE_VERSION ||
+  process.env.RENDER_INSTANCE_ID ||
+  `build_${Date.now()}`;
+
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
+app.use((_req, res, next) => {
+  res.setHeader('X-App-Build', APP_BUILD_ID);
+  next();
+});
+
 app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.json({ status: 'ok', buildId: APP_BUILD_ID, timestamp: new Date().toISOString() });
+});
+
+app.get('/api/version', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.json({ buildId: APP_BUILD_ID, timestamp: new Date().toISOString() });
 });
 
 // Helper: Get active user from request headers
@@ -3734,9 +3756,34 @@ app.get('/terms', (req, res) => {
 
 // Serve static frontend build in production
 const distPath = path.join(__dirname, '../dist');
-app.use(express.static(distPath));
+app.use(
+  express.static(distPath, {
+    setHeaders: (res, filePath) => {
+      const normalized = filePath.replace(/\\/g, '/');
+      if (normalized.includes('/assets/')) {
+        // Hashed Vite assets can be aggressively cached for 1 year
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      } else if (
+        normalized.endsWith('.html') ||
+        normalized.endsWith('sw.js') ||
+        normalized.endsWith('sw-push.js') ||
+        normalized.endsWith('registerSW.js') ||
+        normalized.endsWith('manifest.webmanifest')
+      ) {
+        // Core application shell, SW, and manifests must NEVER be cached
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+      }
+    },
+  })
+);
+
 app.get('*', (req, res) => {
   if (!req.path.startsWith('/api')) {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     res.sendFile(path.join(distPath, 'index.html'));
   }
 });

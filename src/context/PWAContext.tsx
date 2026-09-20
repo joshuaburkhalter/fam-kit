@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { Household, User, Aisle } from '../types';
 import { api } from '../lib/api';
+import { forceAppHardReload, checkServerVersion, cleanupReloadUrlParam } from '../lib/reload';
 
 interface PWAContextType {
   household: Household | null;
@@ -378,12 +379,31 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     initAuth();
+    cleanupReloadUrlParam();
+    checkServerVersion();
 
     // Online / Offline tracking
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
+
+    // Focus & visibility change: recheck server build & trigger service worker update check
+    const handleCheckOnActive = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        checkServerVersion();
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistration().then((reg) => reg?.update().catch(() => {}));
+        }
+      }
+    };
+    window.addEventListener('focus', handleCheckOnActive);
+    document.addEventListener('visibilitychange', handleCheckOnActive);
+
+    // Periodic check for new server deploys every 30 seconds
+    const versionInterval = setInterval(() => {
+      checkServerVersion();
+    }, 30000);
 
     // PWA install prompt capture
     const handleBeforeInstallPrompt = (e: Event) => {
@@ -400,6 +420,7 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsPWAInstalled(isStandalone);
 
     // Service worker & update management
+    let handleControllerChange: (() => void) | null = null;
     if ('serviceWorker' in navigator) {
       if (import.meta.env.DEV) {
         // In local development, unregister any lingering service workers and clear caches
@@ -412,6 +433,18 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           });
         }
       } else {
+        // Listen for when an updated service worker takes control (via skipWaiting + clientsClaim)
+        let hadControllerOnLoad = !!navigator.serviceWorker.controller;
+        handleControllerChange = () => {
+          if (hadControllerOnLoad) {
+            console.log('[SW] Controller changed to new version. Hard reloading app...');
+            forceAppHardReload();
+          } else {
+            hadControllerOnLoad = true;
+          }
+        };
+        navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange);
+
         // In production, register sw.js and automatically activate updates
         navigator.serviceWorker
           .register('/sw.js')
@@ -457,9 +490,15 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     return () => {
+      clearInterval(versionInterval);
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('focus', handleCheckOnActive);
+      document.removeEventListener('visibilitychange', handleCheckOnActive);
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      if (handleControllerChange && 'serviceWorker' in navigator) {
+        navigator.serviceWorker.removeEventListener('controllerchange', handleControllerChange);
+      }
     };
   }, []);
 

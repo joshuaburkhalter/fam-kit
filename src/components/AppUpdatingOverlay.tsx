@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Sparkles, RefreshCw, Loader2, CheckCircle2 } from 'lucide-react';
 import { api, onServerUpdatingChange } from '../lib/api';
+import { forceAppHardReload } from '../lib/reload';
 
 export const AppUpdatingOverlay: React.FC = () => {
   const [isUpdating, setIsUpdating] = useState(false);
@@ -29,9 +30,9 @@ export const AppUpdatingOverlay: React.FC = () => {
       if (isHealthy) {
         setIsRestored(true);
         if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-        // Short pause to display success checkmark, then reload
+        // Short pause to display success checkmark, then hard reload
         setTimeout(() => {
-          window.location.reload();
+          forceAppHardReload();
         }, 800);
       }
     };
@@ -96,7 +97,7 @@ export const AppUpdatingOverlay: React.FC = () => {
         <div className="flex items-center gap-3 w-full">
           <button
             type="button"
-            onClick={() => window.location.reload()}
+            onClick={() => forceAppHardReload()}
             className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 text-xs font-bold transition-all shadow-lg shadow-emerald-500/20 active:scale-95 cursor-pointer"
           >
             Refresh Now
