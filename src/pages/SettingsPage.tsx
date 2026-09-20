@@ -1040,14 +1040,6 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
               </p>
             </div>
           </div>
-
-          <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-xl border shrink-0 ${
-            isPushSubscribed
-              ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-              : 'bg-white/5 text-slate-400 border-white/10'
-          }`}>
-            {isPushSubscribed ? 'Alerts On' : 'Alerts Off'}
-          </span>
         </div>
 
         {/* Browser Support / Permission Warnings */}
@@ -1069,61 +1061,39 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
             </div>
           </div>
         ) : (
-          /* Sleek Device Status & Action Card */
-          <div className="rounded-2xl bg-slate-900/80 border border-white/10 p-4 space-y-3 shadow-lg shadow-black/20">
-            {/* Top Row: Label on Left, Status Badge on Right */}
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className={`p-2 rounded-xl border shrink-0 transition-colors ${
-                  isPushSubscribed
-                    ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
-                    : 'bg-slate-800 border-white/10 text-slate-400'
-                }`}>
-                  <Smartphone className="w-4 h-4" />
-                </div>
-
-                <div className="min-w-0">
-                  <span className="text-xs font-bold text-white block">This Device</span>
-                  <p className="text-[11px] text-slate-400 truncate mt-0.5">
-                    {isPushSubscribed
-                      ? 'Delivers instant background alerts'
-                      : 'Push notifications are silenced'}
-                  </p>
-                </div>
-              </div>
-
-              {/* Status Badge */}
-              <div className="shrink-0">
-                {isPushSubscribed ? (
-                  <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-emerald-300 bg-emerald-500/20 border border-emerald-500/35 px-2.5 py-1 rounded-full shadow-sm">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    Active
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-400 bg-slate-800/80 border border-white/10 px-2.5 py-1 rounded-full">
-                    <BellOff className="w-3 h-3 text-slate-400" />
-                    Muted
-                  </span>
-                )}
-              </div>
+          /* Sleek Device Status & Action Row */
+          <div className="rounded-2xl bg-slate-900/60 border border-white/5 p-3.5 sm:p-4 flex items-center justify-between gap-3">
+            {/* Left: Device status */}
+            <div className="flex items-center gap-2 min-w-0">
+              <span className={`w-2 h-2 rounded-full shrink-0 ${
+                isPushSubscribed ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'
+              }`} />
+              <span className="text-xs font-semibold text-white">This Device</span>
+              <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full shrink-0 ${
+                isPushSubscribed
+                  ? 'text-emerald-400 bg-emerald-500/15 border border-emerald-500/30'
+                  : 'text-slate-400 bg-white/5 border border-white/10'
+              }`}>
+                {isPushSubscribed ? 'Active' : 'Muted'}
+              </span>
             </div>
 
-            {/* Bottom Row: Actions (Right aligned) */}
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/5">
+            {/* Right: Actions */}
+            <div className="flex items-center gap-2 shrink-0">
               {isPushSubscribed && (
                 <button
                   type="button"
                   onClick={handleSendTestPush}
                   disabled={isSendingTestPush}
-                  className="px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-200 bg-slate-800/90 hover:bg-slate-700/90 border border-white/10 hover:border-white/20 active:scale-[0.98] transition-all flex items-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-50"
-                  title="Send a sample alert to verify delivery"
+                  className="px-2.5 py-1.5 rounded-xl text-xs font-semibold text-slate-200 bg-white/5 hover:bg-white/10 border border-white/10 active:scale-[0.98] transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  title="Send a sample alert"
                 >
                   {isSendingTestPush ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" />
                   ) : (
                     <Send className="w-3.5 h-3.5 text-emerald-400" />
                   )}
-                  <span>Test Alert</span>
+                  <span>Test<span className="hidden sm:inline"> Alert</span></span>
                 </button>
               )}
 
@@ -1131,7 +1101,7 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
                 type="button"
                 onClick={() => handlePushToggle(!isPushSubscribed)}
                 disabled={isSubscribingPush}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md ${
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md ${
                   isPushSubscribed
                     ? 'bg-slate-800 text-slate-300 hover:bg-rose-500/20 hover:text-rose-300 hover:border-rose-500/30 border border-white/10'
                     : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/20 font-extrabold'
@@ -1142,12 +1112,12 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
                 ) : isPushSubscribed ? (
                   <>
                     <BellOff className="w-3.5 h-3.5" />
-                    <span>Mute Alerts</span>
+                    <span>Mute<span className="hidden sm:inline"> Alerts</span></span>
                   </>
                 ) : (
                   <>
                     <Bell className="w-3.5 h-3.5" />
-                    <span>Enable Alerts</span>
+                    <span>Enable<span className="hidden sm:inline"> Alerts</span></span>
                   </>
                 )}
               </button>
