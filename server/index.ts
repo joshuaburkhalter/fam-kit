@@ -4021,12 +4021,19 @@ app.use(
 );
 
 app.get('*', (req, res) => {
-  if (!req.path.startsWith('/api')) {
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
-    res.sendFile(path.join(distPath, 'index.html'));
+  if (req.path.startsWith('/api')) {
+    return res.status(404).json({ error: 'Endpoint not found' });
   }
+
+  // Never return index.html for missing static assets or files with extensions
+  if (req.path.startsWith('/assets/') || path.extname(req.path)) {
+    return res.status(404).type('text/plain').send('Not found');
+  }
+
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.sendFile(path.join(distPath, 'index.html'));
 });
 
 // Initialize database & start server

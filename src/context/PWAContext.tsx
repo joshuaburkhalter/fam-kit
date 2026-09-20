@@ -431,7 +431,9 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         handleControllerChange = () => {
           if (hadControllerOnLoad) {
             console.log('[SW] Controller changed to new version. Reloading app...');
-            window.location.reload();
+            setTimeout(() => {
+              window.location.reload();
+            }, 200);
           } else {
             hadControllerOnLoad = true;
           }
