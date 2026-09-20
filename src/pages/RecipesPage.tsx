@@ -544,21 +544,18 @@ export const RecipesPage: React.FC = () => {
                 return (
                   <button
                     onClick={() => handleAddAllToGrocery(selectedRecipe)}
-                    className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-md shrink-0 cursor-pointer group ${
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-md shrink-0 cursor-pointer ${
                       inGrocery
-                        ? 'text-emerald-400 hover:text-rose-300 bg-emerald-500/15 hover:bg-rose-500/20 border border-emerald-500/30 hover:border-rose-500/40'
+                        ? 'text-emerald-400 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30'
                         : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/20'
                     }`}
-                    title={inGrocery ? 'Click to remove ingredients from Grocery List' : 'Add all ingredients to Grocery List'}
+                    title={inGrocery ? 'In Grocery (click to remove)' : 'Add all ingredients to Grocery List'}
                   >
                     {inGrocery ? (
                       <>
-                        <Check className="w-3.5 h-3.5 stroke-[2.5] group-hover:hidden" />
-                        <X className="w-3.5 h-3.5 stroke-[2.5] hidden group-hover:inline text-rose-400" />
-                        <span className="hidden sm:inline group-hover:hidden">In Grocery List</span>
-                        <span className="hidden sm:inline hidden group-hover:inline">Remove from List</span>
-                        <span className="sm:hidden group-hover:hidden">In List</span>
-                        <span className="sm:hidden hidden group-hover:inline">Remove</span>
+                        <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                        <span className="hidden sm:inline">In Grocery List</span>
+                        <span className="sm:hidden">In List</span>
                       </>
                     ) : (
                       <>
