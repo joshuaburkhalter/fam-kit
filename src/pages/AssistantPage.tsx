@@ -624,7 +624,6 @@ export const AssistantPage: React.FC = () => {
 
                 {/* Middle: Text Input */}
                 <input
-                  autoFocus
                   type="text"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
