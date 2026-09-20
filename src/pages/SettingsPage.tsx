@@ -1097,18 +1097,21 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
 
         {/* Category Settings: Which Notifications to Receive */}
         <div className="pt-2 border-t border-white/5 space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <div>
+          <div>
+            <div className="flex items-center justify-between gap-2 min-h-[1.25rem]">
               <h4 className="text-xs font-bold text-white">Alert Categories</h4>
-              <p className="text-[11px] text-slate-400 mt-0.5">
-                Choose which types of activities send push notifications for {currentUser?.name || 'you'}
-              </p>
-            </div>
-            {isSavingPref && (
-              <span className="text-[10px] text-emerald-400 flex items-center gap-1 font-medium shrink-0">
+              <span
+                className={`text-[10px] text-emerald-400 flex items-center gap-1 font-medium transition-opacity duration-150 shrink-0 ${
+                  isSavingPref ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                }`}
+                aria-hidden={!isSavingPref}
+              >
                 <Loader2 className="w-3 h-3 animate-spin" /> Saving...
               </span>
-            )}
+            </div>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Choose which types of activities send push notifications for {currentUser?.name || 'you'}
+            </p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
