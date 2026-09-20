@@ -1,5 +1,3 @@
-let isReloading = false;
-
 /**
  * Strips the cache-busting `_v` query parameter from the URL if present,
  * cleaning up any leftover parameters from prior refreshes.
@@ -19,25 +17,8 @@ export function cleanupReloadUrlParam(): void {
 }
 
 /**
- * Cleanly and safely reloads the application.
- * With Express sending Cache-Control: no-cache, no-store, must-revalidate on index.html and sw.js,
- * a standard reload always fetches the latest app shell safely without:
- * - Wiping active CSS/JS from Workbox caches (prevents plain HTML / FOUC)
- * - Appending query string timestamps (prevents Cloudflare URL routing errors)
+ * Cleanly reloads the application.
  */
-export function safeAppReload(): void {
-  if (isReloading) return;
-
-  // Prevent multiple rapid reload calls (10s debounce)
-  const lastReload = Number(sessionStorage.getItem('famkit_last_reload') || '0');
-  const now = Date.now();
-  if (now - lastReload < 10000) {
-    return;
-  }
-
-  isReloading = true;
-  sessionStorage.setItem('famkit_last_reload', String(now));
-
-  // Perform a clean reload
+export function reloadApp(): void {
   window.location.reload();
 }

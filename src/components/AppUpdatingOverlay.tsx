@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Sparkles, RefreshCw, Loader2, CheckCircle2 } from 'lucide-react';
 import { api, onServerUpdatingChange } from '../lib/api';
-import { safeAppReload } from '../lib/reload';
 
 export const AppUpdatingOverlay: React.FC = () => {
   const [isUpdating, setIsUpdating] = useState(false);
@@ -30,10 +29,21 @@ export const AppUpdatingOverlay: React.FC = () => {
       if (isHealthy) {
         setIsRestored(true);
         if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+
+        // Tell service worker to check for new build immediately
+        if ('serviceWorker' in navigator) {
+          try {
+            const reg = await navigator.serviceWorker.getRegistration();
+            if (reg) {
+              await reg.update();
+            }
+          } catch {}
+        }
+
         // Short pause to display success checkmark, then reload
         setTimeout(() => {
-          safeAppReload();
-        }, 800);
+          window.location.reload();
+        }, 600);
       }
     };
 
@@ -97,7 +107,7 @@ export const AppUpdatingOverlay: React.FC = () => {
         <div className="flex items-center gap-3 w-full">
           <button
             type="button"
-            onClick={() => safeAppReload()}
+            onClick={() => window.location.reload()}
             className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 text-xs font-bold transition-all shadow-lg shadow-emerald-500/20 active:scale-95 cursor-pointer"
           >
             Refresh Now

@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { Household, User, Aisle } from '../types';
 import { api } from '../lib/api';
-import { safeAppReload, cleanupReloadUrlParam } from '../lib/reload';
+import { cleanupReloadUrlParam } from '../lib/reload';
 
 interface PWAContextType {
   household: Household | null;
@@ -430,8 +430,8 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         let hadControllerOnLoad = !!navigator.serviceWorker.controller;
         handleControllerChange = () => {
           if (hadControllerOnLoad) {
-            console.log('[SW] Controller changed to new version. Safely reloading app...');
-            safeAppReload();
+            console.log('[SW] Controller changed to new version. Reloading app...');
+            window.location.reload();
           } else {
             hadControllerOnLoad = true;
           }

@@ -70,6 +70,14 @@ export default defineConfig({
         navigateFallbackDenylist: [/^\/api/, /^\/auth/],
         runtimeCaching: [
           {
+            urlPattern: ({ request }: any) => request.mode === 'navigate',
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'fam-kit-pages-cache',
+              networkTimeoutSeconds: 3,
+            },
+          },
+          {
             urlPattern: /^\/api\/auth\/.*/i,
             handler: 'NetworkOnly'
           },

@@ -1040,6 +1040,14 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
               </p>
             </div>
           </div>
+
+          <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-xl border shrink-0 ${
+            isPushSubscribed
+              ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+              : 'bg-white/5 text-slate-400 border-white/10'
+          }`}>
+            {isPushSubscribed ? 'Active' : 'Muted'}
+          </span>
         </div>
 
         {/* Browser Support / Permission Warnings */}
@@ -1069,13 +1077,6 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
                 isPushSubscribed ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'
               }`} />
               <span className="text-xs font-semibold text-white">This Device</span>
-              <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full shrink-0 ${
-                isPushSubscribed
-                  ? 'text-emerald-400 bg-emerald-500/15 border border-emerald-500/30'
-                  : 'text-slate-400 bg-white/5 border border-white/10'
-              }`}>
-                {isPushSubscribed ? 'Active' : 'Muted'}
-              </span>
             </div>
 
             {/* Right: Actions */}
