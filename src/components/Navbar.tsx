@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   Sparkles,
   Users,
-  Copy,
-  Check,
   Wifi,
   WifiOff,
   Download,
@@ -43,7 +41,6 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
     installPWA,
   } = usePWA();
 
-  const [copiedInvite, setCopiedInvite] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [showEditProfileModal, setShowEditProfileModal] = useState(false);
   const [showBugFeatureModal, setShowBugFeatureModal] = useState(() => {
@@ -80,15 +77,6 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
     }
   }, [currentUser]);
 
-  const handleCopyInvite = () => {
-    const code = household?.invite_code || (household as any)?.inviteCode;
-    if (code) {
-      navigator.clipboard.writeText(code);
-      setCopiedInvite(true);
-      setTimeout(() => setCopiedInvite(false), 2000);
-    }
-  };
-
   return (
     <header className="sticky top-0 z-40 w-full glass-panel border-b border-white/10 px-4 py-3">
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-2">
@@ -107,24 +95,9 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
               </div>
               {household && (
                 <div className="text-[11px] font-medium text-slate-400 flex items-center gap-1.5 -mt-0.5">
-                  <span className="truncate max-w-[110px] sm:max-w-[160px]">
+                  <span className="truncate max-w-[140px] sm:max-w-[200px]">
                     {household.name}
                   </span>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleCopyInvite();
-                    }}
-                    title="Copy Household Invite Code"
-                    className="inline-flex items-center gap-1 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 px-1.5 py-0.5 rounded text-[10px] font-mono border border-emerald-500/30 transition-colors"
-                  >
-                    {copiedInvite ? (
-                      <Check className="w-3 h-3 text-emerald-400" />
-                    ) : (
-                      <Copy className="w-2.5 h-2.5" />
-                    )}
-                    {household.invite_code || (household as any).inviteCode}
-                  </button>
                 </div>
               )}
             </div>

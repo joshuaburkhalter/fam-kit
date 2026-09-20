@@ -909,32 +909,18 @@ export const RecipesPage: React.FC = () => {
               </h1>
             </div>
 
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setScraperInitialMode('scan');
-                  setIsScraperOpen(true);
-                }}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-slate-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer"
-                title="Scan recipe from photos"
-              >
-                <Camera className="w-3.5 h-3.5 stroke-[2.2]" />
-                <span>Scan</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setScraperInitialMode('url');
-                  setIsScraperOpen(true);
-                }}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-slate-200 text-xs font-bold transition-all border border-white/10 active:scale-95 cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-                <span>Import</span>
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setScraperInitialMode('url');
+                setIsScraperOpen(true);
+              }}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer"
+              title="Add recipe"
+            >
+              <Plus className="w-4 h-4 stroke-[2.5]" />
+              <span>Add</span>
+            </button>
           </div>
 
           {/* Category / Tag Filter Pills */}

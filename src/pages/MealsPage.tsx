@@ -972,68 +972,6 @@ export const MealsPage: React.FC = () => {
             </button>
 
             <div className="flex items-center gap-1.5 sm:gap-2 ml-auto">
-              {/* Add to Planner / In Planner Button */}
-              {(() => {
-                const inPlanner = meals.some((m) => m.recipe_id === selectedRecipe.id);
-                return (
-                  <button
-                    onClick={(e) => handleToggleRecipePlanner(selectedRecipe, e)}
-                    className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shrink-0 cursor-pointer group ${
-                      inPlanner
-                        ? 'text-emerald-400 hover:text-rose-300 bg-emerald-500/15 hover:bg-rose-500/20 border border-emerald-500/30 hover:border-rose-500/40'
-                        : 'text-slate-950 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 shadow-md shadow-emerald-500/20'
-                    }`}
-                    title={inPlanner ? 'Click to remove from Planner' : 'Add to Planner'}
-                  >
-                    {inPlanner ? (
-                      <>
-                        <Check className="w-3.5 h-3.5 stroke-[2.5] group-hover:hidden" />
-                        <X className="w-3.5 h-3.5 stroke-[2.5] hidden group-hover:inline text-rose-400" />
-                        <span className="group-hover:hidden">In Planner</span>
-                        <span className="hidden group-hover:inline">Remove</span>
-                      </>
-                    ) : (
-                      <>
-                        <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-                        <span className="hidden sm:inline">Add to </span>
-                        <span>Planner</span>
-                      </>
-                    )}
-                  </button>
-                );
-              })()}
-
-              {/* Add to Grocery / In Grocery Button */}
-              {(() => {
-                const inGrocery = isRecipeInGrocery(selectedRecipe.title);
-                return (
-                  <button
-                    onClick={(e) => handleToggleShopIngredients(selectedRecipe, e)}
-                    className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shrink-0 cursor-pointer group ${
-                      inGrocery
-                        ? 'text-emerald-400 hover:text-rose-300 bg-emerald-500/15 hover:bg-rose-500/20 border border-emerald-500/30 hover:border-rose-500/40'
-                        : 'text-slate-950 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 shadow-md shadow-emerald-500/20'
-                    }`}
-                    title={inGrocery ? 'Click to remove ingredients from Grocery List' : 'Add to Grocery List'}
-                  >
-                    {inGrocery ? (
-                      <>
-                        <Check className="w-3.5 h-3.5 stroke-[2.5] group-hover:hidden text-emerald-400" />
-                        <X className="w-3.5 h-3.5 stroke-[2.5] hidden group-hover:inline text-rose-400" />
-                        <span className="group-hover:hidden">In Grocery</span>
-                        <span className="hidden group-hover:inline">Remove</span>
-                      </>
-                    ) : (
-                      <>
-                        <ShoppingCart className="w-3.5 h-3.5 stroke-[2.5]" />
-                        <span className="hidden sm:inline">Add to </span>
-                        <span>Grocery</span>
-                      </>
-                    )}
-                  </button>
-                );
-              })()}
-
               {hasProgress && (
                 <button
                   onClick={handleResetProgress}
@@ -1162,30 +1100,63 @@ export const MealsPage: React.FC = () => {
                 </p>
               )}
 
-              {/* Stats row */}
-              <div className="flex flex-wrap items-center gap-4 text-xs text-slate-400 mt-4 pt-4 border-t border-white/10">
-                {selectedRecipe.prep_time_minutes ? (
+              {/* Stats & Add to Planner row */}
+              <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400 mt-4 pt-4 border-t border-white/10">
+                <div className="flex flex-wrap items-center gap-4">
+                  {selectedRecipe.prep_time_minutes ? (
+                    <div className="flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-pink-400" />
+                      <span>Prep: {selectedRecipe.prep_time_minutes}m</span>
+                    </div>
+                  ) : null}
+                  {selectedRecipe.cook_time_minutes ? (
+                    <div className="flex items-center gap-1.5">
+                      <Flame className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Cook: {selectedRecipe.cook_time_minutes}m</span>
+                    </div>
+                  ) : null}
+                  {selectedRecipe.servings ? (
+                    <div className="flex items-center gap-1.5">
+                      <Users className="w-3.5 h-3.5 text-teal-400" />
+                      <span>{selectedRecipe.servings} servings</span>
+                    </div>
+                  ) : null}
                   <div className="flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5 text-pink-400" />
-                    <span>Prep: {selectedRecipe.prep_time_minutes}m</span>
+                    <BookOpen className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>{selectedRecipe.ingredients.length} ingredients</span>
                   </div>
-                ) : null}
-                {selectedRecipe.cook_time_minutes ? (
-                  <div className="flex items-center gap-1.5">
-                    <Flame className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Cook: {selectedRecipe.cook_time_minutes}m</span>
-                  </div>
-                ) : null}
-                {selectedRecipe.servings ? (
-                  <div className="flex items-center gap-1.5">
-                    <Users className="w-3.5 h-3.5 text-teal-400" />
-                    <span>{selectedRecipe.servings} servings</span>
-                  </div>
-                ) : null}
-                <div className="flex items-center gap-1.5">
-                  <BookOpen className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>{selectedRecipe.ingredients.length} ingredients</span>
                 </div>
+
+                {/* Add to Planner / In Planner Button at bottom right of recipe card */}
+                {(() => {
+                  const inPlanner = meals.some((m) => m.recipe_id === selectedRecipe.id);
+                  return (
+                    <button
+                      type="button"
+                      onClick={(e) => handleToggleRecipePlanner(selectedRecipe, e)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shrink-0 cursor-pointer group shadow-sm ${
+                        inPlanner
+                          ? 'text-emerald-400 hover:text-rose-300 bg-emerald-500/15 hover:bg-rose-500/20 border border-emerald-500/30 hover:border-rose-500/40'
+                          : 'text-slate-950 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 shadow-emerald-500/20'
+                      }`}
+                      title={inPlanner ? 'Click to remove from Planner' : 'Add to Planner'}
+                    >
+                      {inPlanner ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 stroke-[2.5] group-hover:hidden" />
+                          <X className="w-3.5 h-3.5 stroke-[2.5] hidden group-hover:inline text-rose-400" />
+                          <span className="group-hover:hidden">In Planner</span>
+                          <span className="hidden group-hover:inline">Remove</span>
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                          <span>Add to Planner</span>
+                        </>
+                      )}
+                    </button>
+                  );
+                })()}
               </div>
             </div>
           </div>
@@ -1332,32 +1303,18 @@ export const MealsPage: React.FC = () => {
             </h1>
 
             {activeTab === 'recipes' && (
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setScraperInitialMode('scan');
-                    setIsScraperOpen(true);
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-slate-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer"
-                  title="Scan recipe from photos"
-                >
-                  <Camera className="w-3.5 h-3.5 stroke-[2.5]" />
-                  <span>Scan</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setScraperInitialMode('url');
-                    setIsScraperOpen(true);
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-slate-200 text-xs font-bold transition-all border border-white/10 active:scale-95 cursor-pointer"
-                  title="Import recipe from link or text"
-                >
-                  <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-                  <span>Import</span>
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setScraperInitialMode('url');
+                  setIsScraperOpen(true);
+                }}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer"
+                title="Add recipe"
+              >
+                <Plus className="w-4 h-4 stroke-[2.5]" />
+                <span>Add</span>
+              </button>
             )}
           </div>
 
@@ -1969,21 +1926,7 @@ export const MealsPage: React.FC = () => {
                       <X className="w-4 h-4" />
                     </button>
 
-                    {/* Secondary action: Scan Recipe from Photos */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsRecipeFabOpen(false);
-                        setScraperInitialMode('scan');
-                        setIsScraperOpen(true);
-                      }}
-                      className="w-8 h-8 rounded-xl bg-white/5 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-400 border border-white/10 hover:border-emerald-500/30 flex items-center justify-center transition-all cursor-pointer shrink-0"
-                      title="Scan Recipe from Photos"
-                    >
-                      <Camera className="w-4 h-4 text-emerald-400" />
-                    </button>
-
-                    {/* Secondary action: Import Recipe from Web */}
+                    {/* Secondary action: Add Recipe */}
                     <button
                       type="button"
                       onClick={() => {
@@ -1992,9 +1935,9 @@ export const MealsPage: React.FC = () => {
                         setIsScraperOpen(true);
                       }}
                       className="w-8 h-8 rounded-xl bg-white/5 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-400 border border-white/10 hover:border-emerald-500/30 flex items-center justify-center transition-all cursor-pointer shrink-0"
-                      title="Import Recipe from Web"
+                      title="Add Recipe"
                     >
-                      <Link2 className="w-4 h-4 text-emerald-400" />
+                      <Plus className="w-4 h-4 text-emerald-400 stroke-[2.5]" />
                     </button>
 
                     {/* Middle: Search text input (no autoFocus) */}
