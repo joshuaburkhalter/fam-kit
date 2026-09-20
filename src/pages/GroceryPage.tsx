@@ -1457,7 +1457,6 @@ export const GroceryPage: React.FC = () => {
                   className="flex-1 min-w-0 flex items-center gap-2"
                 >
                   <input
-                    autoFocus
                     type="text"
                     placeholder={`Add to ${currentListName}...`}
                     value={newItemName}

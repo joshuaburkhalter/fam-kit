@@ -1174,7 +1174,6 @@ export const CalendarPage: React.FC = () => {
                 <form onSubmit={handleAssistantSchedule} className="flex-1 min-w-0 flex items-center gap-2">
                   {/* Single Smart Input: Just type what you want to add */}
                   <input
-                    autoFocus
                     type="text"
                     placeholder="Add event (e.g. Board game night on monday 6-9pm)..."
                     value={quickInput}

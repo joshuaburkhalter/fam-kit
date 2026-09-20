@@ -1959,6 +1959,7 @@ export const MealsPage: React.FC = () => {
                   </button>
                 ) : (
                   <div className="w-full flex items-center gap-2 animate-in fade-in duration-200">
+                    {/* Far left: Close button */}
                     <button
                       type="button"
                       onClick={() => setIsRecipeFabOpen(false)}
@@ -1968,9 +1969,37 @@ export const MealsPage: React.FC = () => {
                       <X className="w-4 h-4" />
                     </button>
 
+                    {/* Secondary action: Scan Recipe from Photos */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsRecipeFabOpen(false);
+                        setScraperInitialMode('scan');
+                        setIsScraperOpen(true);
+                      }}
+                      className="w-8 h-8 rounded-xl bg-white/5 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-400 border border-white/10 hover:border-emerald-500/30 flex items-center justify-center transition-all cursor-pointer shrink-0"
+                      title="Scan Recipe from Photos"
+                    >
+                      <Camera className="w-4 h-4 text-emerald-400" />
+                    </button>
+
+                    {/* Secondary action: Import Recipe from Web */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsRecipeFabOpen(false);
+                        setScraperInitialMode('url');
+                        setIsScraperOpen(true);
+                      }}
+                      className="w-8 h-8 rounded-xl bg-white/5 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-400 border border-white/10 hover:border-emerald-500/30 flex items-center justify-center transition-all cursor-pointer shrink-0"
+                      title="Import Recipe from Web"
+                    >
+                      <Link2 className="w-4 h-4 text-emerald-400" />
+                    </button>
+
+                    {/* Middle: Search text input (no autoFocus) */}
                     <div className="flex-1 min-w-0 flex items-center relative">
                       <input
-                        autoFocus
                         type="text"
                         placeholder="Search recipes by title or tags..."
                         value={searchQuery}
@@ -1989,46 +2018,19 @@ export const MealsPage: React.FC = () => {
                       )}
                     </div>
 
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsRecipeFabOpen(false);
-                          setScraperInitialMode('scan');
-                          setIsScraperOpen(true);
-                        }}
-                        className="w-8 h-8 rounded-xl bg-white/5 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-400 border border-white/10 hover:border-emerald-500/30 flex items-center justify-center transition-all cursor-pointer"
-                        title="Scan Recipe from Photos"
-                      >
-                        <Camera className="w-4 h-4 text-emerald-400" />
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsRecipeFabOpen(false);
-                          setScraperInitialMode('url');
-                          setIsScraperOpen(true);
-                        }}
-                        className="w-8 h-8 rounded-xl bg-white/5 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-400 border border-white/10 hover:border-emerald-500/30 flex items-center justify-center transition-all cursor-pointer"
-                        title="Import Recipe from Web"
-                      >
-                        <Link2 className="w-4 h-4 text-emerald-400" />
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsRecipeFabOpen(false);
-                          setEditingRecipe(null);
-                          setIsEditRecipeModalOpen(true);
-                        }}
-                        className="w-8 h-8 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 flex items-center justify-center transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer"
-                        title="New Recipe"
-                      >
-                        <Plus className="w-4 h-4 stroke-[2.5]" />
-                      </button>
-                    </div>
+                    {/* Far right: Main action button (New Recipe) */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsRecipeFabOpen(false);
+                        setEditingRecipe(null);
+                        setIsEditRecipeModalOpen(true);
+                      }}
+                      className="w-8 h-8 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 flex items-center justify-center transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer shrink-0"
+                      title="New Recipe"
+                    >
+                      <Plus className="w-4 h-4 stroke-[2.5]" />
+                    </button>
                   </div>
                 )}
               </div>
