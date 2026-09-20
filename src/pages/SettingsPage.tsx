@@ -910,22 +910,20 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
                     <button
                       type="button"
                       onClick={() => currentUser && handleOpenCalendarSelector(currentUser)}
-                      className="px-2.5 sm:px-3 py-1.5 rounded-xl border border-white/10 hover:border-emerald-500/40 bg-white/5 hover:bg-emerald-500/10 text-slate-200 hover:text-emerald-300 text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
+                      className="px-2.5 py-1.5 rounded-xl border border-white/10 hover:border-emerald-500/40 bg-white/5 hover:bg-emerald-500/10 text-slate-200 hover:text-emerald-300 text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
+                      title="Choose calendars to sync"
                     >
                       <SlidersHorizontal className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>Choose Calendars</span>
-                      {syncStatus?.selectedCalendarCount !== undefined && (
-                        <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 font-mono">
-                          {syncStatus.selectedCalendarCount}
-                        </span>
-                      )}
+                      <span className="text-[11px] font-bold font-mono px-1.5 py-0.2 rounded-md bg-emerald-500/20 text-emerald-300">
+                        {syncStatus?.selectedCalendarCount ?? 0}
+                      </span>
                     </button>
 
                     <button
                       type="button"
                       disabled={isDisconnecting}
                       onClick={() => currentUser && handleDisconnectGoogle(currentUser.id)}
-                      className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl border border-red-500/20 hover:border-red-500/40 text-red-400 hover:bg-red-500/10 text-xs font-semibold transition-all flex items-center gap-1 disabled:opacity-50 cursor-pointer"
+                      className="p-1.5 rounded-xl border border-red-500/20 hover:border-red-500/40 text-red-400 hover:bg-red-500/10 transition-all flex items-center justify-center disabled:opacity-50 cursor-pointer"
                       title="Disconnect Google Calendar"
                     >
                       {isDisconnecting ? (
@@ -933,7 +931,6 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
                       ) : (
                         <Trash2 className="w-3.5 h-3.5" />
                       )}
-                      <span className="hidden sm:inline">Disconnect</span>
                     </button>
                   </div>
                 ) : isPending ? (
@@ -989,89 +986,42 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
       </div>
 
       {/* 4. Assistant Voice Responses */}
-      <div className="glass-panel rounded-3xl p-5 border border-white/10 space-y-3">
+      <div className="glass-panel rounded-3xl p-5 border border-white/10">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="p-2 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 shrink-0">
-              <Volume2 className="w-4 h-4" />
+            <div className={`p-2 rounded-xl border shrink-0 transition-colors ${
+              autoAudioResponses
+                ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20'
+                : 'bg-white/5 text-slate-400 border-white/10'
+            }`}>
+              {autoAudioResponses ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
             </div>
             <div className="min-w-0">
               <h3 className="text-sm font-bold text-white">Assistant Voice Playback</h3>
-              <p className="text-[11px] text-slate-400 mt-0.5">
-                Choose how the AI assistant responds to your messages
+              <p className="text-[11px] text-slate-400 mt-0.5 truncate">
+                {autoAudioResponses
+                  ? 'Automatically speaks Assistant answers aloud'
+                  : 'Responds silently in chat. Tap speaker to listen'}
               </p>
             </div>
           </div>
 
-          <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-xl border shrink-0 ${
-            autoAudioResponses
-              ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-              : 'bg-white/5 text-slate-400 border-white/10'
-          }`}>
-            {autoAudioResponses ? 'Auto-Read' : 'Silent'}
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-          {/* Option 1: Silent */}
-          <div
-            onClick={() => setAutoAudioResponses(false)}
-            className={`p-3.5 rounded-2xl border cursor-pointer flex items-center justify-between gap-3 transition-all ${
-              !autoAudioResponses
-                ? 'bg-emerald-500/10 border-emerald-500/40 ring-1 ring-emerald-500/25'
-                : 'bg-slate-900/60 border-white/5 hover:border-white/10'
-            }`}
-          >
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="p-2 rounded-xl bg-white/5 border border-white/10 text-slate-400 shrink-0">
-                <VolumeX className="w-4 h-4" />
-              </div>
-              <div className="min-w-0">
-                <span className="text-xs font-bold text-white block">Text Only (Silent)</span>
-                <span className="text-[11px] text-slate-400 block truncate">
-                  Responds silently in chat. Tap speaker to listen.
-                </span>
-              </div>
-            </div>
-
-            <div className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 transition-all ${
-              !autoAudioResponses
-                ? 'border-emerald-500 bg-emerald-500 text-slate-950'
-                : 'border-white/20 bg-slate-900/80'
-            }`}>
-              {!autoAudioResponses && <div className="w-2 h-2 rounded-full bg-slate-950" />}
-            </div>
-          </div>
-
-          {/* Option 2: Auto-Read */}
-          <div
-            onClick={() => setAutoAudioResponses(true)}
-            className={`p-3.5 rounded-2xl border cursor-pointer flex items-center justify-between gap-3 transition-all ${
+          <button
+            type="button"
+            role="switch"
+            aria-checked={autoAudioResponses}
+            onClick={() => setAutoAudioResponses(!autoAudioResponses)}
+            className={`w-12 h-6.5 rounded-full transition-all relative cursor-pointer shrink-0 border p-0.5 flex items-center ${
               autoAudioResponses
-                ? 'bg-emerald-500/10 border-emerald-500/40 ring-1 ring-emerald-500/25'
-                : 'bg-slate-900/60 border-white/5 hover:border-white/10'
+                ? 'bg-emerald-500 border-emerald-400/50 justify-end'
+                : 'bg-slate-800 border-white/10 justify-start'
             }`}
+            title={autoAudioResponses ? 'Disable auto-read voice' : 'Enable auto-read voice'}
           >
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shrink-0">
-                <Volume2 className="w-4 h-4" />
-              </div>
-              <div className="min-w-0">
-                <span className="text-xs font-bold text-white block">Auto-Read Aloud</span>
-                <span className="text-[11px] text-slate-400 block truncate">
-                  Automatically speaks Assistant answers aloud.
-                </span>
-              </div>
-            </div>
-
-            <div className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 transition-all ${
-              autoAudioResponses
-                ? 'border-emerald-500 bg-emerald-500 text-slate-950'
-                : 'border-white/20 bg-slate-900/80'
-            }`}>
-              {autoAudioResponses && <div className="w-2 h-2 rounded-full bg-slate-950" />}
-            </div>
-          </div>
+            <span
+              className="w-5 h-5 rounded-full bg-white transition-all shadow-md block"
+            />
+          </button>
         </div>
       </div>
 
