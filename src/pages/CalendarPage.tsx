@@ -996,7 +996,6 @@ export const CalendarPage: React.FC = () => {
             <input
               type="text"
               required
-              autoFocus
               placeholder="e.g. Soccer game, Dentist, Family Dinner..."
               value={formTitle}
               onChange={(e) => setFormTitle(e.target.value)}

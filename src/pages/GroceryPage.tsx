@@ -1304,7 +1304,6 @@ export const GroceryPage: React.FC = () => {
             <input
               type="text"
               required
-              autoFocus
               placeholder="e.g. Egg white protein powder"
               value={editName}
               onChange={(e) => setEditName(e.target.value)}
@@ -1408,7 +1407,6 @@ export const GroceryPage: React.FC = () => {
           <input
             type="text"
             required
-            autoFocus
             placeholder="e.g. Costco, Home Depot, Camping Gear..."
             value={newListTitle}
             onChange={(e) => setNewListTitle(e.target.value)}

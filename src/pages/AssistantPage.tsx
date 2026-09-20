@@ -77,6 +77,8 @@ export const AssistantPage: React.FC = () => {
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const chatBottomRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const isInitialChatScrollRef = useRef(true);
 
   const dockRef = useFabAutoClose<HTMLDivElement>({
     isOpen: isInputExpanded,
@@ -125,7 +127,17 @@ export const AssistantPage: React.FC = () => {
   };
 
   useEffect(() => {
-    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (!chatContainerRef.current) return;
+    const container = chatContainerRef.current;
+    if (isInitialChatScrollRef.current) {
+      isInitialChatScrollRef.current = false;
+      container.scrollTop = container.scrollHeight;
+    } else {
+      container.scrollTo({
+        top: container.scrollHeight,
+        behavior: 'smooth',
+      });
+    }
   }, [messages, isLoading]);
 
   const handleSendMessage = async (textToSend?: string) => {
@@ -332,7 +344,7 @@ export const AssistantPage: React.FC = () => {
       </div>
 
       {/* Chat Messages or Centered Gemini Welcome Screen */}
-      <div className="flex-1 overflow-y-auto space-y-4 px-1 py-2 pb-36 md:pb-28 flex flex-col">
+      <div ref={chatContainerRef} className="flex-1 overflow-y-auto space-y-4 px-1 py-2 pb-36 md:pb-28 flex flex-col">
         {messages.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center text-center px-4 py-8 max-w-lg mx-auto my-auto animate-in fade-in zoom-in-95 duration-200">
             {/* Centered Gemini Sparkle Glow Icon */}

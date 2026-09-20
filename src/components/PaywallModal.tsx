@@ -162,7 +162,6 @@ export const PaywallModal: React.FC<PaywallModalProps> = () => {
                 onChange={(e) => setInviteCodeInput(e.target.value.toUpperCase())}
                 placeholder="Enter invite code (e.g. BETA2026)"
                 className="w-full bg-slate-950 border border-white/15 focus:border-emerald-500 rounded-2xl px-4 py-3 text-xs sm:text-sm font-mono text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 uppercase tracking-wider transition-all"
-                autoFocus
               />
             </div>
 

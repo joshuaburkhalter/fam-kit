@@ -119,9 +119,14 @@ export const AppContent: React.FC = () => {
 
   const setActiveTab = (tab: string, replace: boolean = false) => {
     if (!VALID_TABS.includes(tab)) return;
-    if (tab === activeTab) return;
+    if (tab === activeTab) {
+      // Tapping the active tab scrolls smoothly back to top (standard mobile UX)
+      window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+      return;
+    }
 
     setActiveTabState(tab);
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
     try {
       localStorage.setItem(LAST_TAB_KEY, tab);
     } catch {}
@@ -143,6 +148,18 @@ export const AppContent: React.FC = () => {
       }
     }
   };
+
+  // Prevent browser from auto-scrolling to saved history scroll offsets on tab switches
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'scrollRestoration' in window.history) {
+      window.history.scrollRestoration = 'manual';
+    }
+  }, []);
+
+  // Always scroll window to top whenever activeTab or overlay changes
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
+  }, [activeTab, overlayView]);
 
   // Sync initial root state in history
   useEffect(() => {
