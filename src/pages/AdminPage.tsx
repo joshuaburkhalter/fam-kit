@@ -47,13 +47,28 @@ interface AdminPageProps {
 }
 
 export const AdminPage: React.FC<AdminPageProps> = ({ onBack }) => {
-  const { currentUser } = usePWA();
+  const { currentUser, household, testSetSubscriptionState } = usePWA();
   const isAdmin = isUserAdmin(currentUser);
 
   const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'codes' | 'feedback' | 'households'>('overview');
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Closed Beta Gate Simulation
+  const handleSetTestState = async (status: 'active' | 'unpaid' | 'expired') => {
+    try {
+      if (testSetSubscriptionState) {
+        await testSetSubscriptionState(status);
+        showToast(`Household subscription set to "${status}"`);
+        // Refresh overview in background
+        api.getAdminOverview().then((ov) => { if (ov) setOverview(ov); }).catch(() => {});
+      }
+    } catch (err: any) {
+      console.error('Failed to set test state:', err);
+      showToast(err.message || 'Failed to update test state');
+    }
+  };
 
   // Data states
   const [overview, setOverview] = useState<AdminOverviewData | null>(null);
@@ -982,6 +997,53 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onBack }) => {
           {/* TAB 3: CODES & VOUCHERS */}
           {activeTab === 'codes' && (
             <div className="space-y-6 animate-in fade-in duration-200">
+              {/* Closed Beta Gate Simulation Card */}
+              <div className="bg-slate-900/90 border border-white/10 rounded-3xl p-5 sm:p-6 shadow-xl space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-3">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-5 h-5 text-emerald-400" />
+                    <h2 className="text-sm sm:text-base font-bold text-white">Closed Beta Gate Simulation</h2>
+                  </div>
+                  <span className="text-[11px] text-slate-400 font-mono">
+                    Current Household Status:{' '}
+                    <span className="font-bold text-emerald-400 uppercase">
+                      {household?.subscription_status || 'active'}
+                    </span>
+                  </span>
+                </div>
+
+                <p className="text-xs text-slate-400">
+                  Simulate different subscription states to test the Closed Beta gate and paywall flows:
+                </p>
+
+                <div className="flex flex-wrap gap-2.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => handleSetTestState('active')}
+                    className="px-3.5 py-2 rounded-xl bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 text-xs font-bold border border-emerald-500/30 cursor-pointer transition-all flex items-center gap-1.5"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Set to Active (Unlocked)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSetTestState('unpaid')}
+                    className="px-3.5 py-2 rounded-xl bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 text-xs font-bold border border-amber-500/30 cursor-pointer transition-all flex items-center gap-1.5"
+                  >
+                    <Lock className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Set to Locked (Code Required)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSetTestState('expired')}
+                    className="px-3.5 py-2 rounded-xl bg-rose-500/20 text-rose-300 hover:bg-rose-500/30 text-xs font-bold border border-rose-500/30 cursor-pointer transition-all flex items-center gap-1.5"
+                  >
+                    <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
+                    <span>Set to Expired (Paywall Gate)</span>
+                  </button>
+                </div>
+              </div>
+
               {/* Generator Card */}
               <div className="bg-slate-900/90 border border-white/10 rounded-3xl p-5 sm:p-6 shadow-xl space-y-4">
                 <div className="flex items-center gap-2 border-b border-white/10 pb-3">
