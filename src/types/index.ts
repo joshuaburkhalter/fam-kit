@@ -333,3 +333,39 @@ export interface AdminHousehold {
   eventCount: number;
 }
 
+export type PantryLocation = 'fridge' | 'freezer' | 'pantry';
+export type FreshnessStatus = 'fresh' | 'expiring_soon' | 'expired';
+
+export interface InventoryItem {
+  id: string;
+  householdId: string;
+  name: string;
+  barcode?: string | null;
+  category: string;
+  location: PantryLocation;
+  quantity?: string | null;
+  unit?: string | null;
+  imageUrl?: string | null;
+  isStock: boolean;
+  restockCadenceDays?: number | null;
+  lastRestockedAt?: string | null;
+  expiresAt: string;
+  createdAt: string;
+  updatedAt: string;
+  daysUntilExpiry?: number;
+  freshness: FreshnessStatus;
+}
+
+export interface IngredientInventoryMatch {
+  matched: Array<{
+    ingredient: string;
+    inStockItem: InventoryItem;
+    isFresh: boolean;
+  }>;
+  missing: Array<{
+    item: string;
+    amount?: string;
+    unit?: string;
+  }>;
+}
+

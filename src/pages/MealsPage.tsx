@@ -27,6 +27,11 @@ import {
   Pencil,
   ImageIcon,
   Camera,
+  Package,
+  Barcode,
+  AlertTriangle,
+  Star,
+  Tag,
 } from 'lucide-react';
 import { compressImageFile } from '../lib/imageCompression';
 import {
@@ -35,13 +40,17 @@ import {
   isYesterday,
   parseISO,
 } from 'date-fns';
-import type { WeeklyMeal, MealLog, Recipe, GroceryItem } from '../types';
+import type { WeeklyMeal, MealLog, Recipe, GroceryItem, InventoryItem, PantryLocation } from '../types';
 import { usePWA } from '../context/PWAContext';
 import { api } from '../lib/api';
 import { CheckSparkle, CelebrationConfetti, triggerHapticCheck } from '../components/CheckSparkle';
 import { Drawer } from '../components/ui/Drawer';
 import { RecipeScraperModal, extractSharedUrl } from '../components/RecipeScraperModal';
 import { EditRecipeModal } from '../components/EditRecipeModal';
+import { BarcodeScannerModal } from '../components/inventory/BarcodeScannerModal';
+import { VisionScanModal } from '../components/inventory/VisionScanModal';
+import { EditInventoryModal } from '../components/inventory/EditInventoryModal';
+import { getFreshnessBadge, getLocationMeta } from '../lib/shelfLife';
 import { useFabAutoClose } from '../hooks/useFabAutoClose';
 import { Toast } from '../components/ui/Toast';
 
@@ -51,17 +60,21 @@ interface MealsDataCache {
   mealLogs: MealLog[];
   recipes: Recipe[];
   groceryItems?: GroceryItem[];
+  inventoryItems?: InventoryItem[];
 }
 
 let mealsDataCache: MealsDataCache | null = null;
 
-function resolveInitialSubTab(): 'recipes' | 'planner' | 'history' {
+function resolveInitialSubTab(): 'recipes' | 'planner' | 'pantry' | 'history' {
   if (typeof window === 'undefined') return 'recipes';
   try {
     const params = new URLSearchParams(window.location.search);
     const pathname = window.location.pathname.toLowerCase();
     if (params.get('subtab') === 'planner' || params.get('view') === 'planner') {
       return 'planner';
+    }
+    if (params.get('subtab') === 'pantry' || params.get('view') === 'pantry' || params.get('tab') === 'pantry') {
+      return 'pantry';
     }
     if (params.get('subtab') === 'history' || params.get('view') === 'history') {
       return 'history';
@@ -85,20 +98,23 @@ export const MealsPage: React.FC = () => {
   const householdId = household?.id;
   const isMountedRef = useRef(true);
 
-  // Sub-views: 'recipes' (Recipe Box) | 'planner' (On deck & ready to shop) | 'history' (Cooked log)
-  const [activeTab, setActiveTab] = useState<'recipes' | 'planner' | 'history'>(resolveInitialSubTab);
+  // Sub-views: 'recipes' | 'planner' | 'pantry' | 'history'
+  const [activeTab, setActiveTab] = useState<'recipes' | 'planner' | 'pantry' | 'history'>(resolveInitialSubTab);
 
   // Keep visited tabs mounted with CSS display:none for instant 0ms switching without DOM thrashing
   const [visitedTabs, setVisitedTabs] = useState<Record<string, boolean>>(() => ({
     [resolveInitialSubTab()]: true,
   }));
 
-  const handleTabChange = (tab: 'recipes' | 'planner' | 'history') => {
+  const handleTabChange = (tab: 'recipes' | 'planner' | 'pantry' | 'history') => {
     setActiveTab(tab);
     setVisitedTabs((prev) => (prev[tab] ? prev : { ...prev, [tab]: true }));
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
     if (tab !== 'recipes') {
       setIsRecipeFabOpen(false);
+    }
+    if (tab !== 'pantry') {
+      setIsPantryFabOpen(false);
     }
   };
 
@@ -120,6 +136,11 @@ export const MealsPage: React.FC = () => {
   const [groceryItems, setGroceryItems] = useState<GroceryItem[]>(() => {
     return mealsDataCache && mealsDataCache.householdId === householdId && mealsDataCache.groceryItems
       ? mealsDataCache.groceryItems
+      : [];
+  });
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>(() => {
+    return mealsDataCache && mealsDataCache.householdId === householdId && mealsDataCache.inventoryItems
+      ? mealsDataCache.inventoryItems
       : [];
   });
   const [isLoading, setIsLoading] = useState<boolean>(() => {
@@ -160,6 +181,20 @@ export const MealsPage: React.FC = () => {
     isOpen: isRecipeFabOpen,
     onClose: () => setIsRecipeFabOpen(false),
     ignore: isScraperOpen || isEditRecipeModalOpen || Boolean(selectedRecipe),
+  });
+
+  // Pantry state & modals
+  const [pantryFilter, setPantryFilter] = useState<'all' | 'fridge' | 'freezer' | 'pantry' | 'expiring' | 'staples'>('all');
+  const [pantrySearchQuery, setPantrySearchQuery] = useState('');
+  const [isPantryFabOpen, setIsPantryFabOpen] = useState(false);
+  const [isBarcodeModalOpen, setIsBarcodeModalOpen] = useState(false);
+  const [isVisionModalOpen, setIsVisionModalOpen] = useState(false);
+  const [isEditInventoryModalOpen, setIsEditInventoryModalOpen] = useState(false);
+  const [editingInventoryItem, setEditingInventoryItem] = useState<InventoryItem | null>(null);
+  const pantryFabRef = useFabAutoClose<HTMLDivElement>({
+    isOpen: isPantryFabOpen,
+    onClose: () => setIsPantryFabOpen(false),
+    ignore: isBarcodeModalOpen || isVisionModalOpen || isEditInventoryModalOpen,
   });
 
   // Recipe search & tags
@@ -253,17 +288,21 @@ export const MealsPage: React.FC = () => {
       if (mealsDataCache.groceryItems) {
         setGroceryItems(mealsDataCache.groceryItems);
       }
+      if (mealsDataCache.inventoryItems) {
+        setInventoryItems(mealsDataCache.inventoryItems);
+      }
       setIsLoading(false);
     } else {
       setIsLoading(true);
     }
 
     try {
-      const [weeklyRes, logsRes, recRes, groceryRes] = await Promise.all([
+      const [weeklyRes, logsRes, recRes, groceryRes, inventoryRes] = await Promise.all([
         api.getWeeklyMeals(householdId),
         api.getMealLogs(householdId),
         api.getRecipes(householdId),
         api.getGroceryItems(householdId),
+        api.getInventory(),
       ]);
 
       if (!isMountedRef.current) return;
@@ -273,6 +312,7 @@ export const MealsPage: React.FC = () => {
       setMealLogs(logsRes);
       setRecipes(recRes);
       setGroceryItems(groceryRes);
+      setInventoryItems(inventoryRes);
 
       mealsDataCache = {
         householdId,
@@ -280,6 +320,7 @@ export const MealsPage: React.FC = () => {
         mealLogs: logsRes,
         recipes: recRes,
         groceryItems: groceryRes,
+        inventoryItems: inventoryRes,
       };
     } catch (err) {
       console.error('Failed to load meals data', err);
@@ -641,6 +682,19 @@ export const MealsPage: React.FC = () => {
     }
   };
 
+  // Helper to cross-reference recipe ingredients with active household pantry inventory
+  const getIngredientPantryMatch = (ingItem: string): InventoryItem | undefined => {
+    if (!ingItem || !inventoryItems || inventoryItems.length === 0) return undefined;
+    const clean = ingItem.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').trim();
+    const words = clean.split(/\s+/).filter((w) => w.length > 2 && !['cup', 'cups', 'tbsp', 'tsp', 'oz', 'pound', 'pounds', 'gram', 'grams', 'can', 'cans', 'clove', 'cloves', 'slice', 'slices', 'large', 'small', 'medium'].includes(w));
+
+    return inventoryItems.find((inv) => {
+      const invClean = inv.name.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').trim();
+      if (invClean === clean || invClean.includes(clean) || clean.includes(invClean)) return true;
+      return words.some((w) => invClean.includes(w) && w.length >= 4);
+    });
+  };
+
   // Shop / Remove Ingredients to/from Grocery List
   const handleToggleShopIngredients = async (recipe: Recipe, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -678,9 +732,17 @@ export const MealsPage: React.FC = () => {
 
     // Optimistically add ingredients to grocery list immediately
     const previousItems = groceryItems;
-    const ingredientsToAdd = recipe.ingredients && recipe.ingredients.length > 0
+    const rawIngredients = recipe.ingredients && recipe.ingredients.length > 0
       ? recipe.ingredients
       : [{ item: recipe.title, amount: '', unit: '', category: 'Other' }];
+
+    const matchedInPantry = rawIngredients.filter((ing) => Boolean(getIngredientPantryMatch(ing.item)));
+    const ingredientsToAdd = rawIngredients.filter((ing) => !getIngredientPantryMatch(ing.item));
+
+    if (ingredientsToAdd.length === 0 && matchedInPantry.length > 0) {
+      showToast(`All ingredients for "${recipe.title}" are already in your pantry! 🎉`);
+      return;
+    }
 
     const optimisticItems: GroceryItem[] = ingredientsToAdd.map((ing, idx) => ({
       id: `temp-g-${Date.now()}-${idx}`,
@@ -706,11 +768,17 @@ export const MealsPage: React.FC = () => {
     justAddedGroceryTimeoutRef.current = setTimeout(() => {
       setJustAddedGroceryId((prev) => (prev === recipe.id ? null : prev));
     }, 2500);
-    showToast(`Added "${recipe.title}" ingredients to Grocery list!`);
+
+    const toastMsg = matchedInPantry.length > 0
+      ? `Added ${ingredientsToAdd.length} items to Grocery (skipped ${matchedInPantry.length} already in pantry!)`
+      : `Added "${recipe.title}" ingredients to Grocery list!`;
+    showToast(toastMsg);
     triggerHapticCheck();
 
     try {
-      const res = await api.addRecipeToGrocery(recipe, householdId);
+      await api.addRecipeToGrocery(recipe, householdId, {
+        excludeItemNames: matchedInPantry.map((m) => m.item),
+      });
       const refreshedItems = await api.getGroceryItems(householdId);
       setGroceryItems(refreshedItems);
       if (mealsDataCache && mealsDataCache.householdId === householdId) {
@@ -727,6 +795,23 @@ export const MealsPage: React.FC = () => {
   };
 
   const handleShopIngredients = handleToggleShopIngredients;
+
+  const handleRestockPantryItem = async (item: InventoryItem, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (!householdId) return;
+    try {
+      triggerHapticCheck();
+      await api.restockInventoryItemToGrocery(item.id);
+      showToast(`Added "${item.name}" to your Grocery List!`);
+      const refreshed = await api.getGroceryItems(householdId);
+      setGroceryItems(refreshed);
+      if (mealsDataCache && mealsDataCache.householdId === householdId) {
+        mealsDataCache.groceryItems = refreshed;
+      }
+    } catch (err) {
+      showToast(`Failed to add "${item.name}" to grocery list`);
+    }
+  };
 
   // Submit Manual Log Form
   const handleSubmitManualLog = async (e: React.FormEvent) => {
@@ -1259,6 +1344,7 @@ export const MealsPage: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
               {selectedRecipe.ingredients.map((ing, idx) => {
                 const isChecked = Boolean(checkedIngredients[idx]);
+                const pantryMatch = getIngredientPantryMatch(ing.item);
                 return (
                   <div
                     key={idx}
@@ -1282,6 +1368,14 @@ export const MealsPage: React.FC = () => {
                       {ing.amount && <strong className="font-semibold text-emerald-400 mr-1">{ing.amount} {ing.unit || ''}</strong>}
                       {ing.item}
                     </span>
+                    {pantryMatch && (
+                      <span
+                        className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 flex items-center gap-1 shrink-0 font-medium"
+                        title={`In pantry: ${pantryMatch.name} (${pantryMatch.quantity || 'Available'})`}
+                      >
+                        <span>✓ In Pantry</span>
+                      </span>
+                    )}
                   </div>
                 );
               })}
@@ -1454,6 +1548,27 @@ export const MealsPage: React.FC = () => {
                   }`}
                 >
                   {meals.length}
+                </span>
+              )}
+            </button>
+
+            <button
+              onClick={() => handleTabChange('pantry')}
+              className={`flex-1 py-1.5 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors duration-150 cursor-pointer ${
+                activeTab === 'pantry'
+                  ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
+                  : 'text-slate-400 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <Package className="w-3.5 h-3.5" />
+              <span>Pantry</span>
+              {inventoryItems.length > 0 && (
+                <span
+                  className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
+                    activeTab === 'pantry' ? 'bg-slate-950/25 text-slate-950' : 'bg-emerald-500/20 text-emerald-400'
+                  }`}
+                >
+                  {inventoryItems.length}
                 </span>
               )}
             </button>
@@ -1849,6 +1964,242 @@ export const MealsPage: React.FC = () => {
             </div>
           )}
 
+          {/* ================= 2b. PANTRY TAB ================= */}
+          {visitedTabs['pantry'] && (
+            <div className={activeTab === 'pantry' ? 'space-y-4' : 'hidden'}>
+              {/* Quick Summary Cards / Expiry Alerts */}
+              {(() => {
+                const expiringCount = inventoryItems.filter(
+                  (i) => i.freshness === 'expiring_soon' || i.freshness === 'expired'
+                ).length;
+                const staplesCount = inventoryItems.filter((i) => i.isStock).length;
+
+                return (
+                  <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+                    {expiringCount > 0 && (
+                      <button
+                        onClick={() => setPantryFilter(pantryFilter === 'expiring' ? 'all' : 'expiring')}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                          pantryFilter === 'expiring'
+                            ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                            : 'bg-amber-500/10 text-amber-400 border-amber-500/20 hover:bg-amber-500/15'
+                        }`}
+                      >
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                        <span>{expiringCount} Expiring Soon</span>
+                      </button>
+                    )}
+
+                    <button
+                      onClick={() => setPantryFilter(pantryFilter === 'staples' ? 'all' : 'staples')}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                        pantryFilter === 'staples'
+                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                          : 'bg-slate-900/60 text-slate-300 border-white/10 hover:bg-white/5'
+                      }`}
+                    >
+                      <Star className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" />
+                      <span>{staplesCount} Staples</span>
+                    </button>
+
+                    <div className="ml-auto flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setIsBarcodeModalOpen(true)}
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-200 text-xs font-semibold border border-white/10 transition-colors cursor-pointer"
+                        title="Scan Barcode"
+                      >
+                        <Barcode className="w-3.5 h-3.5 text-emerald-400" />
+                        <span className="hidden sm:inline">Scan</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setIsVisionModalOpen(true)}
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-200 text-xs font-semibold border border-white/10 transition-colors cursor-pointer"
+                        title="AI Photo Scan"
+                      >
+                        <Camera className="w-3.5 h-3.5 text-purple-400" />
+                        <span className="hidden sm:inline">Photo</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Location & Status Filter Chips */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+                {(
+                  [
+                    { id: 'all', label: 'All Items', icon: null },
+                    { id: 'fridge', label: 'Fridge', icon: '🧊' },
+                    { id: 'freezer', label: 'Freezer', icon: '❄️' },
+                    { id: 'pantry', label: 'Pantry', icon: '🥫' },
+                  ] as const
+                ).map((chip) => {
+                  const isSelected = pantryFilter === chip.id;
+                  const count =
+                    chip.id === 'all'
+                      ? inventoryItems.length
+                      : inventoryItems.filter((i) => i.location === chip.id).length;
+
+                  return (
+                    <button
+                      key={chip.id}
+                      onClick={() => setPantryFilter(chip.id)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                        isSelected
+                          ? 'bg-emerald-500 text-slate-950 font-bold shadow-sm'
+                          : 'bg-slate-900/80 text-slate-400 hover:text-white hover:bg-slate-800 border border-white/5'
+                      }`}
+                    >
+                      {chip.icon && <span>{chip.icon}</span>}
+                      <span>{chip.label}</span>
+                      <span
+                        className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                          isSelected ? 'bg-slate-950/20 text-slate-950 font-black' : 'bg-white/5 text-slate-400'
+                        }`}
+                      >
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Inventory Items Grid */}
+              {isLoading ? (
+                <div className="py-12 text-center text-xs text-slate-400">Loading pantry inventory...</div>
+              ) : (() => {
+                const query = pantrySearchQuery.toLowerCase().trim();
+                const filteredItems = inventoryItems.filter((item) => {
+                  if (
+                    query &&
+                    !item.name.toLowerCase().includes(query) &&
+                    !(item.category && item.category.toLowerCase().includes(query))
+                  ) {
+                    return false;
+                  }
+                  if (pantryFilter === 'all') return true;
+                  if (pantryFilter === 'fridge' || pantryFilter === 'freezer' || pantryFilter === 'pantry') {
+                    return item.location === pantryFilter;
+                  }
+                  if (pantryFilter === 'expiring') {
+                    return item.freshness === 'expiring_soon' || item.freshness === 'expired';
+                  }
+                  if (pantryFilter === 'staples') {
+                    return item.isStock;
+                  }
+                  return true;
+                });
+
+                if (filteredItems.length === 0) {
+                  return (
+                    <div className="py-16 text-center glass-panel rounded-3xl p-8 border border-white/5 space-y-3">
+                      <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center mx-auto">
+                        <Package className="w-6 h-6" />
+                      </div>
+                      <h3 className="text-base font-bold text-white">
+                        {inventoryItems.length === 0 ? 'Your pantry is empty' : 'No matching items'}
+                      </h3>
+                      <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                        {inventoryItems.length === 0
+                          ? 'Scan barcodes, snap photos of your fridge/receipt, or add items to track freshness and prevent duplicate buying!'
+                          : 'Try changing your search keywords or active filter.'}
+                      </p>
+                      {inventoryItems.length === 0 && (
+                        <div className="flex items-center justify-center gap-2 pt-2">
+                          <button
+                            onClick={() => setIsBarcodeModalOpen(true)}
+                            className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-4 py-2 rounded-2xl text-xs font-bold inline-flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20 cursor-pointer"
+                          >
+                            <Barcode className="w-4 h-4 stroke-[2.5]" />
+                            <span>Scan Barcode</span>
+                          </button>
+                          <button
+                            onClick={() => setIsVisionModalOpen(true)}
+                            className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-2xl text-xs font-bold inline-flex items-center gap-1.5 transition-all shadow-md shadow-purple-600/20 cursor-pointer"
+                          >
+                            <Camera className="w-4 h-4" />
+                            <span>AI Photo Scan</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    {filteredItems.map((item) => {
+                      const locMeta = getLocationMeta(item.location);
+                      const badge = getFreshnessBadge(item.freshness, item.daysUntilExpiry);
+
+                      return (
+                        <div
+                          key={item.id}
+                          onClick={() => {
+                            setEditingInventoryItem(item);
+                            setIsEditInventoryModalOpen(true);
+                          }}
+                          className="glass-panel rounded-2xl border border-white/10 p-3.5 flex flex-col justify-between gap-3 hover:border-emerald-500/30 transition-all shadow-lg group cursor-pointer"
+                        >
+                          <div>
+                            {/* Top row: Location & Freshness Badge */}
+                            <div className="flex items-center justify-between gap-2 mb-2">
+                              <span className="text-[11px] px-2 py-0.5 rounded-lg bg-white/5 border border-white/10 text-slate-300 font-medium flex items-center gap-1">
+                                <span>{locMeta.icon}</span>
+                                <span>{locMeta.label}</span>
+                              </span>
+
+                              <span
+                                className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${badge.bgColor} ${badge.color} ${badge.borderColor} flex items-center gap-1`}
+                              >
+                                <span className={`w-1.5 h-1.5 rounded-full ${badge.dotColor}`} />
+                                <span>{badge.label}</span>
+                              </span>
+                            </div>
+
+                            {/* Item Name & Details */}
+                            <h4 className="text-sm font-bold text-white group-hover:text-emerald-300 transition-colors line-clamp-1">
+                              {item.name}
+                            </h4>
+
+                            <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-1">
+                              <span>{item.category || 'Pantry'}</span>
+                              {item.quantity && <span>· {item.quantity}</span>}
+                            </div>
+
+                            {item.isStock && (
+                              <div className="flex items-center gap-1 text-[11px] text-yellow-400/90 font-medium mt-1.5">
+                                <Star className="w-3 h-3 fill-yellow-400" />
+                                <span>Staple {item.restockCadenceDays ? `(every ${item.restockCadenceDays}d)` : ''}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Footer Action: Quick Restock to Grocery List */}
+                          <div className="pt-2 border-t border-white/5 flex items-center justify-between">
+                            <span className="text-[10px] text-slate-500">Tap to edit</span>
+                            <button
+                              type="button"
+                              onClick={(e) => handleRestockPantryItem(item, e)}
+                              className="px-2.5 py-1 rounded-xl bg-white/5 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-400 border border-white/10 hover:border-emerald-500/30 text-[11px] font-semibold flex items-center gap-1 transition-all cursor-pointer"
+                              title="Add to Grocery List"
+                            >
+                              <ShoppingCart className="w-3 h-3 text-emerald-400" />
+                              <span>Restock</span>
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
           {/* ================= 3. HISTORY TAB ================= */}
           {visitedTabs['history'] && (
             <div className={activeTab === 'history' ? 'space-y-4' : 'hidden'}>
@@ -2097,6 +2448,104 @@ export const MealsPage: React.FC = () => {
                         <span className="hidden sm:inline">Search</span>
                       </button>
                     </form>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'pantry' && (
+              <div
+                ref={pantryFabRef}
+                className={`fab-dock-transition pointer-events-auto h-[50px] border shadow-2xl flex items-center overflow-hidden ${
+                  isPantryFabOpen
+                    ? 'w-full rounded-3xl border-white/25 bg-slate-900/95 backdrop-blur-xl shadow-emerald-500/10 px-2.5'
+                    : 'w-[50px] rounded-full border-emerald-400/40 bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 cursor-pointer shadow-xl shadow-emerald-500/30 hover:scale-105 active:scale-95 justify-center'
+                }`}
+              >
+                {!isPantryFabOpen ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsPantryFabOpen(true)}
+                    className="w-full h-full flex items-center justify-center text-slate-950 cursor-pointer"
+                    title="Pantry Actions & Search"
+                  >
+                    <Plus className="w-6 h-6 stroke-[2.5]" />
+                  </button>
+                ) : (
+                  <div className="w-full flex items-center gap-2 animate-in fade-in duration-200">
+                    {/* Far left: Close button */}
+                    <button
+                      type="button"
+                      onClick={() => setIsPantryFabOpen(false)}
+                      className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center shrink-0 transition-colors cursor-pointer"
+                      title="Close"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+
+                    {/* Secondary action 1 on the left: Scan Barcode */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsPantryFabOpen(false);
+                        setIsBarcodeModalOpen(true);
+                      }}
+                      className="h-8 px-2 sm:px-2.5 rounded-xl bg-white/5 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-400 border border-white/10 hover:border-emerald-500/30 text-xs font-bold flex items-center gap-1.5 transition-all shrink-0 cursor-pointer"
+                      title="Scan Barcode"
+                    >
+                      <Barcode className="w-3.5 h-3.5 text-emerald-400 stroke-[2.2]" />
+                      <span className="hidden sm:inline">Barcode</span>
+                    </button>
+
+                    {/* Secondary action 2 on the left: Photo Scan */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsPantryFabOpen(false);
+                        setIsVisionModalOpen(true);
+                      }}
+                      className="h-8 px-2 sm:px-2.5 rounded-xl bg-white/5 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-400 border border-white/10 hover:border-emerald-500/30 text-xs font-bold flex items-center gap-1.5 transition-all shrink-0 cursor-pointer"
+                      title="AI Photo Scan (fridge/shelf/receipt)"
+                    >
+                      <Camera className="w-3.5 h-3.5 text-purple-400 stroke-[2.2]" />
+                      <span className="hidden sm:inline">Photo</span>
+                    </button>
+
+                    {/* Middle: Search text input */}
+                    <div className="flex-1 min-w-0 flex items-center relative">
+                      <input
+                        type="text"
+                        placeholder="Search pantry..."
+                        value={pantrySearchQuery}
+                        onChange={(e) => setPantrySearchQuery(e.target.value)}
+                        className="w-full bg-transparent border-none text-xs text-white placeholder-slate-500 focus:outline-none py-1.5 px-1"
+                      />
+                      {pantrySearchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setPantrySearchQuery('')}
+                          className="p-1 text-slate-400 hover:text-white shrink-0 cursor-pointer"
+                          title="Clear search"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Far right: Main action button (+ Add Item) */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsPantryFabOpen(false);
+                        setEditingInventoryItem(null);
+                        setIsEditInventoryModalOpen(true);
+                      }}
+                      className="h-8 px-3.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20 shrink-0 active:scale-95 cursor-pointer"
+                      title="Add item manually"
+                    >
+                      <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                      <span className="hidden sm:inline">Add</span>
+                    </button>
                   </div>
                 )}
               </div>
@@ -2417,6 +2866,64 @@ export const MealsPage: React.FC = () => {
           }}
         />
       )}
+
+      {/* ================= MODAL: BARCODE SCANNER ================= */}
+      <BarcodeScannerModal
+        isOpen={isBarcodeModalOpen}
+        onClose={() => setIsBarcodeModalOpen(false)}
+        onItemAdded={(newItem) => {
+          setInventoryItems((prev) => [newItem, ...prev]);
+          if (mealsDataCache && mealsDataCache.householdId === householdId) {
+            mealsDataCache.inventoryItems = [newItem, ...(mealsDataCache.inventoryItems || [])];
+          }
+          showToast(`Added "${newItem.name}" to your pantry!`);
+        }}
+      />
+
+      {/* ================= MODAL: VISION PHOTO SCAN ================= */}
+      <VisionScanModal
+        isOpen={isVisionModalOpen}
+        onClose={() => setIsVisionModalOpen(false)}
+        onItemsAdded={async () => {
+          const refreshed = await api.getInventory();
+          setInventoryItems(refreshed);
+          if (mealsDataCache && mealsDataCache.householdId === householdId) {
+            mealsDataCache.inventoryItems = refreshed;
+          }
+          showToast('Added scanned items to your pantry!');
+        }}
+      />
+
+      {/* ================= MODAL: EDIT / ADD INVENTORY ITEM ================= */}
+      <EditInventoryModal
+        isOpen={isEditInventoryModalOpen}
+        item={editingInventoryItem}
+        onClose={() => {
+          setIsEditInventoryModalOpen(false);
+          setEditingInventoryItem(null);
+        }}
+        onSaved={(savedItem) => {
+          setInventoryItems((prev) => {
+            const exists = prev.some((i) => i.id === savedItem.id);
+            const next = exists ? prev.map((i) => (i.id === savedItem.id ? savedItem : i)) : [savedItem, ...prev];
+            if (mealsDataCache && mealsDataCache.householdId === householdId) {
+              mealsDataCache.inventoryItems = next;
+            }
+            return next;
+          });
+          showToast(`Saved "${savedItem.name}" to pantry!`);
+        }}
+        onDeleted={(deletedId) => {
+          setInventoryItems((prev) => {
+            const next = prev.filter((i) => i.id !== deletedId);
+            if (mealsDataCache && mealsDataCache.householdId === householdId) {
+              mealsDataCache.inventoryItems = next;
+            }
+            return next;
+          });
+          showToast('Removed item from pantry');
+        }}
+      />
     </div>
   );
 };

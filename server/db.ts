@@ -218,9 +218,48 @@ function initSchema(db: Database) {
       createdAt TEXT NOT NULL,
       updatedAt TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS inventory_items (
+      id TEXT PRIMARY KEY,
+      householdId TEXT NOT NULL,
+      name TEXT NOT NULL,
+      barcode TEXT,
+      category TEXT NOT NULL DEFAULT 'Other',
+      location TEXT NOT NULL DEFAULT 'pantry',
+      quantity TEXT,
+      unit TEXT,
+      imageUrl TEXT,
+      isStock INTEGER NOT NULL DEFAULT 0,
+      restockCadenceDays INTEGER,
+      lastRestockedAt TEXT,
+      expiresAt TEXT NOT NULL,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL
+    );
   `);
 
   // Auto-migration for existing DBs: ensure tables and columns exist
+  try {
+    db.run(`
+      CREATE TABLE IF NOT EXISTS inventory_items (
+        id TEXT PRIMARY KEY,
+        householdId TEXT NOT NULL,
+        name TEXT NOT NULL,
+        barcode TEXT,
+        category TEXT NOT NULL DEFAULT 'Other',
+        location TEXT NOT NULL DEFAULT 'pantry',
+        quantity TEXT,
+        unit TEXT,
+        imageUrl TEXT,
+        isStock INTEGER NOT NULL DEFAULT 0,
+        restockCadenceDays INTEGER,
+        lastRestockedAt TEXT,
+        expiresAt TEXT NOT NULL,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      );
+    `);
+  } catch {}
   try {
     db.run(`
       CREATE TABLE IF NOT EXISTS user_google_sync (

@@ -30,6 +30,19 @@ import {
   pushUnsyncedLocalEventsToGoogle,
 } from './google-calendar.js';
 import { isBasicPantryStaple } from './groceryStaples.js';
+import {
+  lookupBarcode,
+  scanInventoryVision,
+  matchRecipeIngredientsAgainstInventory,
+  initBackgroundInventoryAlerts,
+  InventoryItemRow,
+} from './inventory.js';
+import {
+  calculateExpiryDate,
+  getDaysUntilExpiry,
+  getFreshnessStatus,
+  PantryLocation,
+} from './shelfLife.js';
 
 dotenv.config();
 dotenv.config({ path: '.env.local' });
@@ -2484,6 +2497,287 @@ app.delete('/api/meals/log', (req, res) => {
   res.json({ success: true });
 });
 
+// 5b. Pantry & Inventory API
+app.get('/api/inventory', (req, res) => {
+  const householdId = getHouseholdId(req);
+  const location = req.query.location as string;
+  const filter = req.query.filter as string; // 'all' | 'expiring_soon' | 'expired' | 'staples'
+  const search = ((req.query.search as string) || '').toLowerCase().trim();
+
+  let sql = 'SELECT * FROM inventory_items WHERE householdId = ?';
+  const params: any[] = [householdId];
+
+  if (location && ['fridge', 'freezer', 'pantry'].includes(location)) {
+    sql += ' AND location = ?';
+    params.push(location);
+  }
+
+  if (filter === 'staples') {
+    sql += ' AND isStock = 1';
+  }
+
+  sql += ' ORDER BY createdAt DESC';
+
+  const rows = queryAll<any>(sql, params);
+
+  let items = rows.map((item) => {
+    const daysUntilExpiry = getDaysUntilExpiry(item.expiresAt);
+    const freshness = getFreshnessStatus(item.expiresAt);
+    return {
+      ...item,
+      isStock: Boolean(item.isStock),
+      daysUntilExpiry,
+      freshness,
+    };
+  });
+
+  if (filter === 'expiring_soon') {
+    items = items.filter((i) => i.freshness === 'expiring_soon');
+  } else if (filter === 'expired') {
+    items = items.filter((i) => i.freshness === 'expired');
+  }
+
+  if (search) {
+    items = items.filter(
+      (i) =>
+        i.name.toLowerCase().includes(search) ||
+        (i.category && i.category.toLowerCase().includes(search)) ||
+        (i.location && i.location.toLowerCase().includes(search))
+    );
+  }
+
+  // Prioritize expired and expiring_soon first
+  const freshnessPriority: Record<string, number> = {
+    expired: 0,
+    expiring_soon: 1,
+    fresh: 2,
+  };
+  items.sort((a, b) => {
+    const diff = freshnessPriority[a.freshness] - freshnessPriority[b.freshness];
+    if (diff !== 0) return diff;
+    return (a.daysUntilExpiry ?? 999) - (b.daysUntilExpiry ?? 999);
+  });
+
+  res.json(items);
+});
+
+app.post('/api/inventory', (req, res) => {
+  const householdId = getHouseholdId(req);
+  const {
+    name,
+    barcode,
+    category = 'Pantry',
+    location = 'pantry',
+    quantity,
+    unit,
+    imageUrl,
+    isStock = false,
+    restockCadenceDays,
+    expiresAt: customExpiresAt,
+  } = req.body;
+
+  if (!name || !name.trim()) {
+    return res.status(400).json({ error: 'Item name is required' });
+  }
+
+  const id = `inv_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const now = new Date().toISOString();
+  const expiresAt = customExpiresAt || calculateExpiryDate(name.trim(), category, location);
+
+  execute(
+    `INSERT INTO inventory_items (
+      id, householdId, name, barcode, category, location, quantity, unit,
+      imageUrl, isStock, restockCadenceDays, lastRestockedAt, expiresAt, createdAt, updatedAt
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      id,
+      householdId,
+      name.trim(),
+      barcode ? String(barcode).trim() : null,
+      category,
+      location,
+      quantity ? String(quantity).trim() : null,
+      unit ? String(unit).trim() : null,
+      imageUrl || null,
+      isStock ? 1 : 0,
+      restockCadenceDays ? parseInt(String(restockCadenceDays), 10) : null,
+      isStock ? now : null,
+      expiresAt,
+      now,
+      now,
+    ]
+  );
+  saveDb();
+
+  const saved = queryOne<any>('SELECT * FROM inventory_items WHERE id = ?', [id]);
+  if (!saved) return res.status(500).json({ error: 'Failed to create inventory item' });
+
+  res.json({
+    ...saved,
+    isStock: Boolean(saved.isStock),
+    daysUntilExpiry: getDaysUntilExpiry(saved.expiresAt),
+    freshness: getFreshnessStatus(saved.expiresAt),
+  });
+});
+
+app.post('/api/inventory/batch', (req, res) => {
+  const householdId = getHouseholdId(req);
+  const { items } = req.body;
+  if (!Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ error: 'Items array is required' });
+  }
+
+  const now = new Date().toISOString();
+  const addedIds: string[] = [];
+
+  for (const it of items) {
+    if (!it.name || !it.name.trim()) continue;
+    const id = `inv_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const expiresAt = it.expiresAt || calculateExpiryDate(it.name.trim(), it.category || 'Pantry', it.location || 'pantry');
+    execute(
+      `INSERT INTO inventory_items (
+        id, householdId, name, barcode, category, location, quantity, unit,
+        imageUrl, isStock, restockCadenceDays, lastRestockedAt, expiresAt, createdAt, updatedAt
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id,
+        householdId,
+        it.name.trim(),
+        it.barcode ? String(it.barcode).trim() : null,
+        it.category || 'Pantry',
+        it.location || 'pantry',
+        it.quantity ? String(it.quantity).trim() : null,
+        it.unit ? String(it.unit).trim() : null,
+        it.imageUrl || null,
+        it.isStock ? 1 : 0,
+        it.restockCadenceDays ? parseInt(String(it.restockCadenceDays), 10) : null,
+        it.isStock ? now : null,
+        expiresAt,
+        now,
+        now,
+      ]
+    );
+    addedIds.push(id);
+  }
+  saveDb();
+
+  res.json({ success: true, count: addedIds.length });
+});
+
+app.patch('/api/inventory/:id', (req, res) => {
+  const householdId = getHouseholdId(req);
+  const { id } = req.params;
+  const existing = queryOne<any>('SELECT * FROM inventory_items WHERE id = ? AND householdId = ?', [id, householdId]);
+  if (!existing) return res.status(404).json({ error: 'Item not found' });
+
+  const {
+    name,
+    category,
+    location,
+    quantity,
+    unit,
+    imageUrl,
+    isStock,
+    restockCadenceDays,
+    expiresAt,
+    lastRestockedAt,
+  } = req.body;
+
+  const now = new Date().toISOString();
+
+  if (name !== undefined) execute('UPDATE inventory_items SET name = ? WHERE id = ?', [name.trim(), id]);
+  if (category !== undefined) execute('UPDATE inventory_items SET category = ? WHERE id = ?', [category, id]);
+  if (location !== undefined) execute('UPDATE inventory_items SET location = ? WHERE id = ?', [location, id]);
+  if (quantity !== undefined) execute('UPDATE inventory_items SET quantity = ? WHERE id = ?', [quantity ? String(quantity).trim() : null, id]);
+  if (unit !== undefined) execute('UPDATE inventory_items SET unit = ? WHERE id = ?', [unit ? String(unit).trim() : null, id]);
+  if (imageUrl !== undefined) execute('UPDATE inventory_items SET imageUrl = ? WHERE id = ?', [imageUrl || null, id]);
+  if (isStock !== undefined) execute('UPDATE inventory_items SET isStock = ? WHERE id = ?', [isStock ? 1 : 0, id]);
+  if (restockCadenceDays !== undefined) execute('UPDATE inventory_items SET restockCadenceDays = ? WHERE id = ?', [restockCadenceDays ? parseInt(String(restockCadenceDays), 10) : null, id]);
+  if (expiresAt !== undefined) execute('UPDATE inventory_items SET expiresAt = ? WHERE id = ?', [expiresAt, id]);
+  if (lastRestockedAt !== undefined) execute('UPDATE inventory_items SET lastRestockedAt = ? WHERE id = ?', [lastRestockedAt, id]);
+
+  execute('UPDATE inventory_items SET updatedAt = ? WHERE id = ?', [now, id]);
+  saveDb();
+
+  const updated = queryOne<any>('SELECT * FROM inventory_items WHERE id = ?', [id]);
+  res.json({
+    ...updated,
+    isStock: Boolean(updated.isStock),
+    daysUntilExpiry: getDaysUntilExpiry(updated.expiresAt),
+    freshness: getFreshnessStatus(updated.expiresAt),
+  });
+});
+
+app.delete('/api/inventory/:id', (req, res) => {
+  const householdId = getHouseholdId(req);
+  const { id } = req.params;
+  execute('DELETE FROM inventory_items WHERE id = ? AND householdId = ?', [id, householdId]);
+  saveDb();
+  res.json({ success: true });
+});
+
+app.get('/api/inventory/barcode/:code', async (req, res) => {
+  const { code } = req.params;
+  if (!code) return res.status(400).json({ error: 'Barcode is required' });
+  const data = await lookupBarcode(code);
+  res.json(data);
+});
+
+app.post('/api/inventory/scan-vision', async (req, res) => {
+  try {
+    const { image, mimeType } = req.body;
+    if (!image) return res.status(400).json({ error: 'Image is required' });
+    const items = await scanInventoryVision(image, mimeType || 'image/jpeg');
+    res.json({ items });
+  } catch (err: any) {
+    console.error('Vision scan error:', err);
+    res.status(500).json({ error: err.message || 'Failed to scan image' });
+  }
+});
+
+app.post('/api/inventory/check-ingredients', (req, res) => {
+  const householdId = getHouseholdId(req);
+  const { ingredients } = req.body;
+  if (!Array.isArray(ingredients)) {
+    return res.status(400).json({ error: 'Ingredients array is required' });
+  }
+
+  const items = queryAll<InventoryItemRow>('SELECT * FROM inventory_items WHERE householdId = ?', [householdId]);
+  const result = matchRecipeIngredientsAgainstInventory(ingredients, items);
+  res.json(result);
+});
+
+app.post('/api/inventory/:id/restock-to-grocery', (req, res) => {
+  const householdId = getHouseholdId(req);
+  const { id } = req.params;
+  const item = queryOne<any>('SELECT * FROM inventory_items WHERE id = ? AND householdId = ?', [id, householdId]);
+  if (!item) return res.status(404).json({ error: 'Item not found' });
+
+  const now = new Date().toISOString();
+  const groceryId = `g_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+  
+  execute(
+    `INSERT INTO grocery_items (id, name, category, quantity, unit, note, checked, householdId, createdAt)
+     VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+    [
+      groceryId,
+      item.name,
+      item.category || 'Other',
+      item.quantity || '1',
+      item.unit || null,
+      'From Pantry Restock',
+      householdId,
+      now,
+    ]
+  );
+
+  // Update item's lastRestockedAt to now
+  execute('UPDATE inventory_items SET lastRestockedAt = ?, updatedAt = ? WHERE id = ?', [now, now, id]);
+  saveDb();
+
+  res.json({ success: true, groceryItemId: groceryId });
+});
+
 // 6. Calendar API
 app.get('/api/calendar', (req, res) => {
   const householdId = getHouseholdId(req);
@@ -3832,6 +4126,7 @@ getDb().then(() => {
   app.listen(Number(PORT), '0.0.0.0', () => {
     console.log(`⚡ Homebase server running on http://0.0.0.0:${PORT}`);
     initBackgroundGoogleSync();
+    initBackgroundInventoryAlerts(sendPushNotificationToHousehold);
   });
 });
 

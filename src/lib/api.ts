@@ -18,6 +18,9 @@ import type {
   AdminOverviewData,
   AdminUser,
   AdminHousehold,
+  InventoryItem,
+  PantryLocation,
+  IngredientInventoryMatch,
 } from '../types';
 import { filterRecipeIngredientsForGrocery } from './groceryStaples';
 
@@ -610,11 +613,20 @@ export const api = {
     return normalizeDbRecipe(res.recipe);
   },
 
-  addRecipeToGrocery: async (recipeOrId: string | Recipe, householdId: string) => {
+  addRecipeToGrocery: async (
+    recipeOrId: string | Recipe,
+    householdId: string,
+    options?: { excludeItemNames?: string[] }
+  ) => {
     const recipe = typeof recipeOrId === 'string' ? await api.getRecipe(recipeOrId) : recipeOrId;
     const { toAdd, skippedStaples } = filterRecipeIngredientsForGrocery(recipe.ingredients || []);
     let count = 0;
+    const excludeSet = new Set((options?.excludeItemNames || []).map((s) => s.toLowerCase().trim()));
+
     for (const ing of toAdd) {
+      if (excludeSet.has(ing.item.toLowerCase().trim())) {
+        continue;
+      }
       await api.addGroceryItem(householdId, {
         name: ing.item,
         quantity: ing.amount,
@@ -1354,6 +1366,70 @@ export const api = {
   deleteAdminHousehold: async (householdId: string): Promise<{ success: boolean; message?: string }> => {
     return fetchJson<{ success: boolean; message?: string }>(`/admin/households/${encodeURIComponent(householdId)}`, {
       method: 'DELETE',
+    });
+  },
+
+  // Inventory & Pantry
+  getInventory: async (params?: { location?: PantryLocation; filter?: string; search?: string }): Promise<InventoryItem[]> => {
+    const searchParams = new URLSearchParams();
+    if (params?.location) searchParams.set('location', params.location);
+    if (params?.filter) searchParams.set('filter', params.filter);
+    if (params?.search) searchParams.set('search', params.search);
+    const queryStr = searchParams.toString();
+    return fetchJson<InventoryItem[]>(`/inventory${queryStr ? `?${queryStr}` : ''}`);
+  },
+
+  addInventoryItem: async (item: Partial<InventoryItem>): Promise<InventoryItem> => {
+    return fetchJson<InventoryItem>('/inventory', {
+      method: 'POST',
+      body: JSON.stringify(item),
+    });
+  },
+
+  addInventoryBatch: async (items: Array<Partial<InventoryItem>>): Promise<{ success: boolean; count: number }> => {
+    return fetchJson<{ success: boolean; count: number }>('/inventory/batch', {
+      method: 'POST',
+      body: JSON.stringify({ items }),
+    });
+  },
+
+  updateInventoryItem: async (id: string, updates: Partial<InventoryItem>): Promise<InventoryItem> => {
+    return fetchJson<InventoryItem>(`/inventory/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    });
+  },
+
+  deleteInventoryItem: async (id: string): Promise<{ success: boolean }> => {
+    return fetchJson<{ success: boolean }>(`/inventory/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+  },
+
+  lookupBarcode: async (code: string): Promise<{ found: boolean; item?: any }> => {
+    return fetchJson<{ found: boolean; item?: any }>(`/inventory/barcode/${encodeURIComponent(code)}`);
+  },
+
+  scanInventoryVision: async (
+    image: string,
+    mimeType?: string
+  ): Promise<{ items: Array<{ name: string; category: string; location: PantryLocation; quantity: string; expiresAt: string }> }> => {
+    return fetchJson<{ items: Array<{ name: string; category: string; location: PantryLocation; quantity: string; expiresAt: string }> }>('/inventory/scan-vision', {
+      method: 'POST',
+      body: JSON.stringify({ image, mimeType }),
+    });
+  },
+
+  checkIngredientsAgainstInventory: async (ingredients: any[]): Promise<IngredientInventoryMatch> => {
+    return fetchJson<IngredientInventoryMatch>('/inventory/check-ingredients', {
+      method: 'POST',
+      body: JSON.stringify({ ingredients }),
+    });
+  },
+
+  restockInventoryItemToGrocery: async (id: string): Promise<{ success: boolean; groceryItemId: string }> => {
+    return fetchJson<{ success: boolean; groceryItemId: string }>(`/inventory/${encodeURIComponent(id)}/restock-to-grocery`, {
+      method: 'POST',
     });
   },
 
