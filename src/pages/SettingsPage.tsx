@@ -615,37 +615,38 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
       )}
 
       {/* 0. Closed Beta Access & Membership */}
+      {/* 0. Closed Beta Access & Membership */}
       <div className="glass-panel rounded-3xl p-5 border border-white/10 space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
               <ShieldCheck className="w-4 h-4" />
             </div>
             <div className="min-w-0">
-              <h3 className="text-sm font-bold text-white">Closed Beta Access</h3>
-              <p className="text-[11px] text-slate-400 mt-0.5">
+              <h3 className="text-sm font-bold text-white truncate">Closed Beta Access</h3>
+              <p className="text-[11px] text-slate-400 mt-0.5 truncate">
                 {household?.promo_code_used
-                  ? `Redeemed Code: ${household.promo_code_used}`
+                  ? `Code: ${household.promo_code_used}`
                   : hasActiveAccess
-                  ? 'Active Beta Tester (Complimentary Early Access)'
-                  : 'Closed Beta invite required to access all features'}
+                  ? 'Complimentary Early Access'
+                  : 'Closed Beta invite required'}
               </p>
             </div>
           </div>
 
-          <div className="shrink-0 flex flex-col sm:items-end gap-1">
+          <div className="shrink-0 flex flex-col items-end gap-0.5 text-right">
             {hasActiveAccess ? (
-              <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 whitespace-nowrap">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                 Active Access
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-xl bg-amber-500/15 text-amber-300 border border-amber-500/30">
+              <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-xl bg-amber-500/15 text-amber-300 border border-amber-500/30 whitespace-nowrap">
                 Code Required
               </span>
             )}
             {household?.subscription_expires_at && (
-              <span className="text-[10px] text-slate-500 font-mono">
+              <span className="text-[10px] text-slate-500 font-mono whitespace-nowrap">
                 Valid until {new Date(household.subscription_expires_at).toLocaleDateString()}
               </span>
             )}
@@ -686,22 +687,22 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
 
       {/* 1. Household Invite Code */}
       <div className="glass-panel rounded-3xl p-5 border border-white/10 space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
               <KeyRound className="w-4 h-4" />
             </div>
             <div className="min-w-0">
-              <h3 className="text-sm font-bold text-white">Household Invite Code</h3>
-              <p className="text-[11px] text-slate-400 mt-0.5">
-                Share this 6-character code with family members to connect their devices
+              <h3 className="text-sm font-bold text-white truncate">Household Invite Code</h3>
+              <p className="text-[11px] text-slate-400 mt-0.5 truncate">
+                Share code to connect family devices
               </p>
             </div>
           </div>
 
           <button
             onClick={handleCopyInvite}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 cursor-pointer shrink-0 self-start sm:self-auto"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 cursor-pointer shrink-0"
           >
             {copiedInvite ? (
               <>
@@ -720,34 +721,34 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
 
       {/* 2. Family Members */}
       <div className="glass-panel rounded-3xl p-5 border border-white/10 space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center justify-between gap-2.5">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
               <Users className="w-4 h-4" />
             </div>
             <div className="min-w-0">
-              <h3 className="text-sm font-bold text-white">Family Members</h3>
-              <p className="text-[11px] text-slate-400 mt-0.5">Profiles and permissions connected to this household</p>
+              <h3 className="text-sm font-bold text-white truncate">Family Members</h3>
+              <p className="text-[11px] text-slate-400 mt-0.5 truncate">
+                {users.length} {users.length === 1 ? 'member' : 'members'} connected
+              </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto flex-wrap">
-            <span className="text-[11px] font-mono text-slate-400 bg-white/5 border border-white/10 px-2 py-1 rounded-xl font-medium">
-              {users.length} {users.length === 1 ? 'member' : 'members'}
-            </span>
+          <div className="flex items-center gap-1.5 shrink-0">
             <button
               onClick={() => setShowJoinModal(true)}
               className="px-2.5 py-1.5 rounded-xl text-xs font-medium text-slate-300 hover:text-white hover:bg-white/5 border border-white/10 transition-colors flex items-center gap-1 cursor-pointer"
+              title="Join Household"
             >
               <LogIn className="w-3.5 h-3.5 text-indigo-400" />
-              <span className="hidden sm:inline">Join Household</span>
+              <span className="hidden sm:inline">Join</span>
             </button>
             <button
               onClick={() => setShowAddMemberModal(true)}
               className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition-all shadow-md shadow-emerald-500/20 flex items-center gap-1 cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-              <span>Add Member</span>
+              <span>Add</span>
             </button>
           </div>
         </div>
@@ -874,109 +875,112 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
 
             return (
               <div
-                className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 transition-all ${
+                className={`p-3.5 sm:p-4 rounded-2xl border bg-slate-900/60 transition-all space-y-3 ${
                   isPending
-                    ? 'bg-emerald-500/5 border-emerald-500/25 ring-1 ring-emerald-500/10'
-                    : 'bg-slate-900/60 border-white/5'
+                    ? 'border-emerald-500/25 ring-1 ring-emerald-500/10'
+                    : 'border-white/5'
                 }`}
               >
-                {/* Left: Labels and Description */}
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
-                    <Calendar className="w-5 h-5" />
+                {/* Top Row: Label & Email on Left, Status Badge on Right */}
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
+                      <Calendar className="w-4 h-4" />
+                    </div>
+
+                    <div className="min-w-0">
+                      <span className="text-xs font-bold text-white block">Google Calendar</span>
+                      <div className="text-[11px] text-slate-400 truncate pt-0.5">
+                        {isConnected && syncStatus?.googleEmail ? (
+                          <span className="font-mono text-slate-300">{syncStatus.googleEmail}</span>
+                        ) : isPending ? (
+                          <span className="text-emerald-400/90 flex items-center gap-1.5">
+                            <Loader2 className="w-2.5 h-2.5 animate-spin text-emerald-400" />
+                            Syncing events...
+                          </span>
+                        ) : (
+                          <span className="text-slate-500">Connect personal or work calendar</span>
+                        )}
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="min-w-0">
-                    <span className="text-xs font-bold text-white block">Google Calendar</span>
-                    <div className="text-[11px] text-slate-400 truncate pt-0.5">
-                      {isConnected && syncStatus?.googleEmail ? (
-                        <span className="font-mono text-slate-300">{syncStatus.googleEmail}</span>
-                      ) : isPending ? (
-                        <span className="text-emerald-400/90 flex items-center gap-1.5">
-                          <Loader2 className="w-2.5 h-2.5 animate-spin text-emerald-400" />
-                          Syncing Google events...
-                        </span>
-                      ) : (
-                        <span className="text-slate-500">Connect your personal or work calendar</span>
-                      )}
-                    </div>
+                  {/* Status Indicator (Right aligned) */}
+                  <div className="shrink-0">
+                    {isConnected ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 rounded-full font-medium">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        <span>Connected</span>
+                      </span>
+                    ) : isPending ? (
+                      <span className="inline-flex items-center gap-1.5 text-[10px] text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 rounded-full font-medium">
+                        <Loader2 className="w-2.5 h-2.5 animate-spin text-emerald-400" />
+                        <span>Connecting...</span>
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-slate-500 bg-white/5 border border-white/5 px-2 py-0.5 rounded-full font-medium">
+                        Not connected
+                      </span>
+                    )}
                   </div>
                 </div>
 
-                {/* Right: Status and Actions */}
-                <div className="shrink-0 flex items-center gap-2.5 sm:justify-end flex-wrap">
-                  {/* Status Indicator */}
-                  {isConnected ? (
-                    <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 rounded-full font-medium">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                      <span>Connected</span>
-                    </span>
-                  ) : isPending ? (
-                    <span className="inline-flex items-center gap-1.5 text-[10px] text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 rounded-full font-medium">
-                      <Loader2 className="w-2.5 h-2.5 animate-spin text-emerald-400" />
+                {/* Bottom Row: Actions (Right aligned) */}
+                {isConnected ? (
+                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/5">
+                    <button
+                      type="button"
+                      onClick={() => currentUser && handleOpenCalendarSelector(currentUser)}
+                      className="px-3 py-1.5 rounded-xl border border-white/10 hover:border-emerald-500/40 bg-white/5 hover:bg-emerald-500/10 text-slate-200 hover:text-emerald-300 text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <SlidersHorizontal className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Choose Calendars</span>
+                      {syncStatus?.selectedCalendarCount !== undefined && (
+                        <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 font-mono">
+                          {syncStatus.selectedCalendarCount}
+                        </span>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={isDisconnecting}
+                      onClick={() => currentUser && handleDisconnectGoogle(currentUser.id)}
+                      className="px-2.5 py-1.5 rounded-xl border border-red-500/20 hover:border-red-500/40 text-red-400 hover:bg-red-500/10 text-xs font-semibold transition-all flex items-center gap-1 disabled:opacity-50 cursor-pointer"
+                      title="Disconnect Google Calendar"
+                    >
+                      {isDisconnecting ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-3.5 h-3.5" />
+                      )}
+                      <span className="hidden sm:inline">Disconnect</span>
+                    </button>
+                  </div>
+                ) : isPending ? (
+                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/5">
+                    <button
+                      type="button"
+                      disabled
+                      className="px-3 py-1.5 rounded-xl bg-white/5 text-slate-300 border border-white/10 text-xs font-semibold flex items-center gap-2 cursor-wait"
+                    >
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" />
                       <span>Connecting...</span>
-                    </span>
-                  ) : (
-                    <span className="text-[10px] text-slate-500 bg-white/5 border border-white/5 px-2 py-0.5 rounded-full font-medium">
-                      Not connected
-                    </span>
-                  )}
-
-                  {/* Actions */}
-                  {isConnected ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => currentUser && handleOpenCalendarSelector(currentUser)}
-                        className="px-3 py-1.5 rounded-xl border border-white/10 hover:border-emerald-500/40 bg-white/5 hover:bg-emerald-500/10 text-slate-200 hover:text-emerald-300 text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
-                      >
-                        <SlidersHorizontal className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>Choose Calendars</span>
-                        {syncStatus?.selectedCalendarCount !== undefined && (
-                          <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 font-mono">
-                            {syncStatus.selectedCalendarCount}
-                          </span>
-                        )}
-                      </button>
-
-                      <button
-                        type="button"
-                        disabled={isDisconnecting}
-                        onClick={() => currentUser && handleDisconnectGoogle(currentUser.id)}
-                        className="px-2.5 py-1.5 rounded-xl border border-red-500/20 hover:border-red-500/40 text-red-400 hover:bg-red-500/10 text-xs font-semibold transition-all flex items-center gap-1 disabled:opacity-50 cursor-pointer"
-                        title="Disconnect Google Calendar"
-                      >
-                        {isDisconnecting ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
-                          <Trash2 className="w-3.5 h-3.5" />
-                        )}
-                        <span className="hidden sm:inline">Disconnect</span>
-                      </button>
-                    </>
-                  ) : isPending ? (
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        disabled
-                        className="px-3 py-1.5 rounded-xl bg-white/5 text-slate-300 border border-white/10 text-xs font-semibold flex items-center gap-2 cursor-wait"
-                      >
-                        <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" />
-                        <span>Connecting...</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          localStorage.removeItem('homebase_pending_google_sync');
-                          setPendingSyncUserId(null);
-                        }}
-                        className="text-[11px] text-slate-400 hover:text-white px-2 py-1 cursor-pointer transition-colors"
-                        title="Cancel pending state"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  ) : (
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        localStorage.removeItem('homebase_pending_google_sync');
+                        setPendingSyncUserId(null);
+                      }}
+                      className="text-[11px] text-slate-400 hover:text-white px-2 py-1 cursor-pointer transition-colors"
+                      title="Cancel pending state"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex justify-end pt-2 border-t border-white/5">
                     <button
                       type="button"
                       disabled={isConnecting || !currentUser}
@@ -1007,8 +1011,8 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
                       )}
                       <span>Connect Google Calendar</span>
                     </button>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             );
           })()}
@@ -1154,41 +1158,46 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
           </div>
         ) : (
           /* Sleek Device Status & Action Card */
-          <div className="rounded-2xl bg-slate-900/80 border border-white/10 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-lg shadow-black/20">
-            {/* Left: Labels and Description */}
-            <div className="flex items-center gap-3 min-w-0">
-              <div className={`p-2.5 rounded-2xl border shrink-0 transition-colors ${
-                isPushSubscribed
-                  ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
-                  : 'bg-slate-800 border-white/10 text-slate-400'
-              }`}>
-                <Smartphone className="w-5 h-5" />
+          <div className="rounded-2xl bg-slate-900/80 border border-white/10 p-4 space-y-3 shadow-lg shadow-black/20">
+            {/* Top Row: Label on Left, Status Badge on Right */}
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className={`p-2 rounded-xl border shrink-0 transition-colors ${
+                  isPushSubscribed
+                    ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+                    : 'bg-slate-800 border-white/10 text-slate-400'
+                }`}>
+                  <Smartphone className="w-4 h-4" />
+                </div>
+
+                <div className="min-w-0">
+                  <span className="text-xs font-bold text-white block">This Device</span>
+                  <p className="text-[11px] text-slate-400 truncate mt-0.5">
+                    {isPushSubscribed
+                      ? 'Delivers instant background alerts'
+                      : 'Push notifications are silenced'}
+                  </p>
+                </div>
               </div>
 
-              <div className="min-w-0">
-                <span className="text-xs font-bold text-white block">This Device</span>
-                <p className="text-[11px] text-slate-400 leading-relaxed pt-0.5">
-                  {isPushSubscribed
-                    ? 'Delivers native notifications when Homebase is running or in the background.'
-                    : 'Push notifications are silenced on this browser.'}
-                </p>
+              {/* Status Badge */}
+              <div className="shrink-0">
+                {isPushSubscribed ? (
+                  <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-emerald-300 bg-emerald-500/20 border border-emerald-500/35 px-2.5 py-1 rounded-full shadow-sm">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    Active
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-400 bg-slate-800/80 border border-white/10 px-2.5 py-1 rounded-full">
+                    <BellOff className="w-3 h-3 text-slate-400" />
+                    Muted
+                  </span>
+                )}
               </div>
             </div>
 
-            {/* Right: Status and Actions */}
-            <div className="shrink-0 flex items-center gap-2.5 flex-wrap sm:justify-end">
-              {isPushSubscribed ? (
-                <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-emerald-300 bg-emerald-500/20 border border-emerald-500/35 px-2.5 py-1 rounded-full shadow-sm">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  Active
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-400 bg-slate-800/80 border border-white/10 px-2.5 py-1 rounded-full">
-                  <BellOff className="w-3 h-3 text-slate-400" />
-                  Muted
-                </span>
-              )}
-
+            {/* Bottom Row: Actions (Right aligned) */}
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/5">
               {isPushSubscribed && (
                 <button
                   type="button"
@@ -1202,7 +1211,7 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
                   ) : (
                     <Send className="w-3.5 h-3.5 text-emerald-400" />
                   )}
-                  <span>{isSendingTestPush ? 'Sending...' : 'Test Alert'}</span>
+                  <span>Test Alert</span>
                 </button>
               )}
 
@@ -1458,55 +1467,48 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
 
       {/* 5. Grocery Store Aisles */}
       <div className="glass-panel rounded-3xl p-5 border border-white/10">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
               <MoveVertical className="w-4 h-4" />
             </div>
             <div className="min-w-0">
-              <h3 className="text-sm font-bold text-white">Grocery Store Aisles</h3>
-              <p className="text-[11px] text-slate-400 mt-0.5">
-                Arrange aisle ordering and names to match your local supermarket
+              <h3 className="text-sm font-bold text-white truncate">Grocery Store Aisles</h3>
+              <p className="text-[11px] text-slate-400 mt-0.5 truncate">
+                {aisles.length > 0 ? `${aisles.length} custom aisles configured` : 'Arrange aisle ordering to match your supermarket'}
               </p>
             </div>
           </div>
 
-          <div className="shrink-0 flex items-center gap-2.5 self-start sm:self-auto">
-            {aisles.length > 0 && (
-              <span className="text-[11px] font-mono text-slate-400 bg-white/5 border border-white/10 px-2 py-1 rounded-xl hidden sm:inline">
-                {aisles.length} aisles
-              </span>
-            )}
-            <button
-              type="button"
-              onClick={() => setIsAisleModalOpen(true)}
-              className="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10 flex items-center gap-1.5 transition-colors cursor-pointer"
-            >
-              <MoveVertical className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Configure Aisles</span>
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => setIsAisleModalOpen(true)}
+            className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10 flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
+          >
+            <MoveVertical className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Configure</span>
+          </button>
         </div>
       </div>
 
       {/* 6. App Installation & PWA */}
       <div className="glass-panel rounded-3xl p-5 border border-white/10">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="p-2 rounded-xl bg-teal-500/10 text-teal-400 border border-teal-500/20 shrink-0">
               <Smartphone className="w-4 h-4" />
             </div>
             <div className="min-w-0">
-              <h3 className="text-sm font-bold text-white">Mobile App & Offline Mode</h3>
-              <p className="text-[11px] text-slate-400 mt-0.5">
+              <h3 className="text-sm font-bold text-white truncate">Mobile App & Offline Mode</h3>
+              <p className="text-[11px] text-slate-400 mt-0.5 truncate">
                 {isPWAInstalled
-                  ? 'Homebase is installed and ready for offline use'
-                  : 'Install on your home screen for quick launch and offline access'}
+                  ? 'Installed and ready for offline use'
+                  : 'Install to your home screen for quick launch'}
               </p>
             </div>
           </div>
 
-          <div className="shrink-0 self-start sm:self-auto">
+          <div className="shrink-0">
             {isPWAInstalled ? (
               <span className="flex items-center gap-1 text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 rounded-xl">
                 <Check className="w-3.5 h-3.5 stroke-[2.5]" />
@@ -1515,10 +1517,10 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
             ) : canInstallPWA ? (
               <button
                 onClick={installPWA}
-                className="px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition-all shadow-md shadow-emerald-500/20 flex items-center gap-1.5 cursor-pointer"
+                className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition-all shadow-md shadow-emerald-500/20 flex items-center gap-1.5 cursor-pointer"
               >
                 <Download className="w-3.5 h-3.5" />
-                <span>Install App</span>
+                <span>Install</span>
               </button>
             ) : (
               <span className="text-[11px] text-slate-400 bg-slate-900/80 px-2.5 py-1.5 rounded-xl border border-white/5">
