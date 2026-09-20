@@ -1508,90 +1508,54 @@ export const MealsPage: React.FC = () => {
             )}
           </div>
 
-          {/* Full-width compact segmented sub-navigation: Recipes -> Planner -> History */}
+          {/* Full-width compact segmented sub-navigation: Recipes -> Planner -> Pantry -> History */}
           <div className="w-full flex items-center p-1 bg-slate-900/80 rounded-xl border border-white/10 shadow-md">
             <button
               onClick={() => handleTabChange('recipes')}
-              className={`flex-1 py-1.5 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors duration-150 cursor-pointer ${
+              className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors duration-150 cursor-pointer ${
                 activeTab === 'recipes'
                   ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
                   : 'text-slate-400 hover:text-white hover:bg-white/5'
               }`}
             >
-              <BookOpen className="w-3.5 h-3.5" />
-              <span>Recipes</span>
-              {recipes.length > 0 && (
-                <span
-                  className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
-                    activeTab === 'recipes' ? 'bg-slate-950/25 text-slate-950' : 'bg-emerald-500/20 text-emerald-400'
-                  }`}
-                >
-                  {recipes.length}
-                </span>
-              )}
+              <BookOpen className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">Recipes</span>
             </button>
 
             <button
               onClick={() => handleTabChange('planner')}
-              className={`flex-1 py-1.5 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors duration-150 cursor-pointer ${
+              className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors duration-150 cursor-pointer ${
                 activeTab === 'planner'
                   ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
                   : 'text-slate-400 hover:text-white hover:bg-white/5'
               }`}
             >
-              <Utensils className="w-3.5 h-3.5" />
-              <span>Planner</span>
-              {meals.length > 0 && (
-                <span
-                  className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
-                    activeTab === 'planner' ? 'bg-slate-950/25 text-slate-950' : 'bg-emerald-500/20 text-emerald-400'
-                  }`}
-                >
-                  {meals.length}
-                </span>
-              )}
+              <Utensils className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">Planner</span>
             </button>
 
             <button
               onClick={() => handleTabChange('pantry')}
-              className={`flex-1 py-1.5 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors duration-150 cursor-pointer ${
+              className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors duration-150 cursor-pointer ${
                 activeTab === 'pantry'
                   ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
                   : 'text-slate-400 hover:text-white hover:bg-white/5'
               }`}
             >
-              <Package className="w-3.5 h-3.5" />
-              <span>Pantry</span>
-              {inventoryItems.length > 0 && (
-                <span
-                  className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
-                    activeTab === 'pantry' ? 'bg-slate-950/25 text-slate-950' : 'bg-emerald-500/20 text-emerald-400'
-                  }`}
-                >
-                  {inventoryItems.length}
-                </span>
-              )}
+              <Package className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">Pantry</span>
             </button>
 
             <button
               onClick={() => handleTabChange('history')}
-              className={`flex-1 py-1.5 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors duration-150 cursor-pointer ${
+              className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors duration-150 cursor-pointer ${
                 activeTab === 'history'
                   ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
                   : 'text-slate-400 hover:text-white hover:bg-white/5'
               }`}
             >
-              <History className="w-3.5 h-3.5" />
-              <span>History</span>
-              {mealLogs.length > 0 && (
-                <span
-                  className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
-                    activeTab === 'history' ? 'bg-slate-950/25 text-slate-950' : 'bg-emerald-500/20 text-emerald-400'
-                  }`}
-                >
-                  {mealLogs.length}
-                </span>
-              )}
+              <History className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">History</span>
             </button>
           </div>
 
