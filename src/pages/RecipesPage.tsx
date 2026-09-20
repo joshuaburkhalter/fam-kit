@@ -999,7 +999,7 @@ export const RecipesPage: React.FC = () => {
               <p className="text-xs text-slate-400 max-w-sm mx-auto">
                 {selectedTag === 'ai'
                   ? 'No AI-created recipes yet. Ask your Family Assistant to create a recipe!'
-                  : 'Import your first recipe by pasting a link from any cooking site or asking the Gemini AI!'}
+                  : 'Import your first recipe by pasting a link from any cooking site or asking your Assistant!'}
               </p>
               <div className="pt-2">
                 <button

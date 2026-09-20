@@ -1642,7 +1642,7 @@ app.post('/api/assistant/test', async (req, res) => {
     const { apiKey } = req.body;
     const keyToTest = apiKey || process.env.GEMINI_API_KEY;
     if (!keyToTest || !keyToTest.trim()) {
-      return res.status(400).json({ error: 'Please provide a Gemini API key to test' });
+      return res.status(400).json({ error: 'Please provide an Assistant API key to test' });
     }
 
     const model = getGeminiModel(keyToTest.trim());
@@ -1651,7 +1651,7 @@ app.post('/api/assistant/test', async (req, res) => {
     res.json({ success: true, message: reply });
   } catch (err: any) {
     console.error('Gemini test error:', err);
-    res.status(500).json({ error: err.message || 'Failed to connect to Gemini API' });
+    res.status(500).json({ error: err.message || 'Failed to connect to Assistant API' });
   }
 });
 
@@ -2124,7 +2124,7 @@ app.post('/api/recipes/import-images', async (req, res) => {
     console.error('Import images error:', err);
     let errorMsg = err.message || 'Failed to scan recipe from photos';
     if (/recitation|copyright/i.test(errorMsg)) {
-      errorMsg = 'Gemini automated recitation filter flagged this printed cookbook page. Try snapping the photo closer to the ingredients and steps (without the publisher/book title header), or paste the text directly.';
+      errorMsg = 'Automated text filter flagged this printed cookbook page. Try snapping the photo closer to the ingredients and steps (without the publisher/book title header), or paste the text directly.';
     }
     res.status(500).json({ error: errorMsg });
   }
@@ -2206,7 +2206,7 @@ app.post('/api/recipes/:id/regenerate-image', async (req, res) => {
       newImageUrl = customUrl.trim();
     } else if (mode === 'imagen') {
       if (!apiKey) {
-        return res.status(400).json({ error: 'Gemini API key is required for Imagen 3 image generation.' });
+        return res.status(400).json({ error: 'Assistant API key is required for dish image generation.' });
       }
       newImageUrl = await generateRecipeImageWithImagen(
         {

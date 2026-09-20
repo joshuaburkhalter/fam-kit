@@ -244,7 +244,7 @@ export const ASSISTANT_TOOLS: FunctionDeclaration[] = [
 export function getGeminiModel(apiKey?: string) {
   const key = apiKey || process.env.GEMINI_API_KEY;
   if (!key) {
-    throw new Error('Gemini API key is not configured. Please add it in Settings or set GEMINI_API_KEY.');
+    throw new Error('Assistant API key is not configured. Please add it in Settings or set GEMINI_API_KEY on the server.');
   }
 
   const genAI = new GoogleGenerativeAI(key);

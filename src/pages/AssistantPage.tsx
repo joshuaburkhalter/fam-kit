@@ -193,8 +193,8 @@ export const AssistantPage: React.FC = () => {
       const isKeyMissing =
         !apiKey && (err.message?.includes('API key') || err.message?.includes('configured') || err.message?.includes('Gemini'));
       const friendlyMessage = isKeyMissing
-        ? '⚠️ Gemini is not connected yet! Please go to Settings (top right gear icon) to enter your Gemini API Key or set GEMINI_API_KEY on the server.'
-        : `⚠️ Sorry, I ran into an error: ${err.message || 'Please verify your Gemini connection.'}`;
+        ? '⚠️ Assistant is not connected yet! Please check Settings or verify server configuration.'
+        : `⚠️ Sorry, I ran into an error: ${err.message || 'Please verify your connection.'}`;
 
       setMessages((prev) => [
         ...prev,
@@ -566,7 +566,7 @@ export const AssistantPage: React.FC = () => {
                 type="button"
                 onClick={() => setIsInputExpanded(true)}
                 className="w-full h-full flex items-center justify-center text-slate-950"
-                title="Message Gemini Assistant"
+                title="Message Assistant"
               >
                 <MessageCircle className="w-6 h-6 stroke-[2.2]" />
               </button>
@@ -630,7 +630,7 @@ export const AssistantPage: React.FC = () => {
                   placeholder={
                     isListening
                       ? 'Listening to your voice...'
-                      : 'Ask Gemini (e.g. "Add milk", "Plan dinners", "Schedule game")...'
+                      : 'Ask Assistant (e.g. "Add milk", "Plan dinners", "Schedule game")...'
                   }
                   className="flex-1 min-w-0 bg-transparent border-none text-sm text-white placeholder-slate-500 focus:outline-none py-2 px-1"
                 />

@@ -82,7 +82,7 @@ export async function parseRecipeFromUrl(url: string, geminiApiKey?: string): Pr
       }
 
       throw new Error(
-        `This website (${new URL(url).hostname}) blocks automated recipe crawlers (${response.status}: ${response.statusText}). Configure your Gemini API key in Settings for automatic AI recipe generation, or paste the recipe text in "Paste Content".`
+        `This website (${new URL(url).hostname}) blocks automated recipe crawlers (${response.status}: ${response.statusText}). Configure your Assistant in Settings for automatic recipe generation, or paste the recipe text in "Paste Content".`
       );
     }
     throw new Error(`Failed to fetch recipe URL (${response.status}: ${response.statusText})`);
@@ -1253,7 +1253,7 @@ export async function parseRecipeFromImages(
 ): Promise<ParsedRecipeFromImages> {
   const activeKey = apiKey || process.env.GEMINI_API_KEY;
   if (!activeKey) {
-    throw new Error('Gemini API key is required to scan recipes from photos. Please configure your API key in Settings.');
+    throw new Error('Assistant API key is required to scan recipes from photos. Please configure your settings.');
   }
 
   if (!images || images.length === 0) {
@@ -1410,7 +1410,7 @@ INSTRUCTIONS TO PREVENT RECITATION:
   if (!text) {
     if (/recitation|copyright/i.test(lastError?.message || '')) {
       throw new Error(
-        'Gemini automated recitation filter flagged this printed page. Try snapping the photo closer to the ingredients and steps without the book header or publisher name, or paste the text directly.'
+        'Automated text filter flagged this printed page. Try snapping the photo closer to the ingredients and steps without the book header or publisher name, or paste the text directly.'
       );
     }
     throw lastError || new Error('Failed to parse recipe from photos');

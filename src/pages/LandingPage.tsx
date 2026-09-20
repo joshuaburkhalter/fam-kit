@@ -166,7 +166,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onOpenPric
           <div className="p-4 rounded-2xl bg-slate-900/60 border border-white/5 space-y-1">
             <div className="flex items-center gap-2 text-indigo-400 font-bold text-xs">
               <Sparkles className="w-4 h-4" />
-              <span>Gemini Assistant</span>
+              <span>Family Assistant</span>
             </div>
             <p className="text-[11px] text-slate-400">Voice-ready AI family coordinator</p>
           </div>
@@ -522,7 +522,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onOpenPric
                 <CheckCircle2 className="w-3.5 h-3.5" />
                 Google Calendar & AI
               </span>
-              <p className="text-[11px] text-slate-400">Two-way Google Calendar sync and Gemini AI assistant.</p>
+              <p className="text-[11px] text-slate-400">Two-way Google Calendar sync and Family Assistant.</p>
             </div>
           </div>
 

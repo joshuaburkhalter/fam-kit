@@ -74,8 +74,8 @@ export const AppUpdatingOverlay: React.FC = () => {
 
         <p className="text-xs text-slate-400 max-w-sm leading-relaxed mb-6">
           {isRestored
-            ? 'The server is back online! Refreshing your app now...'
-            : 'A new build is currently deploying on Render. As soon as it finishes, this page will automatically reload with the latest updates.'}
+            ? 'Update ready! Refreshing your app now...'
+            : 'A new update is currently being applied. As soon as it finishes, this page will automatically reload with the latest improvements.'}
         </p>
 
         {/* Status indicator bar */}
@@ -87,7 +87,7 @@ export const AppUpdatingOverlay: React.FC = () => {
           ) : (
             <span className="flex items-center gap-2 text-slate-400">
               <Loader2 className="w-3.5 h-3.5 text-emerald-400 animate-spin" />
-              Waiting for new build to go live...
+              Applying the latest updates...
             </span>
           )}
         </div>

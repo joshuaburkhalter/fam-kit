@@ -187,7 +187,7 @@ export const PricingPage: React.FC<PricingPageProps> = ({ onBack, onOpenAuth }) 
         </h1>
 
         <p className="max-w-2xl mx-auto text-sm sm:text-base text-slate-400">
-          No per-user fees. Keep your family synchronized with shared grocery lists, meal planning, 2-way Google Calendar sync, and our Gemini AI assistant.
+          No per-user fees. Keep your family synchronized with shared grocery lists, meal planning, 2-way Google Calendar sync, and our Family Assistant.
         </p>
 
         {/* Billing Cycle Toggle */}
@@ -305,7 +305,7 @@ export const PricingPage: React.FC<PricingPageProps> = ({ onBack, onOpenAuth }) 
                   <div className="w-4 h-4 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
                     <Check className="w-3 h-3" />
                   </div>
-                  <span>Household AI Assistant powered by Google Gemini</span>
+                  <span>Household AI Assistant with voice control</span>
                 </li>
                 <li className="flex items-center gap-2.5">
                   <div className="w-4 h-4 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">

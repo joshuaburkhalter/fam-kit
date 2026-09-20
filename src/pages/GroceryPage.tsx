@@ -780,7 +780,7 @@ export const GroceryPage: React.FC = () => {
             </div>
             <h3 className="text-base font-bold text-white">{currentListName} is empty</h3>
             <p className="text-xs text-slate-400 max-w-sm mx-auto">
-              Add items using the bar above or speak to your Gemini voice assistant!
+              Add items using the bar above or speak to your voice assistant!
             </p>
           </div>
         ) : null}

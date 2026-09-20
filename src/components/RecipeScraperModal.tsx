@@ -128,7 +128,7 @@ export const RecipeScraperModal: React.FC<RecipeScraperModalProps> = ({
     if (!clean) return;
 
     setIsLoading(true);
-    setLoadingMessage('Parsing recipe schema and metadata with Gemini...');
+    setLoadingMessage('Parsing recipe schema and metadata...');
     setError(null);
     setImportedRecipe(null);
 
@@ -205,7 +205,7 @@ export const RecipeScraperModal: React.FC<RecipeScraperModalProps> = ({
     }
 
     setIsLoading(true);
-    setLoadingMessage(`Analyzing ${capturedImages.length} photo${capturedImages.length > 1 ? 's' : ''} with Gemini Vision...`);
+    setLoadingMessage(`Analyzing ${capturedImages.length} photo${capturedImages.length > 1 ? 's' : ''}...`);
     setError(null);
     setImportedRecipe(null);
 
@@ -241,7 +241,7 @@ export const RecipeScraperModal: React.FC<RecipeScraperModalProps> = ({
     if (!rawText.trim()) return;
 
     setIsLoading(true);
-    setLoadingMessage('Parsing recipe text with Gemini...');
+    setLoadingMessage('Parsing recipe text...');
     setError(null);
     setImportedRecipe(null);
 
@@ -716,7 +716,7 @@ export const RecipeScraperModal: React.FC<RecipeScraperModalProps> = ({
           <div className="py-6 px-4 text-center space-y-2.5 bg-emerald-500/5 rounded-2xl border border-emerald-500/20 animate-in fade-in">
             <Loader2 className="w-7 h-7 animate-spin text-emerald-400 mx-auto" />
             <p className="text-xs text-emerald-300 font-semibold">
-              {loadingMessage || 'Processing recipe with Gemini AI...'}
+              {loadingMessage || 'Processing recipe...'}
             </p>
             <p className="text-[11px] text-slate-400 max-w-xs mx-auto">
               Reading ingredients, directions, times, and choosing your cover photo...

@@ -120,7 +120,7 @@ export const PaywallModal: React.FC<PaywallModalProps> = () => {
             </div>
             <h4 className="text-xs font-bold text-white">Family Calendar</h4>
             <p className="text-[11px] text-slate-400 leading-snug">
-              Google Calendar sync and Gemini AI assistant
+              Google Calendar sync and Family Assistant
             </p>
           </div>
         </div>

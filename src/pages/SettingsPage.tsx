@@ -1682,7 +1682,7 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
             <Volume2 className="w-4 h-4" />
           </div>
           <div>
-            <h3 className="text-sm font-bold text-white">Gemini Voice Playback</h3>
+            <h3 className="text-sm font-bold text-white">Assistant Voice Playback</h3>
             <p className="text-[11px] text-slate-400">
               Choose how the AI assistant responds to your messages
             </p>
@@ -1739,7 +1739,7 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
                 Auto-Read Aloud
               </div>
               <div className="text-[11px] text-slate-400 mt-0.5">
-                Automatically speaks Gemini answers using voice speech synthesis.
+                Automatically speaks Assistant answers aloud.
               </div>
             </div>
           </label>
@@ -1989,7 +1989,7 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
                   AI Assistant Actions
                 </div>
                 <div className="text-[11px] text-slate-400 mt-0.5">
-                  When Gemini takes automated actions or updates family lists.
+                  When the Assistant takes automated actions or updates family lists.
                 </div>
               </div>
             </label>
