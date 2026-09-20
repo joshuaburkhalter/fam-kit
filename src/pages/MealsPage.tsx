@@ -810,6 +810,16 @@ export const MealsPage: React.FC = () => {
     if (isAllDone && isNowCompleted) {
       setShowConfetti(true);
       setTimeout(() => setShowConfetti(false), 4500);
+
+      // If this recipe is currently in the Planner, automatically mark it as cooked today and complete it in Planner!
+      const matchingMeal = meals.find(
+        (m) =>
+          m.recipe_id === selectedRecipe.id ||
+          (m.title && m.title.trim().toLowerCase() === selectedRecipe.title.trim().toLowerCase())
+      );
+      if (matchingMeal) {
+        handleMarkMealCooked(matchingMeal, format(new Date(), 'yyyy-MM-dd'));
+      }
     }
 
     if (isNowCompleted) {
