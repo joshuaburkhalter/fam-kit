@@ -25,8 +25,16 @@ export const AppUpdatingOverlay: React.FC = () => {
     }
 
     const checkServer = async () => {
-      const isHealthy = await api.checkHealth();
-      if (isHealthy) {
+      try {
+        const isHealthy = await api.checkHealth();
+        if (!isHealthy) return;
+
+        // Verify root page returns 200 (not 502 from Cloudflare during container swap)
+        const rootCheck = await fetch('/', { method: 'HEAD', cache: 'no-store' }).catch(() => null);
+        if (!rootCheck || rootCheck.status !== 200) {
+          return;
+        }
+
         setIsRestored(true);
         if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
 
@@ -43,8 +51,8 @@ export const AppUpdatingOverlay: React.FC = () => {
         // Short pause to display success checkmark, then reload
         setTimeout(() => {
           window.location.reload();
-        }, 600);
-      }
+        }, 800);
+      } catch {}
     };
 
     // First check after 2 seconds
