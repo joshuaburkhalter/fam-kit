@@ -363,6 +363,7 @@ export interface InventoryItem {
   updatedAt: string;
   daysUntilExpiry?: number;
   freshness: FreshnessStatus;
+  isDuplicate?: boolean;
 }
 
 export interface IngredientInventoryMatch {

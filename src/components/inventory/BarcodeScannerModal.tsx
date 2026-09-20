@@ -24,7 +24,12 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
   const [hasBarcodeDetector, setHasBarcodeDetector] = useState(false);
   const [isBatchMode, setIsBatchMode] = useState(true);
   const [batchItems, setBatchItems] = useState<InventoryItem[]>([]);
-  const [lastScannedToast, setLastScannedToast] = useState<{ name: string; location: PantryLocation } | null>(null);
+  const [lastScannedToast, setLastScannedToast] = useState<{
+    name: string;
+    location: PantryLocation;
+    isDuplicate?: boolean;
+    quantity?: string | null;
+  } | null>(null);
 
   // Single-item mode state
   const [lookupResult, setLookupResult] = useState<{
@@ -160,9 +165,14 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     }
   }, [isOpen, startCamera, stopCamera]);
 
-  const triggerToast = (name: string, location: PantryLocation) => {
+  const triggerToast = (
+    name: string,
+    location: PantryLocation,
+    isDuplicate?: boolean,
+    quantity?: string | null
+  ) => {
     if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
-    setLastScannedToast({ name, location });
+    setLastScannedToast({ name, location, isDuplicate, quantity });
     toastTimeoutRef.current = setTimeout(() => {
       setLastScannedToast(null);
     }, 2600);
@@ -225,8 +235,16 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
         });
 
         onItemAdded(saved);
-        setBatchItems((prev) => [saved, ...prev]);
-        triggerToast(itemName, itemLoc);
+        setBatchItems((prev) => {
+          const idx = prev.findIndex((i) => i.id === saved.id);
+          if (idx >= 0) {
+            const updated = [...prev];
+            updated[idx] = saved;
+            return updated;
+          }
+          return [saved, ...prev];
+        });
+        triggerToast(saved.name, itemLoc, Boolean(saved.isDuplicate), saved.quantity);
       } catch (err: any) {
         console.error('Batch barcode scan error:', err);
       } finally {
@@ -288,8 +306,16 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
             expiresAt: first.expiresAt,
           });
           onItemAdded(saved);
-          setBatchItems((prev) => [saved, ...prev]);
-          triggerToast(first.name, loc);
+          setBatchItems((prev) => {
+            const idx = prev.findIndex((i) => i.id === saved.id);
+            if (idx >= 0) {
+              const updated = [...prev];
+              updated[idx] = saved;
+              return updated;
+            }
+            return [saved, ...prev];
+          });
+          triggerToast(saved.name, loc, Boolean(saved.isDuplicate), saved.quantity);
         } else {
           stopCamera();
           setLookupResult({
@@ -494,13 +520,17 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                 {lastScannedToast && (
                   <div className="absolute top-3 left-3 right-16 z-30 animate-in fade-in slide-in-from-top-2 duration-200">
                     <div className="p-2.5 bg-emerald-950/90 border border-emerald-500/50 backdrop-blur-md rounded-xl text-white shadow-xl flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center shrink-0">
-                        <Check className="w-3.5 h-3.5 stroke-[3]" />
+                      <div className="w-6 h-6 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center shrink-0 font-bold text-xs">
+                        {lastScannedToast.isDuplicate ? '+' : <Check className="w-3.5 h-3.5 stroke-[3]" />}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-xs font-bold truncate text-emerald-200">{lastScannedToast.name}</p>
+                        <p className="text-xs font-bold truncate text-emerald-200">
+                          {lastScannedToast.isDuplicate ? `Updated: ${lastScannedToast.name}` : lastScannedToast.name}
+                        </p>
                         <p className="text-[10px] text-emerald-400 font-medium">
-                          Auto-assigned to {getLocationLabel(lastScannedToast.location)}
+                          {lastScannedToast.isDuplicate
+                            ? `Quantity increased to ${lastScannedToast.quantity || '2'} (${getLocationLabel(lastScannedToast.location)})`
+                            : `Auto-assigned to ${getLocationLabel(lastScannedToast.location)}`}
                         </p>
                       </div>
                     </div>
@@ -579,7 +609,12 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                     >
                       <div className="min-w-0 flex-1">
                         <p className="text-xs font-bold text-white truncate">{item.name}</p>
-                        <p className="text-[10px] text-slate-400">{item.category}</p>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                            Qty: {item.quantity || '1'}
+                          </span>
+                          <span className="text-[10px] text-slate-400">{item.category}</span>
+                        </div>
                       </div>
 
                       <div className="relative shrink-0">

@@ -41,6 +41,7 @@ import {
   calculateExpiryDate,
   getDaysUntilExpiry,
   getFreshnessStatus,
+  addQuantities,
   PantryLocation,
 } from './shelfLife.js';
 import {
@@ -2521,9 +2522,78 @@ app.post('/api/inventory', (req, res) => {
     return res.status(400).json({ error: 'Item name is required' });
   }
 
-  const id = `inv_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
   const now = new Date().toISOString();
-  const expiresAt = customExpiresAt || calculateExpiryDate(name.trim(), category, location);
+  const cleanName = name.trim();
+  const cleanBarcode = barcode ? String(barcode).trim() : null;
+
+  // Check if item already exists in this household
+  let existing: any = null;
+  if (cleanBarcode) {
+    existing = queryOne<any>(
+      'SELECT * FROM inventory_items WHERE householdId = ? AND barcode = ?',
+      [householdId, cleanBarcode]
+    );
+  }
+
+  if (!existing) {
+    // Check exact name match in the same location
+    existing = queryOne<any>(
+      'SELECT * FROM inventory_items WHERE householdId = ? AND LOWER(TRIM(name)) = LOWER(?) AND location = ?',
+      [householdId, cleanName, location]
+    );
+    // If not found in same location, check any location in this household
+    if (!existing) {
+      existing = queryOne<any>(
+        'SELECT * FROM inventory_items WHERE householdId = ? AND LOWER(TRIM(name)) = LOWER(?)',
+        [householdId, cleanName]
+      );
+    }
+  }
+
+  if (existing) {
+    // Duplicate item found: increment existing quantity
+    const newQuantity = addQuantities(existing.quantity, quantity);
+    const calculatedExpiry = calculateExpiryDate(cleanName, existing.category || category, existing.location || location);
+    const candidateExpiry = customExpiresAt || calculatedExpiry;
+    const finalExpiresAt =
+      candidateExpiry && (!existing.expiresAt || new Date(candidateExpiry) > new Date(existing.expiresAt))
+        ? candidateExpiry
+        : existing.expiresAt;
+
+    execute(
+      `UPDATE inventory_items SET
+         quantity = ?,
+         expiresAt = ?,
+         barcode = COALESCE(barcode, ?),
+         imageUrl = COALESCE(?, imageUrl),
+         lastRestockedAt = ?,
+         updatedAt = ?
+       WHERE id = ?`,
+      [
+        newQuantity,
+        finalExpiresAt,
+        cleanBarcode,
+        imageUrl || null,
+        now,
+        now,
+        existing.id,
+      ]
+    );
+    saveDb();
+
+    const updated = queryOne<any>('SELECT * FROM inventory_items WHERE id = ?', [existing.id]);
+    return res.json({
+      ...updated,
+      isDuplicate: true,
+      isStock: Boolean(updated.isStock),
+      daysUntilExpiry: getDaysUntilExpiry(updated.expiresAt),
+      freshness: getFreshnessStatus(updated.expiresAt),
+    });
+  }
+
+  // Not a duplicate: insert new inventory item
+  const id = `inv_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const expiresAt = customExpiresAt || calculateExpiryDate(cleanName, category, location);
 
   execute(
     `INSERT INTO inventory_items (
@@ -2533,8 +2603,8 @@ app.post('/api/inventory', (req, res) => {
     [
       id,
       householdId,
-      name.trim(),
-      barcode ? String(barcode).trim() : null,
+      cleanName,
+      cleanBarcode,
       category,
       location,
       quantity ? String(quantity).trim() : null,
@@ -2555,6 +2625,7 @@ app.post('/api/inventory', (req, res) => {
 
   res.json({
     ...saved,
+    isDuplicate: false,
     isStock: Boolean(saved.isStock),
     daysUntilExpiry: getDaysUntilExpiry(saved.expiresAt),
     freshness: getFreshnessStatus(saved.expiresAt),
@@ -2573,32 +2644,85 @@ app.post('/api/inventory/batch', (req, res) => {
 
   for (const it of items) {
     if (!it.name || !it.name.trim()) continue;
-    const id = `inv_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const expiresAt = it.expiresAt || calculateExpiryDate(it.name.trim(), it.category || 'Pantry', it.location || 'pantry');
-    execute(
-      `INSERT INTO inventory_items (
-        id, householdId, name, barcode, category, location, quantity, unit,
-        imageUrl, isStock, restockCadenceDays, lastRestockedAt, expiresAt, createdAt, updatedAt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        id,
-        householdId,
-        it.name.trim(),
-        it.barcode ? String(it.barcode).trim() : null,
-        it.category || 'Pantry',
-        it.location || 'pantry',
-        it.quantity ? String(it.quantity).trim() : null,
-        it.unit ? String(it.unit).trim() : null,
-        it.imageUrl || null,
-        it.isStock ? 1 : 0,
-        it.restockCadenceDays ? parseInt(String(it.restockCadenceDays), 10) : null,
-        it.isStock ? now : null,
-        expiresAt,
-        now,
-        now,
-      ]
-    );
-    addedIds.push(id);
+    const cleanName = it.name.trim();
+    const cleanBarcode = it.barcode ? String(it.barcode).trim() : null;
+    const loc = it.location || 'pantry';
+    const cat = it.category || 'Pantry';
+
+    let existing: any = null;
+    if (cleanBarcode) {
+      existing = queryOne<any>(
+        'SELECT * FROM inventory_items WHERE householdId = ? AND barcode = ?',
+        [householdId, cleanBarcode]
+      );
+    }
+    if (!existing) {
+      existing = queryOne<any>(
+        'SELECT * FROM inventory_items WHERE householdId = ? AND LOWER(TRIM(name)) = LOWER(?) AND location = ?',
+        [householdId, cleanName, loc]
+      ) || queryOne<any>(
+        'SELECT * FROM inventory_items WHERE householdId = ? AND LOWER(TRIM(name)) = LOWER(?)',
+        [householdId, cleanName]
+      );
+    }
+
+    if (existing) {
+      const newQuantity = addQuantities(existing.quantity, it.quantity);
+      const calculatedExpiry = calculateExpiryDate(cleanName, existing.category || cat, existing.location || loc);
+      const candidateExpiry = it.expiresAt || calculatedExpiry;
+      const finalExpiresAt =
+        candidateExpiry && (!existing.expiresAt || new Date(candidateExpiry) > new Date(existing.expiresAt))
+          ? candidateExpiry
+          : existing.expiresAt;
+
+      execute(
+        `UPDATE inventory_items SET
+           quantity = ?,
+           expiresAt = ?,
+           barcode = COALESCE(barcode, ?),
+           imageUrl = COALESCE(?, imageUrl),
+           lastRestockedAt = ?,
+           updatedAt = ?
+         WHERE id = ?`,
+        [
+          newQuantity,
+          finalExpiresAt,
+          cleanBarcode,
+          it.imageUrl || null,
+          now,
+          now,
+          existing.id,
+        ]
+      );
+      addedIds.push(existing.id);
+    } else {
+      const id = `inv_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const expiresAt = it.expiresAt || calculateExpiryDate(cleanName, cat, loc);
+      execute(
+        `INSERT INTO inventory_items (
+          id, householdId, name, barcode, category, location, quantity, unit,
+          imageUrl, isStock, restockCadenceDays, lastRestockedAt, expiresAt, createdAt, updatedAt
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          id,
+          householdId,
+          cleanName,
+          cleanBarcode,
+          cat,
+          loc,
+          it.quantity ? String(it.quantity).trim() : null,
+          it.unit ? String(it.unit).trim() : null,
+          it.imageUrl || null,
+          it.isStock ? 1 : 0,
+          it.restockCadenceDays ? parseInt(String(it.restockCadenceDays), 10) : null,
+          it.isStock ? now : null,
+          expiresAt,
+          now,
+          now,
+        ]
+      );
+      addedIds.push(id);
+    }
   }
   saveDb();
 

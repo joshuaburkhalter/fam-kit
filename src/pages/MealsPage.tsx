@@ -2989,11 +2989,29 @@ export const MealsPage: React.FC = () => {
         isOpen={isBarcodeModalOpen}
         onClose={() => setIsBarcodeModalOpen(false)}
         onItemAdded={(newItem) => {
-          setInventoryItems((prev) => [newItem, ...prev]);
+          setInventoryItems((prev) => {
+            const existingIdx = prev.findIndex((i) => i.id === newItem.id);
+            if (existingIdx >= 0) {
+              const updated = [...prev];
+              updated[existingIdx] = newItem;
+              return updated;
+            }
+            return [newItem, ...prev];
+          });
           if (mealsDataCache && mealsDataCache.householdId === householdId) {
-            mealsDataCache.inventoryItems = [newItem, ...(mealsDataCache.inventoryItems || [])];
+            const cachedList = mealsDataCache.inventoryItems || [];
+            const cachedIdx = cachedList.findIndex((i: any) => i.id === newItem.id);
+            if (cachedIdx >= 0) {
+              cachedList[cachedIdx] = newItem;
+            } else {
+              mealsDataCache.inventoryItems = [newItem, ...cachedList];
+            }
           }
-          showToast(`Added "${newItem.name}" to your pantry!`);
+          if (newItem.isDuplicate) {
+            showToast(`Updated "${newItem.name}" quantity to ${newItem.quantity || '2'}`);
+          } else {
+            showToast(`Added "${newItem.name}" to your pantry!`);
+          }
         }}
       />
 

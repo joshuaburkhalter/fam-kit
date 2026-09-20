@@ -177,3 +177,67 @@ export function inferStorageLocation(
   }
   return { location: 'pantry', category: category || 'Pantry' };
 }
+
+/**
+ * Intelligently combines and increments item quantities.
+ */
+export function addQuantities(
+  existingQty: string | null | undefined,
+  addedQty: string | null | undefined
+): string {
+  const eStr = (existingQty || '').trim();
+  const aStr = (addedQty || '').trim();
+
+  if (!eStr && !aStr) {
+    return '2';
+  }
+
+  const numRegex = /^(\d+(?:\.\d+)?)\s*(.*)$/i;
+  const eMatch = eStr.match(numRegex);
+  const aMatch = aStr.match(numRegex);
+
+  const eNum = eMatch ? parseFloat(eMatch[1]) : (eStr ? NaN : 1);
+  const eUnit = eMatch ? eMatch[2].trim() : eStr;
+
+  const aNum = aMatch ? parseFloat(aMatch[1]) : (aStr ? NaN : 1);
+  const aUnit = aMatch ? aMatch[2].trim() : aStr;
+
+  const formatUnit = (count: number, rawUnit: string) => {
+    if (!rawUnit) return '';
+    const clean = rawUnit.toLowerCase();
+    if (['oz', 'g', 'kg', 'ml', 'l', 'lbs', 'lb', 'fl oz'].includes(clean)) {
+      return rawUnit;
+    }
+    if (count > 1 && !clean.endsWith('s')) {
+      if (clean === 'loaf') return 'loaves';
+      return `${rawUnit}s`;
+    }
+    if (count === 1 && clean.endsWith('s') && !clean.endsWith('ss')) {
+      if (clean === 'loaves') return 'loaf';
+      return rawUnit.slice(0, -1);
+    }
+    return rawUnit;
+  };
+
+  if (!isNaN(eNum) && !isNaN(aNum)) {
+    const total = Math.round((eNum + aNum) * 100) / 100;
+    const unit = eUnit || aUnit;
+    const formattedUnit = formatUnit(total, unit);
+    return formattedUnit ? `${total} ${formattedUnit}` : String(total);
+  }
+
+  if (!isNaN(eNum)) {
+    const total = Math.round((eNum + 1) * 100) / 100;
+    const formattedUnit = formatUnit(total, eUnit || aUnit);
+    return formattedUnit ? `${total} ${formattedUnit}` : String(total);
+  }
+  if (!isNaN(aNum)) {
+    const total = Math.round((aNum + 1) * 100) / 100;
+    const formattedUnit = formatUnit(total, aUnit || eUnit);
+    return formattedUnit ? `${total} ${formattedUnit}` : String(total);
+  }
+
+  if (eStr) return `${eStr} (+1)`;
+  return '2';
+}
+
