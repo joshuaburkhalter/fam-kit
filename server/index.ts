@@ -1920,6 +1920,10 @@ app.put('/api/grocery/aisles', (req, res) => {
       execute('UPDATE aisles SET orderIndex = ? WHERE id = ?', [item.orderIndex, item.id]);
     }
   }
+  saveDb();
+  res.json({ success: true });
+});
+
 app.delete('/api/grocery/aisles', (req, res) => {
   const householdId = getHouseholdId(req);
   const id = req.query.id as string;
