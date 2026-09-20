@@ -567,17 +567,17 @@ export const AssistantPage: React.FC = () => {
 
           <div
             ref={dockRef}
-            className={`fab-dock-transition pointer-events-auto h-[52px] border shadow-2xl flex items-center overflow-hidden ${
+            className={`fab-dock-transition pointer-events-auto h-[50px] border shadow-2xl flex items-center overflow-hidden ${
               isInputExpanded
-                ? 'w-full rounded-3xl border-white/25 bg-slate-900/95 backdrop-blur-xl shadow-emerald-500/10 px-2'
-                : 'w-[52px] rounded-full border-emerald-400/40 bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 cursor-pointer shadow-xl shadow-emerald-500/30 hover:scale-105 active:scale-95 justify-center'
+                ? 'w-full rounded-3xl border-white/25 bg-slate-900/95 backdrop-blur-xl shadow-emerald-500/10 px-2.5'
+                : 'w-[50px] rounded-full border-emerald-400/40 bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 cursor-pointer shadow-xl shadow-emerald-500/30 hover:scale-105 active:scale-95 justify-center'
             }`}
           >
             {!isInputExpanded ? (
               <button
                 type="button"
                 onClick={() => setIsInputExpanded(true)}
-                className="w-full h-full flex items-center justify-center text-slate-950"
+                className="w-full h-full flex items-center justify-center text-slate-950 cursor-pointer"
                 title="Message Assistant"
               >
                 <MessageCircle className="w-6 h-6 stroke-[2.2]" />
@@ -588,13 +588,13 @@ export const AssistantPage: React.FC = () => {
                   e.preventDefault();
                   handleSendMessage();
                 }}
-                className="w-full flex items-center gap-2"
+                className="w-full flex items-center gap-2 animate-in fade-in duration-200"
               >
                 {/* Far left: Close button */}
                 <button
                   type="button"
                   onClick={() => setIsInputExpanded(false)}
-                  className="p-2 rounded-2xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white shrink-0"
+                  className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center shrink-0 transition-colors cursor-pointer"
                   title="Close"
                 >
                   <X className="w-4 h-4" />
@@ -615,7 +615,7 @@ export const AssistantPage: React.FC = () => {
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   title="Snap photo with camera"
-                  className="p-1.5 sm:px-2 rounded-xl bg-white/5 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-400 border border-white/10 hover:border-emerald-500/30 text-xs font-bold flex items-center gap-1.5 transition-all shrink-0"
+                  className="h-8 px-2 sm:px-2.5 rounded-xl bg-white/5 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-400 border border-white/10 hover:border-emerald-500/30 text-xs font-bold flex items-center gap-1.5 transition-all shrink-0 cursor-pointer"
                 >
                   <Camera className="w-3.5 h-3.5 text-emerald-400" />
                 </button>
@@ -625,7 +625,7 @@ export const AssistantPage: React.FC = () => {
                   type="button"
                   onClick={toggleVoiceInput}
                   title={isListening ? 'Stop Listening' : 'Voice Input (STT)'}
-                  className={`p-1.5 sm:px-2 rounded-xl transition-all shrink-0 flex items-center gap-1.5 border text-xs font-bold ${
+                  className={`h-8 px-2 sm:px-2.5 rounded-xl transition-all shrink-0 flex items-center gap-1.5 border text-xs font-bold cursor-pointer ${
                     isListening
                       ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-500/30 border-red-400/40'
                       : 'bg-white/5 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-400 border-white/10 hover:border-emerald-500/30'
@@ -644,17 +644,17 @@ export const AssistantPage: React.FC = () => {
                       ? 'Listening to your voice...'
                       : 'Ask Assistant (e.g. "Add milk", "Plan dinners", "Schedule game")...'
                   }
-                  className="flex-1 min-w-0 bg-transparent border-none text-sm text-white placeholder-slate-500 focus:outline-none py-2 px-1"
+                  className="flex-1 min-w-0 bg-transparent border-none text-xs text-white placeholder-slate-500 focus:outline-none py-1.5 px-1"
                 />
 
                 {/* Far right: Main action button (Send) */}
                 <button
                   type="submit"
                   disabled={(!input.trim() && !selectedImage) || isLoading}
-                  className="p-2 sm:px-3.5 sm:py-2 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 disabled:opacity-40 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20 shrink-0"
+                  className="h-8 px-3.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 disabled:opacity-40 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20 shrink-0 active:scale-95 cursor-pointer"
                   title="Send message"
                 >
-                  <Send className="w-4 h-4" />
+                  <Send className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">Send</span>
                 </button>
               </form>

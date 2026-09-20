@@ -2028,44 +2028,7 @@ export const MealsPage: React.FC = () => {
                       <X className="w-4 h-4" />
                     </button>
 
-                    {/* Secondary action: Add / Import Recipe */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsRecipeFabOpen(false);
-                        setScraperInitialMode('url');
-                        setIsScraperOpen(true);
-                      }}
-                      className="h-8 px-2.5 rounded-xl bg-white/5 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-300 border border-white/10 hover:border-emerald-500/30 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
-                      title="Add recipe (import from web link or scan)"
-                    >
-                      <Plus className="w-3.5 h-3.5 text-emerald-400 stroke-[2.5]" />
-                      <span className="hidden sm:inline">Add</span>
-                    </button>
-
-                    {/* Middle: Search text input */}
-                    <div className="flex-1 min-w-0 flex items-center relative bg-white/5 rounded-xl px-2.5 py-1 border border-white/5 focus-within:border-emerald-500/40 focus-within:bg-white/10 transition-all">
-                      <Search className="w-3.5 h-3.5 text-slate-400 mr-1.5 shrink-0 hidden xs:block" />
-                      <input
-                        type="text"
-                        placeholder="Search recipes..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full bg-transparent border-none text-xs text-white placeholder-slate-500 focus:outline-none"
-                      />
-                      {searchQuery && (
-                        <button
-                          type="button"
-                          onClick={() => setSearchQuery('')}
-                          className="p-0.5 text-slate-400 hover:text-white shrink-0 cursor-pointer ml-1"
-                          title="Clear search"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Secondary action: Create Recipe */}
+                    {/* Secondary action 1 on the left: Create Recipe */}
                     <button
                       type="button"
                       onClick={() => {
@@ -2073,12 +2036,67 @@ export const MealsPage: React.FC = () => {
                         setEditingRecipe(null);
                         setIsEditRecipeModalOpen(true);
                       }}
-                      className="h-8 px-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer shrink-0"
+                      className="h-8 px-2 sm:px-2.5 rounded-xl bg-white/5 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-400 border border-white/10 hover:border-emerald-500/30 text-xs font-bold flex items-center gap-1.5 transition-all shrink-0 cursor-pointer"
                       title="Create recipe from scratch"
                     >
-                      <Pencil className="w-3.5 h-3.5 stroke-[2.2]" />
+                      <Pencil className="w-3.5 h-3.5 text-emerald-400 stroke-[2.2]" />
                       <span className="hidden sm:inline">Create</span>
                     </button>
+
+                    {/* Secondary action 2 on the left: Add Recipe */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsRecipeFabOpen(false);
+                        setScraperInitialMode('url');
+                        setIsScraperOpen(true);
+                      }}
+                      className="h-8 px-2 sm:px-2.5 rounded-xl bg-white/5 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-400 border border-white/10 hover:border-emerald-500/30 text-xs font-bold flex items-center gap-1.5 transition-all shrink-0 cursor-pointer"
+                      title="Add recipe (import from web link or scan)"
+                    >
+                      <Plus className="w-3.5 h-3.5 text-emerald-400 stroke-[2.5]" />
+                      <span className="hidden sm:inline">Add</span>
+                    </button>
+
+                    {/* Form wrapping middle search input and right search button */}
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        (document.activeElement as HTMLElement)?.blur();
+                      }}
+                      className="flex-1 min-w-0 flex items-center gap-2"
+                    >
+                      {/* Middle: Search text input */}
+                      <div className="flex-1 min-w-0 flex items-center relative">
+                        <input
+                          type="text"
+                          placeholder="Search recipes..."
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          className="w-full bg-transparent border-none text-xs text-white placeholder-slate-500 focus:outline-none py-1.5 px-1"
+                        />
+                        {searchQuery && (
+                          <button
+                            type="button"
+                            onClick={() => setSearchQuery('')}
+                            className="p-1 text-slate-400 hover:text-white shrink-0 cursor-pointer"
+                            title="Clear search"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Far right: Main action button (Search) */}
+                      <button
+                        type="submit"
+                        className="h-8 px-3.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20 shrink-0 active:scale-95 cursor-pointer"
+                        title="Search recipes"
+                      >
+                        <Search className="w-3.5 h-3.5 stroke-[2.5]" />
+                        <span className="hidden sm:inline">Search</span>
+                      </button>
+                    </form>
                   </div>
                 )}
               </div>

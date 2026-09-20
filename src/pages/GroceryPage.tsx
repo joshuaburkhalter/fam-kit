@@ -1432,18 +1432,18 @@ export const GroceryPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setIsInputExpanded(true)}
-                className="w-full h-full flex items-center justify-center text-slate-950"
+                className="w-full h-full flex items-center justify-center text-slate-950 cursor-pointer"
                 title={`Add item to ${currentListName}`}
               >
                 <Plus className="w-6 h-6 stroke-[2.5]" />
               </button>
             ) : (
-              <div className="w-full flex items-center gap-2">
+              <div className="w-full flex items-center gap-2 animate-in fade-in duration-200">
                 {/* Far left: Close button outside of form so Enter never triggers it */}
                 <button
                   type="button"
                   onClick={() => setIsInputExpanded(false)}
-                  className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center shrink-0 transition-colors"
+                  className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center shrink-0 transition-colors cursor-pointer"
                   title="Close"
                 >
                   <X className="w-4 h-4" />
@@ -1460,14 +1460,14 @@ export const GroceryPage: React.FC = () => {
                     value={newItemName}
                     onChange={(e) => setNewItemName(e.target.value)}
                     disabled={isAddingItem}
-                    className="flex-1 min-w-0 bg-transparent border-none text-sm text-white placeholder-slate-500 focus:outline-none py-2 px-1"
+                    className="flex-1 min-w-0 bg-transparent border-none text-xs text-white placeholder-slate-500 focus:outline-none py-1.5 px-1"
                   />
 
                   {/* Far right: Main action button (Add) */}
                   <button
                     type="submit"
                     disabled={!newItemName.trim() || isAddingItem}
-                    className="min-h-[36px] px-3.5 py-1.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 disabled:opacity-40 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20 shrink-0 active:scale-95"
+                    className="h-8 px-3.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 disabled:opacity-40 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20 shrink-0 active:scale-95 cursor-pointer"
                     title="Add item"
                   >
                     {isAddingItem ? (

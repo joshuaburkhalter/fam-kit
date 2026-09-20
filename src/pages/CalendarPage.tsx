@@ -1130,26 +1130,26 @@ export const CalendarPage: React.FC = () => {
             ref={dockRef}
             className={`fab-dock-transition pointer-events-auto h-[50px] border shadow-2xl flex items-center overflow-hidden ${
               isQuickAddExpanded
-                ? 'w-full rounded-3xl border-white/20 bg-slate-900/95 backdrop-blur-xl px-2'
-                : 'w-[50px] rounded-full border-emerald-400/30 bg-emerald-500 hover:bg-emerald-400 cursor-pointer shadow-xl shadow-emerald-500/30 hover:scale-105 active:scale-95 justify-center'
+                ? 'w-full rounded-3xl border-white/25 bg-slate-900/95 backdrop-blur-xl shadow-emerald-500/10 px-2.5'
+                : 'w-[50px] rounded-full border-emerald-400/40 bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 cursor-pointer shadow-xl shadow-emerald-500/30 hover:scale-105 active:scale-95 justify-center'
             }`}
           >
             {!isQuickAddExpanded ? (
               <button
                 type="button"
                 onClick={() => setIsQuickAddExpanded(true)}
-                className="w-full h-full flex items-center justify-center text-slate-950"
+                className="w-full h-full flex items-center justify-center text-slate-950 cursor-pointer"
                 title="Add Event"
               >
                 <Plus className="w-6 h-6 stroke-[2.5]" />
               </button>
             ) : (
-              <div className="w-full flex items-center gap-2">
+              <div className="w-full flex items-center gap-2 animate-in fade-in duration-200">
                 {/* Close button */}
                 <button
                   type="button"
                   onClick={() => setIsQuickAddExpanded(false)}
-                  className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white shrink-0"
+                  className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center shrink-0 transition-colors cursor-pointer"
                   title="Close"
                 >
                   <X className="w-4 h-4" />
@@ -1162,7 +1162,7 @@ export const CalendarPage: React.FC = () => {
                     setIsQuickAddExpanded(false);
                     handleOpenAddModal();
                   }}
-                  className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl bg-white/5 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-400 border border-white/10 hover:border-emerald-500/30 text-xs font-bold flex items-center gap-1.5 transition-all shrink-0"
+                  className="h-8 px-2 sm:px-2.5 rounded-xl bg-white/5 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-400 border border-white/10 hover:border-emerald-500/30 text-xs font-bold flex items-center gap-1.5 transition-all shrink-0 cursor-pointer"
                   title="Open full event form"
                 >
                   <CalendarIcon className="w-3.5 h-3.5 text-emerald-400" />
@@ -1185,7 +1185,7 @@ export const CalendarPage: React.FC = () => {
                   <button
                     type="submit"
                     disabled={!quickInput.trim() || isAssistantSubmitting}
-                    className="px-3.5 py-1.5 rounded-xl text-slate-950 font-bold text-xs flex items-center gap-1 transition-all shadow-md shrink-0 disabled:opacity-40 bg-emerald-500 hover:bg-emerald-400 shadow-emerald-500/25 active:scale-95"
+                    className="h-8 px-3.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 disabled:opacity-40 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20 shrink-0 active:scale-95 cursor-pointer"
                   >
                     {isAssistantSubmitting ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
