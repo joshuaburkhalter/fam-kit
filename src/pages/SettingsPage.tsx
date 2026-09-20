@@ -43,6 +43,7 @@ import { api } from '../lib/api';
 import { AisleManagerModal } from '../components/AisleManagerModal';
 import { EditProfileModal } from '../components/EditProfileModal';
 import { Drawer } from '../components/ui/Drawer';
+import { Toast } from '../components/ui/Toast';
 import type { User, GoogleSyncStatus, GoogleCalendarEntry, NotificationPreferences, PromoCode } from '../types';
 
 const AVATAR_COLORS = [
@@ -456,17 +457,6 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
             subscription: sub.toJSON(),
           });
         }
-
-        // Direct browser notification verification if permission is granted
-        if (Notification.permission === 'granted') {
-          reg.showNotification('Homebase Alert 🛒', {
-            body: 'Push notifications are working smoothly on your device!',
-            icon: '/icons/icon-192.png',
-            badge: '/icons/icon-192.png',
-            data: { url: '/grocery' },
-            tag: 'fam-kit-test-' + Date.now(),
-          });
-        }
       }
 
       // 2. Dispatch push notification via backend server
@@ -590,29 +580,8 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
         </div>
       </div>
 
-      {statusMessage && (
-        <div className="p-3 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center gap-2 text-emerald-400 text-xs font-semibold animate-in fade-in">
-          <Check className="w-4 h-4 shrink-0" />
-          <span>{statusMessage}</span>
-        </div>
-      )}
-
-      {errorMessage && (
-        <div className="p-3.5 rounded-2xl bg-red-500/15 border border-red-500/30 flex items-center justify-between gap-3 text-red-400 text-xs font-semibold animate-in fade-in">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
-            <span className="break-words">{errorMessage}</span>
-          </div>
-          <button
-            type="button"
-            onClick={() => setErrorMessage(null)}
-            className="text-slate-400 hover:text-white p-1 cursor-pointer shrink-0"
-            title="Dismiss"
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      )}
+      <Toast message={statusMessage} onClose={() => setStatusMessage(null)} />
+      <Toast message={errorMessage} type="error" onClose={() => setErrorMessage(null)} />
 
       {/* 0. Closed Beta Access & Membership */}
       {/* 0. Closed Beta Access & Membership */}

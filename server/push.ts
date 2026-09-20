@@ -170,10 +170,18 @@ export async function sendPushNotificationToHousehold(
       return;
     }
 
+    // Deduplicate subscriptions by endpoint to ensure each physical device receives at most one push
+    const seenEndpoints = new Set<string>();
+    const uniqueSubscriptions = subscriptions.filter((sub) => {
+      if (!sub.endpoint || seenEndpoints.has(sub.endpoint)) return false;
+      seenEndpoints.add(sub.endpoint);
+      return true;
+    });
+
     const category = options?.category;
     const actorUserId = options?.actorUserId;
 
-    const notifications = subscriptions.map(async (sub) => {
+    const notifications = uniqueSubscriptions.map(async (sub) => {
       try {
         // If this subscription belongs to a specific user, check their notification preferences
         if (sub.userId) {
@@ -261,8 +269,15 @@ export async function sendPushNotificationToUser(
       return { success: false, sentCount: 0 };
     }
 
+    const seenEndpoints = new Set<string>();
+    const uniqueSubscriptions = subscriptions.filter((sub) => {
+      if (!sub.endpoint || seenEndpoints.has(sub.endpoint)) return false;
+      seenEndpoints.add(sub.endpoint);
+      return true;
+    });
+
     let sentCount = 0;
-    const notifications = subscriptions.map(async (sub) => {
+    const notifications = uniqueSubscriptions.map(async (sub) => {
       try {
         const keys = JSON.parse(sub.keys);
         const pushSubscription = { endpoint: sub.endpoint, keys };
