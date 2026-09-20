@@ -1999,121 +1999,88 @@ export const MealsPage: React.FC = () => {
             )}
 
             {activeTab === 'recipes' && (
-              <div className="flex flex-col items-end gap-2 w-full sm:w-auto">
-                {/* Two secondary action buttons for creating a recipe and adding a recipe */}
-                {!isRecipeFabOpen && (
-                  <div className="flex flex-col items-end gap-2 animate-in fade-in slide-in-from-bottom-2 duration-150 pointer-events-auto">
-                    {/* Secondary button 1: Create Recipe (from scratch) */}
+              <div
+                ref={recipeFabRef}
+                className={`fab-dock-transition pointer-events-auto h-[50px] border shadow-2xl flex items-center overflow-hidden ${
+                  isRecipeFabOpen
+                    ? 'w-full rounded-3xl border-white/25 bg-slate-900/95 backdrop-blur-xl shadow-emerald-500/10 px-2.5'
+                    : 'w-[50px] rounded-full border-emerald-400/40 bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 cursor-pointer shadow-xl shadow-emerald-500/30 hover:scale-105 active:scale-95 justify-center'
+                }`}
+              >
+                {!isRecipeFabOpen ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsRecipeFabOpen(true)}
+                    className="w-full h-full flex items-center justify-center text-slate-950 cursor-pointer"
+                    title="Search & Actions"
+                  >
+                    <Search className="w-5 h-5 stroke-[2.2]" />
+                  </button>
+                ) : (
+                  <div className="w-full flex items-center gap-2 animate-in fade-in duration-200">
+                    {/* Far left: Close button */}
                     <button
                       type="button"
-                      onClick={() => {
-                        setEditingRecipe(null);
-                        setIsEditRecipeModalOpen(true);
-                      }}
-                      className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-900/95 hover:bg-slate-850 text-slate-200 hover:text-white border border-white/15 text-xs font-semibold shadow-xl shadow-black/40 backdrop-blur-md transition-all hover:scale-105 active:scale-95 cursor-pointer"
-                      title="Create recipe from scratch"
+                      onClick={() => setIsRecipeFabOpen(false)}
+                      className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center shrink-0 transition-colors cursor-pointer"
+                      title="Close"
                     >
-                      <Pencil className="w-3.5 h-3.5 text-emerald-400 stroke-[2.2]" />
-                      <span>Create Recipe</span>
+                      <X className="w-4 h-4" />
                     </button>
 
-                    {/* Secondary button 2: Add Recipe (from web or scan) */}
+                    {/* Secondary action: Add / Import Recipe */}
                     <button
                       type="button"
                       onClick={() => {
+                        setIsRecipeFabOpen(false);
                         setScraperInitialMode('url');
                         setIsScraperOpen(true);
                       }}
-                      className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-900/95 hover:bg-slate-850 text-slate-200 hover:text-white border border-white/15 text-xs font-semibold shadow-xl shadow-black/40 backdrop-blur-md transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                      className="h-8 px-2.5 rounded-xl bg-white/5 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-300 border border-white/10 hover:border-emerald-500/30 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
                       title="Add recipe (import from web link or scan)"
                     >
-                      <Plus className="w-3.5 h-3.5 text-teal-400 stroke-[2.5]" />
-                      <span>Add Recipe</span>
+                      <Plus className="w-3.5 h-3.5 text-emerald-400 stroke-[2.5]" />
+                      <span className="hidden sm:inline">Add</span>
+                    </button>
+
+                    {/* Middle: Search text input */}
+                    <div className="flex-1 min-w-0 flex items-center relative bg-white/5 rounded-xl px-2.5 py-1 border border-white/5 focus-within:border-emerald-500/40 focus-within:bg-white/10 transition-all">
+                      <Search className="w-3.5 h-3.5 text-slate-400 mr-1.5 shrink-0 hidden xs:block" />
+                      <input
+                        type="text"
+                        placeholder="Search recipes..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full bg-transparent border-none text-xs text-white placeholder-slate-500 focus:outline-none"
+                      />
+                      {searchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setSearchQuery('')}
+                          className="p-0.5 text-slate-400 hover:text-white shrink-0 cursor-pointer ml-1"
+                          title="Clear search"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Secondary action: Create Recipe */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsRecipeFabOpen(false);
+                        setEditingRecipe(null);
+                        setIsEditRecipeModalOpen(true);
+                      }}
+                      className="h-8 px-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer shrink-0"
+                      title="Create recipe from scratch"
+                    >
+                      <Pencil className="w-3.5 h-3.5 stroke-[2.2]" />
+                      <span className="hidden sm:inline">Create</span>
                     </button>
                   </div>
                 )}
-
-                {/* Main Recipe FAB: Search button / expanding search dock */}
-                <div
-                  ref={recipeFabRef}
-                  className={`fab-dock-transition pointer-events-auto h-[50px] border shadow-2xl flex items-center overflow-hidden ${
-                    isRecipeFabOpen
-                      ? 'w-full rounded-3xl border-white/25 bg-slate-900/95 backdrop-blur-xl shadow-emerald-500/10 px-2.5'
-                      : 'w-[50px] rounded-full border-emerald-400/40 bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 cursor-pointer shadow-xl shadow-emerald-500/30 hover:scale-105 active:scale-95 justify-center'
-                  }`}
-                >
-                  {!isRecipeFabOpen ? (
-                    <button
-                      type="button"
-                      onClick={() => setIsRecipeFabOpen(true)}
-                      className="w-full h-full flex items-center justify-center text-slate-950 cursor-pointer"
-                      title="Search Recipes"
-                    >
-                      <Search className="w-5 h-5 stroke-[2.2]" />
-                    </button>
-                  ) : (
-                    <div className="w-full flex items-center gap-2 animate-in fade-in duration-200">
-                      {/* Far left: Close button */}
-                      <button
-                        type="button"
-                        onClick={() => setIsRecipeFabOpen(false)}
-                        className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center shrink-0 transition-colors cursor-pointer"
-                        title="Close search"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-
-                      {/* Secondary action inside dock: Add Recipe */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsRecipeFabOpen(false);
-                          setScraperInitialMode('url');
-                          setIsScraperOpen(true);
-                        }}
-                        className="w-8 h-8 rounded-xl bg-white/5 hover:bg-teal-500/20 text-slate-300 hover:text-teal-300 border border-white/10 hover:border-teal-500/30 flex items-center justify-center transition-all cursor-pointer shrink-0"
-                        title="Add Recipe"
-                      >
-                        <Plus className="w-4 h-4 text-teal-400 stroke-[2.5]" />
-                      </button>
-
-                      {/* Middle: Search text input */}
-                      <div className="flex-1 min-w-0 flex items-center relative">
-                        <input
-                          type="text"
-                          placeholder="Search recipes by title or tags..."
-                          value={searchQuery}
-                          onChange={(e) => setSearchQuery(e.target.value)}
-                          className="w-full bg-transparent border-none text-xs text-white placeholder-slate-500 focus:outline-none px-1"
-                        />
-                        {searchQuery && (
-                          <button
-                            type="button"
-                            onClick={() => setSearchQuery('')}
-                            className="p-1 text-slate-400 hover:text-white shrink-0 cursor-pointer"
-                            title="Clear search"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-
-                      {/* Secondary action inside dock: Create Recipe */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsRecipeFabOpen(false);
-                          setEditingRecipe(null);
-                          setIsEditRecipeModalOpen(true);
-                        }}
-                        className="w-8 h-8 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 flex items-center justify-center transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer shrink-0"
-                        title="Create Recipe"
-                      >
-                        <Pencil className="w-4 h-4 stroke-[2.2]" />
-                      </button>
-                    </div>
-                  )}
-                </div>
               </div>
             )}
 

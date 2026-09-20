@@ -40,6 +40,7 @@ export const RecipesPage: React.FC = () => {
   const [scraperInitialUrl, setScraperInitialUrl] = useState('');
   const [scraperAutoImport, setScraperAutoImport] = useState(false);
   const [isEditRecipeModalOpen, setIsEditRecipeModalOpen] = useState(false);
+  const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
 
@@ -1130,71 +1131,67 @@ export const RecipesPage: React.FC = () => {
                     <Search className="w-5 h-5 stroke-[2.2]" />
                   </button>
                 ) : (
-                  <div className="w-full flex items-center gap-2">
+                  <div className="w-full flex items-center gap-2 animate-in fade-in duration-200">
                     {/* Far left: Close button */}
                     <button
                       type="button"
                       onClick={() => setIsSearchExpanded(false)}
-                      className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white shrink-0"
-                      title="Close search"
+                      className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center shrink-0 transition-colors cursor-pointer"
+                      title="Close"
                     >
                       <X className="w-4 h-4" />
                     </button>
 
-                    {/* Secondary action: Scan Recipe from Photos */}
+                    {/* Secondary action: Add / Import Recipe */}
                     <button
                       type="button"
                       onClick={() => {
-                        setScraperInitialMode('scan');
-                        setIsScraperOpen(true);
-                      }}
-                      className="p-1.5 sm:px-2 rounded-xl bg-white/5 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-400 border border-white/10 hover:border-emerald-500/30 text-xs font-bold flex items-center gap-1.5 transition-all shrink-0"
-                      title="Scan Recipe from Photos"
-                    >
-                      <Camera className="w-3.5 h-3.5 text-emerald-400" />
-                    </button>
-
-                    {/* Secondary action: Import from Web */}
-                    <button
-                      type="button"
-                      onClick={() => {
+                        setIsSearchExpanded(false);
                         setScraperInitialMode('url');
                         setIsScraperOpen(true);
                       }}
-                      className="p-1.5 sm:px-2 rounded-xl bg-white/5 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-400 border border-white/10 hover:border-emerald-500/30 text-xs font-bold flex items-center gap-1.5 transition-all shrink-0"
-                      title="Import Recipe from Web"
+                      className="h-8 px-2.5 rounded-xl bg-white/5 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-300 border border-white/10 hover:border-emerald-500/30 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
+                      title="Add recipe (import from web link or scan)"
                     >
-                      <Link2 className="w-3.5 h-3.5 text-emerald-400" />
+                      <Plus className="w-3.5 h-3.5 text-emerald-400 stroke-[2.5]" />
+                      <span className="hidden sm:inline">Add</span>
                     </button>
 
-                    {/* Middle: Search text input (no autoFocus) */}
-                    <input
-                      type="text"
-                      placeholder="Search recipes by title or tags (e.g. Pasta, Quick)..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="flex-1 min-w-0 bg-transparent border-none text-xs text-white placeholder-slate-500 focus:outline-none px-1"
-                    />
+                    {/* Middle: Search text input */}
+                    <div className="flex-1 min-w-0 flex items-center relative bg-white/5 rounded-xl px-2.5 py-1 border border-white/5 focus-within:border-emerald-500/40 focus-within:bg-white/10 transition-all">
+                      <Search className="w-3.5 h-3.5 text-slate-400 mr-1.5 shrink-0 hidden xs:block" />
+                      <input
+                        type="text"
+                        placeholder="Search recipes..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full bg-transparent border-none text-xs text-white placeholder-slate-500 focus:outline-none"
+                      />
+                      {searchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setSearchQuery('')}
+                          className="p-0.5 text-slate-400 hover:text-white shrink-0 cursor-pointer ml-1"
+                          title="Clear search text"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
 
-                    {searchQuery && (
-                      <button
-                        type="button"
-                        onClick={() => setSearchQuery('')}
-                        className="p-1.5 rounded-xl text-slate-400 hover:text-white shrink-0"
-                        title="Clear search text"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    )}
-
-                    {/* Far right: Main action button (Search) */}
+                    {/* Secondary action: Create Recipe */}
                     <button
                       type="button"
-                      className="px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20 shrink-0"
-                      title="Search recipes"
+                      onClick={() => {
+                        setIsSearchExpanded(false);
+                        setEditingRecipe(null);
+                        setIsEditRecipeModalOpen(true);
+                      }}
+                      className="h-8 px-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer shrink-0"
+                      title="Create recipe from scratch"
                     >
-                      <Search className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">Search</span>
+                      <Pencil className="w-3.5 h-3.5 stroke-[2.2]" />
+                      <span className="hidden sm:inline">Create</span>
                     </button>
                   </div>
                 )}
@@ -1231,14 +1228,34 @@ export const RecipesPage: React.FC = () => {
       )}
 
       {/* Edit Recipe Modal */}
-      {selectedRecipe && (
+      {(selectedRecipe || isEditRecipeModalOpen) && (
         <EditRecipeModal
           isOpen={isEditRecipeModalOpen}
-          onClose={() => setIsEditRecipeModalOpen(false)}
-          recipe={selectedRecipe}
+          onClose={() => {
+            setIsEditRecipeModalOpen(false);
+            setEditingRecipe(null);
+          }}
+          recipe={
+            editingRecipe || selectedRecipe || {
+              id: '',
+              household_id: household?.id || '',
+              title: '',
+              ingredients: [],
+              instructions: [],
+              tags: [],
+              created_at: new Date().toISOString(),
+            }
+          }
           onSave={(updated) => {
-            setSelectedRecipe(updated);
-            setRecipes((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+            if (selectedRecipe && selectedRecipe.id === updated.id) {
+              setSelectedRecipe(updated);
+            }
+            setRecipes((prev) => {
+              const exists = prev.some((r) => r.id === updated.id);
+              return exists ? prev.map((r) => (r.id === updated.id ? updated : r)) : [updated, ...prev];
+            });
+            setIsEditRecipeModalOpen(false);
+            setEditingRecipe(null);
           }}
         />
       )}
