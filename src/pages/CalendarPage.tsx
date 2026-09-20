@@ -11,6 +11,7 @@ import {
   ChevronDown,
   ChevronUp,
   Sparkles,
+  RefreshCw,
 } from 'lucide-react';
 import {
   format,
@@ -148,6 +149,7 @@ export const CalendarPage: React.FC = () => {
   const { currentUser, household, users } = usePWA();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [daysCount, setDaysCount] = useState<number>(14);
   const [showPastEvents, setShowPastEvents] = useState<boolean>(false);
   const [pastDaysCount, setPastDaysCount] = useState<number>(14);
@@ -193,6 +195,19 @@ export const CalendarPage: React.FC = () => {
       console.error('Failed to load calendar events:', err);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleManualSync = async () => {
+    if (isSyncing) return;
+    setIsSyncing(true);
+    try {
+      await api.syncGoogleCalendar();
+      await loadData();
+    } catch (err) {
+      console.error('Failed to sync Google Calendar:', err);
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -477,9 +492,20 @@ export const CalendarPage: React.FC = () => {
           </div>
           <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white flex items-center gap-2">
             Calendar
-            {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" />}
+            {isLoading && !isSyncing && <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" />}
           </h1>
         </div>
+
+        <button
+          type="button"
+          onClick={handleManualSync}
+          disabled={isSyncing || isLoading}
+          title="Sync with Google Calendar"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-white/10 text-slate-300 hover:text-white hover:bg-slate-800 text-xs font-semibold transition-all disabled:opacity-50 cursor-pointer shadow-xs active:scale-95"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-emerald-400' : 'text-slate-400'}`} />
+          <span>{isSyncing ? 'Syncing...' : 'Sync'}</span>
+        </button>
       </div>
 
       {/* Sub-Bar: Compact Family Avatars + Tiny All/Events Toggle */}

@@ -2720,19 +2720,21 @@ app.post('/api/inventory/:id/restock-to-grocery', (req, res) => {
 });
 
 // 6. Calendar API
-app.get('/api/calendar', (req, res) => {
+app.get('/api/calendar', async (req, res) => {
   const householdId = getHouseholdId(req);
   const memberId = req.query.memberId as string;
 
-  // Background freshness check: if connected users haven't synced in 5 minutes, trigger sync asynchronously
+  // Freshness check: if connected users haven't synced in the last 60 seconds, sync and prune deletions before returning events
   try {
     const statuses = getHouseholdGoogleSyncStatus(householdId);
-    const fiveMinsAgo = Date.now() - 5 * 60 * 1000;
-    const needsSync = statuses.some((s) => !s.lastSyncedAt || new Date(s.lastSyncedAt).getTime() < fiveMinsAgo);
+    const oneMinAgo = Date.now() - 60 * 1000;
+    const needsSync = statuses.some((s) => !s.lastSyncedAt || new Date(s.lastSyncedAt).getTime() < oneMinAgo);
     if (needsSync) {
-      syncAllConnectedHouseholdCalendars(householdId).catch((e) => console.error('Auto freshness sync error:', e));
+      await syncAllConnectedHouseholdCalendars(householdId);
     }
-  } catch {}
+  } catch (syncErr) {
+    console.warn('Auto freshness sync error:', syncErr);
+  }
 
   const events = memberId && memberId !== 'all'
     ? queryAll('SELECT * FROM calendar_events WHERE householdId = ? AND assignedMemberId = ? ORDER BY date ASC, startTime ASC', [householdId, memberId])

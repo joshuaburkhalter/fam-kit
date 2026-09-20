@@ -522,11 +522,13 @@ export async function syncUserGoogleCalendar(
   }
 
   const now = new Date();
-  const past30 = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-  const future90 = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
+  const past90 = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+  const future365 = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
 
-  const timeMin = past30.toISOString();
-  const timeMax = future90.toISOString();
+  const timeMin = past90.toISOString();
+  const timeMax = future365.toISOString();
+  const dateMinStr = past90.toISOString().split('T')[0];
+  const dateMaxStr = future365.toISOString().split('T')[0];
   let totalSynced = 0;
   const nowIso = new Date().toISOString();
 
@@ -551,105 +553,147 @@ export async function syncUserGoogleCalendar(
       assignedMemberId = memberMap[calId] && memberMap[calId] !== 'family' ? memberMap[calId] : null;
     }
 
-    const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(
-      calId
-    )}/events?timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(
-      timeMax
-    )}&singleEvents=true&orderBy=startTime&maxResults=250`;
+    const seenActiveGoogleEventIds = new Set<string>();
+    let calendarSyncSucceeded = false;
+    let pageToken: string | undefined = undefined;
+    let pageCount = 0;
 
     try {
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
+      do {
+        let url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(
+          calId
+        )}/events?timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(
+          timeMax
+        )}&singleEvents=true&orderBy=startTime&maxResults=250`;
+        if (pageToken) {
+          url += `&pageToken=${encodeURIComponent(pageToken)}`;
+        }
 
-      if (!res.ok) {
-        const errText = await res.text();
-        console.warn(`Google Calendar ${calId} error (${res.status}):`, errText);
-        continue;
-      }
+        const res = await fetch(url, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
 
-      const data = (await res.json()) as {
-        items?: Array<{
-          id: string;
-          status?: string;
-          summary?: string;
-          description?: string;
-          location?: string;
-          start?: { date?: string; dateTime?: string };
-          end?: { date?: string; dateTime?: string };
-        }>;
-      };
+        if (!res.ok) {
+          const errText = await res.text();
+          console.warn(`Google Calendar ${calId} error (${res.status}):`, errText);
+          break;
+        }
 
-      const items = data.items || [];
+        const data = (await res.json()) as {
+          nextPageToken?: string;
+          items?: Array<{
+            id: string;
+            status?: string;
+            summary?: string;
+            description?: string;
+            location?: string;
+            start?: { date?: string; dateTime?: string };
+            end?: { date?: string; dateTime?: string };
+          }>;
+        };
 
-      for (const item of items) {
-        try {
-          if (!item.id || item.status === 'cancelled') {
-            // Delete cancelled event if it exists in Homebase
-            if (item.id) {
+        calendarSyncSucceeded = true;
+        pageToken = data.nextPageToken;
+        pageCount++;
+
+        const items = data.items || [];
+
+        for (const item of items) {
+          try {
+            if (!item.id || item.status === 'cancelled') {
+              // Delete cancelled event if it exists in Homebase
+              if (item.id) {
+                execute(
+                  'DELETE FROM calendar_events WHERE householdId = ? AND (googleEventId = ? OR id = ?)',
+                  [householdId, item.id, `gcal_${item.id.replace(/[^a-zA-Z0-9_-]/g, '_')}`]
+                );
+              }
+              continue;
+            }
+
+            seenActiveGoogleEventIds.add(item.id);
+
+            const title = item.summary?.trim() || '(No Title)';
+            const description = item.description?.trim() || null;
+            const location = item.location?.trim() || null;
+
+            let date: string | null = null;
+            let startTime: string | null = null;
+            let endTime: string | null = null;
+
+            if (item.start?.date) {
+              date = item.start.date;
+              startTime = null;
+              endTime = null;
+            } else if (item.start?.dateTime) {
+              date = item.start.dateTime.split('T')[0];
+              startTime = item.start.dateTime.split('T')[1]?.substring(0, 5) || null;
+              if (item.end?.dateTime) {
+                endTime = item.end.dateTime.split('T')[1]?.substring(0, 5) || null;
+              }
+            }
+
+            if (!date) continue;
+
+            const id = `gcal_${item.id.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+
+            const existingEvent = queryOne<{ id: string }>(
+              'SELECT id FROM calendar_events WHERE id = ? OR (householdId = ? AND googleEventId = ?)',
+              [id, householdId, item.id]
+            );
+
+            if (existingEvent) {
               execute(
-                'DELETE FROM calendar_events WHERE householdId = ? AND googleEventId = ?',
-                [householdId, item.id]
+                `UPDATE calendar_events
+                 SET title = ?,
+                     description = ?,
+                     date = ?,
+                     startTime = ?,
+                     endTime = ?,
+                     location = ?,
+                     assignedMemberId = ?,
+                     googleCalendarId = ?,
+                     googleEventId = ?,
+                     isGoogleEvent = 1
+                 WHERE id = ?`,
+                [title, description, date, startTime, endTime, location, assignedMemberId, calId, item.id, existingEvent.id]
+              );
+            } else {
+              execute(
+                `INSERT OR REPLACE INTO calendar_events (id, title, description, date, startTime, endTime, category, location, assignedMemberId, householdId, isGoogleEvent, googleEventId, googleCalendarId, createdAt)
+                 VALUES (?, ?, ?, ?, ?, ?, 'Google Calendar', ?, ?, ?, 1, ?, ?, ?)`,
+                [id, title, description, date, startTime, endTime, location, assignedMemberId, householdId, item.id, calId, nowIso]
               );
             }
-            continue;
+            totalSynced++;
+          } catch (itemErr) {
+            console.warn(`Error syncing event ${item.id}:`, itemErr);
           }
+        }
+      } while (pageToken && pageCount < 20);
 
-          const title = item.summary?.trim() || '(No Title)';
-          const description = item.description?.trim() || null;
-          const location = item.location?.trim() || null;
-
-          let date: string | null = null;
-          let startTime: string | null = null;
-          let endTime: string | null = null;
-
-          if (item.start?.date) {
-            date = item.start.date;
-            startTime = null;
-            endTime = null;
-          } else if (item.start?.dateTime) {
-            date = item.start.dateTime.split('T')[0];
-            startTime = item.start.dateTime.split('T')[1]?.substring(0, 5) || null;
-            if (item.end?.dateTime) {
-              endTime = item.end.dateTime.split('T')[1]?.substring(0, 5) || null;
-            }
-          }
-
-          if (!date) continue;
-
-          const id = `gcal_${item.id.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
-
-          const existingEvent = queryOne<{ id: string }>(
-            'SELECT id FROM calendar_events WHERE id = ? OR (householdId = ? AND googleEventId = ?)',
-            [id, householdId, item.id]
+      // Reconcile: If calendar was queried successfully, any Google event in Homebase
+      // in the sync window that is NOT in seenActiveGoogleEventIds was removed from Google!
+      if (calendarSyncSucceeded) {
+        try {
+          const localEvents = queryAll<{ id: string; googleEventId: string; title: string }>(
+            `SELECT id, googleEventId, title FROM calendar_events 
+             WHERE householdId = ? 
+               AND isGoogleEvent = 1 
+               AND (googleCalendarId = ? OR (googleCalendarId = 'primary' AND ? LIKE '%@%') OR (googleCalendarId LIKE '%@%' AND ? = 'primary') OR googleCalendarId IS NULL)
+               AND date >= ? 
+               AND date <= ?`,
+            [householdId, calId, calId, calId, dateMinStr, dateMaxStr]
           );
 
-          if (existingEvent) {
-            execute(
-              `UPDATE calendar_events
-               SET title = ?,
-                   description = ?,
-                   date = ?,
-                   startTime = ?,
-                   endTime = ?,
-                   location = ?,
-                   assignedMemberId = ?,
-                   googleCalendarId = ?,
-                   googleEventId = ?,
-                   isGoogleEvent = 1
-               WHERE id = ?`,
-              [title, description, date, startTime, endTime, location, assignedMemberId, calId, item.id, existingEvent.id]
-            );
-          } else {
-            execute(
-              `INSERT OR REPLACE INTO calendar_events (id, title, description, date, startTime, endTime, category, location, assignedMemberId, householdId, isGoogleEvent, googleEventId, googleCalendarId, createdAt)
-               VALUES (?, ?, ?, ?, ?, ?, 'Google Calendar', ?, ?, ?, 1, ?, ?, ?)`,
-              [id, title, description, date, startTime, endTime, location, assignedMemberId, householdId, item.id, calId, nowIso]
-            );
+          for (const localEv of localEvents) {
+            if (localEv.googleEventId && !seenActiveGoogleEventIds.has(localEv.googleEventId)) {
+              execute('DELETE FROM calendar_events WHERE id = ?', [localEv.id]);
+              console.log(`[Google Sync] Removed deleted event from Homebase: "${localEv.title}" (${localEv.googleEventId})`);
+            }
           }
-          totalSynced++;
-        } catch (itemErr) {
-          console.warn(`Error syncing event ${item.id}:`, itemErr);
+        } catch (reconcileErr) {
+          console.warn(`[Google Sync] Reconciliation error for ${calId}:`, reconcileErr);
         }
       }
     } catch (calErr) {
