@@ -41,6 +41,20 @@ input, textarea, [contenteditable="true"], .selectable-text {
   background: #334155;
 }
 
+/* Hide scrollbar utility for touch/filter rails */
+.no-scrollbar::-webkit-scrollbar,
+.scrollbar-none::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.no-scrollbar,
+.scrollbar-none {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}
+
 /* Custom glow animations */
 @keyframes pulse-glow {
   0%, 100% {

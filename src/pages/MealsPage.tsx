@@ -1563,7 +1563,10 @@ export const MealsPage: React.FC = () => {
           {visitedTabs['recipes'] && (
             <div className={activeTab === 'recipes' ? 'space-y-4' : 'hidden'}>
               {/* Tag Filters */}
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+              <div
+                className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar"
+                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+              >
                 {searchQuery && (
                   <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-semibold whitespace-nowrap">
                     <span>"{searchQuery}"</span>
@@ -1939,7 +1942,10 @@ export const MealsPage: React.FC = () => {
                 const staplesCount = inventoryItems.filter((i) => i.isStock).length;
 
                 return (
-                  <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+                  <div
+                    className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar"
+                    style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                  >
                     {expiringCount > 0 && (
                       <button
                         onClick={() => setPantryFilter(pantryFilter === 'expiring' ? 'all' : 'expiring')}
@@ -1992,7 +1998,10 @@ export const MealsPage: React.FC = () => {
               })()}
 
               {/* Location & Status Filter Chips */}
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+              <div
+                className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar"
+                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+              >
                 {(
                   [
                     { id: 'all', label: 'All Items', icon: null },
