@@ -3,6 +3,7 @@ import type {
   User,
   Aisle,
   GroceryItem,
+  GrocerySuggestion,
   CustomList,
   Recipe,
   MealPlan,
@@ -363,9 +364,9 @@ export const api = {
   getGroceryData: async (
     householdId: string,
     listType: string = 'grocery'
-  ): Promise<{ items: GroceryItem[]; lists: CustomList[]; aisles: Aisle[] }> => {
+  ): Promise<{ items: GroceryItem[]; lists: CustomList[]; aisles: Aisle[]; suggestions?: GrocerySuggestion[] }> => {
     const url = listType === 'grocery' ? '/grocery' : `/grocery?listId=${listType}`;
-    const data = await fetchJson<{ items: any[]; lists?: any[]; aisles?: any[] }>(url);
+    const data = await fetchJson<{ items: any[]; lists?: any[]; aisles?: any[]; suggestions?: any[] }>(url);
     return {
       items: (data.items || []).map((i) => ({
         id: i.id,
@@ -397,6 +398,7 @@ export const api = {
         display_order: a.orderIndex || 0,
         icon: a.icon,
       })),
+      suggestions: data.suggestions || [],
     };
   },
 

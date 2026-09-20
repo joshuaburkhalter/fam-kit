@@ -43,6 +43,11 @@ import {
   getFreshnessStatus,
   PantryLocation,
 } from './shelfLife.js';
+import {
+  saveCategoryPreference,
+  resolveAisleForGroceryItem,
+  getHouseholdGrocerySuggestions,
+} from './groceryPreferences.js';
 
 dotenv.config();
 dotenv.config({ path: '.env.local' });
@@ -1241,17 +1246,7 @@ ${contextString}
               continue;
             }
 
-            let matchedAisle = guessAisleForGroceryItem(item.name, aisles);
-            if (!matchedAisle && item.category) {
-              matchedAisle = aisles.find(
-                (a) =>
-                  a.name.toLowerCase().includes((item.category || '').toLowerCase()) ||
-                  (item.category || '').toLowerCase().includes(a.name.toLowerCase())
-              );
-            }
-            if (!matchedAisle) {
-              matchedAisle = aisles.find((a) => a.name === 'Other') || aisles[0];
-            }
+            const resolved = resolveAisleForGroceryItem(householdId, item.name, aisles, item.category);
 
             const id = `g_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
             const now = new Date().toISOString();
@@ -1259,10 +1254,10 @@ ${contextString}
             execute(
               `INSERT INTO grocery_items (id, name, category, aisleId, quantity, note, checked, householdId, addedById, createdAt)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-              [id, item.name, matchedAisle?.name || item.category || 'Other', matchedAisle?.id, item.quantity || '1', item.note || null, 0, householdId, activeMemberId || 'u1', now]
+              [id, item.name, resolved.category, resolved.aisleId, item.quantity || '1', item.note || null, 0, householdId, activeMemberId || 'u1', now]
             );
 
-            createdItems.push({ id, name: item.name, category: matchedAisle?.name || item.category });
+            createdItems.push({ id, name: item.name, category: resolved.category });
           }
 
           actionsExecuted.push({
@@ -1707,24 +1702,24 @@ app.get('/api/grocery', (req, res) => {
     const deliAisle = aisles.find((a) => /deli|prepared/i.test(a.name));
     for (const it of items) {
       if (!it.aisleId) {
-        const matched = guessAisleForGroceryItem(it.name, aisles);
-        if (matched) {
-          it.aisleId = matched.id;
-          it.category = matched.name;
+        const matched = resolveAisleForGroceryItem(householdId, it.name, aisles, it.category);
+        if (matched && matched.aisleId) {
+          it.aisleId = matched.aisleId;
+          it.category = matched.category;
           execute('UPDATE grocery_items SET aisleId = ?, category = ? WHERE id = ?', [
-            matched.id,
-            matched.name,
+            matched.aisleId,
+            matched.category,
             it.id,
           ]);
         }
       } else if (deliAisle && /meat|seafood/i.test(it.category || '')) {
-        const matched = guessAisleForGroceryItem(it.name, aisles);
-        if (matched && matched.id === deliAisle.id) {
-          it.aisleId = matched.id;
-          it.category = matched.name;
+        const matched = resolveAisleForGroceryItem(householdId, it.name, aisles, it.category);
+        if (matched && matched.aisleId === deliAisle.id) {
+          it.aisleId = matched.aisleId;
+          it.category = matched.category;
           execute('UPDATE grocery_items SET aisleId = ?, category = ? WHERE id = ?', [
-            matched.id,
-            matched.name,
+            matched.aisleId,
+            matched.category,
             it.id,
           ]);
         }
@@ -1732,94 +1727,17 @@ app.get('/api/grocery', (req, res) => {
     }
   }
 
+  const suggestions = !listId || listId === 'grocery'
+    ? getHouseholdGrocerySuggestions(householdId, aisles)
+    : [];
+
   res.json({
     items: items.map((i: any) => ({ ...i, checked: Boolean(i.checked) })),
     lists,
     aisles,
+    suggestions,
   });
 });
-
-function cleanIngredientName(raw: string): string {
-  return raw
-    .toLowerCase()
-    .replace(/^[\d\s½⅓⅔¼¾⅛⅜⅝⅞/.,-]+(?:to\s+[\d\s½⅓⅔¼¾⅛⅜⅝⅞/.,-]+)?/i, '')
-    .replace(/\b(?:cups?|c|tablespoons?|tbsp?|teaspoons?|tsp?|pounds?|lbs?|ounces?|oz|grams?|g|kg|ml|liters?|pinches?|cloves?|stalks?|bunches?|cans?|bottles?|packages?|pkgs?|slices?|pieces?)\b/gi, '')
-    .replace(/\([^)]*\)/g, '')
-    .replace(/\b(?:divided|optional|to taste|for serving|freshly|grated|chopped|sliced|diced|minced|cubed|crushed|plus more as needed)\b/gi, '')
-    .replace(/[^\w\s-]/g, ' ')
-    .trim();
-}
-
-function guessAisleForGroceryItem(rawName: string, aisles: Array<{ id: string; name: string }>) {
-  const clean = cleanIngredientName(rawName);
-  const lower = rawName.toLowerCase();
-
-  const findAisle = (regex: RegExp) => aisles.find((a) => regex.test(a.name));
-
-  // 1. Specific compound checks first
-  if (/\b(?:peanut|almond|cashew|sunflower|nut)\s*butter\b/i.test(lower)) {
-    return findAisle(/pantry/i);
-  }
-  if (/\b(?:chile|chili|curry|garlic|onion)\s*powder\b/i.test(lower)) {
-    return findAisle(/pantry/i);
-  }
-  if (/\b(?:protein powder|egg white powder|whey|collagen|creatine|matcha|protein)\b/i.test(lower)) {
-    return findAisle(/pantry/i) || findAisle(/health/i) || findAisle(/other/i);
-  }
-  if (/\b(?:coconut|almond|oat|soy)\s*milk\b/i.test(lower)) {
-    return findAisle(/dairy/i) || findAisle(/pantry/i);
-  }
-  if (/\b(?:naan|tortilla|pita|bread|bun|roll|bagel|baguette|croissant|crust)\b/i.test(clean)) {
-    return findAisle(/bakery|bread/i);
-  }
-
-  // 2. Deli & Prepared (sliced lunch meats, deli counter meats, rotisserie chicken, prepared salads & dips)
-  if (
-    /\b(?:deli|lunch\s*meat|lunchmeat|cold\s*cuts?|prosciutto|salami|pepperoni|bologna|pastrami|capicola|pancetta|mortadella)\b/i.test(lower) ||
-    (/\b(?:sliced|shaved|deli)\b/i.test(lower) && /\b(?:turkey|chicken|ham|roast\s*beef|beef|pastrami)\b/i.test(lower) && !/\b(?:ground|raw|whole)\b/i.test(lower)) ||
-    /\b(?:turkey|chicken|ham|beef|roast\s*beef)\s+(?:slices?|cold\s*cuts?|lunch\s*meat)\b/i.test(lower) ||
-    /\b(?:rotisserie\s*chicken|potato\s*salad|macaroni\s*salad|coleslaw|chicken\s*salad|egg\s*salad|tuna\s*salad|hummus|tzatziki)\b/i.test(lower)
-  ) {
-    return findAisle(/deli|prepared/i) || findAisle(/meat|seafood/i);
-  }
-
-  // 3. Meat & Seafood
-  if (/\b(?:chicken|beef|pork|steak|bacon|turkey|salmon|fish|shrimp|sausage|lamb|tuna|meat|prawns?|scallops?|halibut|cod|tilapia|ribs?|ground beef|ground turkey)\b/i.test(clean)) {
-    return findAisle(/meat|seafood/i);
-  }
-
-  // 3. Dairy & Eggs
-  if (/\b(?:paneer|milk|yogurt|yoghurt|cheese|butter|cream|eggs?|mozzarella|cheddar|parmesan|feta|ricotta|provolone|curd|sour cream)\b/i.test(clean)) {
-    return findAisle(/dairy/i);
-  }
-
-  // 4. Produce (fresh fruits, vegetables, fresh herbs)
-  if (/\b(?:cilantro|mint|onion|onions|garlic|chile|chiles|chili|chilies|peppers?|lemons?|limes?|ginger|herbs?|spinach|lettuce|apples?|bananas?|potatoes?|avocados?|carrots?|basil|tomatoes?|shallots?|kale|scallions?|berries|strawberries|blueberries|mushrooms?|cucumbers?|parsley|rosemary|thyme|zucchini|cabbage|cauliflower|broccoli|celery|asparagus|corn|peas)\b/i.test(clean)) {
-    return findAisle(/produce/i);
-  }
-
-  // 5. Frozen
-  if (/\b(?:frozen|ice cream|gelato|popsicle|popsicles)\b/i.test(lower)) {
-    return findAisle(/frozen/i);
-  }
-
-  // 6. Beverages (strict word boundaries so "tea" doesn't match "teaspoon")
-  if (/\b(?:juice|coffee|tea|soda|wine|beer|seltzer|cider|cola|lemonade|beverage)\b/i.test(clean)) {
-    return findAisle(/beverage|drink/i);
-  }
-
-  // 7. Snacks & Sweets
-  if (/\b(?:chips?|crackers?|chocolate|cookies?|candy|popcorn|pretzels?|nuts?|cashews?|almonds?|peanuts?|walnuts?)\b/i.test(clean)) {
-    return findAisle(/snack|sweet/i);
-  }
-
-  // 8. Pantry & Dry Goods
-  if (/\b(?:rice|pasta|noodles?|oil|ghee|salt|sea salt|seeds?|cumin|spices?|seasoning|flour|sugar|broth|stock|sauce|soy sauce|vinegar|beans?|can|canned|extract|honey|syrup|vanilla|cinnamon|oregano|curry|water|mustard|ketchup|mayo|mayonnaise|yeast|baking powder|baking soda|oats?|quinoa)\b/i.test(clean) || /\b(?:ghee|oil|salt|seeds?|cumin|powder)\b/i.test(lower)) {
-    return findAisle(/pantry/i);
-  }
-
-  return findAisle(/pantry/i) || findAisle(/other/i) || aisles[0] || null;
-}
 
 app.post('/api/grocery', (req, res) => {
   try {
@@ -1846,17 +1764,15 @@ app.post('/api/grocery', (req, res) => {
     let finalAisleId = aisleId || null;
     let finalCategory = category || 'Other';
 
-    // If no aisleId is specified and it's for the main grocery list, auto-categorize based on item name
-    if (!finalAisleId && (!listId || listId === 'grocery')) {
+    // Auto-categorize using learned preferences + smart heuristics
+    if (!listId || listId === 'grocery') {
       const aisles = queryAll<{ id: string; name: string }>(
         'SELECT id, name FROM aisles WHERE householdId = ? ORDER BY orderIndex ASC',
         [householdId]
       );
-      const matched = guessAisleForGroceryItem(name, aisles);
-      if (matched) {
-        finalAisleId = matched.id;
-        finalCategory = matched.name;
-      }
+      const resolved = resolveAisleForGroceryItem(householdId, name, aisles, category || undefined, aisleId || undefined);
+      finalAisleId = resolved.aisleId;
+      finalCategory = resolved.category;
     }
 
     execute(
@@ -1914,6 +1830,12 @@ app.patch('/api/grocery', (req, res) => {
   saveDb();
 
   const updated = queryOne<any>('SELECT * FROM grocery_items WHERE id = ?', [id]);
+
+  // If item was moved to a different aisle/category, remember this preference for the household
+  if ((aisleId !== undefined || category !== undefined) && updated && updated.aisleId) {
+    const householdId = getHouseholdId(req);
+    saveCategoryPreference(householdId, updated.name, updated.aisleId, updated.category || 'Other');
+  }
 
   if (checked === true && updated) {
     const householdId = getHouseholdId(req);
@@ -1998,6 +1920,21 @@ app.put('/api/grocery/aisles', (req, res) => {
       execute('UPDATE aisles SET orderIndex = ? WHERE id = ?', [item.orderIndex, item.id]);
     }
   }
+app.delete('/api/grocery/aisles', (req, res) => {
+  const householdId = getHouseholdId(req);
+  const id = req.query.id as string;
+  if (!id) return res.status(400).json({ error: 'Aisle id is required' });
+
+  // Delete aisle
+  execute('DELETE FROM aisles WHERE id = ? AND householdId = ?', [id, householdId]);
+
+  // Clean up any preferences pointing to this aisle
+  execute('DELETE FROM grocery_category_preferences WHERE householdId = ? AND aisleId = ?', [householdId, id]);
+
+  // Reset any grocery items in this aisle to unassigned/Other
+  execute("UPDATE grocery_items SET aisleId = NULL, category = 'Other' WHERE householdId = ? AND aisleId = ?", [householdId, id]);
+  saveDb();
+
   res.json({ success: true });
 });
 
@@ -2311,16 +2248,16 @@ app.post('/api/meal-planner', (req, res) => {
 
     for (const ing of ingredients) {
       const name = typeof ing === 'string' ? ing : ing.item;
-      const cat = typeof ing === 'object' && ing.category ? ing.category : 'Produce';
+      const cat = typeof ing === 'object' && ing.category ? ing.category : undefined;
       if (!name) continue;
 
-      const matchedAisle = aisles.find((a) => a.name.toLowerCase().includes(cat.toLowerCase())) || aisles[0];
+      const resolved = resolveAisleForGroceryItem(householdId, name, aisles, cat);
       const gId = `g_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
       execute(
         `INSERT INTO grocery_items (id, name, category, aisleId, quantity, checked, householdId, addedById, createdAt)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [gId, name, matchedAisle?.name || 'Produce', matchedAisle?.id, '1', 0, householdId, addedById || 'u1', now]
+        [gId, name, resolved.category, resolved.aisleId, '1', 0, householdId, addedById || 'u1', now]
       );
     }
     return res.json({ success: true });
@@ -2753,16 +2690,20 @@ app.post('/api/inventory/:id/restock-to-grocery', (req, res) => {
   const item = queryOne<any>('SELECT * FROM inventory_items WHERE id = ? AND householdId = ?', [id, householdId]);
   if (!item) return res.status(404).json({ error: 'Item not found' });
 
+  const aisles = queryAll<{ id: string; name: string }>('SELECT id, name FROM aisles WHERE householdId = ?', [householdId]);
+  const resolved = resolveAisleForGroceryItem(householdId, item.name, aisles, item.category);
+
   const now = new Date().toISOString();
   const groceryId = `g_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
   
   execute(
-    `INSERT INTO grocery_items (id, name, category, quantity, unit, note, checked, householdId, createdAt)
-     VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+    `INSERT INTO grocery_items (id, name, category, aisleId, quantity, unit, note, checked, householdId, createdAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
     [
       groceryId,
       item.name,
-      item.category || 'Other',
+      resolved.category,
+      resolved.aisleId,
       item.quantity || '1',
       item.unit || null,
       'From Pantry Restock',

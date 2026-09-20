@@ -85,6 +85,18 @@ function initSchema(db: Database) {
       createdAt TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS grocery_category_preferences (
+      id TEXT PRIMARY KEY,
+      householdId TEXT NOT NULL,
+      normalizedName TEXT NOT NULL,
+      rawName TEXT NOT NULL,
+      aisleId TEXT NOT NULL,
+      category TEXT NOT NULL,
+      updatedAt TEXT NOT NULL,
+      UNIQUE(householdId, normalizedName)
+    );
+    CREATE INDEX IF NOT EXISTS idx_grocery_pref_lookup ON grocery_category_preferences(householdId, normalizedName);
+
     CREATE TABLE IF NOT EXISTS custom_lists (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,

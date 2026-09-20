@@ -13,8 +13,10 @@ import {
   Loader2,
   Pencil,
   GripVertical,
+  ArrowRightLeft,
+  Sparkles,
 } from 'lucide-react';
-import type { GroceryItem, Aisle, CustomList } from '../types';
+import type { GroceryItem, Aisle, CustomList, GrocerySuggestion } from '../types';
 import { usePWA } from '../context/PWAContext';
 import { api } from '../lib/api';
 import { useFabAutoClose } from '../hooks/useFabAutoClose';
@@ -27,6 +29,7 @@ interface GroceryDataCache {
   itemsByList: Record<string, GroceryItem[]>;
   lists: CustomList[];
   aisles: Aisle[];
+  suggestions?: GrocerySuggestion[];
 }
 
 let groceryDataCache: GroceryDataCache | null = null;
@@ -75,10 +78,25 @@ export const GroceryPage: React.FC = () => {
   const [editAisleId, setEditAisleId] = useState('');
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
+  const [suggestions, setSuggestions] = useState<GrocerySuggestion[]>(() => {
+    return groceryDataCache?.suggestions || [];
+  });
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState<number>(-1);
+  const [isAutocompleteDismissed, setIsAutocompleteDismissed] = useState<boolean>(false);
+  const [movingItem, setMovingItem] = useState<GroceryItem | null>(null);
+
+  const matchingSuggestions = React.useMemo(() => {
+    const q = newItemName.trim().toLowerCase();
+    if (!q || q.length < 1 || isAutocompleteDismissed || activeListType !== 'grocery') return [];
+    return suggestions
+      .filter((s) => s.name.toLowerCase().includes(q))
+      .slice(0, 6);
+  }, [newItemName, suggestions, isAutocompleteDismissed, activeListType]);
+
   const dockRef = useFabAutoClose<HTMLDivElement>({
     isOpen: isInputExpanded,
     onClose: () => setIsInputExpanded(false),
-    ignore: isNewListModalOpen,
+    ignore: isNewListModalOpen || Boolean(editingItem) || Boolean(movingItem),
   });
 
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -153,6 +171,10 @@ export const GroceryPage: React.FC = () => {
       if (data.aisles.length > 0) {
         groceryDataCache.aisles = data.aisles;
       }
+      if (data.suggestions && data.suggestions.length > 0) {
+        groceryDataCache.suggestions = data.suggestions;
+        setSuggestions(data.suggestions);
+      }
 
       if (activeListTypeRef.current === targetListId) {
         setItems(data.items);
@@ -209,12 +231,85 @@ export const GroceryPage: React.FC = () => {
         }
         return next;
       });
+
+      // Update suggestions pool
+      setSuggestions((prev) => {
+        const next = [...prev];
+        const matchIdx = next.findIndex((s) => s.name.toLowerCase() === item.name.toLowerCase());
+        const aisle = (localAisles.length > 0 ? localAisles : aisles).find((a) => a.id === item.aisle_id);
+        const entry: GrocerySuggestion = {
+          name: item.name,
+          aisleId: item.aisle_id,
+          category: aisle?.name || 'Grocery',
+        };
+        if (matchIdx >= 0) {
+          next[matchIdx] = entry;
+        } else {
+          next.unshift(entry);
+        }
+        if (groceryDataCache) groceryDataCache.suggestions = next;
+        return next;
+      });
+
       setNewItemName('');
+      setIsAutocompleteDismissed(false);
+      setSelectedSuggestionIndex(-1);
     } catch (err: any) {
       console.error('Failed to add item:', err);
       showToast(err?.message || 'Error adding item. Please check connection.');
     } finally {
       setIsAddingItem(false);
+    }
+  };
+
+  const handleAddSuggestion = async (sug: GrocerySuggestion) => {
+    const nameToAdd = sug.name.trim();
+    if (!nameToAdd) return;
+
+    try {
+      setIsAddingItem(true);
+      const item = await api.addGroceryItem(effectiveHouseholdId, {
+        name: nameToAdd,
+        list_type: activeListType,
+        aisle_id: sug.aisleId,
+        added_by_user_id: currentUser?.id,
+        added_by_user_name: currentUser?.name,
+      });
+      setItems((prev) => {
+        const next = [...prev, item];
+        if (groceryDataCache && groceryDataCache.householdId === effectiveHouseholdId) {
+          groceryDataCache.itemsByList[activeListType] = next;
+        }
+        return next;
+      });
+      setNewItemName('');
+      setIsAutocompleteDismissed(true);
+      setSelectedSuggestionIndex(-1);
+
+      const aisle = (localAisles.length > 0 ? localAisles : aisles).find((a) => a.id === item.aisle_id);
+      showToast(`Added ${item.name} to ${aisle?.name || sug.category || 'Grocery'}`);
+    } catch (err: any) {
+      console.error('Failed to add suggested item:', err);
+      showToast(err?.message || 'Error adding item. Please check connection.');
+    } finally {
+      setIsAddingItem(false);
+    }
+  };
+
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (matchingSuggestions.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedSuggestionIndex((prev) => (prev < matchingSuggestions.length - 1 ? prev + 1 : 0));
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedSuggestionIndex((prev) => (prev > 0 ? prev - 1 : matchingSuggestions.length - 1));
+      } else if (e.key === 'Enter' && selectedSuggestionIndex >= 0 && selectedSuggestionIndex < matchingSuggestions.length) {
+        e.preventDefault();
+        handleAddSuggestion(matchingSuggestions[selectedSuggestionIndex]);
+      } else if (e.key === 'Escape') {
+        setIsAutocompleteDismissed(true);
+      }
     }
   };
 
@@ -344,13 +439,82 @@ export const GroceryPage: React.FC = () => {
         }
       }
 
+      const wasAisleChanged = editingItem.aisle_id !== editAisleId;
+      if (wasAisleChanged && selectedAisle) {
+        setSuggestions((prev) => {
+          const next = [...prev];
+          const matchIdx = next.findIndex((s) => s.name.toLowerCase() === editName.trim().toLowerCase());
+          if (matchIdx >= 0) {
+            next[matchIdx] = { ...next[matchIdx], aisleId: selectedAisle.id, category: selectedAisle.name };
+          } else {
+            next.unshift({ name: editName.trim(), aisleId: selectedAisle.id, category: selectedAisle.name });
+          }
+          if (groceryDataCache) groceryDataCache.suggestions = next;
+          return next;
+        });
+      }
+
       setEditingItem(null);
-      showToast('Item updated');
+      if (wasAisleChanged && selectedAisle) {
+        showToast(`Moved to ${selectedAisle.name} • Remembered for next time`);
+      } else {
+        showToast('Item updated');
+      }
     } catch (err: any) {
       console.error('Failed to update grocery item:', err);
       showToast(err?.message || 'Failed to update item.');
     } finally {
       setIsSavingEdit(false);
+    }
+  };
+
+  const handleQuickMoveItem = async (targetAisleId: string) => {
+    if (!movingItem) return;
+    const targetAisle = localAisles.find((a) => a.id === targetAisleId);
+    if (!targetAisle) return;
+
+    const itemToMove = movingItem;
+    setMovingItem(null);
+
+    // Optimistic update
+    setItems((prev) =>
+      prev.map((i) =>
+        i.id === itemToMove.id ? { ...i, aisle_id: targetAisleId, category: targetAisle.name } : i
+      )
+    );
+
+    if (groceryDataCache && householdId && groceryDataCache.householdId === householdId) {
+      if (groceryDataCache.itemsByList[activeListTypeRef.current]) {
+        groceryDataCache.itemsByList[activeListTypeRef.current] = groceryDataCache.itemsByList[
+          activeListTypeRef.current
+        ].map((i) =>
+          i.id === itemToMove.id ? { ...i, aisle_id: targetAisleId, category: targetAisle.name } : i
+        );
+      }
+    }
+
+    setSuggestions((prev) => {
+      const next = [...prev];
+      const matchIdx = next.findIndex((s) => s.name.toLowerCase() === itemToMove.name.trim().toLowerCase());
+      if (matchIdx >= 0) {
+        next[matchIdx] = { ...next[matchIdx], aisleId: targetAisle.id, category: targetAisle.name };
+      } else {
+        next.unshift({ name: itemToMove.name.trim(), aisleId: targetAisle.id, category: targetAisle.name });
+      }
+      if (groceryDataCache) groceryDataCache.suggestions = next;
+      return next;
+    });
+
+    try {
+      await api.updateGroceryItem(itemToMove.id, {
+        aisleId: targetAisle.id,
+        category: targetAisle.name,
+      });
+      showToast(`Moved to ${targetAisle.name} • Remembered for next time`);
+    } catch (err: any) {
+      console.error('Failed to move item:', err);
+      showToast('Failed to move item.');
+      loadData(activeListTypeRef.current, false);
     }
   };
 
@@ -979,6 +1143,18 @@ export const GroceryPage: React.FC = () => {
                                 {item.added_by_user_name}
                               </span>
                             )}
+                            {isGroceryList && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setMovingItem(item);
+                                }}
+                                className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-400 hover:bg-emerald-500/10 opacity-40 group-hover:opacity-100 transition-all"
+                                title="Move to another aisle"
+                              >
+                                <ArrowRightLeft className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -1078,6 +1254,18 @@ export const GroceryPage: React.FC = () => {
                         <span className="text-[10px] text-slate-500 hidden sm:inline shrink-0">
                           {item.added_by_user_name}
                         </span>
+                      )}
+                      {isGroceryList && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMovingItem(item);
+                          }}
+                          className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-400 hover:bg-emerald-500/10 opacity-40 group-hover:opacity-100 transition-all"
+                          title="Move to another aisle"
+                        >
+                          <ArrowRightLeft className="w-3.5 h-3.5" />
+                        </button>
                       )}
                       <button
                         onClick={(e) => {
@@ -1355,6 +1543,10 @@ export const GroceryPage: React.FC = () => {
                   </option>
                 ))}
               </select>
+              <p className="text-[10px] text-emerald-400/80 mt-1.5 flex items-center gap-1 font-medium">
+                <Sparkles className="w-3 h-3 text-emerald-400 shrink-0" />
+                <span>FamKit will remember this aisle for next time you add this item.</span>
+              </p>
             </div>
           )}
 
@@ -1371,6 +1563,37 @@ export const GroceryPage: React.FC = () => {
             />
           </div>
         </form>
+      </Drawer>
+
+      {/* Quick Move Aisle Drawer */}
+      <Drawer
+        isOpen={Boolean(movingItem)}
+        onClose={() => setMovingItem(null)}
+        title="Move to Aisle"
+        subtitle={movingItem ? `Choose where "${movingItem.name}" belongs. FamKit will remember this for next time.` : undefined}
+        icon={<ArrowRightLeft className="w-5 h-5 text-emerald-400" />}
+      >
+        <div className="space-y-1.5 py-1">
+          {effectiveAisles.map((aisle) => (
+            <button
+              key={aisle.id}
+              onClick={() => handleQuickMoveItem(aisle.id)}
+              className={`w-full flex items-center justify-between p-3 rounded-2xl border transition-all text-left cursor-pointer ${
+                movingItem?.aisle_id === aisle.id
+                  ? 'bg-emerald-500/15 border-emerald-500/40 text-white'
+                  : 'bg-slate-900/60 border-white/5 hover:border-white/20 text-slate-200'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-xl">{aisle.icon || '🛒'}</span>
+                <span className="font-semibold text-sm">{aisle.name}</span>
+              </div>
+              {movingItem?.aisle_id === aisle.id && (
+                <Check className="w-4 h-4 text-emerald-400" />
+              )}
+            </button>
+          ))}
+        </div>
       </Drawer>
 
       {/* New Custom List Drawer */}
@@ -1419,7 +1642,57 @@ export const GroceryPage: React.FC = () => {
 
       {/* Animated Expanding Quick Add Dock & FAB */}
       <div className="fixed bottom-[calc(76px+1rem+env(safe-area-inset-bottom,0px))] md:bottom-8 left-0 right-0 z-40 px-4 pointer-events-none">
-        <div className="max-w-3xl mx-auto pointer-events-none flex justify-end">
+        <div className="max-w-3xl mx-auto pointer-events-none flex flex-col items-end gap-2">
+          {/* Autocomplete Suggestions Popover */}
+          {isInputExpanded && matchingSuggestions.length > 0 && (
+            <div className="w-full pointer-events-auto bg-slate-900/95 backdrop-blur-xl border border-white/15 rounded-2xl p-1.5 shadow-2xl shadow-black/80 max-h-56 overflow-y-auto animate-in fade-in slide-in-from-bottom-2 duration-150">
+              <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between border-b border-white/5 pb-1.5 mb-1">
+                <span className="flex items-center gap-1.5">
+                  <Sparkles className="w-3 h-3 text-emerald-400" />
+                  <span>Previously Added</span>
+                </span>
+                <span className="text-[9px] text-slate-500 font-normal">Tap or press Enter to add</span>
+              </div>
+              <div className="space-y-0.5">
+                {matchingSuggestions.map((sug, idx) => {
+                  const isSelected = idx === selectedSuggestionIndex;
+                  const aisle = effectiveAisles.find((a) => a.id === sug.aisleId);
+                  return (
+                    <button
+                      key={`${sug.name}-${sug.aisleId}-${idx}`}
+                      type="button"
+                      onClick={() => handleAddSuggestion(sug)}
+                      onMouseEnter={() => setSelectedSuggestionIndex(idx)}
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-left transition-colors cursor-pointer ${
+                        isSelected ? 'bg-emerald-500/20 text-white' : 'hover:bg-white/5 text-slate-200'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-xs font-semibold truncate">{sug.name}</span>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0 ml-2">
+                        <span
+                          className="text-[10px] px-2 py-0.5 rounded-full font-medium border flex items-center gap-1 shrink-0"
+                          style={{
+                            borderColor: aisle?.color ? `${aisle.color}40` : 'rgba(255,255,255,0.1)',
+                            backgroundColor: aisle?.color ? `${aisle.color}15` : 'rgba(255,255,255,0.05)',
+                            color: aisle?.color || '#34d399',
+                          }}
+                        >
+                          <span>{aisle?.icon || '🛒'}</span>
+                          <span>{sug.category || aisle?.name || 'Grocery'}</span>
+                        </span>
+                        <div className="w-5 h-5 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500 hover:text-slate-950 flex items-center justify-center transition-colors">
+                          <Plus className="w-3 h-3 stroke-[2.5]" />
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <div
             ref={dockRef}
             className={`fab-dock-transition pointer-events-auto h-[50px] border shadow-2xl flex items-center overflow-hidden ${
@@ -1458,7 +1731,12 @@ export const GroceryPage: React.FC = () => {
                     type="text"
                     placeholder={`Add to ${currentListName}...`}
                     value={newItemName}
-                    onChange={(e) => setNewItemName(e.target.value)}
+                    onChange={(e) => {
+                      setNewItemName(e.target.value);
+                      setIsAutocompleteDismissed(false);
+                      setSelectedSuggestionIndex(-1);
+                    }}
+                    onKeyDown={handleInputKeyDown}
                     disabled={isAddingItem}
                     className="flex-1 min-w-0 bg-transparent border-none text-xs text-white placeholder-slate-500 focus:outline-none py-1.5 px-1"
                   />

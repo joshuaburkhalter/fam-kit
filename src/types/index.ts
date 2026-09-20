@@ -72,6 +72,7 @@ export interface Aisle {
   name: string;
   display_order: number;
   color: string;
+  icon?: string;
 }
 
 export interface GroceryItem {
@@ -88,6 +89,14 @@ export interface GroceryItem {
   list_type: string; // 'grocery' | custom list id
   created_at: string;
   updated_at: string;
+}
+
+export interface GrocerySuggestion {
+  name: string;
+  aisleId: string;
+  category: string;
+  quantity?: string;
+  unit?: string;
 }
 
 export interface CustomList {
