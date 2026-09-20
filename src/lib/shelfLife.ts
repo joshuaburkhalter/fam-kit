@@ -90,3 +90,90 @@ export function getLocationMeta(location: PantryLocation): { label: string; icon
       };
   }
 }
+
+/**
+ * Automatically infers proper storage location (fridge, freezer, or pantry)
+ * and refined category based on item name, packaging tags, and culinary knowledge.
+ */
+export function inferStorageLocation(
+  name: string,
+  category?: string,
+  tags?: string
+): { location: PantryLocation; category: string } {
+  const combined = `${name || ''} ${category || ''} ${tags || ''}`.toLowerCase();
+
+  // 1. FREEZER: Check frozen foods first
+  if (
+    /\b(frozen|ice cream|gelato|sorbet|popsicle|popsicles|waffles?|egg[o|os]|tater tots?|french fries|fries|hash browns?|hot pockets?|pizza rolls?|fish sticks?|nuggets?|tenders?|pot pie|ice cubes?|edamame)\b/i.test(
+      combined
+    ) ||
+    combined.includes('frozen food') ||
+    combined.includes('frozen meals') ||
+    combined.includes('ice-cream')
+  ) {
+    return {
+      location: 'freezer',
+      category: category && category !== 'Pantry' && category !== 'Other' ? category : 'Frozen',
+    };
+  }
+
+  // 2. FRIDGE: Fresh dairy, meats, seafood, chilled produce, fresh condiments, eggs
+  if (
+    /\b(milk|half and half|heavy cream|whipping cream|buttermilk|creamer|cheese|cheddar|mozzarella|parmesan|swiss|gouda|feta|brie|ricotta|cottage cheese|cream cheese|shredded cheese|butter|ghee|yogurt|sour cream|kefir|eggs?|egg whites?)\b/i.test(
+      combined
+    )
+  ) {
+    return { location: 'fridge', category: 'Dairy & Eggs' };
+  }
+
+  if (
+    /\b(beef|ground beef|steak|roast|brisket|chicken|poultry|turkey|pork|pork chops?|ribs|bacon|sausage|hot dogs?|bratwurst|deli|ham|salami|prosciutto|pepperoni|lunch meat|cold cuts?|fish|salmon|tuna|tilapia|cod|shrimp|scallop|crab|lobster|seafood)\b/i.test(
+      combined
+    )
+  ) {
+    return { location: 'fridge', category: 'Meat & Seafood' };
+  }
+
+  if (
+    /\b(lettuce|spinach|kale|arugula|salad|greens|spring mix|cabbage|coleslaw|berries|strawberry|strawberries|raspberry|raspberries|blueberry|blueberries|blackberry|blackberries|carrots?|celery|cucumber|zucchini|broccoli|cauliflower|asparagus|brussels sprouts?|green beans?|mushrooms?|herbs?|cilantro|parsley|basil|dill|chives?|hummus|guacamole|fresh salsa|tofu|tempeh|meatless|mayo|mayonnaise)\b/i.test(
+      combined
+    )
+  ) {
+    return { location: 'fridge', category: 'Produce' };
+  }
+
+  if (
+    /\b(juice|orange juice|apple cider|lemonade|kombucha|cold brew|smoothie)\b/i.test(
+      combined
+    )
+  ) {
+    return { location: 'fridge', category: 'Beverages' };
+  }
+
+  // 3. PANTRY: Grains, dry goods, canned items, snacks, spices, baking, root veg, shelf-stable condiments
+  if (
+    /\b(cereal|granola|oats?|oatmeal|pasta|spaghetti|penne|macaroni|noodles?|ramen|rice|quinoa|couscous|flour|sugar|baking|yeast|cocoa|bread|bagels?|tortillas?|buns?|pita|croissants?|muffins?|canned|beans?|tomato sauce|canned tomatoes|broth|stock|peanut butter|almond butter|jam|jelly|honey|maple syrup|chips?|pretzels?|crackers?|popcorn|cookies?|candy|chocolate|protein bars?|nuts?|almonds?|peanuts?|walnuts?|cashews?|raisins?|trail mix|oil|olive oil|vegetable oil|vinegar|soy sauce|hot sauce|ketchup|mustard|bbq sauce|spices?|seasoning|salt|pepper|coffee|tea|potatoes?|onions?|garlic|shallots?)\b/i.test(
+      combined
+    )
+  ) {
+    let cat = 'Pantry';
+    if (/\b(chips?|pretzels?|crackers?|popcorn|cookies?|candy|chocolate|nuts?|trail mix|snack)\b/i.test(combined)) {
+      cat = 'Snacks';
+    } else if (/\b(bread|bagels?|tortillas?|buns?|croissants?|muffins?|pastry|bakery)\b/i.test(combined)) {
+      cat = 'Bakery';
+    } else if (/\b(potatoes?|onions?|garlic|shallots?)\b/i.test(combined)) {
+      cat = 'Produce';
+    } else if (/\b(coffee|tea)\b/i.test(combined)) {
+      cat = 'Beverages';
+    }
+    return { location: 'pantry', category: cat };
+  }
+
+  // Fallback defaults based on existing category if present
+  const catLower = (category || '').toLowerCase();
+  if (catLower.includes('frozen')) return { location: 'freezer', category: 'Frozen' };
+  if (catLower.includes('dairy') || catLower.includes('meat') || catLower.includes('seafood') || catLower.includes('produce')) {
+    return { location: 'fridge', category: category || 'Produce' };
+  }
+  return { location: 'pantry', category: category || 'Pantry' };
+}

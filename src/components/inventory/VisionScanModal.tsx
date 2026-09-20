@@ -1,7 +1,8 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Drawer } from '../ui/Drawer';
-import { X, Camera, Upload, Check, Loader2, Sparkles, AlertCircle, RefreshCw, Zap } from 'lucide-react';
+import { Camera, Upload, Check, Loader2, Sparkles, AlertCircle, Zap, Plus, ArrowLeft } from 'lucide-react';
 import { api } from '../../lib/api';
+import { inferStorageLocation } from '../../lib/shelfLife';
 import type { PantryLocation } from '../../types';
 
 interface RecognizedItem {
@@ -32,6 +33,7 @@ export const VisionScanModal: React.FC<VisionScanModalProps> = ({
   const [cameraLoading, setCameraLoading] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [recognizedItems, setRecognizedItems] = useState<RecognizedItem[]>([]);
+  const [shotsCount, setShotsCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -40,13 +42,7 @@ export const VisionScanModal: React.FC<VisionScanModalProps> = ({
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const galleryInputRef = useRef<HTMLInputElement | null>(null);
 
-  useEffect(() => {
-    if (!isOpen) {
-      handleClose();
-    }
-  }, [isOpen]);
-
-  const stopLiveCamera = () => {
+  const stopLiveCamera = useCallback(() => {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
@@ -56,9 +52,9 @@ export const VisionScanModal: React.FC<VisionScanModalProps> = ({
     }
     setIsLiveCameraActive(false);
     setCameraLoading(false);
-  };
+  }, []);
 
-  const startLiveCamera = async () => {
+  const startLiveCamera = useCallback(async () => {
     setCameraError(null);
     setCameraLoading(true);
     setIsLiveCameraActive(true);
@@ -90,11 +86,24 @@ export const VisionScanModal: React.FC<VisionScanModalProps> = ({
       setCameraLoading(false);
     } catch (err: any) {
       console.warn('Live camera error:', err);
-      setCameraError('Live camera could not be opened. You can use the Photo button or pick an image from gallery.');
+      setCameraError('Live camera could not be opened automatically. You can use the Native Camera button or pick an image from gallery.');
       setIsLiveCameraActive(false);
       setCameraLoading(false);
     }
-  };
+  }, []);
+
+  // Directly open live camera whenever modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setImagePreview(null);
+      setRecognizedItems([]);
+      setShotsCount(0);
+      setError(null);
+      startLiveCamera();
+    } else {
+      stopLiveCamera();
+    }
+  }, [isOpen, startLiveCamera, stopLiveCamera]);
 
   const snapLivePhoto = () => {
     if (!videoRef.current || videoRef.current.readyState < 2) return;
@@ -121,11 +130,11 @@ export const VisionScanModal: React.FC<VisionScanModalProps> = ({
     const reader = new FileReader();
     reader.onload = () => {
       const result = reader.result as string;
+      stopLiveCamera();
       setImagePreview(result);
       processImage(result, mime);
     };
     reader.readAsDataURL(file);
-    // Reset file input so re-selecting same file triggers change
     e.target.value = '';
   };
 
@@ -135,20 +144,31 @@ export const VisionScanModal: React.FC<VisionScanModalProps> = ({
     try {
       const res = await api.scanInventoryVision(base64, type);
       if (res.items && res.items.length > 0) {
-        setRecognizedItems(
-          res.items.map((item, idx) => ({
-            id: `rec_${idx}_${Date.now()}`,
+        setShotsCount((c) => c + 1);
+        const mappedItems: RecognizedItem[] = res.items.map((item, idx) => {
+          // Auto-categorize location based on food type
+          const inferred = inferStorageLocation(item.name, item.category);
+          return {
+            id: `rec_${Date.now()}_${idx}_${Math.random().toString(36).slice(2, 6)}`,
             selected: true,
             name: item.name,
-            category: item.category,
-            location: item.location,
+            category: inferred.category || item.category,
+            location: (inferred.location as PantryLocation) || item.location,
             quantity: item.quantity,
             expiresAt: item.expiresAt,
             isStock: false,
-          }))
-        );
+          };
+        });
+
+        // Append to existing recognized items for multi-shot batch mode
+        setRecognizedItems((prev) => {
+          // Simple deduplication if same item name already collected
+          const existingNames = new Set(prev.map((i) => i.name.toLowerCase().trim()));
+          const novel = mappedItems.filter((i) => !existingNames.has(i.name.toLowerCase().trim()));
+          return [...prev, ...novel];
+        });
       } else {
-        setError('No grocery or pantry items were recognized in this image. Try taking a closer or clearer photo!');
+        setError('No grocery or pantry items were recognized in this shot. Try taking a closer or clearer photo!');
       }
     } catch (err: any) {
       console.error('Vision scan error:', err);
@@ -193,6 +213,7 @@ export const VisionScanModal: React.FC<VisionScanModalProps> = ({
     stopLiveCamera();
     setImagePreview(null);
     setRecognizedItems([]);
+    setShotsCount(0);
     setError(null);
     setIsScanning(false);
     onClose();
@@ -205,12 +226,12 @@ export const VisionScanModal: React.FC<VisionScanModalProps> = ({
       isOpen={isOpen}
       onClose={handleClose}
       title="AI Photo Scan"
-      subtitle="Scan your fridge, pantry shelf, or receipt to add items"
+      subtitle="Snap your fridge, freezer shelves, or pantry to auto-inventory"
       icon={<Camera className="w-5 h-5 text-slate-950" />}
       maxWidth="max-w-xl"
     >
       <div className="space-y-4">
-        {/* Hidden File Inputs */}
+        {/* Hidden File Inputs for Native Camera / Gallery Pickers */}
         <input
           type="file"
           ref={cameraInputRef}
@@ -227,9 +248,10 @@ export const VisionScanModal: React.FC<VisionScanModalProps> = ({
           className="hidden"
         />
 
+        {/* Viewfinder or Fallback Options */}
         {!imagePreview ? (
           <div className="space-y-4">
-            {/* Live Camera Viewfinder */}
+            {/* Live Camera Viewfinder (Directly open) */}
             {isLiveCameraActive ? (
               <div className="relative aspect-video rounded-2xl overflow-hidden bg-black border border-white/10 shadow-inner">
                 {cameraLoading && (
@@ -257,16 +279,28 @@ export const VisionScanModal: React.FC<VisionScanModalProps> = ({
                   className="w-full h-full object-cover"
                 />
 
-                {/* Close camera button */}
+                {/* Batch multi-shot badge if previous items exist */}
+                {recognizedItems.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setImagePreview('batch_preview')}
+                    className="absolute top-3 left-3 px-3 py-1.5 bg-purple-950/80 hover:bg-purple-900 backdrop-blur-md rounded-xl text-xs font-bold text-purple-200 border border-purple-500/40 shadow-lg flex items-center gap-1.5 cursor-pointer z-10"
+                  >
+                    <span>📦 {recognizedItems.length} items collected</span>
+                    <span className="text-[10px] underline">View</span>
+                  </button>
+                )}
+
+                {/* Cancel / Stop Camera */}
                 <button
                   type="button"
                   onClick={stopLiveCamera}
                   className="absolute top-3 right-3 px-3 py-1.5 bg-slate-950/80 hover:bg-slate-900 backdrop-blur-md rounded-xl text-xs font-semibold text-white border border-white/10 shadow-md cursor-pointer transition-colors z-10"
                 >
-                  Cancel
+                  Pause
                 </button>
 
-                {/* Snap Photo Button */}
+                {/* Snap Photo Action */}
                 <div className="absolute bottom-4 left-0 right-0 px-4 flex justify-center z-10">
                   <button
                     type="button"
@@ -274,7 +308,7 @@ export const VisionScanModal: React.FC<VisionScanModalProps> = ({
                     className="px-6 py-2.5 bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-400 hover:to-indigo-400 active:scale-95 text-white rounded-xl text-xs font-bold shadow-xl shadow-purple-500/30 flex items-center gap-2 cursor-pointer transition-all"
                   >
                     <Camera className="w-4 h-4 stroke-[2.5]" />
-                    <span>Snap Photo</span>
+                    <span>{shotsCount > 0 ? 'Snap Next Shelf' : 'Snap Photo of Food'}</span>
                   </button>
                 </div>
               </div>
@@ -320,8 +354,8 @@ export const VisionScanModal: React.FC<VisionScanModalProps> = ({
                     <Upload className="w-5 h-5" />
                   </div>
                   <div className="text-center">
-                    <p className="text-xs font-bold text-white">Upload / Files</p>
-                    <p className="text-[11px] text-slate-400 mt-0.5">Pick photo from library</p>
+                    <p className="text-xs font-bold text-white">Upload Photo</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Pick from gallery</p>
                   </div>
                 </button>
               </div>
@@ -334,52 +368,56 @@ export const VisionScanModal: React.FC<VisionScanModalProps> = ({
               </div>
             )}
 
-            {/* Explainer card */}
+            {/* Smart Categorization Notice */}
             <div className="p-3.5 bg-purple-500/10 border border-purple-500/20 rounded-2xl flex items-start gap-2.5 text-xs text-purple-300">
               <Sparkles className="w-4 h-4 mt-0.5 shrink-0 text-purple-400" />
               <span>
-                <strong>Zero hassle freshness tracking:</strong> Food categories and recommended USDA shelf-life timelines are calculated automatically without reading blurry date stamps!
+                <strong>Smart Location Auto-Categorization:</strong> Foods are automatically sorted into 🧊 Fridge, ❄️ Freezer, or 🥫 Pantry with calculated freshness shelf-life.
               </span>
             </div>
           </div>
         ) : (
           <div className="space-y-4">
-            {/* Image Preview & Scanning Status */}
+            {/* Status & Multi-shot Control Header */}
             <div className="flex items-center gap-3 p-3 bg-slate-900/80 rounded-2xl border border-white/10">
-              <img
-                src={imagePreview}
-                alt="Scan Preview"
-                className="w-16 h-16 object-cover rounded-xl border border-white/10 shrink-0"
-              />
+              {imagePreview !== 'batch_preview' && (
+                <img
+                  src={imagePreview}
+                  alt="Scan Preview"
+                  className="w-14 h-14 object-cover rounded-xl border border-white/10 shrink-0"
+                />
+              )}
               <div className="flex-1 min-w-0">
                 {isScanning ? (
                   <div className="space-y-1">
                     <p className="text-xs font-bold text-purple-400 flex items-center gap-1.5">
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" /> Recognizing foods & groceries...
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" /> Recognizing foods with Gemini AI...
                     </p>
                     <p className="text-[11px] text-slate-400">
-                      Applying USDA category shelf-life rules automatically
+                      Auto-sorting into fridge, freezer, and pantry
                     </p>
                   </div>
                 ) : (
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-xs font-bold text-white">
-                        {recognizedItems.length} items recognized
+                        {recognizedItems.length} items collected {shotsCount > 1 ? `across ${shotsCount} shots` : ''}
                       </p>
                       <p className="text-[11px] text-slate-400">
-                        Review and select items to add to pantry
+                        Review, adjust locations, or snap more shelves
                       </p>
                     </div>
+
                     <button
                       type="button"
                       onClick={() => {
                         setImagePreview(null);
-                        setRecognizedItems([]);
+                        startLiveCamera();
                       }}
-                      className="text-xs text-purple-400 hover:text-purple-300 font-semibold cursor-pointer"
+                      className="px-3 py-1.5 bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 rounded-xl text-xs font-bold border border-purple-500/30 flex items-center gap-1 cursor-pointer transition-colors"
                     >
-                      Rescan
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Snap Another Shelf</span>
                     </button>
                   </div>
                 )}
@@ -400,16 +438,18 @@ export const VisionScanModal: React.FC<VisionScanModalProps> = ({
                   <span className="text-xs font-bold text-slate-300">
                     Recognized Items ({selectedCount}/{recognizedItems.length})
                   </span>
-                  <button
-                    type="button"
-                    onClick={toggleSelectAll}
-                    className="text-xs text-purple-400 hover:text-purple-300 font-semibold cursor-pointer"
-                  >
-                    {recognizedItems.every((i) => i.selected) ? 'Deselect All' : 'Select All'}
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={toggleSelectAll}
+                      className="text-xs text-purple-400 hover:text-purple-300 font-semibold cursor-pointer"
+                    >
+                      {recognizedItems.every((i) => i.selected) ? 'Deselect All' : 'Select All'}
+                    </button>
+                  </div>
                 </div>
 
-                <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
                   {recognizedItems.map((item, index) => (
                     <div
                       key={item.id}
@@ -436,8 +476,12 @@ export const VisionScanModal: React.FC<VisionScanModalProps> = ({
                               type="text"
                               value={item.name}
                               onChange={(e) => {
+                                const newName = e.target.value;
+                                const inferred = inferStorageLocation(newName, item.category);
                                 const updated = [...recognizedItems];
-                                updated[index].name = e.target.value;
+                                updated[index].name = newName;
+                                updated[index].location = inferred.location;
+                                updated[index].category = inferred.category;
                                 setRecognizedItems(updated);
                               }}
                               className="flex-1 font-bold text-xs text-white bg-transparent border-b border-transparent focus:border-purple-400 focus:outline-none py-0.5"
@@ -455,7 +499,7 @@ export const VisionScanModal: React.FC<VisionScanModalProps> = ({
                                 updated[index].location = e.target.value as PantryLocation;
                                 setRecognizedItems(updated);
                               }}
-                              className="text-xs px-2 py-1 bg-slate-900 border border-white/10 rounded-lg text-slate-200 cursor-pointer"
+                              className="text-xs px-2.5 py-1 bg-slate-900 border border-white/10 rounded-lg text-slate-200 cursor-pointer font-semibold"
                             >
                               <option value="fridge">🧊 Fridge</option>
                               <option value="freezer">❄️ Freezer</option>

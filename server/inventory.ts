@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { queryAll, queryOne, execute } from './db.js';
-import { calculateExpiryDate, calculateShelfLifeDays, getFreshnessStatus, PantryLocation } from './shelfLife.js';
+import { calculateExpiryDate, calculateShelfLifeDays, getFreshnessStatus, inferStorageLocation, PantryLocation } from './shelfLife.js';
 
 export interface InventoryItemRow {
   id: string;
@@ -58,33 +58,11 @@ export async function lookupBarcode(barcode: string): Promise<any> {
     const brand = p.brands ? p.brands.split(',')[0].trim() : '';
     const fullName = brand && !name.toLowerCase().includes(brand.toLowerCase()) ? `${brand} ${name}` : name;
 
-    // Detect category & location
+    // Detect category & location intelligently
     const categoriesTags = Array.isArray(p.categories_tags) ? p.categories_tags.join(' ').toLowerCase() : '';
-    let category = 'Pantry';
-    let location: PantryLocation = 'pantry';
-
-    if (categoriesTags.includes('dairy') || categoriesTags.includes('milk') || categoriesTags.includes('cheese') || categoriesTags.includes('yogurt')) {
-      category = 'Dairy & Eggs';
-      location = 'fridge';
-    } else if (categoriesTags.includes('meat') || categoriesTags.includes('poultry') || categoriesTags.includes('seafood') || categoriesTags.includes('fish')) {
-      category = 'Meat & Seafood';
-      location = 'fridge';
-    } else if (categoriesTags.includes('frozen')) {
-      category = 'Frozen';
-      location = 'freezer';
-    } else if (categoriesTags.includes('fruit') || categoriesTags.includes('vegetable') || categoriesTags.includes('produce')) {
-      category = 'Produce';
-      location = 'fridge';
-    } else if (categoriesTags.includes('bakery') || categoriesTags.includes('bread')) {
-      category = 'Bakery';
-      location = 'pantry';
-    } else if (categoriesTags.includes('beverage') || categoriesTags.includes('drink')) {
-      category = 'Beverages';
-      location = 'fridge';
-    } else if (categoriesTags.includes('snack')) {
-      category = 'Snacks';
-      location = 'pantry';
-    }
+    const inferred = inferStorageLocation(fullName, p.categories || '', categoriesTags);
+    const category = inferred.category;
+    const location = inferred.location;
 
     const imageUrl = p.image_front_url || p.image_url || null;
     const quantity = p.quantity || null;
@@ -130,7 +108,7 @@ export async function scanInventoryVision(
   }
 
   const genAI = new GoogleGenerativeAI(activeKey);
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+  const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' });
 
   // Clean data URL prefix if present
   const base64Data = imageBase64.replace(/^data:image\/[a-zA-Z0-9+.-]+;base64,/, '');
@@ -182,11 +160,17 @@ Example:
 
   return parsed.map((item) => {
     const name = String(item.name || 'Food Item').trim();
-    const category = String(item.category || 'Pantry').trim();
-    const loc: PantryLocation =
-      item.location === 'fridge' || item.location === 'freezer' || item.location === 'pantry'
-        ? item.location
-        : 'pantry';
+    // Intelligently infer or validate storage location & category
+    const inferred = inferStorageLocation(name, item.category || '');
+    let loc: PantryLocation = inferred.location;
+    if (item.location === 'freezer' || item.location === 'fridge' || item.location === 'pantry') {
+      if (inferred.location === 'pantry' && (item.location === 'freezer' || item.location === 'fridge')) {
+        loc = item.location;
+      } else {
+        loc = inferred.location;
+      }
+    }
+    const category = inferred.category || String(item.category || 'Pantry').trim();
     const quantity = String(item.quantity || '1').trim();
 
     // Automatically calculate expiration date from category shelf-life rules

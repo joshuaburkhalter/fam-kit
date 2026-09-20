@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Drawer } from '../ui/Drawer';
-import { X, Camera, Barcode, Check, AlertCircle, Loader2, Sparkles, RefreshCw, Zap } from 'lucide-react';
+import { Camera, Barcode, Check, AlertCircle, Loader2, Sparkles, RefreshCw, Zap, Layers, ChevronDown } from 'lucide-react';
 import { api } from '../../lib/api';
+import { inferStorageLocation } from '../../lib/shelfLife';
 import type { PantryLocation, InventoryItem } from '../../types';
 
 interface BarcodeScannerModalProps {
@@ -21,6 +22,11 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [isLookingUp, setIsLookingUp] = useState(false);
   const [hasBarcodeDetector, setHasBarcodeDetector] = useState(false);
+  const [isBatchMode, setIsBatchMode] = useState(true);
+  const [batchItems, setBatchItems] = useState<InventoryItem[]>([]);
+  const [lastScannedToast, setLastScannedToast] = useState<{ name: string; location: PantryLocation } | null>(null);
+
+  // Single-item mode state
   const [lookupResult, setLookupResult] = useState<{
     found: boolean;
     barcode: string;
@@ -38,21 +44,34 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const scanIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastScanTimeRef = useRef<{ code: string; timestamp: number }>({ code: '', timestamp: 0 });
 
   useEffect(() => {
     setHasBarcodeDetector('BarcodeDetector' in window);
   }, []);
 
-  useEffect(() => {
-    if (!isOpen) {
-      stopCamera();
-      setLookupResult(null);
-      setManualCode('');
-      setCameraError(null);
+  const playScanBeep = useCallback(() => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(920, ctx.currentTime);
+      gain.gain.setValueAtTime(0.18, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.11);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.11);
+    } catch {
+      // AudioContext unavailable or blocked by browser policy
     }
-  }, [isOpen]);
+  }, []);
 
-  const stopCamera = () => {
+  const stopCamera = useCallback(() => {
     if (scanIntervalRef.current) {
       clearInterval(scanIntervalRef.current);
       scanIntervalRef.current = null;
@@ -66,9 +85,9 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     }
     setIsScanningCamera(false);
     setCameraLoading(false);
-  };
+  }, []);
 
-  const startCamera = async () => {
+  const startCamera = useCallback(async () => {
     setCameraError(null);
     setCameraLoading(true);
     setIsScanningCamera(true);
@@ -89,7 +108,6 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 
       streamRef.current = stream;
 
-      // Assign to video element if already mounted
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         try {
@@ -114,13 +132,11 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
             if (detected && detected.length > 0) {
               const code = detected[0].rawValue;
               if (code) {
-                if ('vibrate' in navigator) navigator.vibrate(100);
-                stopCamera();
-                handleLookup(code);
+                handleDetectedBarcode(code);
               }
             }
           } catch {}
-        }, 400);
+        }, 350);
       }
     } catch (err: any) {
       console.warn('Camera access error:', err);
@@ -128,9 +144,102 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
       setIsScanningCamera(false);
       setCameraLoading(false);
     }
+  }, []);
+
+  // Directly open camera whenever modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setBatchItems([]);
+      setLookupResult(null);
+      setManualCode('');
+      setCameraError(null);
+      startCamera();
+    } else {
+      stopCamera();
+      if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    }
+  }, [isOpen, startCamera, stopCamera]);
+
+  const triggerToast = (name: string, location: PantryLocation) => {
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    setLastScannedToast({ name, location });
+    toastTimeoutRef.current = setTimeout(() => {
+      setLastScannedToast(null);
+    }, 2600);
   };
 
-  // Capture current video frame & scan (works on all devices, even without BarcodeDetector)
+  const handleDetectedBarcode = async (rawCode: string) => {
+    const clean = rawCode.trim();
+    if (!clean) return;
+
+    // Debounce / Cooldown duplicate detections of same barcode within 2.5 seconds
+    const now = Date.now();
+    if (lastScanTimeRef.current.code === clean && now - lastScanTimeRef.current.timestamp < 2500) {
+      return;
+    }
+    lastScanTimeRef.current = { code: clean, timestamp: now };
+
+    // Tactile & audio feedback
+    if ('vibrate' in navigator) navigator.vibrate(100);
+    playScanBeep();
+
+    if (isBatchMode) {
+      // BATCH MODE: Look up and auto-save directly without closing camera
+      try {
+        setIsLookingUp(true);
+        const res = await api.lookupBarcode(clean);
+
+        let itemName = 'Grocery Item';
+        let itemCat = 'Pantry';
+        let itemLoc: PantryLocation = 'pantry';
+        let itemQty = '1';
+        let itemExpiresAt = new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0];
+        let itemImg: string | null = null;
+
+        if (res.found && res.item) {
+          itemName = res.item.name || itemName;
+          itemCat = res.item.category || itemCat;
+          itemLoc = (res.item.location as PantryLocation) || itemLoc;
+          itemQty = res.item.quantity || itemQty;
+          itemExpiresAt = res.item.expiresAt || itemExpiresAt;
+          itemImg = res.item.imageUrl || null;
+        } else {
+          itemName = `Item (${clean.slice(-4)})`;
+        }
+
+        // Auto-categorize location based on food type
+        const inferred = inferStorageLocation(itemName, itemCat);
+        itemLoc = inferred.location;
+        itemCat = inferred.category;
+
+        const saved = await api.addInventoryItem({
+          name: itemName,
+          barcode: clean,
+          category: itemCat,
+          location: itemLoc,
+          quantity: itemQty,
+          imageUrl: itemImg,
+          isStock: false,
+          restockCadenceDays: null,
+          expiresAt: itemExpiresAt,
+        });
+
+        onItemAdded(saved);
+        setBatchItems((prev) => [saved, ...prev]);
+        triggerToast(itemName, itemLoc);
+      } catch (err: any) {
+        console.error('Batch barcode scan error:', err);
+      } finally {
+        setIsLookingUp(false);
+      }
+    } else {
+      // SINGLE ITEM MODE: Stop camera and review
+      stopCamera();
+      handleLookup(clean);
+    }
+  };
+
+  // Capture current video frame & scan (fallback for browsers without BarcodeDetector)
   const captureFrameAndScan = async () => {
     if (!videoRef.current || videoRef.current.readyState < 2) return;
     const video = videoRef.current;
@@ -141,7 +250,6 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     if (!ctx) return;
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    // If BarcodeDetector supported, run on canvas
     if ('BarcodeDetector' in window) {
       try {
         const detector = new (window as any).BarcodeDetector({
@@ -149,8 +257,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
         });
         const results = await detector.detect(canvas);
         if (results && results.length > 0 && results[0].rawValue) {
-          stopCamera();
-          handleLookup(results[0].rawValue);
+          handleDetectedBarcode(results[0].rawValue);
           return;
         }
       } catch {}
@@ -158,23 +265,45 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 
     // AI vision fallback to recognize item from photo frame
     const base64 = canvas.toDataURL('image/jpeg', 0.85);
-    stopCamera();
     setIsLookingUp(true);
     try {
       const res = await api.scanInventoryVision(base64, 'image/jpeg');
       if (res.items && res.items.length > 0) {
         const first = res.items[0];
-        setLookupResult({
-          found: true,
-          barcode: 'CAMERA-SCAN',
-          name: first.name,
-          category: first.category,
-          location: first.location,
-          quantity: first.quantity,
-          expiresAt: first.expiresAt,
-        });
+        const inferred = inferStorageLocation(first.name, first.category);
+        const loc = inferred.location;
+        const cat = inferred.category;
+
+        if (isBatchMode) {
+          playScanBeep();
+          const saved = await api.addInventoryItem({
+            name: first.name,
+            barcode: null,
+            category: cat,
+            location: loc,
+            quantity: first.quantity || '1',
+            imageUrl: null,
+            isStock: false,
+            restockCadenceDays: null,
+            expiresAt: first.expiresAt,
+          });
+          onItemAdded(saved);
+          setBatchItems((prev) => [saved, ...prev]);
+          triggerToast(first.name, loc);
+        } else {
+          stopCamera();
+          setLookupResult({
+            found: true,
+            barcode: 'CAMERA-SCAN',
+            name: first.name,
+            category: cat,
+            location: loc,
+            quantity: first.quantity,
+            expiresAt: first.expiresAt,
+          });
+        }
       } else {
-        setCameraError('Could not recognize food item in frame. Please enter name or barcode below.');
+        setCameraError('Could not recognize item in frame. Please try again or enter digits manually.');
       }
     } catch (e: any) {
       setCameraError('Scan recognition failed. Please enter the barcode digits below.');
@@ -192,12 +321,13 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     try {
       const res = await api.lookupBarcode(clean);
       if (res.found && res.item) {
+        const inferred = inferStorageLocation(res.item.name || '', res.item.category || '');
         setLookupResult({
           found: true,
           barcode: clean,
           name: res.item.name || 'Pantry Item',
-          category: res.item.category || 'Pantry',
-          location: (res.item.location as PantryLocation) || 'pantry',
+          category: inferred.category || res.item.category || 'Pantry',
+          location: (inferred.location as PantryLocation) || (res.item.location as PantryLocation) || 'pantry',
           quantity: res.item.quantity || '1',
           imageUrl: res.item.imageUrl || null,
           expiresAt: res.item.expiresAt || new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
@@ -228,7 +358,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     }
   };
 
-  const handleSaveItem = async () => {
+  const handleSaveSingleItem = async () => {
     if (!lookupResult || !lookupResult.name.trim()) return;
     setIsSaving(true);
     try {
@@ -253,9 +383,30 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     }
   };
 
+  const handleLocationChangeForBatchItem = async (itemId: string, newLocation: PantryLocation) => {
+    try {
+      const updated = await api.updateInventoryItem(itemId, { location: newLocation });
+      setBatchItems((prev) => prev.map((item) => (item.id === itemId ? updated : item)));
+      onItemAdded(updated);
+    } catch (e) {
+      console.error('Failed to change location:', e);
+    }
+  };
+
   const handleClose = () => {
     stopCamera();
     onClose();
+  };
+
+  const getLocationLabel = (loc: PantryLocation) => {
+    switch (loc) {
+      case 'fridge':
+        return '🧊 Fridge';
+      case 'freezer':
+        return '❄️ Freezer';
+      default:
+        return '🥫 Pantry';
+    }
   };
 
   return (
@@ -263,11 +414,44 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
       isOpen={isOpen}
       onClose={handleClose}
       title="Scan Barcode"
-      subtitle="Add packaged foods with auto-calculated shelf life"
+      subtitle={isBatchMode ? 'Rapid batch mode: scan items one after another' : 'Add packaged foods with auto-calculated shelf life'}
       icon={<Barcode className="w-5 h-5 text-slate-950" />}
       maxWidth="max-w-lg"
     >
       <div className="space-y-4">
+        {/* Mode Toggle Header */}
+        <div className="flex items-center justify-between p-2.5 bg-slate-900/80 rounded-2xl border border-white/10">
+          <div className="flex items-center gap-2">
+            <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${isBatchMode ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-400'}`}>
+              <Layers className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-white flex items-center gap-1.5">
+                Batch Scanning
+                {isBatchMode && (
+                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-mono font-semibold">
+                    ACTIVE
+                  </span>
+                )}
+              </p>
+              <p className="text-[11px] text-slate-400">
+                {isBatchMode ? 'Auto-adds items & keeps camera scanning' : 'Review & confirm each item individually'}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsBatchMode(!isBatchMode)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              isBatchMode
+                ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
+                : 'bg-white/10 text-slate-300 hover:bg-white/15'
+            }`}
+          >
+            {isBatchMode ? 'Batch On' : 'Single Item'}
+          </button>
+        </div>
+
         {/* Camera Viewfinder */}
         {!lookupResult && (
           <div className="space-y-4">
@@ -306,24 +490,50 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                   </div>
                 </div>
 
+                {/* Floating Success Notification Toast */}
+                {lastScannedToast && (
+                  <div className="absolute top-3 left-3 right-16 z-30 animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="p-2.5 bg-emerald-950/90 border border-emerald-500/50 backdrop-blur-md rounded-xl text-white shadow-xl flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center shrink-0">
+                        <Check className="w-3.5 h-3.5 stroke-[3]" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-bold truncate text-emerald-200">{lastScannedToast.name}</p>
+                        <p className="text-[10px] text-emerald-400 font-medium">
+                          Auto-assigned to {getLocationLabel(lastScannedToast.location)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Looking up spinner on viewfinder */}
+                {isLookingUp && (
+                  <div className="absolute top-3 left-3 px-3 py-1.5 bg-slate-950/80 backdrop-blur-md rounded-xl text-xs font-semibold text-emerald-400 border border-white/10 flex items-center gap-1.5 z-20">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Identifying...</span>
+                  </div>
+                )}
+
                 {/* Close camera button */}
                 <button
                   type="button"
                   onClick={stopCamera}
                   className="absolute top-3 right-3 px-3 py-1.5 bg-slate-950/80 hover:bg-slate-900 backdrop-blur-md rounded-xl text-xs font-semibold text-white border border-white/10 shadow-md cursor-pointer transition-colors z-10"
                 >
-                  Close Camera
+                  Pause
                 </button>
 
-                {/* Manual Scan Snapshot Trigger */}
+                {/* Manual Scan Trigger (Instant scan fallback) */}
                 <div className="absolute bottom-3 left-0 right-0 px-4 flex justify-center z-10">
                   <button
                     type="button"
                     onClick={captureFrameAndScan}
-                    className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 rounded-xl text-xs font-bold shadow-lg shadow-emerald-500/30 flex items-center gap-1.5 cursor-pointer transition-all"
+                    disabled={isLookingUp}
+                    className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 active:scale-95 text-slate-950 rounded-xl text-xs font-bold shadow-lg shadow-emerald-500/30 flex items-center gap-1.5 cursor-pointer transition-all"
                   >
                     <Zap className="w-3.5 h-3.5 stroke-[2.5]" />
-                    <span>{hasBarcodeDetector ? 'Instant Scan' : 'Scan Centered Barcode'}</span>
+                    <span>{hasBarcodeDetector ? 'Instant Barcode Scan' : 'Scan Centered Item'}</span>
                   </button>
                 </div>
               </div>
@@ -337,7 +547,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                   <Camera className="w-6 h-6 stroke-[2.2]" />
                 </div>
                 <div className="text-center">
-                  <p className="text-sm font-bold text-white">Open Live Camera</p>
+                  <p className="text-sm font-bold text-white">Turn Camera On</p>
                   <p className="text-xs text-slate-400 mt-0.5">Point camera at the barcode on any packaging</p>
                 </div>
               </button>
@@ -347,6 +557,55 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
               <div className="flex items-start gap-2 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs text-amber-300">
                 <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
                 <span>{cameraError}</span>
+              </div>
+            )}
+
+            {/* Batch Session Tray */}
+            {isBatchMode && batchItems.length > 0 && (
+              <div className="p-3 bg-slate-900/70 rounded-2xl border border-white/10 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                    <Check className="w-3.5 h-3.5 text-emerald-400 stroke-[3]" />
+                    Scanned This Session ({batchItems.length})
+                  </span>
+                  <span className="text-[10px] text-slate-400">Tap location to change</span>
+                </div>
+
+                <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                  {batchItems.map((item) => (
+                    <div
+                      key={item.id}
+                      className="p-2 bg-slate-950/60 rounded-xl border border-white/5 flex items-center justify-between gap-2"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-bold text-white truncate">{item.name}</p>
+                        <p className="text-[10px] text-slate-400">{item.category}</p>
+                      </div>
+
+                      <div className="relative shrink-0">
+                        <select
+                          value={item.location}
+                          onChange={(e) =>
+                            handleLocationChangeForBatchItem(item.id, e.target.value as PantryLocation)
+                          }
+                          className="text-[11px] font-semibold px-2 py-1 bg-slate-800 border border-white/10 rounded-lg text-slate-200 cursor-pointer focus:outline-none"
+                        >
+                          <option value="fridge">🧊 Fridge</option>
+                          <option value="freezer">❄️ Freezer</option>
+                          <option value="pantry">🥫 Pantry</option>
+                        </select>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  Done Scanning ({batchItems.length} Added)
+                </button>
               </div>
             )}
 
@@ -363,14 +622,14 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                     value={manualCode}
                     onChange={(e) => setManualCode(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleLookup(manualCode);
+                      if (e.key === 'Enter') handleDetectedBarcode(manualCode);
                     }}
                     className="w-full px-3.5 py-2.5 bg-slate-900 border border-white/10 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
                   />
                 </div>
                 <button
                   type="button"
-                  onClick={() => handleLookup(manualCode)}
+                  onClick={() => handleDetectedBarcode(manualCode)}
                   disabled={!manualCode.trim() || isLookingUp}
                   className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-500/20 flex items-center gap-1.5 shrink-0 cursor-pointer"
                 >
@@ -381,7 +640,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
           </div>
         )}
 
-        {/* Lookup Result Form */}
+        {/* Single-Item Lookup Result Form */}
         {lookupResult && (
           <div className="space-y-4 animate-in fade-in">
             <div className="flex items-center justify-between pb-3 border-b border-white/10">
@@ -404,6 +663,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                 onClick={() => {
                   setLookupResult(null);
                   setManualCode('');
+                  startCamera();
                 }}
                 className="text-xs text-slate-400 hover:text-white flex items-center gap-1 cursor-pointer transition-colors"
               >
@@ -420,7 +680,16 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                 <input
                   type="text"
                   value={lookupResult.name}
-                  onChange={(e) => setLookupResult({ ...lookupResult, name: e.target.value })}
+                  onChange={(e) => {
+                    const newName = e.target.value;
+                    const inferred = inferStorageLocation(newName, lookupResult.category);
+                    setLookupResult({
+                      ...lookupResult,
+                      name: newName,
+                      location: inferred.location,
+                      category: inferred.category,
+                    });
+                  }}
                   placeholder="e.g. Organic Whole Milk"
                   className="w-full px-3.5 py-2.5 bg-slate-900 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500"
                 />
@@ -516,14 +785,17 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
             <div className="flex gap-2 pt-2">
               <button
                 type="button"
-                onClick={() => setLookupResult(null)}
+                onClick={() => {
+                  setLookupResult(null);
+                  startCamera();
+                }}
                 className="flex-1 py-2.5 px-4 rounded-xl border border-white/10 text-xs font-semibold text-slate-300 hover:bg-white/5 transition-colors cursor-pointer"
               >
-                Back
+                Back to Camera
               </button>
               <button
                 type="button"
-                onClick={handleSaveItem}
+                onClick={handleSaveSingleItem}
                 disabled={!lookupResult.name.trim() || isSaving}
                 className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 disabled:opacity-50 text-slate-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 flex items-center justify-center gap-1.5 cursor-pointer"
               >
