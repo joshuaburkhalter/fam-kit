@@ -478,26 +478,41 @@ export const RecipesPage: React.FC = () => {
   };
 
   const filteredRecipes = recipes.filter((r) => {
+    const q = searchQuery.trim().toLowerCase();
+    const tagQuery = selectedTag ? selectedTag.toLowerCase().trim().replace(/^#+/, '') : null;
+
     const matchesSearch =
-      !searchQuery.trim() ||
-      r.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      r.tags?.some((t) => t.toLowerCase().includes(searchQuery.toLowerCase()));
+      !q ||
+      r.title.toLowerCase().includes(q) ||
+      r.tags?.some((t) => t.toLowerCase().includes(q));
 
     const matchesTag =
-      !selectedTag ||
-      (selectedTag === 'ai'
+      !tagQuery ||
+      (tagQuery === 'ai'
         ? isAiRecipe(r)
-        : r.tags?.some((t) => t.toLowerCase().trim().replace(/^#/, '') === selectedTag.toLowerCase().trim().replace(/^#/, '')));
+        : r.tags?.some((t) => t.toLowerCase().trim().replace(/^#+/, '') === tagQuery));
 
     return matchesSearch && matchesTag;
   });
 
-  // Collect unique clean tags
-  const allUniqueTags = Array.from(
-    new Set(
-      recipes.flatMap((r) => r.tags || []).map((t) => t.trim().replace(/^#/, ''))
-    )
-  ).filter(Boolean);
+  // Collect unique clean tags case-insensitively
+  const allUniqueTags = (() => {
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const r of recipes) {
+      for (const t of r.tags || []) {
+        const clean = t.trim().replace(/^#+/, '').trim();
+        if (!clean) continue;
+        const lower = clean.toLowerCase();
+        if (lower === 'ai') continue;
+        if (!seen.has(lower)) {
+          seen.add(lower);
+          result.push(clean);
+        }
+      }
+    }
+    return result;
+  })();
   const hasAiRecipes = recipes.some((r) => isAiRecipe(r));
 
   return (

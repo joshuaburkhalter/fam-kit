@@ -944,28 +944,42 @@ export const MealsPage: React.FC = () => {
 
   // Recipe filtering for Recipe Box (memoized)
   const filteredRecipes = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    const tagQuery = selectedTag ? selectedTag.toLowerCase().trim().replace(/^#+/, '') : null;
+
     return recipes.filter((r) => {
       const matchesSearch =
-        !searchQuery.trim() ||
-        r.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        r.tags?.some((t) => t.toLowerCase().includes(searchQuery.toLowerCase()));
+        !q ||
+        r.title.toLowerCase().includes(q) ||
+        r.tags?.some((t) => t.toLowerCase().includes(q));
 
       const matchesTag =
-        !selectedTag ||
-        (selectedTag === 'ai'
+        !tagQuery ||
+        (tagQuery === 'ai'
           ? isAiRecipe(r)
-          : r.tags?.some((t) => t.toLowerCase().trim().replace(/^#/, '') === selectedTag.toLowerCase().trim().replace(/^#/, '')));
+          : r.tags?.some((t) => t.toLowerCase().trim().replace(/^#+/, '') === tagQuery));
 
       return matchesSearch && matchesTag;
     });
   }, [recipes, searchQuery, selectedTag]);
 
+  // Case-insensitive deduplicated tags list (no matching duplicates)
   const allUniqueTags = useMemo(() => {
-    return Array.from(
-      new Set(
-        recipes.flatMap((r) => r.tags || []).map((t) => t.trim().replace(/^#/, ''))
-      )
-    ).filter(Boolean);
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const r of recipes) {
+      for (const t of r.tags || []) {
+        const clean = t.trim().replace(/^#+/, '').trim();
+        if (!clean) continue;
+        const lower = clean.toLowerCase();
+        if (lower === 'ai') continue;
+        if (!seen.has(lower)) {
+          seen.add(lower);
+          result.push(clean);
+        }
+      }
+    }
+    return result;
   }, [recipes]);
 
   const hasAiRecipes = useMemo(() => recipes.some((r) => isAiRecipe(r)), [recipes]);
@@ -1510,20 +1524,26 @@ export const MealsPage: React.FC = () => {
 
                 {allUniqueTags
                   .filter((t) => t.toLowerCase() !== 'ai')
-                  .slice(0, 12)
-                  .map((tag) => (
-                    <button
-                      key={tag}
-                      onClick={() => setSelectedTag(selectedTag === tag ? null : tag)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                        selectedTag === tag
-                          ? 'bg-emerald-500 text-slate-950 font-bold shadow-md shadow-emerald-500/20'
-                          : 'bg-slate-900/80 hover:bg-slate-850 text-slate-300 border border-white/5'
-                      }`}
-                    >
-                      #{tag}
-                    </button>
-                  ))}
+                  .slice(0, 15)
+                  .map((tag) => {
+                    const isSelected =
+                      selectedTag !== null &&
+                      selectedTag.toLowerCase().trim().replace(/^#+/, '') ===
+                        tag.toLowerCase().trim().replace(/^#+/, '');
+                    return (
+                      <button
+                        key={tag.toLowerCase()}
+                        onClick={() => setSelectedTag(isSelected ? null : tag)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-emerald-500 text-slate-950 font-bold shadow-md shadow-emerald-500/20'
+                            : 'bg-slate-900/80 hover:bg-slate-850 text-slate-300 border border-white/5'
+                        }`}
+                      >
+                        #{tag}
+                      </button>
+                    );
+                  })}
               </div>
 
               {/* Recipe Cards Grid */}
@@ -1979,85 +1999,121 @@ export const MealsPage: React.FC = () => {
             )}
 
             {activeTab === 'recipes' && (
-              <div
-                ref={recipeFabRef}
-                className={`fab-dock-transition pointer-events-auto h-[50px] border shadow-2xl flex items-center overflow-hidden ${
-                  isRecipeFabOpen
-                    ? 'w-full rounded-3xl border-white/25 bg-slate-900/95 backdrop-blur-xl shadow-emerald-500/10 px-2.5'
-                    : 'w-[50px] rounded-full border-emerald-400/40 bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 cursor-pointer shadow-xl shadow-emerald-500/30 hover:scale-105 active:scale-95 justify-center'
-                }`}
-              >
-                {!isRecipeFabOpen ? (
-                  <button
-                    type="button"
-                    onClick={() => setIsRecipeFabOpen(true)}
-                    className="w-full h-full flex items-center justify-center text-slate-950 cursor-pointer"
-                    title="Search Recipes"
-                  >
-                    <Search className="w-5 h-5 stroke-[2.2]" />
-                  </button>
-                ) : (
-                  <div className="w-full flex items-center gap-2 animate-in fade-in duration-200">
-                    {/* Far left: Close button */}
-                    <button
-                      type="button"
-                      onClick={() => setIsRecipeFabOpen(false)}
-                      className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center shrink-0 transition-colors cursor-pointer"
-                      title="Close search"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-
-                    {/* Secondary action: Add Recipe */}
+              <div className="flex flex-col items-end gap-2 w-full sm:w-auto">
+                {/* Two secondary action buttons for creating a recipe and adding a recipe */}
+                {!isRecipeFabOpen && (
+                  <div className="flex flex-col items-end gap-2 animate-in fade-in slide-in-from-bottom-2 duration-150 pointer-events-auto">
+                    {/* Secondary button 1: Create Recipe (from scratch) */}
                     <button
                       type="button"
                       onClick={() => {
-                        setIsRecipeFabOpen(false);
-                        setScraperInitialMode('url');
-                        setIsScraperOpen(true);
-                      }}
-                      className="w-8 h-8 rounded-xl bg-white/5 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-400 border border-white/10 hover:border-emerald-500/30 flex items-center justify-center transition-all cursor-pointer shrink-0"
-                      title="Add Recipe"
-                    >
-                      <Plus className="w-4 h-4 text-emerald-400 stroke-[2.5]" />
-                    </button>
-
-                    {/* Middle: Search text input (no autoFocus) */}
-                    <div className="flex-1 min-w-0 flex items-center relative">
-                      <input
-                        type="text"
-                        placeholder="Search recipes by title or tags..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full bg-transparent border-none text-xs text-white placeholder-slate-500 focus:outline-none px-1"
-                      />
-                      {searchQuery && (
-                        <button
-                          type="button"
-                          onClick={() => setSearchQuery('')}
-                          className="p-1 text-slate-400 hover:text-white shrink-0 cursor-pointer"
-                          title="Clear search"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Far right: Main action button (New Recipe) */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsRecipeFabOpen(false);
                         setEditingRecipe(null);
                         setIsEditRecipeModalOpen(true);
                       }}
-                      className="w-8 h-8 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 flex items-center justify-center transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer shrink-0"
-                      title="New Recipe"
+                      className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-900/95 hover:bg-slate-850 text-slate-200 hover:text-white border border-white/15 text-xs font-semibold shadow-xl shadow-black/40 backdrop-blur-md transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                      title="Create recipe from scratch"
                     >
-                      <Plus className="w-4 h-4 stroke-[2.5]" />
+                      <Pencil className="w-3.5 h-3.5 text-emerald-400 stroke-[2.2]" />
+                      <span>Create Recipe</span>
+                    </button>
+
+                    {/* Secondary button 2: Add Recipe (from web or scan) */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setScraperInitialMode('url');
+                        setIsScraperOpen(true);
+                      }}
+                      className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-900/95 hover:bg-slate-850 text-slate-200 hover:text-white border border-white/15 text-xs font-semibold shadow-xl shadow-black/40 backdrop-blur-md transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                      title="Add recipe (import from web link or scan)"
+                    >
+                      <Plus className="w-3.5 h-3.5 text-teal-400 stroke-[2.5]" />
+                      <span>Add Recipe</span>
                     </button>
                   </div>
                 )}
+
+                {/* Main Recipe FAB: Search button / expanding search dock */}
+                <div
+                  ref={recipeFabRef}
+                  className={`fab-dock-transition pointer-events-auto h-[50px] border shadow-2xl flex items-center overflow-hidden ${
+                    isRecipeFabOpen
+                      ? 'w-full rounded-3xl border-white/25 bg-slate-900/95 backdrop-blur-xl shadow-emerald-500/10 px-2.5'
+                      : 'w-[50px] rounded-full border-emerald-400/40 bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 cursor-pointer shadow-xl shadow-emerald-500/30 hover:scale-105 active:scale-95 justify-center'
+                  }`}
+                >
+                  {!isRecipeFabOpen ? (
+                    <button
+                      type="button"
+                      onClick={() => setIsRecipeFabOpen(true)}
+                      className="w-full h-full flex items-center justify-center text-slate-950 cursor-pointer"
+                      title="Search Recipes"
+                    >
+                      <Search className="w-5 h-5 stroke-[2.2]" />
+                    </button>
+                  ) : (
+                    <div className="w-full flex items-center gap-2 animate-in fade-in duration-200">
+                      {/* Far left: Close button */}
+                      <button
+                        type="button"
+                        onClick={() => setIsRecipeFabOpen(false)}
+                        className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center shrink-0 transition-colors cursor-pointer"
+                        title="Close search"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+
+                      {/* Secondary action inside dock: Add Recipe */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsRecipeFabOpen(false);
+                          setScraperInitialMode('url');
+                          setIsScraperOpen(true);
+                        }}
+                        className="w-8 h-8 rounded-xl bg-white/5 hover:bg-teal-500/20 text-slate-300 hover:text-teal-300 border border-white/10 hover:border-teal-500/30 flex items-center justify-center transition-all cursor-pointer shrink-0"
+                        title="Add Recipe"
+                      >
+                        <Plus className="w-4 h-4 text-teal-400 stroke-[2.5]" />
+                      </button>
+
+                      {/* Middle: Search text input */}
+                      <div className="flex-1 min-w-0 flex items-center relative">
+                        <input
+                          type="text"
+                          placeholder="Search recipes by title or tags..."
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          className="w-full bg-transparent border-none text-xs text-white placeholder-slate-500 focus:outline-none px-1"
+                        />
+                        {searchQuery && (
+                          <button
+                            type="button"
+                            onClick={() => setSearchQuery('')}
+                            className="p-1 text-slate-400 hover:text-white shrink-0 cursor-pointer"
+                            title="Clear search"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Secondary action inside dock: Create Recipe */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsRecipeFabOpen(false);
+                          setEditingRecipe(null);
+                          setIsEditRecipeModalOpen(true);
+                        }}
+                        className="w-8 h-8 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 flex items-center justify-center transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer shrink-0"
+                        title="Create Recipe"
+                      >
+                        <Pencil className="w-4 h-4 stroke-[2.2]" />
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
