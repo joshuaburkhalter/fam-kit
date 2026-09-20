@@ -594,6 +594,7 @@ export const RecipesPage: React.FC = () => {
                       src={selectedRecipe.image_url}
                       alt={selectedRecipe.title}
                       className="w-full h-56 object-cover"
+                      referrerPolicy="no-referrer"
                     />
                   ) : (
                     <div className="w-full h-44 bg-slate-900 flex items-center justify-center text-slate-600">
@@ -1022,6 +1023,7 @@ export const RecipesPage: React.FC = () => {
                         src={recipe.image_url}
                         alt={recipe.title}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        referrerPolicy="no-referrer"
                       />
                     ) : (
                       <div className="w-full h-full bg-slate-900 flex items-center justify-center text-slate-600">

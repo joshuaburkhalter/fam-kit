@@ -401,7 +401,7 @@ export const SIGNATURE_DISH_IMAGES: Record<string, string[]> = {
   'chicken alfredo': [
     'https://images.unsplash.com/photo-1645112411341-6c4fd023714a?w=800&auto=format&fit=crop&q=80',
     'https://images.unsplash.com/photo-1555949258-eb67b1ef0ceb?w=800&auto=format&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1551183053-bf91a1d81141?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1621996346565-e3d5d6281691?w=800&auto=format&fit=crop&q=80',
   ],
   'chicken marsala': [
     'https://images.unsplash.com/photo-1604908177453-7462950a6a3b?w=800&auto=format&fit=crop&q=80',
@@ -413,11 +413,11 @@ export const SIGNATURE_DISH_IMAGES: Record<string, string[]> = {
   ],
   'lasagna': [
     'https://images.unsplash.com/photo-1574894709920-11b28e7367e3?w=800&auto=format&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1551183053-bf91a1d81141?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1621996346565-e3d5d6281691?w=800&auto=format&fit=crop&q=80',
   ],
   'mac and cheese': [
     'https://images.unsplash.com/photo-1543339308-43e59d6b73a6?w=800&auto=format&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1551183053-bf91a1d81141?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1621996346565-e3d5d6281691?w=800&auto=format&fit=crop&q=80',
   ],
   'macaroni and cheese': [
     'https://images.unsplash.com/photo-1543339308-43e59d6b73a6?w=800&auto=format&fit=crop&q=80',
@@ -542,15 +542,18 @@ const CURATED_FOOD_IMAGES: Record<string, string[]> = {
 
   // Pastas & Noodles
   pasta: [
-    'https://images.unsplash.com/photo-1551183053-bf91a1d81141?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1621996346565-e3d5d6281691?w=800&auto=format&fit=crop&q=80',
     'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=800&auto=format&fit=crop&q=80',
     'https://images.unsplash.com/photo-1546549032-9571cd6b27df?w=800&auto=format&fit=crop&q=80',
     'https://images.unsplash.com/photo-1645112411341-6c4fd023714a?w=800&auto=format&fit=crop&q=80',
     'https://images.unsplash.com/photo-1555949258-eb67b1ef0ceb?w=800&auto=format&fit=crop&q=80',
   ],
   spaghetti: [
-    'https://images.unsplash.com/photo-1551183053-bf91a1d81141?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1621996346565-e3d5d6281691?w=800&auto=format&fit=crop&q=80',
     'https://images.unsplash.com/photo-1546549032-9571cd6b27df?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1612874742237-6526221588e3?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1556761223-4c4282c73f77?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1588013273468-315fd88ea34c?w=800&auto=format&fit=crop&q=80',
   ],
   noodle: [
     'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=800&auto=format&fit=crop&q=80',
@@ -702,6 +705,102 @@ export function getCuratedFoodImage(title: string = '', tags: string[] = []): st
   return CURATED_FOOD_IMAGES.default[0];
 }
 
+/**
+ * Live Web Image Search for authentic food & recipe photos.
+ * Queries web search for appetizing, high-resolution food photos matching the recipe title.
+ * Automatically cycles through results to find an unused, reachable photo.
+ */
+export async function searchWebRecipeImages(
+  recipeTitle: string,
+  ingredients: Array<any> = [],
+  usedImages: Set<string> = new Set()
+): Promise<string | null> {
+  const cleanTitle = recipeTitle
+    .replace(/^(how to make|easy|best|crispy|creamy|homemade|quick|simple|ultimate|classic|baked|pan-seared|slow cooker|instant pot|sheet pan)\s+/gi, '')
+    .replace(/\s+(recipe|dish|style)$/gi, '')
+    .trim();
+
+  if (!cleanTitle) return null;
+
+  const queries = [
+    `${cleanTitle} recipe dish`,
+    cleanTitle,
+  ];
+
+  if (Array.isArray(ingredients) && ingredients.length > 0) {
+    const topIngs = ingredients
+      .slice(0, 3)
+      .map((i) => (typeof i === 'string' ? i : i?.item || i?.name))
+      .filter(Boolean);
+    if (topIngs.length > 0) {
+      queries.push(`${cleanTitle} ${topIngs.join(' ')}`);
+    }
+  }
+
+  for (const q of queries) {
+    try {
+      const mainUrl = `https://duckduckgo.com/?q=${encodeURIComponent(q)}&iax=images&ia=images`;
+      const res = await fetch(mainUrl, {
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        },
+        signal: AbortSignal.timeout(4000),
+      });
+      const html = await res.text();
+      const vqdMatch = html.match(/vqd=["']?([^"'\s&]+)/i) || html.match(/vqd=([\d-]+)/);
+      if (!vqdMatch) continue;
+      const vqd = vqdMatch[1];
+
+      const apiUrl = `https://duckduckgo.com/i.js?l=us-en&o=json&q=${encodeURIComponent(q)}&vqd=${vqd}&f=,,,&p=1`;
+      const apiRes = await fetch(apiUrl, {
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+          'Referer': 'https://duckduckgo.com/',
+        },
+        signal: AbortSignal.timeout(4000),
+      });
+      const data = (await apiRes.json()) as any;
+      const results = (data.results || []) as Array<{ image?: string; thumbnail?: string; title?: string }>;
+
+      for (const item of results) {
+        const candidate = item.image;
+        const backup = item.thumbnail ? `${item.thumbnail}&w=1200&h=900&c=7` : null;
+        if (!candidate || usedImages.has(candidate) || (backup && usedImages.has(backup))) {
+          continue;
+        }
+
+        // Quick probe to check if candidate is directly accessible
+        let usableUrl = candidate;
+        try {
+          const probe = await fetch(candidate, {
+            method: 'HEAD',
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+            signal: AbortSignal.timeout(2000),
+          });
+          if (!probe.ok || !probe.headers.get('content-type')?.startsWith('image/')) {
+            usableUrl = backup || candidate;
+          }
+        } catch {
+          // If direct host timed out or blocked cross-origin head, fallback to high-res Bing thumbnail
+          usableUrl = backup || candidate;
+        }
+
+        if (usableUrl && !usedImages.has(usableUrl)) {
+          usedImages.add(usableUrl);
+          return usableUrl;
+        }
+      }
+    } catch {
+      // Continue to next query
+    }
+  }
+
+  return null;
+}
+
 export async function findAccurateRecipePhoto(
   title: string = '',
   description: string = '',
@@ -713,7 +812,20 @@ export async function findAccurateRecipePhoto(
   const queryText = `${title} ${imageQuery || ''} ${tags.join(' ')}`.toLowerCase();
   const primaryDishFamily = getDishFamily(title) || (imageQuery ? getDishFamily(imageQuery) : null);
 
-  // 1. Check specialized signature dishes first (sorted by dish name length descending)
+  // 1. Live Web Image Search (authentic food photography of the exact recipe)
+  // Searches specifically for this recipe (e.g. "Spaghetti alla Nerano") and cycles through real web photos
+  if (title) {
+    try {
+      const liveWebPhoto = await searchWebRecipeImages(title, ingredients, usedImages);
+      if (liveWebPhoto) {
+        return liveWebPhoto;
+      }
+    } catch {
+      // Fall through to signature dishes and Wikimedia
+    }
+  }
+
+  // 2. Check specialized signature dishes (sorted by dish name length descending)
   // Ensures composite dishes (e.g. "tuscan chicken", "salmon bowl") match before broad words
   const signatureKeys = Object.keys(SIGNATURE_DISH_IMAGES).sort((a, b) => b.length - a.length);
   for (const dish of signatureKeys) {
@@ -737,7 +849,7 @@ export async function findAccurateRecipePhoto(
     }
   }
 
-  // 2. Try Wikimedia Commons High-Res Food Photo Search
+  // 3. Try Wikimedia Commons High-Res Food Photo Search
   const cleanTitle = title
     .replace(/^(how to make|easy|best|crispy|creamy|homemade|quick|simple|ultimate|classic|baked|pan-seared|slow cooker|instant pot|sheet pan)\s+/gi, '')
     .replace(/\s+(recipe|dish|style)$/gi, '')
@@ -757,12 +869,13 @@ export async function findAccurateRecipePhoto(
     .filter((w) => w.length >= 3 && !FILLER_WORDS.has(w));
 
   // Build list of search query candidates for Wikimedia Commons
+  // Priority: exact recipe clean title FIRST, so specific dishes match directly
   const searchQueries: string[] = [];
-  if (cleanTitle) searchQueries.push(`${cleanTitle} food`);
+  if (cleanTitle) searchQueries.push(cleanTitle);
+  if (cleanTitle) searchQueries.push(`${cleanTitle} dish`);
   if (primaryDishFamily && distinctKeywords.length > 0) {
     searchQueries.push(`${distinctKeywords[0]} ${primaryDishFamily.name}`);
   }
-  if (cleanTitle) searchQueries.push(cleanTitle);
 
   for (const query of searchQueries) {
     try {

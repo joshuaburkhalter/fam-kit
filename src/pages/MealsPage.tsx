@@ -1024,6 +1024,7 @@ export const MealsPage: React.FC = () => {
                   src={selectedRecipe.image_url}
                   alt={selectedRecipe.title}
                   className="w-full h-full object-cover"
+                  referrerPolicy="no-referrer"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent" />
               </div>
@@ -1539,6 +1540,7 @@ export const MealsPage: React.FC = () => {
                               src={recipe.image_url}
                               alt={recipe.title}
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              referrerPolicy="no-referrer"
                             />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center text-slate-600">
@@ -1669,6 +1671,7 @@ export const MealsPage: React.FC = () => {
                               alt={meal.title}
                               onClick={() => handleSelectRecipe(linkedRecipe)}
                               className="w-14 h-14 rounded-xl object-cover border border-white/10 shrink-0 cursor-pointer hover:opacity-90"
+                              referrerPolicy="no-referrer"
                             />
                           ) : (
                             <div className="w-14 h-14 rounded-xl bg-slate-900 border border-white/10 flex items-center justify-center text-emerald-400 shrink-0">
@@ -1865,6 +1868,7 @@ export const MealsPage: React.FC = () => {
                                       alt={log.title}
                                       onClick={() => handleSelectRecipe(linkedRecipe)}
                                       className="w-10 h-10 rounded-xl object-cover border border-white/10 shrink-0 cursor-pointer hover:opacity-90"
+                                      referrerPolicy="no-referrer"
                                     />
                                   ) : (
                                     <div className="w-10 h-10 rounded-xl bg-slate-900 border border-white/10 flex items-center justify-center text-emerald-400 shrink-0">
@@ -2142,6 +2146,7 @@ export const MealsPage: React.FC = () => {
                           src={r.image_url}
                           alt={r.title}
                           className="w-11 h-11 rounded-xl object-cover border border-slate-800 shrink-0"
+                          referrerPolicy="no-referrer"
                         />
                       ) : (
                         <div className="w-11 h-11 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-emerald-400 shrink-0">
