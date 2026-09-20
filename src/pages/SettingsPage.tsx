@@ -889,19 +889,20 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
                     </div>
 
                     <div className="min-w-0">
-                      <span className="text-xs font-bold text-white block">Google Calendar</span>
-                      <div className="text-[11px] text-slate-400 truncate pt-0.5">
-                        {isConnected && syncStatus?.googleEmail ? (
-                          <span className="font-mono text-slate-300">{syncStatus.googleEmail}</span>
-                        ) : isPending ? (
-                          <span className="text-emerald-400/90 flex items-center gap-1.5">
-                            <Loader2 className="w-2.5 h-2.5 animate-spin text-emerald-400" />
-                            Syncing events...
-                          </span>
-                        ) : (
-                          <span className="text-slate-500">Connect personal or work calendar</span>
-                        )}
-                      </div>
+                      {isConnected && syncStatus?.googleEmail ? (
+                        <span className="text-xs font-bold text-white font-mono block truncate">
+                          {syncStatus.googleEmail}
+                        </span>
+                      ) : isPending ? (
+                        <span className="text-xs font-medium text-emerald-400/90 flex items-center gap-1.5">
+                          <Loader2 className="w-3 h-3 animate-spin text-emerald-400" />
+                          Syncing events...
+                        </span>
+                      ) : (
+                        <span className="text-xs font-medium text-slate-400 block">
+                          No account connected
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -1016,13 +1017,6 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
               </div>
             );
           })()}
-        </div>
-
-        <div className="p-3 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-300/90 text-xs flex items-center gap-2">
-          <Check className="w-4 h-4 shrink-0 text-blue-400" />
-          <span>
-            Once connected, events automatically sync to the family calendar in the background. No manual buttons needed.
-          </span>
         </div>
       </div>
 
