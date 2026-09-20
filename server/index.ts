@@ -2122,7 +2122,11 @@ app.post('/api/recipes/import-images', async (req, res) => {
     res.json({ success: true, recipe: saved, detectedDishIndex: parsed.dishPhotoIndex });
   } catch (err: any) {
     console.error('Import images error:', err);
-    res.status(500).json({ error: err.message || 'Failed to scan recipe from photos' });
+    let errorMsg = err.message || 'Failed to scan recipe from photos';
+    if (/recitation|copyright/i.test(errorMsg)) {
+      errorMsg = 'Gemini automated recitation filter flagged this printed cookbook page. Try snapping the photo closer to the ingredients and steps (without the publisher/book title header), or paste the text directly.';
+    }
+    res.status(500).json({ error: errorMsg });
   }
 });
 
