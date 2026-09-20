@@ -617,37 +617,38 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
       {/* 0. Closed Beta Access & Membership */}
       <div className="glass-panel rounded-3xl p-5 border border-white/10 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-gradient-to-tr from-emerald-500/20 to-teal-500/20 text-emerald-400 border border-emerald-500/30 shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
               <ShieldCheck className="w-4 h-4" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm font-bold text-white">Closed Beta Access</h3>
-                {hasActiveAccess ? (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                    <ShieldCheck className="w-3 h-3" />
-                    Active Beta Access
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30">
-                    Locked / Code Required
-                  </span>
-                )}
-              </div>
+            <div className="min-w-0">
+              <h3 className="text-sm font-bold text-white">Closed Beta Access</h3>
               <p className="text-[11px] text-slate-400 mt-0.5">
                 {household?.promo_code_used
-                  ? `Active Beta Tester (Redeemed Code: ${household.promo_code_used})`
+                  ? `Redeemed Code: ${household.promo_code_used}`
                   : hasActiveAccess
                   ? 'Active Beta Tester (Complimentary Early Access)'
-                  : 'Closed Beta invite required. Redeem an invite code below.'}
+                  : 'Closed Beta invite required to access all features'}
               </p>
-              {household?.subscription_expires_at && (
-                <p className="text-[10px] text-slate-500 font-mono mt-0.5">
-                  Beta access active until {new Date(household.subscription_expires_at).toLocaleDateString()}
-                </p>
-              )}
             </div>
+          </div>
+
+          <div className="shrink-0 flex flex-col sm:items-end gap-1">
+            {hasActiveAccess ? (
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                Active Access
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-xl bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                Code Required
+              </span>
+            )}
+            {household?.subscription_expires_at && (
+              <span className="text-[10px] text-slate-500 font-mono">
+                Valid until {new Date(household.subscription_expires_at).toLocaleDateString()}
+              </span>
+            )}
           </div>
         </div>
 
@@ -685,14 +686,14 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
 
       {/* 1. Household Invite Code */}
       <div className="glass-panel rounded-3xl p-5 border border-white/10 space-y-3">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
               <KeyRound className="w-4 h-4" />
             </div>
-            <div>
+            <div className="min-w-0">
               <h3 className="text-sm font-bold text-white">Household Invite Code</h3>
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-slate-400 mt-0.5">
                 Share this 6-character code with family members to connect their devices
               </p>
             </div>
@@ -700,7 +701,7 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
 
           <button
             onClick={handleCopyInvite}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 cursor-pointer shrink-0"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 cursor-pointer shrink-0 self-start sm:self-auto"
           >
             {copiedInvite ? (
               <>
@@ -719,23 +720,21 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
 
       {/* 2. Family Members */}
       <div className="glass-panel rounded-3xl p-5 border border-white/10 space-y-3">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
               <Users className="w-4 h-4" />
             </div>
-            <div>
-              <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
-                Family Members
-                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 font-mono">
-                  {users.length}
-                </span>
-              </h3>
-              <p className="text-[11px] text-slate-400">Profiles connected to this household</p>
+            <div className="min-w-0">
+              <h3 className="text-sm font-bold text-white">Family Members</h3>
+              <p className="text-[11px] text-slate-400 mt-0.5">Profiles and permissions connected to this household</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto flex-wrap">
+            <span className="text-[11px] font-mono text-slate-400 bg-white/5 border border-white/10 px-2 py-1 rounded-xl font-medium">
+              {users.length} {users.length === 1 ? 'member' : 'members'}
+            </span>
             <button
               onClick={() => setShowJoinModal(true)}
               className="px-2.5 py-1.5 rounded-xl text-xs font-medium text-slate-300 hover:text-white hover:bg-white/5 border border-white/10 transition-colors flex items-center gap-1 cursor-pointer"
@@ -783,14 +782,7 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
                     </div>
                   )}
                   <div className="min-w-0">
-                    <div className="flex items-center gap-1.5 truncate">
-                      <span className="text-xs font-bold text-white truncate">{u.name}</span>
-                      {isCurrent && (
-                        <span className="text-[9px] bg-emerald-500/25 text-emerald-300 px-1.5 py-0.2 rounded-full font-semibold shrink-0">
-                          You
-                        </span>
-                      )}
-                    </div>
+                    <span className="text-xs font-bold text-white block truncate">{u.name}</span>
                     <div className="flex items-center gap-1 text-[11px] truncate">
                       <span className="font-mono text-emerald-400 font-medium truncate">@{handle}</span>
                       <span className="text-slate-600 text-[10px]">•</span>
@@ -799,7 +791,12 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1 shrink-0">
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {isCurrent && (
+                    <span className="text-[9px] bg-emerald-500/25 text-emerald-300 px-1.5 py-0.5 rounded-full font-semibold">
+                      You
+                    </span>
+                  )}
                   <button
                     onClick={() => {
                       setEditProfileTargetUser(u);
@@ -842,14 +839,14 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
 
       {/* 3. Google Calendar Sync */}
       <div className="glass-panel rounded-3xl p-5 border border-white/10 space-y-4">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="p-2 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20 shrink-0">
               <Calendar className="w-4 h-4" />
             </div>
-            <div>
+            <div className="min-w-0">
               <h3 className="text-sm font-bold text-white">Google Calendar Sync</h3>
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-slate-400 mt-0.5">
                 Automatically sync personal or shared Google calendars into the family timeline
               </p>
             </div>
@@ -859,7 +856,7 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
             type="button"
             onClick={() => loadGoogleStatus()}
             disabled={isLoadingGoogleStatus}
-            className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all cursor-pointer"
+            className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all cursor-pointer shrink-0"
             title="Refresh Google Calendar sync status"
           >
             <RefreshCw className={`w-4 h-4 ${isLoadingGoogleStatus ? 'animate-spin text-emerald-400' : ''}`} />
@@ -877,39 +874,20 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
 
             return (
               <div
-                className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all ${
+                className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 transition-all ${
                   isPending
                     ? 'bg-emerald-500/5 border-emerald-500/25 ring-1 ring-emerald-500/10'
-                    : isConnected
-                    ? 'bg-slate-900/60 border-white/5'
                     : 'bg-slate-900/60 border-white/5'
                 }`}
               >
+                {/* Left: Labels and Description */}
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
                     <Calendar className="w-5 h-5" />
                   </div>
 
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-white">Google Calendar</span>
-                      {isConnected ? (
-                        <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 rounded-full font-medium">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                          <span>Connected</span>
-                        </span>
-                      ) : isPending ? (
-                        <span className="inline-flex items-center gap-1.5 text-[10px] text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 rounded-full font-medium">
-                          <Loader2 className="w-2.5 h-2.5 animate-spin text-emerald-400" />
-                          <span>Connecting...</span>
-                        </span>
-                      ) : (
-                        <span className="text-[10px] text-slate-500 bg-white/5 px-2 py-0.5 rounded-full font-medium">
-                          Not connected
-                        </span>
-                      )}
-                    </div>
-
+                    <span className="text-xs font-bold text-white block">Google Calendar</span>
                     <div className="text-[11px] text-slate-400 truncate pt-0.5">
                       {isConnected && syncStatus?.googleEmail ? (
                         <span className="font-mono text-slate-300">{syncStatus.googleEmail}</span>
@@ -925,7 +903,26 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
                   </div>
                 </div>
 
-                <div className="shrink-0 flex items-center gap-2 justify-end">
+                {/* Right: Status and Actions */}
+                <div className="shrink-0 flex items-center gap-2.5 sm:justify-end flex-wrap">
+                  {/* Status Indicator */}
+                  {isConnected ? (
+                    <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 rounded-full font-medium">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      <span>Connected</span>
+                    </span>
+                  ) : isPending ? (
+                    <span className="inline-flex items-center gap-1.5 text-[10px] text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 rounded-full font-medium">
+                      <Loader2 className="w-2.5 h-2.5 animate-spin text-emerald-400" />
+                      <span>Connecting...</span>
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-slate-500 bg-white/5 border border-white/5 px-2 py-0.5 rounded-full font-medium">
+                      Not connected
+                    </span>
+                  )}
+
+                  {/* Actions */}
                   {isConnected ? (
                     <>
                       <button
@@ -1025,92 +1022,116 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
         </div>
       </div>
 
-      {/* 4. Assistant Voice Responses (Radio Buttons) */}
+      {/* 4. Assistant Voice Responses */}
       <div className="glass-panel rounded-3xl p-5 border border-white/10 space-y-3">
-        <div className="flex items-center gap-2.5">
-          <div className="p-2 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
-            <Volume2 className="w-4 h-4" />
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="p-2 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 shrink-0">
+              <Volume2 className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <h3 className="text-sm font-bold text-white">Assistant Voice Playback</h3>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                Choose how the AI assistant responds to your messages
+              </p>
+            </div>
           </div>
-          <div>
-            <h3 className="text-sm font-bold text-white">Assistant Voice Playback</h3>
-            <p className="text-[11px] text-slate-400">
-              Choose how the AI assistant responds to your messages
-            </p>
-          </div>
+
+          <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-xl border shrink-0 ${
+            autoAudioResponses
+              ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+              : 'bg-white/5 text-slate-400 border-white/10'
+          }`}>
+            {autoAudioResponses ? 'Auto-Read' : 'Silent'}
+          </span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-          {/* Radio 1: Silent */}
-          <label
+          {/* Option 1: Silent */}
+          <div
             onClick={() => setAutoAudioResponses(false)}
-            className={`p-3.5 rounded-2xl border cursor-pointer flex items-start gap-3 transition-all ${
+            className={`p-3.5 rounded-2xl border cursor-pointer flex items-center justify-between gap-3 transition-all ${
               !autoAudioResponses
                 ? 'bg-emerald-500/10 border-emerald-500/40 ring-1 ring-emerald-500/25'
                 : 'bg-slate-900/60 border-white/5 hover:border-white/10'
             }`}
           >
-            <input
-              type="radio"
-              name="autoAudioOption"
-              checked={!autoAudioResponses}
-              onChange={() => setAutoAudioResponses(false)}
-              className="mt-0.5 h-4 w-4 text-emerald-500 accent-emerald-500 cursor-pointer"
-            />
-            <div>
-              <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                <VolumeX className="w-3.5 h-3.5 text-slate-400" />
-                Text Only (Silent)
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="p-2 rounded-xl bg-white/5 border border-white/10 text-slate-400 shrink-0">
+                <VolumeX className="w-4 h-4" />
               </div>
-              <div className="text-[11px] text-slate-400 mt-0.5">
-                Responds silently in chat. Tap speaker on any message to listen.
+              <div className="min-w-0">
+                <span className="text-xs font-bold text-white block">Text Only (Silent)</span>
+                <span className="text-[11px] text-slate-400 block truncate">
+                  Responds silently in chat. Tap speaker to listen.
+                </span>
               </div>
             </div>
-          </label>
 
-          {/* Radio 2: Auto-Read */}
-          <label
+            <div className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 transition-all ${
+              !autoAudioResponses
+                ? 'border-emerald-500 bg-emerald-500 text-slate-950'
+                : 'border-white/20 bg-slate-900/80'
+            }`}>
+              {!autoAudioResponses && <div className="w-2 h-2 rounded-full bg-slate-950" />}
+            </div>
+          </div>
+
+          {/* Option 2: Auto-Read */}
+          <div
             onClick={() => setAutoAudioResponses(true)}
-            className={`p-3.5 rounded-2xl border cursor-pointer flex items-start gap-3 transition-all ${
+            className={`p-3.5 rounded-2xl border cursor-pointer flex items-center justify-between gap-3 transition-all ${
               autoAudioResponses
                 ? 'bg-emerald-500/10 border-emerald-500/40 ring-1 ring-emerald-500/25'
                 : 'bg-slate-900/60 border-white/5 hover:border-white/10'
             }`}
           >
-            <input
-              type="radio"
-              name="autoAudioOption"
-              checked={autoAudioResponses}
-              onChange={() => setAutoAudioResponses(true)}
-              className="mt-0.5 h-4 w-4 text-emerald-500 accent-emerald-500 cursor-pointer"
-            />
-            <div>
-              <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
-                Auto-Read Aloud
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shrink-0">
+                <Volume2 className="w-4 h-4" />
               </div>
-              <div className="text-[11px] text-slate-400 mt-0.5">
-                Automatically speaks Assistant answers aloud.
+              <div className="min-w-0">
+                <span className="text-xs font-bold text-white block">Auto-Read Aloud</span>
+                <span className="text-[11px] text-slate-400 block truncate">
+                  Automatically speaks Assistant answers aloud.
+                </span>
               </div>
             </div>
-          </label>
+
+            <div className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 transition-all ${
+              autoAudioResponses
+                ? 'border-emerald-500 bg-emerald-500 text-slate-950'
+                : 'border-white/20 bg-slate-900/80'
+            }`}>
+              {autoAudioResponses && <div className="w-2 h-2 rounded-full bg-slate-950" />}
+            </div>
+          </div>
         </div>
       </div>
 
       {/* 4. Family Push Alerts & Notification Preferences */}
       <div className="glass-panel rounded-3xl p-5 sm:p-6 border border-white/10 space-y-6">
         {/* Header */}
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-2xl bg-amber-500/10 text-amber-400 border border-amber-500/20 shadow-inner">
-            <Bell className="w-5 h-5" />
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0">
+              <Bell className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <h3 className="text-sm font-bold text-white">Push Notifications & Alerts</h3>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                Instant alerts delivered when family members update lists, calendar, or meals
+              </p>
+            </div>
           </div>
-          <div>
-            <h3 className="text-sm font-bold text-white tracking-wide">
-              Push Notifications & Alerts
-            </h3>
-            <p className="text-[11px] text-slate-400">
-              Instant alerts delivered when family members update lists, calendar, or meals
-            </p>
-          </div>
+
+          <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-xl border shrink-0 ${
+            isPushSubscribed
+              ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+              : 'bg-white/5 text-slate-400 border-white/10'
+          }`}>
+            {isPushSubscribed ? 'Alerts On' : 'Alerts Off'}
+          </span>
         </div>
 
         {/* Browser Support / Permission Warnings */}
@@ -1134,7 +1155,8 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
         ) : (
           /* Sleek Device Status & Action Card */
           <div className="rounded-2xl bg-slate-900/80 border border-white/10 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-lg shadow-black/20">
-            <div className="flex items-start gap-3.5 min-w-0">
+            {/* Left: Labels and Description */}
+            <div className="flex items-center gap-3 min-w-0">
               <div className={`p-2.5 rounded-2xl border shrink-0 transition-colors ${
                 isPushSubscribed
                   ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
@@ -1143,22 +1165,9 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
                 <Smartphone className="w-5 h-5" />
               </div>
 
-              <div className="min-w-0 space-y-1">
-                <div className="flex items-center gap-2.5 flex-wrap">
-                  <span className="text-xs font-bold text-white">This Device</span>
-                  {isPushSubscribed ? (
-                    <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-emerald-300 bg-emerald-500/20 border border-emerald-500/35 px-2.5 py-0.5 rounded-full shadow-sm">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                      Active & Receiving Alerts
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1.5 text-[10px] font-medium text-slate-400 bg-slate-800/80 border border-white/10 px-2.5 py-0.5 rounded-full">
-                      <BellOff className="w-3 h-3 text-slate-400" />
-                      Alerts Muted
-                    </span>
-                  )}
-                </div>
-                <p className="text-[11px] text-slate-400 leading-relaxed">
+              <div className="min-w-0">
+                <span className="text-xs font-bold text-white block">This Device</span>
+                <p className="text-[11px] text-slate-400 leading-relaxed pt-0.5">
                   {isPushSubscribed
                     ? 'Delivers native notifications when Homebase is running or in the background.'
                     : 'Push notifications are silenced on this browser.'}
@@ -1166,14 +1175,26 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
               </div>
             </div>
 
-            {/* Actions: Test Button + Enable/Mute Toggle */}
-            <div className="flex items-center gap-2.5 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-white/5">
+            {/* Right: Status and Actions */}
+            <div className="shrink-0 flex items-center gap-2.5 flex-wrap sm:justify-end">
+              {isPushSubscribed ? (
+                <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-emerald-300 bg-emerald-500/20 border border-emerald-500/35 px-2.5 py-1 rounded-full shadow-sm">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Active
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-400 bg-slate-800/80 border border-white/10 px-2.5 py-1 rounded-full">
+                  <BellOff className="w-3 h-3 text-slate-400" />
+                  Muted
+                </span>
+              )}
+
               {isPushSubscribed && (
                 <button
                   type="button"
                   onClick={handleSendTestPush}
                   disabled={isSendingTestPush}
-                  className="px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-200 bg-slate-800/90 hover:bg-slate-700/90 border border-white/10 hover:border-white/20 active:scale-[0.98] transition-all flex items-center gap-2 shadow-sm cursor-pointer disabled:opacity-50"
+                  className="px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-200 bg-slate-800/90 hover:bg-slate-700/90 border border-white/10 hover:border-white/20 active:scale-[0.98] transition-all flex items-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-50"
                   title="Send a sample alert to verify delivery"
                 >
                   {isSendingTestPush ? (
@@ -1189,7 +1210,7 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
                 type="button"
                 onClick={() => handlePushToggle(!isPushSubscribed)}
                 disabled={isSubscribingPush}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shadow-md ${
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md ${
                   isPushSubscribed
                     ? 'bg-slate-800 text-slate-300 hover:bg-rose-500/20 hover:text-rose-300 hover:border-rose-500/30 border border-white/10'
                     : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/20 font-extrabold'
@@ -1215,15 +1236,15 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
 
         {/* Category Settings: Which Notifications to Receive */}
         <div className="pt-2 border-t border-white/5 space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <div>
               <h4 className="text-xs font-bold text-white">Alert Categories</h4>
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-slate-400 mt-0.5">
                 Choose which types of activities send push notifications for {currentUser?.name || 'you'}
               </p>
             </div>
             {isSavingPref && (
-              <span className="text-[10px] text-emerald-400 flex items-center gap-1 font-medium">
+              <span className="text-[10px] text-emerald-400 flex items-center gap-1 font-medium shrink-0">
                 <Loader2 className="w-3 h-3 animate-spin" /> Saving...
               </span>
             )}
@@ -1231,117 +1252,129 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             {/* Category 1: Grocery Added */}
-            <label className="p-3 rounded-2xl bg-slate-900/60 border border-white/5 hover:border-white/10 flex items-start gap-3 cursor-pointer transition-all">
+            <label className="p-3.5 rounded-2xl bg-slate-900/60 border border-white/5 hover:border-white/10 flex items-center justify-between gap-3 cursor-pointer transition-all">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
+                  <ShoppingCart className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <span className="text-xs font-bold text-white block">Grocery: Items Added</span>
+                  <p className="text-[11px] text-slate-400 mt-0.5 truncate">
+                    When items are added to the grocery list
+                  </p>
+                </div>
+              </div>
               <input
                 type="checkbox"
                 checked={notificationPrefs.groceryAdded}
                 onChange={(e) => handleTogglePreference('groceryAdded', e.target.checked)}
-                className="mt-1 h-4 w-4 text-emerald-500 accent-emerald-500 rounded cursor-pointer"
+                className="h-4 w-4 text-emerald-500 accent-emerald-500 rounded cursor-pointer shrink-0 ml-2"
               />
-              <div className="flex-1 min-w-0">
-                <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                  <ShoppingCart className="w-3.5 h-3.5 text-emerald-400" />
-                  Grocery: Items Added
-                </div>
-                <div className="text-[11px] text-slate-400 mt-0.5">
-                  When items are added to the grocery shopping list by family or AI.
-                </div>
-              </div>
             </label>
 
             {/* Category 2: Grocery Completed */}
-            <label className="p-3 rounded-2xl bg-slate-900/60 border border-white/5 hover:border-white/10 flex items-start gap-3 cursor-pointer transition-all">
+            <label className="p-3.5 rounded-2xl bg-slate-900/60 border border-white/5 hover:border-white/10 flex items-center justify-between gap-3 cursor-pointer transition-all">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
+                  <Check className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <span className="text-xs font-bold text-white block">Grocery: Items Checked Off</span>
+                  <p className="text-[11px] text-slate-400 mt-0.5 truncate">
+                    When someone checks off groceries in store
+                  </p>
+                </div>
+              </div>
               <input
                 type="checkbox"
                 checked={notificationPrefs.groceryCompleted}
                 onChange={(e) => handleTogglePreference('groceryCompleted', e.target.checked)}
-                className="mt-1 h-4 w-4 text-emerald-500 accent-emerald-500 rounded cursor-pointer"
+                className="h-4 w-4 text-emerald-500 accent-emerald-500 rounded cursor-pointer shrink-0 ml-2"
               />
-              <div className="flex-1 min-w-0">
-                <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                  <Check className="w-3.5 h-3.5 text-emerald-400" />
-                  Grocery: Items Checked Off
-                </div>
-                <div className="text-[11px] text-slate-400 mt-0.5">
-                  When someone checks off groceries while shopping in the store.
-                </div>
-              </div>
             </label>
 
             {/* Category 3: Calendar Events */}
-            <label className="p-3 rounded-2xl bg-slate-900/60 border border-white/5 hover:border-white/10 flex items-start gap-3 cursor-pointer transition-all">
+            <label className="p-3.5 rounded-2xl bg-slate-900/60 border border-white/5 hover:border-white/10 flex items-center justify-between gap-3 cursor-pointer transition-all">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="p-2 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20 shrink-0">
+                  <Calendar className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <span className="text-xs font-bold text-white block">Calendar Events</span>
+                  <p className="text-[11px] text-slate-400 mt-0.5 truncate">
+                    When new events are scheduled or changed
+                  </p>
+                </div>
+              </div>
               <input
                 type="checkbox"
                 checked={notificationPrefs.calendarEvents}
                 onChange={(e) => handleTogglePreference('calendarEvents', e.target.checked)}
-                className="mt-1 h-4 w-4 text-emerald-500 accent-emerald-500 rounded cursor-pointer"
+                className="h-4 w-4 text-emerald-500 accent-emerald-500 rounded cursor-pointer shrink-0 ml-2"
               />
-              <div className="flex-1 min-w-0">
-                <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                  <Calendar className="w-3.5 h-3.5 text-blue-400" />
-                  Calendar Events
-                </div>
-                <div className="text-[11px] text-slate-400 mt-0.5">
-                  When new events are scheduled, rescheduled, or cancelled.
-                </div>
-              </div>
             </label>
 
             {/* Category 4: Meal Planner */}
-            <label className="p-3 rounded-2xl bg-slate-900/60 border border-white/5 hover:border-white/10 flex items-start gap-3 cursor-pointer transition-all">
+            <label className="p-3.5 rounded-2xl bg-slate-900/60 border border-white/5 hover:border-white/10 flex items-center justify-between gap-3 cursor-pointer transition-all">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0">
+                  <Utensils className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <span className="text-xs font-bold text-white block">Meal Planner</span>
+                  <p className="text-[11px] text-slate-400 mt-0.5 truncate">
+                    When dinners and weekly meals are planned
+                  </p>
+                </div>
+              </div>
               <input
                 type="checkbox"
                 checked={notificationPrefs.mealPlans}
                 onChange={(e) => handleTogglePreference('mealPlans', e.target.checked)}
-                className="mt-1 h-4 w-4 text-emerald-500 accent-emerald-500 rounded cursor-pointer"
+                className="h-4 w-4 text-emerald-500 accent-emerald-500 rounded cursor-pointer shrink-0 ml-2"
               />
-              <div className="flex-1 min-w-0">
-                <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                  <Utensils className="w-3.5 h-3.5 text-amber-400" />
-                  Meal Planner
-                </div>
-                <div className="text-[11px] text-slate-400 mt-0.5">
-                  When weekly dinners and family meal plans are scheduled.
-                </div>
-              </div>
             </label>
 
             {/* Category 5: Recipes */}
-            <label className="p-3 rounded-2xl bg-slate-900/60 border border-white/5 hover:border-white/10 flex items-start gap-3 cursor-pointer transition-all">
+            <label className="p-3.5 rounded-2xl bg-slate-900/60 border border-white/5 hover:border-white/10 flex items-center justify-between gap-3 cursor-pointer transition-all">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="p-2 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20 shrink-0">
+                  <BookOpen className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <span className="text-xs font-bold text-white block">New Recipes</span>
+                  <p className="text-[11px] text-slate-400 mt-0.5 truncate">
+                    When new recipes are saved or imported
+                  </p>
+                </div>
+              </div>
               <input
                 type="checkbox"
                 checked={notificationPrefs.recipesAdded}
                 onChange={(e) => handleTogglePreference('recipesAdded', e.target.checked)}
-                className="mt-1 h-4 w-4 text-emerald-500 accent-emerald-500 rounded cursor-pointer"
+                className="h-4 w-4 text-emerald-500 accent-emerald-500 rounded cursor-pointer shrink-0 ml-2"
               />
-              <div className="flex-1 min-w-0">
-                <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                  <BookOpen className="w-3.5 h-3.5 text-purple-400" />
-                  New Recipes
-                </div>
-                <div className="text-[11px] text-slate-400 mt-0.5">
-                  When new recipes are saved, imported, or created by AI.
-                </div>
-              </div>
             </label>
 
             {/* Category 6: AI Assistant */}
-            <label className="p-3 rounded-2xl bg-slate-900/60 border border-white/5 hover:border-white/10 flex items-start gap-3 cursor-pointer transition-all">
+            <label className="p-3.5 rounded-2xl bg-slate-900/60 border border-white/5 hover:border-white/10 flex items-center justify-between gap-3 cursor-pointer transition-all">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="p-2 rounded-xl bg-teal-500/10 text-teal-400 border border-teal-500/20 shrink-0">
+                  <Bot className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <span className="text-xs font-bold text-white block">Assistant Actions</span>
+                  <p className="text-[11px] text-slate-400 mt-0.5 truncate">
+                    When the Assistant updates family lists or schedules
+                  </p>
+                </div>
+              </div>
               <input
                 type="checkbox"
                 checked={notificationPrefs.assistantActions}
                 onChange={(e) => handleTogglePreference('assistantActions', e.target.checked)}
-                className="mt-1 h-4 w-4 text-emerald-500 accent-emerald-500 rounded cursor-pointer"
+                className="h-4 w-4 text-emerald-500 accent-emerald-500 rounded cursor-pointer shrink-0 ml-2"
               />
-              <div className="flex-1 min-w-0">
-                <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                  <Bot className="w-3.5 h-3.5 text-teal-400" />
-                  AI Assistant Actions
-                </div>
-                <div className="text-[11px] text-slate-400 mt-0.5">
-                  When the Assistant takes automated actions or updates family lists.
-                </div>
-              </div>
             </label>
           </div>
         </div>
@@ -1352,55 +1385,63 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
 
           <div className="space-y-2.5">
             {/* Self-Action Filtering */}
-            <label className="p-3 rounded-2xl bg-slate-900/60 border border-white/5 hover:border-white/10 flex items-center justify-between gap-3 cursor-pointer transition-all">
-              <div>
-                <div className="text-xs font-bold text-white">Notify Me of My Own Actions</div>
-                <div className="text-[11px] text-slate-400 mt-0.5">
-                  Receive notifications even when you are the person who added or checked off an item
+            <label className="p-3.5 rounded-2xl bg-slate-900/60 border border-white/5 hover:border-white/10 flex items-center justify-between gap-3 cursor-pointer transition-all">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
+                  <UserCheck className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <span className="text-xs font-bold text-white block">Notify Me of My Own Actions</span>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Receive alerts even when you are the person who added or completed an item
+                  </p>
                 </div>
               </div>
               <input
                 type="checkbox"
                 checked={notificationPrefs.notifyOwnActions}
                 onChange={(e) => handleTogglePreference('notifyOwnActions', e.target.checked)}
-                className="h-4 w-4 text-emerald-500 accent-emerald-500 rounded cursor-pointer shrink-0"
+                className="h-4 w-4 text-emerald-500 accent-emerald-500 rounded cursor-pointer shrink-0 ml-2"
               />
             </label>
 
             {/* Quiet Hours */}
-            <div className="p-3 rounded-2xl bg-slate-900/60 border border-white/5 space-y-2.5">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <Moon className="w-3.5 h-3.5 text-indigo-400" />
-                  <div>
-                    <div className="text-xs font-bold text-white">Quiet Hours (Do Not Disturb)</div>
-                    <div className="text-[11px] text-slate-400">
+            <div className="p-3.5 rounded-2xl bg-slate-900/60 border border-white/5 space-y-3">
+              <label className="flex items-center justify-between gap-3 cursor-pointer">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 shrink-0">
+                    <Moon className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-xs font-bold text-white block">Quiet Hours (Do Not Disturb)</span>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
                       Silence push notifications during nighttime hours
-                    </div>
+                    </p>
                   </div>
                 </div>
                 <input
                   type="checkbox"
                   checked={notificationPrefs.quietHoursEnabled}
                   onChange={(e) => handleTogglePreference('quietHoursEnabled', e.target.checked)}
-                  className="h-4 w-4 text-emerald-500 accent-emerald-500 rounded cursor-pointer shrink-0"
+                  className="h-4 w-4 text-emerald-500 accent-emerald-500 rounded cursor-pointer shrink-0 ml-2"
                 />
-              </div>
+              </label>
 
               {notificationPrefs.quietHoursEnabled && (
-                <div className="pt-2 border-t border-white/5 flex flex-wrap items-center gap-3 text-xs">
+                <div className="pt-3 border-t border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
                   <div className="flex items-center gap-2">
-                    <Clock className="w-3.5 h-3.5 text-slate-400" />
-                    <span className="text-slate-300 text-[11px]">Start:</span>
+                    <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <span className="text-[11px] text-slate-400">Quiet window:</span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-slate-400 text-[11px]">From</span>
                     <input
                       type="time"
                       value={notificationPrefs.quietHoursStart}
                       onChange={(e) => handleTogglePreference('quietHoursStart', e.target.value)}
                       className="bg-slate-800 text-white text-xs px-2.5 py-1 rounded-lg border border-white/10 focus:outline-none focus:border-emerald-500"
                     />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-slate-300 text-[11px]">End:</span>
+                    <span className="text-slate-400 text-[11px]">to</span>
                     <input
                       type="time"
                       value={notificationPrefs.quietHoursEnd}
@@ -1417,40 +1458,47 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
 
       {/* 5. Grocery Store Aisles */}
       <div className="glass-panel rounded-3xl p-5 border border-white/10">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
               <MoveVertical className="w-4 h-4" />
             </div>
-            <div>
+            <div className="min-w-0">
               <h3 className="text-sm font-bold text-white">Grocery Store Aisles</h3>
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-slate-400 mt-0.5">
                 Arrange aisle ordering and names to match your local supermarket
               </p>
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setIsAisleModalOpen(true)}
-            className="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10 flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
-          >
-            <MoveVertical className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Configure Aisles</span>
-          </button>
+          <div className="shrink-0 flex items-center gap-2.5 self-start sm:self-auto">
+            {aisles.length > 0 && (
+              <span className="text-[11px] font-mono text-slate-400 bg-white/5 border border-white/10 px-2 py-1 rounded-xl hidden sm:inline">
+                {aisles.length} aisles
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => setIsAisleModalOpen(true)}
+              className="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10 flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <MoveVertical className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Configure Aisles</span>
+            </button>
+          </div>
         </div>
       </div>
 
       {/* 6. App Installation & PWA */}
       <div className="glass-panel rounded-3xl p-5 border border-white/10">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-teal-500/10 text-teal-400 border border-teal-500/20">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="p-2 rounded-xl bg-teal-500/10 text-teal-400 border border-teal-500/20 shrink-0">
               <Smartphone className="w-4 h-4" />
             </div>
-            <div>
+            <div className="min-w-0">
               <h3 className="text-sm font-bold text-white">Mobile App & Offline Mode</h3>
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-slate-400 mt-0.5">
                 {isPWAInstalled
                   ? 'Homebase is installed and ready for offline use'
                   : 'Install on your home screen for quick launch and offline access'}
@@ -1458,24 +1506,26 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
             </div>
           </div>
 
-          {isPWAInstalled ? (
-            <span className="flex items-center gap-1 text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 rounded-xl shrink-0">
-              <Check className="w-3.5 h-3.5 stroke-[2.5]" />
-              Installed
-            </span>
-          ) : canInstallPWA ? (
-            <button
-              onClick={installPWA}
-              className="px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition-all shadow-md shadow-emerald-500/20 flex items-center gap-1.5 cursor-pointer shrink-0"
-            >
-              <Download className="w-3.5 h-3.5" />
-              Install App
-            </button>
-          ) : (
-            <span className="text-[11px] text-slate-400 bg-slate-900/80 px-2.5 py-1.5 rounded-xl border border-white/5 shrink-0">
-              Web Mode
-            </span>
-          )}
+          <div className="shrink-0 self-start sm:self-auto">
+            {isPWAInstalled ? (
+              <span className="flex items-center gap-1 text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 rounded-xl">
+                <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                Installed
+              </span>
+            ) : canInstallPWA ? (
+              <button
+                onClick={installPWA}
+                className="px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition-all shadow-md shadow-emerald-500/20 flex items-center gap-1.5 cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Install App</span>
+              </button>
+            ) : (
+              <span className="text-[11px] text-slate-400 bg-slate-900/80 px-2.5 py-1.5 rounded-xl border border-white/5">
+                Web Mode
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
