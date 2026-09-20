@@ -20,7 +20,6 @@ import type {
   AdminHousehold,
 } from '../types';
 import { filterRecipeIngredientsForGrocery } from './groceryStaples';
-import { handleServerBuildId } from './reload';
 
 const BASE_URL = '/api';
 
@@ -70,11 +69,6 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
       notifyServerUpdating(true);
     }
     throw err;
-  }
-
-  const buildHeader = res.headers.get('x-app-build');
-  if (buildHeader) {
-    handleServerBuildId(buildHeader);
   }
 
   if (!res.ok) {
@@ -1370,9 +1364,6 @@ export const api = {
       });
       if (res.ok) {
         const data = await res.json().catch(() => null);
-        if (data?.buildId) {
-          handleServerBuildId(data.buildId);
-        }
         return data?.status === 'ok';
       }
       return false;

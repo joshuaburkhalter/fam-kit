@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { Household, User, Aisle } from '../types';
 import { api } from '../lib/api';
-import { forceAppHardReload, checkServerVersion, cleanupReloadUrlParam } from '../lib/reload';
+import { safeAppReload, cleanupReloadUrlParam } from '../lib/reload';
 
 interface PWAContextType {
   household: Household | null;
@@ -380,7 +380,6 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     initAuth();
     cleanupReloadUrlParam();
-    checkServerVersion();
 
     // Online / Offline tracking
     const handleOnline = () => setIsOnline(true);
@@ -388,10 +387,9 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    // Focus & visibility change: recheck server build & trigger service worker update check
+    // Check for service worker updates when user returns to app/tab
     const handleCheckOnActive = () => {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
-        checkServerVersion();
         if ('serviceWorker' in navigator) {
           navigator.serviceWorker.getRegistration().then((reg) => reg?.update().catch(() => {}));
         }
@@ -399,11 +397,6 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     window.addEventListener('focus', handleCheckOnActive);
     document.addEventListener('visibilitychange', handleCheckOnActive);
-
-    // Periodic check for new server deploys every 30 seconds
-    const versionInterval = setInterval(() => {
-      checkServerVersion();
-    }, 30000);
 
     // PWA install prompt capture
     const handleBeforeInstallPrompt = (e: Event) => {
@@ -437,8 +430,8 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         let hadControllerOnLoad = !!navigator.serviceWorker.controller;
         handleControllerChange = () => {
           if (hadControllerOnLoad) {
-            console.log('[SW] Controller changed to new version. Hard reloading app...');
-            forceAppHardReload();
+            console.log('[SW] Controller changed to new version. Safely reloading app...');
+            safeAppReload();
           } else {
             hadControllerOnLoad = true;
           }
@@ -490,7 +483,6 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     return () => {
-      clearInterval(versionInterval);
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('focus', handleCheckOnActive);
