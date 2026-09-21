@@ -370,12 +370,12 @@ export const CalendarPage: React.FC = () => {
       {/* Sub-Bar: Compact Family Avatars + Tiny All/Events Toggle */}
       <div className="flex items-center justify-between gap-2 py-1">
         {/* Simple, Small Family User Toggle */}
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-2 px-1 -my-1.5">
           {/* "All" button */}
           <button
             type="button"
             onClick={() => setSelectedMemberId('all')}
-            className={`h-7 px-2.5 rounded-full text-[11px] font-bold transition-all shrink-0 flex items-center justify-center ${
+            className={`h-7 px-2.5 rounded-full text-[11px] font-bold transition-all shrink-0 flex items-center justify-center cursor-pointer ${
               selectedMemberId === 'all'
                 ? 'bg-emerald-500 text-slate-950 shadow-xs'
                 : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-white/10'
@@ -394,7 +394,7 @@ export const CalendarPage: React.FC = () => {
                 type="button"
                 onClick={() => setSelectedMemberId(isSelected ? 'all' : u.id)}
                 title={u.name}
-                className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold text-white transition-all shrink-0 ${
+                className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold text-white transition-all shrink-0 cursor-pointer ${
                   isSelected
                     ? 'ring-2 ring-emerald-400 ring-offset-2 ring-offset-slate-950 scale-105 shadow-sm'
                     : selectedMemberId !== 'all'
