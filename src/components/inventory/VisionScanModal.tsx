@@ -384,12 +384,12 @@ export const VisionScanModal: React.FC<VisionScanModalProps> = ({
                 <img
                   src={imagePreview}
                   alt="Scan Preview"
-                  className="w-14 h-14 object-cover rounded-xl border border-white/10 shrink-0"
+                  className="w-12 h-12 object-cover rounded-xl border border-white/10 shrink-0"
                 />
               )}
               <div className="flex-1 min-w-0">
                 {isScanning ? (
-                  <div className="space-y-1">
+                  <div className="space-y-0.5">
                     <p className="text-xs font-bold text-purple-400 flex items-center gap-1.5">
                       <Loader2 className="w-3.5 h-3.5 animate-spin" /> Recognizing foods with Gemini AI...
                     </p>
@@ -398,30 +398,30 @@ export const VisionScanModal: React.FC<VisionScanModalProps> = ({
                     </p>
                   </div>
                 ) : (
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-xs font-bold text-white">
-                        {recognizedItems.length} items collected {shotsCount > 1 ? `across ${shotsCount} shots` : ''}
-                      </p>
-                      <p className="text-[11px] text-slate-400">
-                        Review, adjust locations, or snap more shelves
-                      </p>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setImagePreview(null);
-                        startLiveCamera();
-                      }}
-                      className="px-3 py-1.5 bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 rounded-xl text-xs font-bold border border-purple-500/30 flex items-center gap-1 cursor-pointer transition-colors"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Snap Another Shelf</span>
-                    </button>
+                  <div>
+                    <p className="text-xs font-bold text-white">
+                      {recognizedItems.length} items collected {shotsCount > 1 ? `across ${shotsCount} shots` : ''}
+                    </p>
+                    <p className="text-[11px] text-slate-400 truncate">
+                      Auto-sorted into fridge, freezer & pantry
+                    </p>
                   </div>
                 )}
               </div>
+
+              {!isScanning && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setImagePreview(null);
+                    startLiveCamera();
+                  }}
+                  className="px-3 py-1.5 bg-purple-500/20 hover:bg-purple-500/30 active:scale-95 text-purple-200 rounded-xl text-xs font-bold border border-purple-500/30 flex items-center gap-1.5 shrink-0 whitespace-nowrap cursor-pointer transition-all shadow-sm"
+                >
+                  <Plus className="w-3.5 h-3.5 text-purple-400" />
+                  <span>Snap Shelf</span>
+                </button>
+              )}
             </div>
 
             {error && (
@@ -537,6 +537,21 @@ export const VisionScanModal: React.FC<VisionScanModalProps> = ({
                     </div>
                   ))}
                 </div>
+
+                {/* Snap Another Shelf Secondary Action */}
+                {!isScanning && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setImagePreview(null);
+                      startLiveCamera();
+                    }}
+                    className="w-full py-2.5 px-4 rounded-xl border border-dashed border-purple-500/35 hover:border-purple-500/60 bg-purple-500/10 hover:bg-purple-500/15 active:scale-[0.99] text-purple-200 text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-all shadow-sm"
+                  >
+                    <Camera className="w-4 h-4 text-purple-400" />
+                    <span>Snap Another Shelf or Drawer</span>
+                  </button>
+                )}
               </div>
             )}
 
