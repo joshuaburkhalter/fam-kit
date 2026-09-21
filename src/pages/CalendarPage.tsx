@@ -28,122 +28,7 @@ import {
 import type { CalendarEvent } from '../types';
 import { usePWA } from '../context/PWAContext';
 import { api } from '../lib/api';
-import { useFabAutoClose } from '../hooks/useFabAutoClose';
 import { Drawer } from '../components/ui/Drawer';
-
-/**
- * Natural language parser for calendar events (fallback when Gemini is offline or unconfigured)
- * Handles inputs like "board game night on monday from 6-9", "soccer practice tomorrow at 4pm", etc.
- */
-function parseNaturalLanguageEvent(raw: string, members: { id: string; name: string }[]) {
-  const text = raw.trim();
-  const lower = text.toLowerCase();
-  const now = new Date();
-
-  // 1. Detect Day / Date
-  let targetDate = new Date();
-  const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-
-  if (lower.includes('tomorrow')) {
-    targetDate = addDays(now, 1);
-  } else if (lower.includes('today') || lower.includes('tonight')) {
-    targetDate = now;
-  } else {
-    for (let i = 0; i < dayNames.length; i++) {
-      const name = dayNames[i];
-      const regex = new RegExp(`\\b(next\\s+)?${name}\\b`, 'i');
-      const match = lower.match(regex);
-      if (match) {
-        const targetDayIndex = i;
-        const currentDayIndex = now.getDay();
-        let diff = targetDayIndex - currentDayIndex;
-        if (diff <= 0) diff += 7; // next occurrence
-        targetDate = addDays(now, diff);
-        break;
-      }
-    }
-  }
-
-  // 2. Detect Times (e.g., "from 6-9", "at 4pm", "6:30pm", "14:00")
-  let startTime = '09:00';
-  let endTime = '10:00';
-  let isAllDay = true; // Default to all day if no time specified
-
-  // Match pattern like "from 6 to 8", "from 6-8pm", "6-9pm"
-  const rangeMatch = lower.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:to|-)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/);
-  if (rangeMatch) {
-    isAllDay = false;
-    let sH = parseInt(rangeMatch[1], 10);
-    const sM = rangeMatch[2] || '00';
-    let sMeridiem = rangeMatch[3];
-
-    let eH = parseInt(rangeMatch[4], 10);
-    const eM = rangeMatch[5] || '00';
-    const eMeridiem = rangeMatch[6];
-
-    // Inherit meridiem if only provided on end time (e.g., "6-8pm")
-    if (!sMeridiem && eMeridiem) {
-      sMeridiem = eMeridiem;
-    }
-
-    if (sMeridiem === 'pm' && sH < 12) sH += 12;
-    if (sMeridiem === 'am' && sH === 12) sH = 0;
-    if (eMeridiem === 'pm' && eH < 12) eH += 12;
-    if (eMeridiem === 'am' && eH === 12) eH = 0;
-
-    startTime = `${String(sH).padStart(2, '0')}:${sM}`;
-    endTime = `${String(eH).padStart(2, '0')}:${eM}`;
-  } else {
-    // Single time match like "at 4pm", "at 6:30", "18:00"
-    const singleMatch = lower.match(/(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)/);
-    if (singleMatch) {
-      isAllDay = false;
-      let h = parseInt(singleMatch[1], 10);
-      const m = singleMatch[2] || '00';
-      const meridiem = singleMatch[3];
-      if (meridiem === 'pm' && h < 12) h += 12;
-      if (meridiem === 'am' && h === 12) h = 0;
-      startTime = `${String(h).padStart(2, '0')}:${m}`;
-      endTime = `${String((h + 1) % 24).padStart(2, '0')}:${m}`;
-    }
-  }
-
-  // 3. Detect Assigned Member
-  let assignedUserId: string | undefined;
-  for (const m of members) {
-    const firstName = m.name.split(' ')[0].toLowerCase();
-    if (lower.includes(firstName)) {
-      assignedUserId = m.id;
-      break;
-    }
-  }
-
-  // 4. Clean Cleaned Title
-  let title = text
-    .replace(/\b(tomorrow|today|tonight)\b/gi, '')
-    .replace(/\b(next\s+)?(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/gi, '')
-    .replace(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:to|-)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/gi, '')
-    .replace(/(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)/gi, '')
-    .replace(/\b(for|with)\s+([A-Z][a-z]+)\b/g, '')
-    .replace(/\s{2,}/g, ' ')
-    .trim();
-
-  if (!title) {
-    title = 'Family Event';
-  }
-
-  // Capitalize First Letter
-  title = title.charAt(0).toUpperCase() + title.slice(1);
-
-  return {
-    title,
-    date: format(targetDate, 'yyyy-MM-dd'),
-    startTime,
-    endTime,
-    isAllDay,
-    assignedUserId,
-  };
-}
 
 // Module-level calendar cache for instant zero-latency page transitions
 let calendarCache: { householdId: string; events: CalendarEvent[] } | null = null;
@@ -189,21 +74,19 @@ export const CalendarPage: React.FC = () => {
   const [formAssignedUser, setFormAssignedUser] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
-  // Quick Add State (Bottom-Right FAB)
-  const [isQuickAddExpanded, setIsQuickAddExpanded] = useState(false);
-  const [quickInput, setQuickInput] = useState('');
-  const [isAssistantSubmitting, setIsAssistantSubmitting] = useState(false);
-  const [assistantFeedback, setAssistantFeedback] = useState<{
-    type: 'success' | 'error';
-    message: string;
-    date?: string;
-  } | null>(null);
+  // Sync / Action Dropdown State
+  const [isSyncMenuOpen, setIsSyncMenuOpen] = useState(false);
+  const syncMenuRef = useRef<HTMLDivElement>(null);
 
-  const dockRef = useFabAutoClose<HTMLDivElement>({
-    isOpen: isQuickAddExpanded,
-    onClose: () => setIsQuickAddExpanded(false),
-    ignore: isModalOpen,
-  });
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (syncMenuRef.current && !syncMenuRef.current.contains(event.target as Node)) {
+        setIsSyncMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const loadData = async (silent = false) => {
     if (!household) return;
@@ -341,7 +224,6 @@ export const CalendarPage: React.FC = () => {
     setFormLocation('');
     setFormAssignedUser(currentUser?.id || '');
     setIsModalOpen(true);
-    setIsQuickAddExpanded(false);
   };
 
   const handleOpenEditModal = (ev: CalendarEvent) => {
@@ -357,7 +239,6 @@ export const CalendarPage: React.FC = () => {
     setFormLocation(ev.location || '');
     setFormAssignedUser(ev.assigned_user_id || '');
     setIsModalOpen(true);
-    setIsQuickAddExpanded(false);
   };
 
   const handleSaveModal = async (e: React.FormEvent) => {
@@ -412,107 +293,8 @@ export const CalendarPage: React.FC = () => {
     }
   };
 
-  // Assistant Natural Language Scheduling Handler
-  const handleAssistantSchedule = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!household || !quickInput.trim() || isAssistantSubmitting) return;
-
-    const raw = quickInput.trim();
-    setIsAssistantSubmitting(true);
-    setAssistantFeedback(null);
-
-    try {
-      let scheduledTitle = '';
-      let scheduledDate = '';
-
-      // 1. First attempt via Gemini Assistant API
-      try {
-        const now = new Date();
-        const res = await api.sendAssistantMessage({
-          message: raw,
-          householdId: household.id,
-          userId: currentUser?.id,
-          clientDate: format(now, 'yyyy-MM-dd'),
-          clientDay: format(now, 'EEEE'),
-          clientTime: format(now, 'HH:mm'),
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        });
-
-        const calAction = res.actionsExecuted?.find(
-          (a: any) => a.tool === 'calendar_event_added' || a.tool === 'add_calendar_events'
-        );
-
-        if (calAction && calAction.data && calAction.data.length > 0) {
-          scheduledTitle = calAction.data[0].title;
-          scheduledDate = calAction.data[0].date;
-        }
-      } catch {
-        // Fallback silently to client natural language parser
-      }
-
-      // 2. If Gemini didn't execute action, use local natural language parser
-      if (!scheduledTitle) {
-        const parsed = parseNaturalLanguageEvent(raw, users);
-        const startStr = parsed.isAllDay ? `${parsed.date}T00:00:00` : `${parsed.date}T${parsed.startTime}:00`;
-        const endStr = parsed.isAllDay ? `${parsed.date}T23:59:59` : `${parsed.date}T${parsed.endTime}:00`;
-
-        await api.createCalendarEvent(household.id, {
-          title: parsed.title,
-          start_time: startStr,
-          end_time: endStr,
-          is_all_day: parsed.isAllDay,
-          assigned_user_id: parsed.assignedUserId || currentUser?.id,
-        });
-
-        scheduledTitle = parsed.title;
-        scheduledDate = parsed.date;
-      }
-
-      // 3. Ensure date is within visible span
-      if (scheduledDate) {
-        try {
-          const parsedD = parseISO(scheduledDate);
-          const daysDiff = differenceInDays(parsedD, new Date());
-          if (daysDiff >= daysCount) {
-            setDaysCount(daysDiff + 7);
-          }
-        } catch {}
-      }
-
-      // 4. Reload calendar events
-      await loadData();
-
-      // 5. Success feedback
-      let dateLabel = scheduledDate;
-      try {
-        dateLabel = format(parseISO(scheduledDate), 'EEE, MMM d');
-      } catch {}
-
-      setAssistantFeedback({
-        type: 'success',
-        message: `Added "${scheduledTitle}" for ${dateLabel}!`,
-        date: scheduledDate,
-      });
-
-      setQuickInput('');
-      setIsQuickAddExpanded(false);
-
-      setTimeout(() => {
-        setAssistantFeedback(null);
-      }, 4000);
-    } catch (err) {
-      console.error('Failed to schedule event:', err);
-      setAssistantFeedback({
-        type: 'error',
-        message: 'Could not schedule event. Please try again or tap a day to add.',
-      });
-    } finally {
-      setIsAssistantSubmitting(false);
-    }
-  };
-
   return (
-    <div className="max-w-3xl mx-auto px-3 sm:px-6 pt-3 pb-36 md:pb-28 space-y-4">
+    <div className="max-w-3xl mx-auto px-3 sm:px-6 pt-3 pb-28 md:pb-20 space-y-4">
       {/* Consistent Mobile-First Header */}
       <div className="flex items-center justify-between mb-1">
         <div className="flex items-center gap-2.5">
@@ -525,16 +307,60 @@ export const CalendarPage: React.FC = () => {
           </h1>
         </div>
 
-        <button
-          type="button"
-          onClick={handleManualSync}
-          disabled={isSyncing || isLoading}
-          title="Sync with Google Calendar"
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-white/10 text-slate-300 hover:text-white hover:bg-slate-800 text-xs font-semibold transition-all disabled:opacity-50 cursor-pointer shadow-xs active:scale-95"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-emerald-400' : 'text-slate-400'}`} />
-          <span>{isSyncing ? 'Syncing...' : 'Sync'}</span>
-        </button>
+        {/* Sync & Action Dropdown */}
+        <div className="relative" ref={syncMenuRef}>
+          <button
+            type="button"
+            onClick={() => setIsSyncMenuOpen(!isSyncMenuOpen)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-white/10 hover:border-white/20 text-slate-300 hover:text-white hover:bg-slate-800 text-xs font-semibold transition-all cursor-pointer shadow-xs active:scale-95"
+            title="Calendar Options"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-emerald-400' : 'text-slate-400'}`} />
+            <span>{isSyncing ? 'Syncing...' : 'Sync'}</span>
+            <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isSyncMenuOpen ? 'rotate-180' : ''}`} />
+          </button>
+
+          {isSyncMenuOpen && (
+            <div className="absolute right-0 top-full mt-2 w-52 bg-slate-900/95 backdrop-blur-xl border border-white/15 rounded-2xl p-1.5 shadow-2xl shadow-slate-950/80 z-50 animate-in fade-in zoom-in-95 duration-150 space-y-1">
+              {/* Add Event */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSyncMenuOpen(false);
+                  handleOpenAddModal();
+                }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/10 transition-colors text-left cursor-pointer group"
+              >
+                <div className="w-7 h-7 rounded-lg bg-emerald-500/15 text-emerald-400 group-hover:bg-emerald-500/25 flex items-center justify-center shrink-0 transition-colors">
+                  <Plus className="w-4 h-4 stroke-[2.5]" />
+                </div>
+                <div className="min-w-0">
+                  <div className="font-bold text-white">Add Event</div>
+                  <div className="text-[10px] text-slate-400">Schedule on calendar</div>
+                </div>
+              </button>
+
+              {/* Sync with Google Calendar */}
+              <button
+                type="button"
+                disabled={isSyncing}
+                onClick={() => {
+                  setIsSyncMenuOpen(false);
+                  handleManualSync();
+                }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/10 transition-colors text-left cursor-pointer group disabled:opacity-50"
+              >
+                <div className="w-7 h-7 rounded-lg bg-teal-500/15 text-teal-400 group-hover:bg-teal-500/25 flex items-center justify-center shrink-0 transition-colors">
+                  <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
+                </div>
+                <div className="min-w-0">
+                  <div className="font-bold text-white">{isSyncing ? 'Syncing...' : 'Sync with Google'}</div>
+                  <div className="text-[10px] text-slate-400">Refresh Google Calendar</div>
+                </div>
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Sub-Bar: Compact Family Avatars + Tiny All/Events Toggle */}
@@ -1161,100 +987,6 @@ export const CalendarPage: React.FC = () => {
           </div>
         </form>
       </Drawer>
-
-      {/* Floating Feedback Toast */}
-      {assistantFeedback && (
-        <div className="fixed bottom-[calc(76px+4.5rem+env(safe-area-inset-bottom,0px))] md:bottom-20 left-4 right-4 z-50 flex justify-center pointer-events-none animate-in fade-in slide-in-from-bottom-2 duration-200">
-          <div
-            className={`px-4 py-2.5 rounded-2xl shadow-xl border text-xs font-semibold flex items-center gap-2 pointer-events-auto backdrop-blur-xl ${
-              assistantFeedback.type === 'success'
-                ? 'bg-slate-900/95 border-emerald-500/40 text-emerald-300 shadow-emerald-500/20'
-                : 'bg-red-950/95 border-red-500/40 text-red-200 shadow-red-500/20'
-            }`}
-          >
-            <Sparkles className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span>{assistantFeedback.message}</span>
-          </div>
-        </div>
-      )}
-
-      {/* Animated Expanding Quick Add Dock & Add FAB */}
-      <div className="fixed bottom-[calc(76px+1rem+env(safe-area-inset-bottom,0px))] md:bottom-8 left-0 right-0 z-40 px-4 pointer-events-none">
-        <div className="max-w-3xl mx-auto pointer-events-none flex justify-end">
-          <div
-            ref={dockRef}
-            className={`fab-dock-transition pointer-events-auto h-[50px] border shadow-2xl flex items-center overflow-hidden ${
-              isQuickAddExpanded
-                ? 'w-full rounded-3xl border-white/25 bg-slate-900/95 backdrop-blur-xl shadow-emerald-500/10 px-2.5'
-                : 'w-[50px] rounded-full border-emerald-400/40 bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 cursor-pointer shadow-xl shadow-emerald-500/30 hover:scale-105 active:scale-95 justify-center'
-            }`}
-          >
-            {!isQuickAddExpanded ? (
-              <button
-                type="button"
-                onClick={() => setIsQuickAddExpanded(true)}
-                className="w-full h-full flex items-center justify-center text-slate-950 cursor-pointer"
-                title="Add Event"
-              >
-                <Plus className="w-6 h-6 stroke-[2.5]" />
-              </button>
-            ) : (
-              <div className="w-full flex items-center gap-2 animate-in fade-in duration-200">
-                {/* Close button */}
-                <button
-                  type="button"
-                  onClick={() => setIsQuickAddExpanded(false)}
-                  className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center shrink-0 transition-colors cursor-pointer"
-                  title="Close"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-
-                {/* More Details (Full Form) Button */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsQuickAddExpanded(false);
-                    handleOpenAddModal();
-                  }}
-                  className="h-8 px-2 sm:px-2.5 rounded-xl bg-white/5 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-400 border border-white/10 hover:border-emerald-500/30 text-xs font-bold flex items-center gap-1.5 transition-all shrink-0 cursor-pointer"
-                  title="Open full event form"
-                >
-                  <CalendarIcon className="w-3.5 h-3.5 text-emerald-400" />
-                  <span className="hidden sm:inline">Details</span>
-                </button>
-
-                {/* Form for input and submit button */}
-                <form onSubmit={handleAssistantSchedule} className="flex-1 min-w-0 flex items-center gap-2">
-                  {/* Single Smart Input: Just type what you want to add */}
-                  <input
-                    type="text"
-                    placeholder="Add event (e.g. Board game night on monday 6-9pm)..."
-                    value={quickInput}
-                    onChange={(e) => setQuickInput(e.target.value)}
-                    disabled={isAssistantSubmitting}
-                    className="flex-1 min-w-0 bg-transparent border-none text-xs text-white placeholder-slate-500 focus:outline-none py-1.5 px-1"
-                  />
-
-                  {/* Add Button */}
-                  <button
-                    type="submit"
-                    disabled={!quickInput.trim() || isAssistantSubmitting}
-                    className="h-8 px-3.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 disabled:opacity-40 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20 shrink-0 active:scale-95 cursor-pointer"
-                  >
-                    {isAssistantSubmitting ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-                    )}
-                    <span>{isAssistantSubmitting ? 'Adding...' : 'Add'}</span>
-                  </button>
-                </form>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
     </div>
   );
 };
