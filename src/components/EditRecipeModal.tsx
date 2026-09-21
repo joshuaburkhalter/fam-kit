@@ -244,7 +244,7 @@ export const EditRecipeModal: React.FC<EditRecipeModalProps> = ({
                     ) : (
                       <Camera className="w-3.5 h-3.5" />
                     )}
-                    <span>Replace Photo</span>
+                    <span>Replace</span>
                   </button>
                   <button
                     type="button"

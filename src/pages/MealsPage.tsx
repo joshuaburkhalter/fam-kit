@@ -21,6 +21,7 @@ import {
   Search,
   Zap,
   ChevronRight,
+  ChevronDown,
   Flame,
   ArrowLeft,
   Link2,
@@ -116,6 +117,7 @@ export const MealsPage: React.FC = () => {
     if (tab !== 'pantry') {
       setIsPantryFabOpen(false);
     }
+    setIsPantryAddMenuOpen(false);
   };
 
   const [meals, setMeals] = useState<WeeklyMeal[]>(() => {
@@ -191,6 +193,19 @@ export const MealsPage: React.FC = () => {
   const [isVisionModalOpen, setIsVisionModalOpen] = useState(false);
   const [isEditInventoryModalOpen, setIsEditInventoryModalOpen] = useState(false);
   const [editingInventoryItem, setEditingInventoryItem] = useState<InventoryItem | null>(null);
+  const [isPantryAddMenuOpen, setIsPantryAddMenuOpen] = useState(false);
+  const pantryAddDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (pantryAddDropdownRef.current && !pantryAddDropdownRef.current.contains(e.target as Node)) {
+        setIsPantryAddMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const pantryFabRef = useFabAutoClose<HTMLDivElement>({
     isOpen: isPantryFabOpen,
     onClose: () => setIsPantryFabOpen(false),
@@ -1326,7 +1341,7 @@ export const MealsPage: React.FC = () => {
                 ) : (
                   <>
                     <Camera className="w-3.5 h-3.5" />
-                    <span>{selectedRecipe.image_url ? 'Replace Photo' : 'Add Photo'}</span>
+                    <span>{selectedRecipe.image_url ? 'Replace' : 'Add Photo'}</span>
                   </>
                 )}
               </button>
@@ -1412,8 +1427,8 @@ export const MealsPage: React.FC = () => {
                         onClick={(e) => handleToggleRecipePlanner(selectedRecipe, e)}
                         className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shrink-0 cursor-pointer shadow-sm ${
                           inPlanner
-                            ? 'text-emerald-400 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30'
-                            : 'text-slate-950 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 shadow-emerald-500/20'
+                            ? 'text-slate-950 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 shadow-md shadow-emerald-500/20'
+                            : 'text-slate-300 hover:text-white bg-slate-900/80 hover:bg-slate-800 border border-white/15 hover:border-emerald-500/40'
                         }`}
                         title={inPlanner ? 'In Planner (click to remove)' : 'Add to Planner'}
                       >
@@ -1603,8 +1618,8 @@ export const MealsPage: React.FC = () => {
                   onClick={(e) => handleToggleRecipePlanner(selectedRecipe, e)}
                   className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shrink-0 cursor-pointer shadow-sm ${
                     inPlanner
-                      ? 'text-emerald-400 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30'
-                      : 'text-slate-950 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 shadow-md shadow-emerald-500/20'
+                      ? 'text-slate-950 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 shadow-md shadow-emerald-500/20'
+                      : 'text-slate-300 hover:text-white bg-slate-900/80 hover:bg-slate-800 border border-white/15 hover:border-emerald-500/40'
                   }`}
                   title={inPlanner ? 'In Planner (click to remove)' : 'Add to Planner'}
                 >
@@ -1636,6 +1651,7 @@ export const MealsPage: React.FC = () => {
               Meals
             </h1>
 
+            {/* Top Right Action Button for active subtab */}
             {activeTab === 'recipes' && (
               <button
                 type="button"
@@ -1647,7 +1663,111 @@ export const MealsPage: React.FC = () => {
                 title="Add recipe"
               >
                 <Plus className="w-4 h-4 stroke-[2.5]" />
-                <span>Add</span>
+                <span>Add Recipe</span>
+              </button>
+            )}
+
+            {activeTab === 'pantry' && (
+              <div className="relative" ref={pantryAddDropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => setIsPantryAddMenuOpen(!isPantryAddMenuOpen)}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer"
+                  title="Add to Pantry"
+                >
+                  <Plus className="w-4 h-4 stroke-[2.5]" />
+                  <span>Add Item</span>
+                  <ChevronDown className={`w-3.5 h-3.5 stroke-[2.5] transition-transform duration-200 ${isPantryAddMenuOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {isPantryAddMenuOpen && (
+                  <div className="absolute right-0 top-full mt-2 w-52 bg-slate-900/95 backdrop-blur-xl border border-white/15 rounded-2xl p-1.5 shadow-2xl shadow-slate-950/80 z-50 animate-in fade-in zoom-in-95 duration-150 space-y-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsPantryAddMenuOpen(false);
+                        setIsBarcodeModalOpen(true);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/10 transition-colors text-left cursor-pointer"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-emerald-500/15 text-emerald-400 flex items-center justify-center shrink-0">
+                        <Barcode className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="font-bold text-white">Scan Barcode</div>
+                        <div className="text-[10px] text-slate-400">Continuous batch scanner</div>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsPantryAddMenuOpen(false);
+                        setIsVisionModalOpen(true);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/10 transition-colors text-left cursor-pointer"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-purple-500/15 text-purple-400 flex items-center justify-center shrink-0">
+                        <Camera className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="font-bold text-white">AI Photo Scan</div>
+                        <div className="text-[10px] text-slate-400">Snap fridge & pantry shelves</div>
+                      </div>
+                    </button>
+
+                    <div className="h-px bg-white/10 my-1" />
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsPantryAddMenuOpen(false);
+                        setEditingInventoryItem(null);
+                        setInventoryFormName('');
+                        setInventoryFormCategory('Other');
+                        setInventoryFormLocation('pantry');
+                        setInventoryFormQuantity('');
+                        setInventoryFormUnit('');
+                        setInventoryFormDays(7);
+                        setInventoryFormIsStock(false);
+                        setIsEditInventoryModalOpen(true);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/10 transition-colors text-left cursor-pointer"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-teal-500/15 text-teal-400 flex items-center justify-center shrink-0">
+                        <Pencil className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="font-bold text-white">Manual Entry</div>
+                        <div className="text-[10px] text-slate-400">Type item details</div>
+                      </div>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'planner' && (
+              <button
+                type="button"
+                onClick={() => setIsRecipePickerOpen(true)}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer"
+                title="Add meal to planner"
+              >
+                <Plus className="w-4 h-4 stroke-[2.5]" />
+                <span>Add Meal</span>
+              </button>
+            )}
+
+            {activeTab === 'history' && (
+              <button
+                type="button"
+                onClick={() => setIsLogModalOpen(true)}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer"
+                title="Log a cooked meal"
+              >
+                <Plus className="w-4 h-4 stroke-[2.5]" />
+                <span>Log Meal</span>
               </button>
             )}
           </div>
@@ -1883,8 +2003,8 @@ export const MealsPage: React.FC = () => {
                               onClick={(e) => handleToggleRecipePlanner(recipe, e)}
                               className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all shadow-sm active:scale-95 cursor-pointer ${
                                 isAlreadyInPlanner
-                                  ? 'text-emerald-400 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30'
-                                  : 'text-emerald-400 hover:text-white bg-emerald-500/10 hover:bg-emerald-500 border border-emerald-500/30 hover:border-emerald-500'
+                                  ? 'text-slate-950 bg-emerald-500 hover:bg-emerald-400 shadow-md shadow-emerald-500/20'
+                                  : 'text-slate-300 hover:text-white bg-slate-900/80 hover:bg-slate-800 border border-white/15 hover:border-emerald-500/40'
                               }`}
                               title={isAlreadyInPlanner ? 'In Planner (click to remove)' : 'Add to Planner'}
                             >
@@ -2078,110 +2198,53 @@ export const MealsPage: React.FC = () => {
           {/* ================= 2b. PANTRY TAB ================= */}
           {visitedTabs['pantry'] && (
             <div className={activeTab === 'pantry' ? 'space-y-4' : 'hidden'}>
-              {/* Quick Summary Cards / Expiry Alerts */}
-              {(() => {
-                const expiringCount = inventoryItems.filter(
-                  (i) => i.freshness === 'expiring_soon' || i.freshness === 'expired'
-                ).length;
-                const staplesCount = inventoryItems.filter((i) => i.isStock).length;
-
-                return (
-                  <div
-                    className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar"
-                    style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-                  >
-                    {expiringCount > 0 && (
-                      <button
-                        onClick={() => setPantryFilter(pantryFilter === 'expiring' ? 'all' : 'expiring')}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
-                          pantryFilter === 'expiring'
-                            ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                            : 'bg-amber-500/10 text-amber-400 border-amber-500/20 hover:bg-amber-500/15'
-                        }`}
-                      >
-                        <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
-                        <span>{expiringCount} Expiring Soon</span>
-                      </button>
-                    )}
-
-                    <button
-                      onClick={() => setPantryFilter(pantryFilter === 'staples' ? 'all' : 'staples')}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
-                        pantryFilter === 'staples'
-                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                          : 'bg-slate-900/60 text-slate-300 border-white/10 hover:bg-white/5'
-                      }`}
-                    >
-                      <Star className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" />
-                      <span>{staplesCount} Staples</span>
-                    </button>
-
-                    <div className="ml-auto flex items-center gap-1.5 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => setIsBarcodeModalOpen(true)}
-                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-200 text-xs font-semibold border border-white/10 transition-colors cursor-pointer"
-                        title="Scan Barcode"
-                      >
-                        <Barcode className="w-3.5 h-3.5 text-emerald-400" />
-                        <span className="hidden sm:inline">Scan</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setIsVisionModalOpen(true)}
-                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-200 text-xs font-semibold border border-white/10 transition-colors cursor-pointer"
-                        title="AI Photo Scan"
-                      >
-                        <Camera className="w-3.5 h-3.5 text-purple-400" />
-                        <span className="hidden sm:inline">Photo</span>
-                      </button>
-                    </div>
-                  </div>
-                );
-              })()}
-
               {/* Location & Status Filter Chips */}
               <div
                 className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar"
                 style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
               >
-                {(
-                  [
-                    { id: 'all', label: 'All Items', icon: null },
-                    { id: 'fridge', label: 'Fridge', icon: '🧊' },
-                    { id: 'freezer', label: 'Freezer', icon: '❄️' },
-                    { id: 'pantry', label: 'Pantry', icon: '🥫' },
-                  ] as const
-                ).map((chip) => {
-                  const isSelected = pantryFilter === chip.id;
-                  const count =
-                    chip.id === 'all'
-                      ? inventoryItems.length
-                      : inventoryItems.filter((i) => i.location === chip.id).length;
+                {(() => {
+                  const expiringCount = inventoryItems.filter(
+                    (i) => i.freshness === 'expiring_soon' || i.freshness === 'expired'
+                  ).length;
+                  const staplesCount = inventoryItems.filter((i) => i.isStock).length;
 
-                  return (
-                    <button
-                      key={chip.id}
-                      onClick={() => setPantryFilter(chip.id)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
-                        isSelected
-                          ? 'bg-emerald-500 text-slate-950 font-bold shadow-sm'
-                          : 'bg-slate-900/80 text-slate-400 hover:text-white hover:bg-slate-800 border border-white/5'
-                      }`}
-                    >
-                      {chip.icon && <span>{chip.icon}</span>}
-                      <span>{chip.label}</span>
-                      <span
-                        className={`text-[10px] px-1.5 py-0.2 rounded-full ${
-                          isSelected ? 'bg-slate-950/20 text-slate-950 font-black' : 'bg-white/5 text-slate-400'
+                  const chips = [
+                    { id: 'all' as const, label: 'All Items', icon: null, count: inventoryItems.length },
+                    { id: 'staples' as const, label: 'Staples', icon: '⭐', count: staplesCount },
+                    { id: 'fridge' as const, label: 'Fridge', icon: '🧊', count: inventoryItems.filter((i) => i.location === 'fridge').length },
+                    { id: 'freezer' as const, label: 'Freezer', icon: '❄️', count: inventoryItems.filter((i) => i.location === 'freezer').length },
+                    { id: 'pantry' as const, label: 'Pantry', icon: '🥫', count: inventoryItems.filter((i) => i.location === 'pantry').length },
+                    ...(expiringCount > 0
+                      ? [{ id: 'expiring' as const, label: 'Expiring', icon: '⚠️', count: expiringCount }]
+                      : []),
+                  ];
+
+                  return chips.map((chip) => {
+                    const isSelected = pantryFilter === chip.id;
+                    return (
+                      <button
+                        key={chip.id}
+                        onClick={() => setPantryFilter(chip.id)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                          isSelected
+                            ? 'bg-emerald-500 text-slate-950 font-bold shadow-sm'
+                            : 'bg-slate-900/80 text-slate-400 hover:text-white hover:bg-slate-800 border border-white/5'
                         }`}
                       >
-                        {count}
-                      </span>
-                    </button>
-                  );
-                })}
+                        {chip.icon && <span>{chip.icon}</span>}
+                        <span>{chip.label}</span>
+                        <span
+                          className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                            isSelected ? 'bg-slate-950/20 text-slate-950 font-black' : 'bg-white/5 text-slate-400'
+                          }`}
+                        >
+                          {chip.count}
+                        </span>
+                      </button>
+                    );
+                  });
+                })()}
               </div>
 
               {/* Inventory Items Grid */}
@@ -2798,8 +2861,8 @@ export const MealsPage: React.FC = () => {
                       onClick={(e) => handleToggleRecipePlanner(r, e)}
                       className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1 shrink-0 transition-all active:scale-95 cursor-pointer ${
                         isAlreadyInPlanner
-                          ? 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30'
-                          : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-md shadow-emerald-500/20'
+                          ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-md shadow-emerald-500/20'
+                          : 'bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white border border-white/15 hover:border-emerald-500/40'
                       }`}
                       title={isAlreadyInPlanner ? 'In Planner (click to remove)' : 'Add to Planner'}
                     >

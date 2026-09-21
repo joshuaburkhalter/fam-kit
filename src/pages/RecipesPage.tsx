@@ -652,7 +652,7 @@ export const RecipesPage: React.FC = () => {
                       ) : (
                         <>
                           <Camera className="w-3.5 h-3.5" />
-                          <span>{selectedRecipe.image_url ? 'Replace Photo' : 'Add Photo'}</span>
+                          <span>{selectedRecipe.image_url ? 'Replace' : 'Add Photo'}</span>
                         </>
                       )}
                     </button>

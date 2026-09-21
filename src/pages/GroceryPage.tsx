@@ -100,6 +100,7 @@ export const GroceryPage: React.FC = () => {
   });
 
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const quickAddInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -808,13 +809,14 @@ export const GroceryPage: React.FC = () => {
         <button
           type="button"
           onClick={() => {
-            setNewListTitle('');
-            setIsNewListModalOpen(true);
+            setIsInputExpanded(true);
+            setTimeout(() => quickAddInputRef.current?.focus(), 60);
           }}
-          className="flex items-center gap-1 px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 active:scale-95"
+          className="flex items-center gap-1 px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer"
+          title={`Add item to ${currentListName}`}
         >
           <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-          <span>New List</span>
+          <span>Add Item</span>
         </button>
       </div>
 
@@ -1728,6 +1730,7 @@ export const GroceryPage: React.FC = () => {
                   className="flex-1 min-w-0 flex items-center gap-2"
                 >
                   <input
+                    ref={quickAddInputRef}
                     type="text"
                     placeholder={`Add to ${currentListName}...`}
                     value={newItemName}
