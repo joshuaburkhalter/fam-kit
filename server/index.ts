@@ -2847,6 +2847,24 @@ app.post('/api/inventory/:id/restock-to-grocery', (req, res) => {
   res.json({ success: true, groceryItemId: groceryId });
 });
 
+app.delete('/api/inventory/:id/restock-to-grocery', (req, res) => {
+  const householdId = getHouseholdId(req);
+  const { id } = req.params;
+  const item = queryOne<any>('SELECT * FROM inventory_items WHERE id = ? AND householdId = ?', [id, householdId]);
+  if (!item) return res.status(404).json({ error: 'Item not found' });
+
+  execute(
+    `DELETE FROM grocery_items 
+     WHERE householdId = ? 
+       AND checked = 0 
+       AND LOWER(name) = LOWER(?)`,
+    [householdId, item.name.trim()]
+  );
+  saveDb();
+
+  res.json({ success: true });
+});
+
 // 6. Calendar API
 app.get('/api/calendar', (req, res) => {
   const householdId = getHouseholdId(req);

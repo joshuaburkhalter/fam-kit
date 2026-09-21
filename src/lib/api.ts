@@ -1436,6 +1436,12 @@ export const api = {
     });
   },
 
+  unrestockInventoryItemFromGrocery: async (id: string): Promise<{ success: boolean }> => {
+    return fetchJson<{ success: boolean }>(`/inventory/${encodeURIComponent(id)}/restock-to-grocery`, {
+      method: 'DELETE',
+    });
+  },
+
   checkHealth: async (): Promise<boolean> => {
     try {
       const res = await fetch(`${BASE_URL}/health?_t=${Date.now()}`, {

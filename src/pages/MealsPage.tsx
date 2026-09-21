@@ -393,6 +393,15 @@ export const MealsPage: React.FC = () => {
     );
   };
 
+  // Helper to check if a pantry item is currently on the grocery list
+  const isPantryItemInGrocery = (item: InventoryItem) => {
+    if (!item?.name) return false;
+    const clean = item.name.toLowerCase().trim();
+    return groceryItems.some(
+      (g) => !g.is_completed && g.name.toLowerCase().trim() === clean
+    );
+  };
+
   const checkedIngredientsRef = useRef(checkedIngredients);
   useEffect(() => {
     checkedIngredientsRef.current = checkedIngredients;
@@ -855,22 +864,86 @@ export const MealsPage: React.FC = () => {
 
   const handleShopIngredients = handleToggleShopIngredients;
 
-  const handleRestockPantryItem = async (item: InventoryItem, e?: React.MouseEvent) => {
+  const handleToggleRestockPantryItem = async (item: InventoryItem, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     if (!householdId) return;
-    try {
+
+    const inGrocery = isPantryItemInGrocery(item);
+    const cleanName = item.name.toLowerCase().trim();
+
+    if (inGrocery) {
+      // Optimistically remove from grocery list
+      const previousGrocery = groceryItems;
+      const updatedGrocery = groceryItems.filter(
+        (g) => !(g.name.toLowerCase().trim() === cleanName && !g.is_completed)
+      );
+      setGroceryItems(updatedGrocery);
+      if (mealsDataCache && mealsDataCache.householdId === householdId) {
+        mealsDataCache.groceryItems = updatedGrocery;
+      }
       triggerHapticCheck();
+      showToast(`Removed "${item.name}" from your Grocery List`);
+
+      try {
+        await api.unrestockInventoryItemFromGrocery(item.id);
+        const refreshed = await api.getGroceryItems(householdId);
+        setGroceryItems(refreshed);
+        if (mealsDataCache && mealsDataCache.householdId === householdId) {
+          mealsDataCache.groceryItems = refreshed;
+        }
+      } catch (err) {
+        console.error('Failed to remove restocked item from grocery', err);
+        setGroceryItems(previousGrocery);
+        if (mealsDataCache && mealsDataCache.householdId === householdId) {
+          mealsDataCache.groceryItems = previousGrocery;
+        }
+        showToast(`Failed to remove "${item.name}" from grocery list`);
+      }
+      return;
+    }
+
+    // Otherwise, add to grocery list
+    const previousGrocery = groceryItems;
+    const optimisticGroceryItem: GroceryItem = {
+      id: `temp-restock-${Date.now()}`,
+      household_id: householdId,
+      aisle_id: '',
+      name: item.name,
+      quantity: item.quantity || '1',
+      unit: item.unit || '',
+      notes: 'From Pantry Restock',
+      is_completed: false,
+      list_type: 'grocery',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    const nextGrocery = [optimisticGroceryItem, ...groceryItems];
+    setGroceryItems(nextGrocery);
+    if (mealsDataCache && mealsDataCache.householdId === householdId) {
+      mealsDataCache.groceryItems = nextGrocery;
+    }
+    triggerHapticCheck();
+    showToast(`Added "${item.name}" to your Grocery List!`);
+
+    try {
       await api.restockInventoryItemToGrocery(item.id);
-      showToast(`Added "${item.name}" to your Grocery List!`);
       const refreshed = await api.getGroceryItems(householdId);
       setGroceryItems(refreshed);
       if (mealsDataCache && mealsDataCache.householdId === householdId) {
         mealsDataCache.groceryItems = refreshed;
       }
     } catch (err) {
+      console.error('Failed to add restocked item to grocery', err);
+      setGroceryItems(previousGrocery);
+      if (mealsDataCache && mealsDataCache.householdId === householdId) {
+        mealsDataCache.groceryItems = previousGrocery;
+      }
       showToast(`Failed to add "${item.name}" to grocery list`);
     }
   };
+
+  const handleRestockPantryItem = handleToggleRestockPantryItem;
 
   // Submit Manual Log Form
   const handleSubmitManualLog = async (e: React.FormEvent) => {
@@ -2344,15 +2417,28 @@ export const MealsPage: React.FC = () => {
                               )}
                             </div>
 
-                            <button
-                              type="button"
-                              onClick={(e) => handleRestockPantryItem(item, e)}
-                              className="px-2 py-0.5 rounded-lg bg-white/5 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-400 border border-white/10 hover:border-emerald-500/30 text-[10px] font-semibold flex items-center gap-1 shrink-0 whitespace-nowrap transition-all cursor-pointer"
-                              title="Add to Grocery List"
-                            >
-                              <ShoppingCart className="w-3 h-3 text-emerald-400" />
-                              <span>Restock</span>
-                            </button>
+                            {(() => {
+                              const inGrocery = isPantryItemInGrocery(item);
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={(e) => handleToggleRestockPantryItem(item, e)}
+                                  className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold flex items-center gap-1 shrink-0 whitespace-nowrap transition-all cursor-pointer ${
+                                    inGrocery
+                                      ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold shadow-sm shadow-emerald-500/20'
+                                      : 'bg-white/5 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-400 border border-white/10 hover:border-emerald-500/30'
+                                  }`}
+                                  title={inGrocery ? 'In Grocery List (click to remove)' : 'Add to Grocery List'}
+                                >
+                                  {inGrocery ? (
+                                    <Check className="w-3 h-3 stroke-[3]" />
+                                  ) : (
+                                    <ShoppingCart className="w-3 h-3 text-emerald-400" />
+                                  )}
+                                  <span>{inGrocery ? 'In List' : 'Restock'}</span>
+                                </button>
+                              );
+                            })()}
                           </div>
                         </div>
                       );
@@ -2983,6 +3069,8 @@ export const MealsPage: React.FC = () => {
       <EditInventoryModal
         isOpen={isEditInventoryModalOpen}
         item={editingInventoryItem}
+        isInGrocery={editingInventoryItem ? isPantryItemInGrocery(editingInventoryItem) : false}
+        onToggleRestock={handleToggleRestockPantryItem}
         onClose={() => {
           setIsEditInventoryModalOpen(false);
           setEditingInventoryItem(null);

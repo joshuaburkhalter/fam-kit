@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Drawer } from '../ui/Drawer';
-import { Trash2, ShoppingCart, Loader2, Sparkles, Package } from 'lucide-react';
+import { Trash2, ShoppingCart, Loader2, Sparkles, Package, Check } from 'lucide-react';
 import { api } from '../../lib/api';
 import { getFreshnessBadge, getDaysUntilExpiry } from '../../lib/shelfLife';
 import type { InventoryItem, PantryLocation } from '../../types';
@@ -8,9 +8,11 @@ import type { InventoryItem, PantryLocation } from '../../types';
 interface EditInventoryModalProps {
   isOpen: boolean;
   item: InventoryItem | null;
+  isInGrocery?: boolean;
   onClose: () => void;
   onSaved: (item: InventoryItem) => void;
   onDeleted?: (id: string) => void;
+  onToggleRestock?: (item: InventoryItem) => void;
 }
 
 const CATEGORIES = [
@@ -29,9 +31,11 @@ const CATEGORIES = [
 export const EditInventoryModal: React.FC<EditInventoryModalProps> = ({
   isOpen,
   item,
+  isInGrocery = false,
   onClose,
   onSaved,
   onDeleted,
+  onToggleRestock,
 }) => {
   const [name, setName] = useState('');
   const [category, setCategory] = useState('Pantry');
@@ -116,13 +120,22 @@ export const EditInventoryModal: React.FC<EditInventoryModalProps> = ({
 
   const handleRestockToGrocery = async () => {
     if (!item) return;
+    if (onToggleRestock) {
+      onToggleRestock(item);
+      return;
+    }
     setIsRestocking(true);
     try {
-      await api.restockInventoryItemToGrocery(item.id);
-      setRestockedSuccess(true);
-      setTimeout(() => setRestockedSuccess(false), 3000);
+      if (isInGrocery) {
+        await api.unrestockInventoryItemFromGrocery(item.id);
+        setRestockedSuccess(false);
+      } else {
+        await api.restockInventoryItemToGrocery(item.id);
+        setRestockedSuccess(true);
+        setTimeout(() => setRestockedSuccess(false), 3000);
+      }
     } catch (e: any) {
-      alert(e.message || 'Failed to add item to grocery list');
+      alert(e.message || 'Failed to update grocery list');
     } finally {
       setIsRestocking(false);
     }
@@ -301,17 +314,21 @@ export const EditInventoryModal: React.FC<EditInventoryModalProps> = ({
               onClick={handleRestockToGrocery}
               disabled={isRestocking}
               className={`w-full py-2.5 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
-                restockedSuccess
+                isInGrocery
+                  ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/25'
+                  : restockedSuccess
                   ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
                   : 'bg-slate-900 hover:bg-slate-800 border-white/10 text-slate-200'
               }`}
             >
               {isRestocking ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : isInGrocery || restockedSuccess ? (
+                <Check className="w-3.5 h-3.5 text-emerald-400 stroke-[3]" />
               ) : (
                 <ShoppingCart className="w-3.5 h-3.5 text-emerald-400" />
               )}
-              <span>{restockedSuccess ? '✓ Added to Grocery List!' : 'Add to Grocery List'}</span>
+              <span>{isInGrocery ? 'In Grocery List (Click to Remove)' : restockedSuccess ? '✓ Added to Grocery List!' : 'Add to Grocery List'}</span>
             </button>
           </div>
         )}
