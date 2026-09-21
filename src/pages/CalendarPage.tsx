@@ -590,21 +590,26 @@ export const CalendarPage: React.FC = () => {
                 }`}
               >
                 {/* 1. Date Column */}
-                <div className="w-12 shrink-0 flex flex-col items-center pt-0.5 select-none">
+                <button
+                  type="button"
+                  onClick={() => handleOpenAddModal(dateStr)}
+                  className="w-12 shrink-0 flex flex-col items-center pt-0.5 pb-1 select-none rounded-xl hover:bg-white/5 active:scale-95 transition-all cursor-pointer group/date"
+                  title={`Add event on ${format(day, 'EEEE, MMMM d')}`}
+                >
                   <span
-                    className={`text-[10px] font-bold uppercase tracking-wider ${
-                      isCurrentDay ? 'text-emerald-400' : 'text-slate-400'
+                    className={`text-[10px] font-bold uppercase tracking-wider transition-colors ${
+                      isCurrentDay ? 'text-emerald-400' : 'text-slate-400 group-hover/date:text-emerald-400'
                     }`}
                   >
                     {format(day, 'EEE')}
                   </span>
 
                   {isCurrentDay ? (
-                    <div className="w-7 h-7 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center font-bold text-sm shadow-sm mt-0.5">
+                    <div className="w-7 h-7 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center font-bold text-sm shadow-sm mt-0.5 group-hover/date:scale-105 transition-transform">
                       {format(day, 'd')}
                     </div>
                   ) : (
-                    <span className="text-base font-bold text-slate-200 mt-0.5">
+                    <span className="text-base font-bold text-slate-200 mt-0.5 group-hover/date:text-emerald-300 transition-colors">
                       {format(day, 'd')}
                     </span>
                   )}
@@ -615,7 +620,7 @@ export const CalendarPage: React.FC = () => {
                     </span>
                   )}
                   {isTomorrowDay && (
-                    <span className="text-[9px] font-medium text-slate-400 uppercase tracking-tight mt-0.5">
+                    <span className="text-[9px] font-medium text-slate-400 group-hover/date:text-slate-300 uppercase tracking-tight mt-0.5 transition-colors">
                       Tmrw
                     </span>
                   )}
@@ -624,24 +629,29 @@ export const CalendarPage: React.FC = () => {
                       Yest
                     </span>
                   )}
-                </div>
+                </button>
 
                 {/* 2. Timeline Rail Node */}
-                <div className="w-6 shrink-0 flex flex-col items-center pt-2 relative z-10">
+                <button
+                  type="button"
+                  onClick={() => handleOpenAddModal(dateStr)}
+                  className="w-6 shrink-0 flex flex-col items-center pt-2 relative z-10 cursor-pointer group/node"
+                  title={`Add event on ${format(day, 'EEEE, MMMM d')}`}
+                >
                   {isCurrentDay && !hasActiveEvent && nowIndex === 0 ? (
                     <div className="w-2.5 h-2.5 rounded-full opacity-0" />
                   ) : (
                     <div
                       className={`rounded-full transition-all ${
                         isCurrentDay
-                          ? 'w-2.5 h-2.5 bg-slate-700 ring-2 ring-slate-950'
+                          ? 'w-2.5 h-2.5 bg-slate-700 ring-2 ring-slate-950 group-hover/node:bg-emerald-400 group-hover/node:scale-125'
                           : dayEvents.length > 0
-                          ? 'w-2.5 h-2.5 bg-slate-600 ring-2 ring-slate-950 group-hover:bg-slate-400 group-hover:scale-125'
-                          : 'w-2 h-2 bg-slate-700 ring-2 ring-slate-950 group-hover:bg-slate-500 group-hover:scale-125'
+                          ? 'w-2.5 h-2.5 bg-slate-600 ring-2 ring-slate-950 group-hover/node:bg-emerald-400 group-hover/node:scale-125'
+                          : 'w-2 h-2 bg-slate-700 ring-2 ring-slate-950 group-hover/node:bg-emerald-400 group-hover/node:scale-125'
                       }`}
                     />
                   )}
-                </div>
+                </button>
 
                 {/* 3. Content Column */}
                 <div className="flex-1 min-w-0 pt-0.5">
