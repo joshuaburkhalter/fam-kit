@@ -73,6 +73,7 @@ export interface Aisle {
   display_order: number;
   color: string;
   icon?: string;
+  list_id?: string;
 }
 
 export interface GroceryItem {

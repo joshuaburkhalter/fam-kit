@@ -4,6 +4,7 @@ import {
   Check,
   Trash2,
   ListPlus,
+  FolderPlus,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -26,6 +27,7 @@ import { Toast } from '../components/ui/Toast';
 interface GroceryDataCache {
   householdId: string;
   itemsByList: Record<string, GroceryItem[]>;
+  aislesByList?: Record<string, Aisle[]>;
   lists: CustomList[];
   aisles: Aisle[];
   suggestions?: GrocerySuggestion[];
@@ -56,11 +58,17 @@ export const GroceryPage: React.FC = () => {
     return groceryDataCache ? groceryDataCache.lists : [];
   });
   const [localAisles, setLocalAisles] = useState<Aisle[]>(() => {
-    return groceryDataCache && groceryDataCache.aisles.length > 0 ? groceryDataCache.aisles : aisles;
+    return groceryDataCache?.aislesByList?.['grocery'] || (groceryDataCache && groceryDataCache.aisles.length > 0 ? groceryDataCache.aisles : aisles);
   });
   const [newItemName, setNewItemName] = useState('');
+  const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
+  const addMenuRef = useRef<HTMLDivElement>(null);
   const [isNewListModalOpen, setIsNewListModalOpen] = useState(false);
   const [newListTitle, setNewListTitle] = useState('');
+  const [isNewCategoryModalOpen, setIsNewCategoryModalOpen] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryIcon, setNewCategoryIcon] = useState('📁');
+  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
   const [isListDropdownOpen, setIsListDropdownOpen] = useState(false);
   const [isLoading, setIsLoading] = useState<boolean>(() => {
     return !(groceryDataCache && groceryDataCache.itemsByList['grocery'] !== undefined);
@@ -114,6 +122,9 @@ export const GroceryPage: React.FC = () => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsListDropdownOpen(false);
       }
+      if (addMenuRef.current && !addMenuRef.current.contains(event.target as Node)) {
+        setIsAddMenuOpen(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -131,12 +142,19 @@ export const GroceryPage: React.FC = () => {
         ? groceryDataCache.itemsByList[targetListId]
         : undefined;
 
+    const cachedAisles =
+      groceryDataCache && groceryDataCache.householdId === householdId
+        ? groceryDataCache.aislesByList?.[targetListId]
+        : undefined;
+
     if (cachedItems !== undefined) {
       setItems(cachedItems);
+      setLocalAisles(cachedAisles || (targetListId === 'grocery' ? aisles : []));
       setIsLoading(false);
     } else {
       // Clear stale items immediately so the previous list never flashes while loading the new one
       setItems([]);
+      setLocalAisles(targetListId === 'grocery' ? aisles : []);
       setIsLoading(true);
     }
   };
@@ -155,13 +173,18 @@ export const GroceryPage: React.FC = () => {
         groceryDataCache = {
           householdId,
           itemsByList: {},
+          aislesByList: {},
           lists: data.lists,
           aisles: data.aisles,
         };
       }
       groceryDataCache.itemsByList[targetListId] = data.items;
+      if (!groceryDataCache.aislesByList) {
+        groceryDataCache.aislesByList = {};
+      }
+      groceryDataCache.aislesByList[targetListId] = data.aisles;
       groceryDataCache.lists = data.lists;
-      if (data.aisles.length > 0) {
+      if (targetListId === 'grocery') {
         groceryDataCache.aisles = data.aisles;
       }
       if (data.suggestions && data.suggestions.length > 0) {
@@ -171,11 +194,9 @@ export const GroceryPage: React.FC = () => {
 
       if (activeListTypeRef.current === targetListId) {
         setItems(data.items);
-      }
-      setCustomLists(data.lists);
-      if (data.aisles.length > 0) {
         setLocalAisles(data.aisles);
       }
+      setCustomLists(data.lists);
     } catch (err) {
       console.error('Failed to load items:', err);
     } finally {
@@ -530,21 +551,25 @@ export const GroceryPage: React.FC = () => {
 
   const handleCreateCustomList = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newListTitle.trim() || !household) return;
+    const hId = household?.id || householdId;
+    if (!newListTitle.trim() || !hId) return;
 
     try {
-      const created = await api.createCustomList(household.id, newListTitle.trim());
+      const created = await api.createCustomList(hId, newListTitle.trim());
       setCustomLists((prev) => {
         const next = [...prev, created];
-        if (groceryDataCache && groceryDataCache.householdId === household.id) {
+        if (groceryDataCache && groceryDataCache.householdId === hId) {
           groceryDataCache.lists = next;
         }
         return next;
       });
-      if (groceryDataCache && groceryDataCache.householdId === household.id) {
+      if (groceryDataCache && groceryDataCache.householdId === hId) {
         groceryDataCache.itemsByList[created.id] = [];
+        if (!groceryDataCache.aislesByList) groceryDataCache.aislesByList = {};
+        groceryDataCache.aislesByList[created.id] = [];
       }
       setItems([]);
+      setLocalAisles([]);
       setIsLoading(false);
       setActiveListType(created.id);
       activeListTypeRef.current = created.id;
@@ -556,12 +581,54 @@ export const GroceryPage: React.FC = () => {
     }
   };
 
+  const handleCreateCategory = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const catName = newCategoryName.trim();
+    if (!catName || !householdId) return;
+
+    try {
+      setIsCreatingCategory(true);
+      const newAisle = await api.createAisle(
+        householdId,
+        catName,
+        '#10b981',
+        activeListType,
+        newCategoryIcon || (activeListType === 'grocery' ? '🛒' : '📁')
+      );
+
+      setLocalAisles((prev) => {
+        const next = [...prev, newAisle];
+        if (groceryDataCache && groceryDataCache.householdId === householdId) {
+          if (!groceryDataCache.aislesByList) groceryDataCache.aislesByList = {};
+          groceryDataCache.aislesByList[activeListType] = next;
+          if (activeListType === 'grocery') {
+            groceryDataCache.aisles = next;
+          }
+        }
+        return next;
+      });
+
+      refreshAisles();
+      showToast(`Category "${catName}" added to ${currentListName}`);
+      setNewCategoryName('');
+      setIsNewCategoryModalOpen(false);
+    } catch (err: any) {
+      console.error('Failed to create category:', err);
+      showToast(err?.message || 'Failed to create category');
+    } finally {
+      setIsCreatingCategory(false);
+    }
+  };
+
   const handleDeleteCustomList = async (listId: string, listTitle: string) => {
     if (confirm(`Are you sure you want to delete the list "${listTitle}"?`)) {
       try {
         await api.deleteCustomList(listId);
         if (groceryDataCache) {
           delete groceryDataCache.itemsByList[listId];
+          if (groceryDataCache.aislesByList) {
+            delete groceryDataCache.aislesByList[listId];
+          }
           groceryDataCache.lists = groceryDataCache.lists.filter((l) => l.id !== listId);
         }
         setCustomLists((prev) => prev.filter((l) => l.id !== listId));
@@ -586,15 +653,16 @@ export const GroceryPage: React.FC = () => {
   const completedItems = items.filter((it) => it.is_completed);
 
   // Sort aisles by display_order
-  const effectiveAisles = localAisles.length > 0 ? localAisles : aisles;
+  const effectiveAisles = localAisles.length > 0 ? localAisles : (activeListType === 'grocery' ? aisles : []);
   const sortedAisles = [...effectiveAisles].sort((a, b) => a.display_order - b.display_order);
 
   const itemsByAisle: { aisle: Aisle; items: GroceryItem[] }[] = [];
   const uncategorizedItems: GroceryItem[] = [];
 
   const isGroceryList = activeListType === 'grocery';
+  const hasCategories = effectiveAisles.length > 0;
 
-  if (isGroceryList) {
+  if (hasCategories) {
     const placedItemIds = new Set<string>();
 
     sortedAisles.forEach((aisle) => {
@@ -604,7 +672,7 @@ export const GroceryPage: React.FC = () => {
           (it.aisle_id === aisle.id || (it as any).category?.toLowerCase() === aisle.name.toLowerCase())
       );
       aisleItems.forEach((it) => placedItemIds.add(it.id));
-      if (aisleItems.length > 0) {
+      if (aisleItems.length > 0 || !isGroceryList) {
         itemsByAisle.push({ aisle, items: aisleItems });
       }
     });
@@ -798,18 +866,66 @@ export const GroceryPage: React.FC = () => {
           </h1>
         </div>
 
-        <button
-          type="button"
-          onClick={() => {
-            quickAddInputRef.current?.focus();
-            quickAddInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          }}
-          className="flex items-center gap-1 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer"
-          title={`Add item to ${currentListName}`}
-        >
-          <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-          <span>Add Item</span>
-        </button>
+        {/* Add Dropdown Menu */}
+        <div className="relative" ref={addMenuRef}>
+          <button
+            type="button"
+            onClick={() => setIsAddMenuOpen((prev) => !prev)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer"
+            title="Add options"
+          >
+            <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+            <span>Add</span>
+            <ChevronDown
+              className={`w-3.5 h-3.5 stroke-[2.5] transition-transform duration-200 ${
+                isAddMenuOpen ? 'rotate-180' : ''
+              }`}
+            />
+          </button>
+
+          {isAddMenuOpen && (
+            <div className="absolute right-0 top-full mt-2 w-48 bg-slate-900/95 backdrop-blur-xl rounded-2xl p-1.5 shadow-2xl z-50 border border-white/15 animate-in fade-in zoom-in-95 duration-100">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAddMenuOpen(false);
+                  quickAddInputRef.current?.focus();
+                  quickAddInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:bg-white/10 hover:text-emerald-400 transition-colors cursor-pointer text-left"
+              >
+                <Plus className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>Add Item</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAddMenuOpen(false);
+                  setIsNewCategoryModalOpen(true);
+                }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:bg-white/10 hover:text-emerald-400 transition-colors cursor-pointer text-left"
+              >
+                <FolderPlus className="w-4 h-4 text-teal-400 shrink-0" />
+                <span>Add Category</span>
+              </button>
+
+              <div className="my-1 border-t border-white/5" />
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAddMenuOpen(false);
+                  setIsNewListModalOpen(true);
+                }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:bg-white/10 hover:text-emerald-400 transition-colors cursor-pointer text-left"
+              >
+                <ListPlus className="w-4 h-4 text-cyan-400 shrink-0" />
+                <span>Add List</span>
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Sleek, Full-Width List Header */}
@@ -1045,8 +1161,8 @@ export const GroceryPage: React.FC = () => {
           </div>
         ) : null}
 
-        {/* If Grocery List: Display Grouped by Store Aisles */}
-        {isGroceryList && itemsByAisle.length > 1 && (
+        {/* If List has Categories: Display Grouped by Categories / Aisles */}
+        {hasCategories && itemsByAisle.length > 1 && (
           <div className="flex items-center justify-between px-1 text-[11px] font-medium text-slate-400">
             <span className="flex items-center gap-1.5">
               <GripVertical className="w-3.5 h-3.5 text-slate-500" />
@@ -1058,7 +1174,7 @@ export const GroceryPage: React.FC = () => {
           </div>
         )}
 
-        {isGroceryList &&
+        {hasCategories &&
           itemsByAisle.map(({ aisle, items: aisleItems }, idx) => {
             const isCollapsed = collapsedAisles[aisle.id];
             const isDragging = draggingAisleId === aisle.id;
@@ -1181,108 +1297,114 @@ export const GroceryPage: React.FC = () => {
                 {/* Items in this Aisle */}
                 {!isCollapsed && (
                   <div className="divide-y divide-white/5">
-                    {aisleItems.map((item) => {
-                      const isCrossing = Boolean(crossingOffIds[item.id]);
-                      const isChecked = item.is_completed || isCrossing;
-                      return (
-                        <div
-                          key={item.id}
-                          onClick={() => handleToggleItem(item.id)}
-                          className={`flex items-center justify-between px-3.5 py-2 transition-all cursor-pointer group hover:bg-white/5 gap-2 min-h-[42px] ${
-                            isCrossing ? 'animate-row-crossing' : ''
-                          }`}
-                        >
-                          <div className="flex items-center gap-3 min-w-0 flex-1">
-                            <div
-                              className={`relative w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition-all ${
-                                isChecked
-                                  ? 'border-emerald-500 bg-emerald-500 text-slate-950 shadow-sm shadow-emerald-500/30 ' +
-                                    (isCrossing ? 'animate-check-pop' : '')
-                                  : 'border-white/20 bg-slate-900/80 group-hover:border-emerald-500'
-                              }`}
-                            >
-                              <CheckSparkle trigger={isCrossing} />
-                              {isChecked && (
-                                <Check className="w-3.5 h-3.5 text-slate-950 font-bold stroke-[3]" />
-                              )}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2">
-                                <span
-                                  className={`text-sm font-semibold truncate transition-colors ${
-                                    isCrossing
-                                      ? 'animate-strike text-slate-400'
-                                      : isChecked
-                                      ? 'line-through text-slate-400'
-                                      : 'text-slate-100'
-                                  }`}
-                                >
-                                  {item.name}
-                                </span>
-                                {item.quantity && (
-                                  <span className="text-xs font-mono text-slate-400 shrink-0">
-                                    ({item.quantity}{item.unit ? ` ${item.unit}` : ''})
-                                  </span>
+                    {aisleItems.length === 0 ? (
+                      <div className="px-4 py-3.5 text-center text-xs text-slate-500 italic">
+                        No items in this category yet.
+                      </div>
+                    ) : (
+                      aisleItems.map((item) => {
+                        const isCrossing = Boolean(crossingOffIds[item.id]);
+                        const isChecked = item.is_completed || isCrossing;
+                        return (
+                          <div
+                            key={item.id}
+                            onClick={() => handleToggleItem(item.id)}
+                            className={`flex items-center justify-between px-3.5 py-2 transition-all cursor-pointer group hover:bg-white/5 gap-2 min-h-[42px] ${
+                              isCrossing ? 'animate-row-crossing' : ''
+                            }`}
+                          >
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                              <div
+                                className={`relative w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition-all ${
+                                  isChecked
+                                    ? 'border-emerald-500 bg-emerald-500 text-slate-950 shadow-sm shadow-emerald-500/30 ' +
+                                      (isCrossing ? 'animate-check-pop' : '')
+                                    : 'border-white/20 bg-slate-900/80 group-hover:border-emerald-500'
+                                }`}
+                              >
+                                <CheckSparkle trigger={isCrossing} />
+                                {isChecked && (
+                                  <Check className="w-3.5 h-3.5 text-slate-950 font-bold stroke-[3]" />
                                 )}
                               </div>
-                              {item.notes && (
-                                <p className="text-[11px] text-emerald-400/80 truncate leading-tight mt-0.5">
-                                  {item.notes}
-                                </p>
-                              )}
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2">
+                                  <span
+                                    className={`text-sm font-semibold truncate transition-colors ${
+                                      isCrossing
+                                        ? 'animate-strike text-slate-400'
+                                        : isChecked
+                                        ? 'line-through text-slate-400'
+                                        : 'text-slate-100'
+                                    }`}
+                                  >
+                                    {item.name}
+                                  </span>
+                                  {item.quantity && (
+                                    <span className="text-xs font-mono text-slate-400 shrink-0">
+                                      ({item.quantity}{item.unit ? ` ${item.unit}` : ''})
+                                    </span>
+                                  )}
+                                </div>
+                                {item.notes && (
+                                  <p className="text-[11px] text-emerald-400/80 truncate leading-tight mt-0.5">
+                                    {item.notes}
+                                  </p>
+                                )}
+                              </div>
                             </div>
-                          </div>
 
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            {item.added_by_user_name && (
-                              <span className="text-[10px] text-slate-500 hidden sm:inline shrink-0">
-                                {item.added_by_user_name}
-                              </span>
-                            )}
-                            {isGroceryList && (
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {item.added_by_user_name && (
+                                <span className="text-[10px] text-slate-500 hidden sm:inline shrink-0">
+                                  {item.added_by_user_name}
+                                </span>
+                              )}
+                              {effectiveAisles.length > 1 && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setMovingItem(item);
+                                  }}
+                                  className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-400 hover:bg-emerald-500/10 opacity-40 group-hover:opacity-100 transition-all"
+                                  title={isGroceryList ? "Move to another aisle" : "Move to another category"}
+                                >
+                                  <ArrowRightLeft className="w-3.5 h-3.5" />
+                                </button>
+                              )}
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  setMovingItem(item);
+                                  handleEditItem(item);
                                 }}
                                 className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-400 hover:bg-emerald-500/10 opacity-40 group-hover:opacity-100 transition-all"
-                                title="Move to another aisle"
+                                title="Edit item"
                               >
-                                <ArrowRightLeft className="w-3.5 h-3.5" />
+                                <Pencil className="w-3.5 h-3.5" />
                               </button>
-                            )}
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleEditItem(item);
-                              }}
-                              className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-400 hover:bg-emerald-500/10 opacity-40 group-hover:opacity-100 transition-all"
-                              title="Edit item"
-                            >
-                              <Pencil className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteItem(item.id);
-                              }}
-                              className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 opacity-40 group-hover:opacity-100 transition-all"
-                              title="Delete item"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteItem(item.id);
+                                }}
+                                className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 opacity-40 group-hover:opacity-100 transition-all"
+                                title="Delete item"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })
+                    )}
                   </div>
                 )}
               </div>
             );
           })}
 
-        {/* Uncategorized Items (if Grocery list) */}
-        {isGroceryList && uncategorizedItems.length > 0 && (
+        {/* Uncategorized Items (if list has categories) */}
+        {hasCategories && uncategorizedItems.length > 0 && (
           <div className="glass-panel rounded-3xl border border-white/10 overflow-hidden shadow-sm">
             <div className="flex items-center gap-2.5 px-3.5 py-2.5 bg-slate-900/40 border-b border-white/5">
               <div className="w-2.5 h-2.5 rounded-full bg-slate-600 shrink-0" />
@@ -1351,14 +1473,14 @@ export const GroceryPage: React.FC = () => {
                           {item.added_by_user_name}
                         </span>
                       )}
-                      {isGroceryList && (
+                      {effectiveAisles.length > 0 && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             setMovingItem(item);
                           }}
                           className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-400 hover:bg-emerald-500/10 opacity-40 group-hover:opacity-100 transition-all"
-                          title="Move to another aisle"
+                          title={isGroceryList ? "Move to an aisle" : "Move to a category"}
                         >
                           <ArrowRightLeft className="w-3.5 h-3.5" />
                         </button>
@@ -1391,8 +1513,8 @@ export const GroceryPage: React.FC = () => {
           </div>
         )}
 
-        {/* Non-Grocery Custom List: Display as Simple Flat Checklist */}
-        {!isGroceryList && activeItems.length > 0 && (
+        {/* Non-Categorized List: Display as Simple Flat Checklist */}
+        {!hasCategories && activeItems.length > 0 && (
           <div className="glass-panel rounded-3xl border border-white/10 overflow-hidden shadow-sm divide-y divide-white/5">
             {activeItems.map((item) => {
               const isCrossing = Boolean(crossingOffIds[item.id]);
@@ -1622,10 +1744,10 @@ export const GroceryPage: React.FC = () => {
             </div>
           </div>
 
-          {isGroceryList && localAisles.length > 0 && (
+          {localAisles.length > 0 && (
             <div>
               <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                Store Aisle / Category
+                {isGroceryList ? 'Store Aisle / Category' : 'Category / Section'}
               </label>
               <select
                 value={editAisleId}
@@ -1641,7 +1763,7 @@ export const GroceryPage: React.FC = () => {
               </select>
               <p className="text-[10px] text-emerald-400/80 mt-1.5 flex items-center gap-1 font-medium">
                 <Sparkles className="w-3 h-3 text-emerald-400 shrink-0" />
-                <span>FamKit will remember this aisle for next time you add this item.</span>
+                <span>FamKit will remember this category for next time you add this item.</span>
               </p>
             </div>
           )}
@@ -1690,6 +1812,74 @@ export const GroceryPage: React.FC = () => {
             </button>
           ))}
         </div>
+      </Drawer>
+
+      {/* New Category Drawer */}
+      <Drawer
+        isOpen={isNewCategoryModalOpen}
+        onClose={() => setIsNewCategoryModalOpen(false)}
+        title={`Add Category to ${currentListName}`}
+        subtitle={`Organize items in ${currentListName} into sections`}
+        icon={<FolderPlus className="w-5 h-5 text-emerald-400" />}
+        footer={
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsNewCategoryModalOpen(false)}
+              className="min-h-[40px] px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              form="create-category-form"
+              disabled={!newCategoryName.trim() || isCreatingCategory}
+              className="min-h-[40px] bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-bold px-5 py-2 rounded-xl text-xs shadow-md shadow-emerald-500/20 cursor-pointer flex items-center gap-1.5"
+            >
+              {isCreatingCategory && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              <span>{isCreatingCategory ? 'Creating...' : 'Create Category'}</span>
+            </button>
+          </div>
+        }
+      >
+        <form id="create-category-form" onSubmit={handleCreateCategory} className="space-y-4">
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+              Category Name
+            </label>
+            <input
+              type="text"
+              required
+              autoFocus
+              placeholder={isGroceryList ? "e.g. Snacks, Beverages, Frozen..." : "e.g. Clothing, Toiletries, Electronics..."}
+              value={newCategoryName}
+              onChange={(e) => setNewCategoryName(e.target.value)}
+              className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+              Icon / Emoji
+            </label>
+            <div className="flex flex-wrap gap-2 pt-1">
+              {['📁', '🛒', '🍎', '🥩', '🍞', '🥛', '🥫', '🧹', '🎒', '👕', '💊', '🏷️', '🔧', '📦'].map((emoji) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  onClick={() => setNewCategoryIcon(emoji)}
+                  className={`w-9 h-9 rounded-xl text-lg flex items-center justify-center border transition-all cursor-pointer ${
+                    newCategoryIcon === emoji
+                      ? 'border-emerald-500 bg-emerald-500/20 shadow-sm'
+                      : 'border-white/10 bg-slate-950/60 hover:border-white/20'
+                  }`}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          </div>
+        </form>
       </Drawer>
 
       {/* New Custom List Drawer */}

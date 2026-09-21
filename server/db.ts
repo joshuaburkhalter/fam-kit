@@ -67,7 +67,8 @@ function initSchema(db: Database) {
       name TEXT NOT NULL,
       icon TEXT NOT NULL DEFAULT '🛒',
       orderIndex INTEGER NOT NULL DEFAULT 0,
-      householdId TEXT NOT NULL
+      householdId TEXT NOT NULL,
+      listId TEXT DEFAULT 'grocery'
     );
 
     CREATE TABLE IF NOT EXISTS grocery_items (
@@ -550,6 +551,12 @@ function initSchema(db: Database) {
     db.run(`ALTER TABLE users ADD COLUMN createdAt TEXT;`);
   } catch {}
   try {
+    db.run(`ALTER TABLE aisles ADD COLUMN listId TEXT DEFAULT 'grocery';`);
+  } catch {}
+  try {
+    db.run(`UPDATE aisles SET listId = 'grocery' WHERE listId IS NULL;`);
+  } catch {}
+  try {
     db.run(`
       UPDATE users 
       SET createdAt = (
@@ -720,7 +727,7 @@ export function createDefaultAisles(householdId: string, db?: Database) {
   if (!targetDb) return;
   DEFAULT_AISLE_TEMPLATES.forEach((a, idx) => {
     const id = `a_${householdId}_${idx + 1}`;
-    targetDb.run(`INSERT OR IGNORE INTO aisles VALUES (?, ?, ?, ?, ?)`, [id, a.name, a.icon, idx, householdId]);
+    targetDb.run(`INSERT OR IGNORE INTO aisles (id, name, icon, orderIndex, householdId, listId) VALUES (?, ?, ?, ?, ?, 'grocery')`, [id, a.name, a.icon, idx, householdId]);
   });
 }
 

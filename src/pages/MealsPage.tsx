@@ -114,9 +114,6 @@ export const MealsPage: React.FC = () => {
     if (tab !== 'recipes') {
       setIsRecipeFabOpen(false);
     }
-    if (tab !== 'pantry') {
-      setIsPantryFabOpen(false);
-    }
     setIsPantryAddMenuOpen(false);
   };
 
@@ -993,7 +990,7 @@ export const MealsPage: React.FC = () => {
               location: item.location,
               quantity: item.quantity,
               unit: item.unit,
-              expiryDate: item.expiryDate,
+              expiresAt: item.expiresAt,
               isStock: item.isStock,
               restockCadenceDays: item.restockCadenceDays,
             });
@@ -1008,7 +1005,7 @@ export const MealsPage: React.FC = () => {
           } catch (err) {
             console.error('Failed to restore inventory item', err);
             try {
-              const refreshed = await api.getInventory(householdId);
+              const refreshed = await api.getInventory();
               setInventoryItems(refreshed);
               if (mealsDataCache && mealsDataCache.householdId === householdId) {
                 mealsDataCache.inventoryItems = refreshed;
@@ -2507,7 +2504,9 @@ export const MealsPage: React.FC = () => {
                                   {item.name}
                                 </h4>
                                 {item.isStock && (
-                                  <Star className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400 shrink-0" title="Pantry Staple" />
+                                  <span title="Pantry Staple">
+                                    <Star className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400 shrink-0" />
+                                  </span>
                                 )}
                               </div>
 

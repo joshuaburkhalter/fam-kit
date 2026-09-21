@@ -318,21 +318,35 @@ export const api = {
   },
 
   // Aisles
-  getAisles: async (householdId: string): Promise<Aisle[]> => {
-    const aisles = await fetchJson<any[]>('/grocery/aisles');
+  getAisles: async (householdId: string, listId?: string): Promise<Aisle[]> => {
+    const url = listId ? `/grocery/aisles?listId=${encodeURIComponent(listId)}` : '/grocery/aisles';
+    const aisles = await fetchJson<any[]>(url);
     return aisles.map((a: any) => ({
       id: a.id,
       household_id: a.householdId,
       name: a.name,
       display_order: a.orderIndex,
       color: a.color || '#10b981',
+      icon: a.icon,
+      list_id: a.listId || 'grocery',
     }));
   },
 
-  createAisle: async (householdId: string, name: string, color?: string): Promise<Aisle> => {
+  createAisle: async (
+    householdId: string,
+    name: string,
+    color?: string,
+    listId?: string,
+    icon?: string
+  ): Promise<Aisle> => {
     const res = await fetchJson<any>('/grocery/aisles', {
       method: 'POST',
-      body: JSON.stringify({ name, icon: '🛒', color }),
+      body: JSON.stringify({
+        name,
+        icon: icon || (listId && listId !== 'grocery' ? '📁' : '🛒'),
+        color,
+        listId: listId || 'grocery',
+      }),
     });
     return {
       id: res.id,
@@ -340,6 +354,8 @@ export const api = {
       name: res.name,
       display_order: res.orderIndex,
       color: color || '#10b981',
+      icon: res.icon,
+      list_id: res.listId || listId || 'grocery',
     };
   },
 
@@ -397,6 +413,7 @@ export const api = {
         color: a.color || '#10b981',
         display_order: a.orderIndex || 0,
         icon: a.icon,
+        list_id: a.listId || 'grocery',
       })),
       suggestions: data.suggestions || [],
     };

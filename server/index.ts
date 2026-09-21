@@ -1690,13 +1690,16 @@ app.post('/api/assistant/test', async (req, res) => {
 app.get('/api/grocery', (req, res) => {
   const householdId = getHouseholdId(req);
   const listId = req.query.listId as string;
+  const targetList = listId || 'grocery';
 
-  const items = listId
+  const items = listId && listId !== 'grocery'
     ? queryAll('SELECT * FROM grocery_items WHERE householdId = ? AND listId = ? ORDER BY checked ASC, createdAt DESC', [householdId, listId])
-    : queryAll('SELECT * FROM grocery_items WHERE householdId = ? AND listId IS NULL ORDER BY checked ASC, createdAt DESC', [householdId]);
+    : queryAll('SELECT * FROM grocery_items WHERE householdId = ? AND (listId IS NULL OR listId = \'grocery\') ORDER BY checked ASC, createdAt DESC', [householdId]);
 
   const lists = queryAll('SELECT * FROM custom_lists WHERE householdId = ? ORDER BY createdAt ASC', [householdId]);
-  const aisles = queryAll('SELECT * FROM aisles WHERE householdId = ? ORDER BY orderIndex ASC', [householdId]);
+  const aisles = targetList === 'grocery'
+    ? queryAll('SELECT * FROM aisles WHERE householdId = ? AND (listId = ? OR listId IS NULL) ORDER BY orderIndex ASC', [householdId, 'grocery'])
+    : queryAll('SELECT * FROM aisles WHERE householdId = ? AND listId = ? ORDER BY orderIndex ASC', [householdId, targetList]);
 
   // Auto-heal any existing grocery items missing an aisleId or miscategorized deli items
   if (!listId) {
@@ -1768,12 +1771,32 @@ app.post('/api/grocery', (req, res) => {
     // Auto-categorize using learned preferences + smart heuristics
     if (!listId || listId === 'grocery') {
       const aisles = queryAll<{ id: string; name: string }>(
-        'SELECT id, name FROM aisles WHERE householdId = ? ORDER BY orderIndex ASC',
+        'SELECT id, name FROM aisles WHERE householdId = ? AND (listId = \'grocery\' OR listId IS NULL) ORDER BY orderIndex ASC',
         [householdId]
       );
       const resolved = resolveAisleForGroceryItem(householdId, name, aisles, category || undefined, aisleId || undefined);
       finalAisleId = resolved.aisleId;
       finalCategory = resolved.category;
+    } else {
+      const listAisles = queryAll<{ id: string; name: string }>(
+        'SELECT id, name FROM aisles WHERE householdId = ? AND listId = ? ORDER BY orderIndex ASC',
+        [householdId, listId]
+      );
+      if (listAisles.length > 0) {
+        if (aisleId) {
+          const match = listAisles.find((a) => a.id === aisleId);
+          if (match) {
+            finalAisleId = match.id;
+            finalCategory = match.name;
+          }
+        } else if (category) {
+          const match = listAisles.find((a) => a.name.toLowerCase() === category.toLowerCase());
+          if (match) {
+            finalAisleId = match.id;
+            finalCategory = match.name;
+          }
+        }
+      }
     }
 
     execute(
@@ -1891,27 +1914,51 @@ app.delete('/api/grocery', (req, res) => {
     return res.json({ success: true });
   }
 
+  if (listId) {
+    execute('DELETE FROM custom_lists WHERE id = ? AND householdId = ?', [listId, householdId]);
+    execute('DELETE FROM grocery_items WHERE listId = ? AND householdId = ?', [listId, householdId]);
+    execute('DELETE FROM aisles WHERE listId = ? AND householdId = ?', [listId, householdId]);
+    saveDb();
+    return res.json({ success: true });
+  }
+
   res.status(400).json({ error: 'Invalid delete parameters' });
 });
 
 // 3. Aisle Order & Custom Aisles API
 app.get('/api/grocery/aisles', (req, res) => {
   const householdId = getHouseholdId(req);
-  const aisles = queryAll('SELECT * FROM aisles WHERE householdId = ? ORDER BY orderIndex ASC', [householdId]);
+  const listId = req.query.listId as string;
+  const targetList = listId || 'grocery';
+  const aisles = targetList === 'grocery'
+    ? queryAll('SELECT * FROM aisles WHERE householdId = ? AND (listId = ? OR listId IS NULL) ORDER BY orderIndex ASC', [householdId, 'grocery'])
+    : queryAll('SELECT * FROM aisles WHERE householdId = ? AND listId = ? ORDER BY orderIndex ASC', [householdId, targetList]);
   res.json(aisles);
 });
 
 app.post('/api/grocery/aisles', (req, res) => {
   const householdId = getHouseholdId(req);
-  const { name, icon } = req.body;
+  const { name, icon, listId } = req.body;
   if (!name) return res.status(400).json({ error: 'Aisle name is required' });
 
+  const targetList = listId || 'grocery';
   const id = `a_${Date.now()}`;
-  const max = queryOne<{ maxIdx: number }>('SELECT MAX(orderIndex) as maxIdx FROM aisles WHERE householdId = ?', [householdId]);
+  const max = queryOne<{ maxIdx: number }>(
+    'SELECT MAX(orderIndex) as maxIdx FROM aisles WHERE householdId = ? AND (listId = ? OR (? = \'grocery\' AND (listId IS NULL OR listId = \'grocery\')))',
+    [householdId, targetList, targetList]
+  );
   const orderIndex = (max?.maxIdx ?? -1) + 1;
 
-  execute('INSERT INTO aisles VALUES (?, ?, ?, ?, ?)', [id, name, icon || '🛒', orderIndex, householdId]);
-  res.json({ id, name, icon: icon || '🛒', orderIndex, householdId });
+  execute('INSERT INTO aisles (id, name, icon, orderIndex, householdId, listId) VALUES (?, ?, ?, ?, ?, ?)', [
+    id,
+    name,
+    icon || (targetList === 'grocery' ? '🛒' : '📁'),
+    orderIndex,
+    householdId,
+    targetList,
+  ]);
+  saveDb();
+  res.json({ id, name, icon: icon || (targetList === 'grocery' ? '🛒' : '📁'), orderIndex, householdId, listId: targetList });
 });
 
 app.put('/api/grocery/aisles', (req, res) => {
