@@ -222,6 +222,7 @@ export const MealsPage: React.FC = () => {
 
   // Quick custom dish input
   const [quickDishInput, setQuickDishInput] = useState('');
+  const quickDishInputRef = useRef<HTMLInputElement>(null);
   const [isAddingQuick, setIsAddingQuick] = useState(false);
 
   // Notification Toast
@@ -2156,6 +2157,50 @@ export const MealsPage: React.FC = () => {
           {/* ================= 2. PLANNER TAB ================= */}
           {visitedTabs['planner'] && (
             <div className={activeTab === 'planner' ? 'space-y-4' : 'hidden'}>
+              {/* Inline Quick Add Bar for Planner (same height and style as Lists add bar: h-8, rounded-xl) */}
+              <div className="relative z-20">
+                <form
+                  onSubmit={handleQuickAddCustom}
+                  className="h-8 flex items-center gap-1.5 bg-slate-900/90 border border-white/10 hover:border-white/20 focus-within:border-emerald-500/50 rounded-xl px-1.5 transition-all shadow-md"
+                >
+                  <div className="w-5 h-5 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0 text-emerald-400">
+                    <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                  </div>
+                  <input
+                    ref={quickDishInputRef}
+                    type="text"
+                    placeholder="Quick add dish to planner (e.g. Grandma's Lasagna, Takeout Thai)..."
+                    value={quickDishInput}
+                    onChange={(e) => setQuickDishInput(e.target.value)}
+                    disabled={isAddingQuick}
+                    className="flex-1 min-w-0 bg-transparent border-none text-xs text-white placeholder-slate-500 focus:outline-none py-1 px-1 font-medium"
+                  />
+                  {quickDishInput && (
+                    <button
+                      type="button"
+                      onClick={() => setQuickDishInput('')}
+                      className="p-0.5 text-slate-400 hover:text-white cursor-pointer"
+                      title="Clear input"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={!quickDishInput.trim() || isAddingQuick}
+                    className="h-6 px-2.5 sm:px-3 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 disabled:opacity-40 text-slate-950 font-bold text-xs flex items-center gap-1 transition-all shadow-md shadow-emerald-500/20 shrink-0 active:scale-95 cursor-pointer"
+                    title="Add to planner"
+                  >
+                    {isAddingQuick ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <Plus className="w-3 h-3 stroke-[2.5]" />
+                    )}
+                    <span>{isAddingQuick ? 'Adding...' : 'Add'}</span>
+                  </button>
+                </form>
+              </div>
+
               {isLoading ? (
                 <div className="py-12 text-center text-xs text-slate-400">Loading planner...</div>
               ) : meals.length === 0 ? (
@@ -2165,7 +2210,7 @@ export const MealsPage: React.FC = () => {
                   </div>
                   <h3 className="text-base font-bold text-white">No meals on deck</h3>
                   <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                    Add recipes or dishes using the Quick Add button below to put them on deck and ready to shop for!
+                    Add recipes or dishes using the quick add bar above or the Add Meal button to put them on deck and ready to shop for!
                   </p>
                 </div>
               ) : (
@@ -2291,30 +2336,6 @@ export const MealsPage: React.FC = () => {
                   })}
                 </div>
               )}
-
-              {/* Quick dish input at bottom of Planner */}
-              <div className="glass-panel p-4 rounded-3xl border border-white/10">
-                <h4 className="text-xs font-bold text-slate-300 mb-2 uppercase tracking-wider">
-                  Quick Add Dish to Planner
-                </h4>
-                <form onSubmit={handleQuickAddCustom} className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    placeholder="e.g. Grandma's Lasagna, Takeout Thai, Leftover BBQ..."
-                    value={quickDishInput}
-                    onChange={(e) => setQuickDishInput(e.target.value)}
-                    className="flex-1 bg-slate-900 border border-white/10 rounded-2xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
-                  />
-                  <button
-                    type="submit"
-                    disabled={isAddingQuick || !quickDishInput.trim()}
-                    className="bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 px-4 py-2 rounded-2xl text-xs font-bold shrink-0 transition-all shadow-md shadow-emerald-500/20 flex items-center gap-1 cursor-pointer"
-                  >
-                    {isAddingQuick ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5 stroke-[2.5]" />}
-                    <span>Add</span>
-                  </button>
-                </form>
-              </div>
             </div>
           )}
 
@@ -2707,17 +2728,6 @@ export const MealsPage: React.FC = () => {
       {!selectedRecipe && (
         <div className="fixed bottom-[calc(76px+1rem+env(safe-area-inset-bottom,0px))] md:bottom-8 left-0 right-0 z-40 px-4 pointer-events-none">
           <div className="max-w-4xl mx-auto pointer-events-none flex justify-end">
-            {activeTab === 'planner' && (
-              <button
-                type="button"
-                onClick={() => setIsRecipePickerOpen(true)}
-                className="pointer-events-auto w-[50px] h-[50px] rounded-full border border-emerald-400/40 bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 cursor-pointer shadow-xl shadow-emerald-500/30 hover:scale-105 active:scale-95 flex items-center justify-center transition-transform"
-                title="Quick Add Meal to Planner"
-              >
-                <Plus className="w-6 h-6 stroke-[2.5]" />
-              </button>
-            )}
-
             {activeTab === 'recipes' && (
               <div
                 ref={recipeFabRef}
