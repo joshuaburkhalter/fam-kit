@@ -139,6 +139,9 @@ export const AppContent: React.FC = () => {
         url.searchParams.set('tab', tab);
       }
       url.searchParams.delete('recipe');
+      if (tab !== 'meals' && tab !== 'recipes') {
+        url.searchParams.delete('subtab');
+      }
 
       const newPath = url.pathname + (url.search ? url.search : '') + (url.hash ? url.hash : '');
       if (replace) {

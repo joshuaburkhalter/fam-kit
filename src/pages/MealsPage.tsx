@@ -66,29 +66,47 @@ interface MealsDataCache {
 
 let mealsDataCache: MealsDataCache | null = null;
 
+const LAST_MEALS_SUBTAB_KEY = 'famkit_last_meals_subtab';
+const VALID_MEALS_SUBTABS: Array<'recipes' | 'planner' | 'pantry' | 'history'> = [
+  'recipes',
+  'planner',
+  'pantry',
+  'history',
+];
+let cachedMealsSubTab: 'recipes' | 'planner' | 'pantry' | 'history' | null = null;
+
 function resolveInitialSubTab(): 'recipes' | 'planner' | 'pantry' | 'history' {
   if (typeof window === 'undefined') return 'recipes';
   try {
     const params = new URLSearchParams(window.location.search);
     const pathname = window.location.pathname.toLowerCase();
-    if (params.get('subtab') === 'planner' || params.get('view') === 'planner') {
-      return 'planner';
-    }
-    if (params.get('subtab') === 'pantry' || params.get('view') === 'pantry' || params.get('tab') === 'pantry') {
-      return 'pantry';
-    }
-    if (params.get('subtab') === 'history' || params.get('view') === 'history') {
-      return 'history';
-    }
+
+    // 1. Explicit forced cases (shared recipes, import, specific recipe view)
     if (
       params.has('shared') ||
       params.has('import') ||
       params.has('recipe') ||
-      params.get('subtab') === 'recipes' ||
-      params.get('view') === 'recipes' ||
       pathname.startsWith('/recipes')
     ) {
       return 'recipes';
+    }
+
+    // 2. Explicit subtab query parameter takes priority (e.g. deep links)
+    const subtabParam = params.get('subtab') || params.get('view');
+    if (subtabParam === 'planner') return 'planner';
+    if (subtabParam === 'pantry' || params.get('tab') === 'pantry') return 'pantry';
+    if (subtabParam === 'history') return 'history';
+    if (subtabParam === 'recipes') return 'recipes';
+
+    // 3. Return in-memory module cache if set during this session
+    if (cachedMealsSubTab && VALID_MEALS_SUBTABS.includes(cachedMealsSubTab)) {
+      return cachedMealsSubTab;
+    }
+
+    // 4. Return persisted subtab from localStorage
+    const saved = localStorage.getItem(LAST_MEALS_SUBTAB_KEY) as 'recipes' | 'planner' | 'pantry' | 'history' | null;
+    if (saved && VALID_MEALS_SUBTABS.includes(saved)) {
+      return saved;
     }
   } catch {}
   return 'recipes';
@@ -115,6 +133,25 @@ export const MealsPage: React.FC = () => {
       setIsRecipeFabOpen(false);
     }
     setIsPantryAddMenuOpen(false);
+
+    // Persist subtab in session cache and localStorage
+    cachedMealsSubTab = tab;
+    try {
+      localStorage.setItem(LAST_MEALS_SUBTAB_KEY, tab);
+    } catch {}
+
+    // Update URL subtab parameter seamlessly without full page reload
+    if (typeof window !== 'undefined') {
+      try {
+        const url = new URL(window.location.href);
+        if (tab === 'recipes') {
+          url.searchParams.delete('subtab');
+        } else {
+          url.searchParams.set('subtab', tab);
+        }
+        window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+      } catch {}
+    }
   };
 
   const [meals, setMeals] = useState<WeeklyMeal[]>(() => {
@@ -264,6 +301,29 @@ export const MealsPage: React.FC = () => {
       Object.values(pantryCrossingTimersRef.current).forEach((t) => clearTimeout(t));
     };
   }, []);
+
+  // Sync URL search params and persistence on mount / activeTab change
+  useEffect(() => {
+    cachedMealsSubTab = activeTab;
+    try {
+      localStorage.setItem(LAST_MEALS_SUBTAB_KEY, activeTab);
+    } catch {}
+
+    if (typeof window !== 'undefined') {
+      try {
+        const url = new URL(window.location.href);
+        const currentTab = url.searchParams.get('tab');
+        if (!currentTab || currentTab === 'meals' || currentTab === 'recipes') {
+          if (activeTab === 'recipes') {
+            url.searchParams.delete('subtab');
+          } else {
+            url.searchParams.set('subtab', activeTab);
+          }
+          window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+        }
+      } catch {}
+    }
+  }, [activeTab]);
 
   // Check URL parameters for Web Share Target PWA sharing
   useEffect(() => {
