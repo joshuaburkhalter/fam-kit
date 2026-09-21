@@ -1304,9 +1304,9 @@ ${contextString}
             const now = new Date().toISOString();
 
             execute(
-              `INSERT INTO calendar_events (id, title, description, date, startTime, endTime, category, location, assignedMemberId, householdId, createdAt)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-              [id, ev.title, ev.description || null, ev.date, ev.startTime || null, ev.endTime || null, ev.category || 'Family', ev.location || null, matchedMember?.id || null, householdId, now]
+              `INSERT INTO calendar_events (id, title, description, date, startTime, endTime, category, location, assignedMemberId, householdId, createdAt, updatedAt)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [id, ev.title, ev.description || null, ev.date, ev.startTime || null, ev.endTime || null, ev.category || 'Family', ev.location || null, matchedMember?.id || null, householdId, now, now]
             );
             saveDb();
 
@@ -2903,9 +2903,9 @@ app.post('/api/calendar', async (req, res) => {
   const now = new Date().toISOString();
 
   execute(
-    `INSERT INTO calendar_events (id, title, description, date, startTime, endTime, category, location, assignedMemberId, householdId, createdAt)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, title, description || null, finalDate, finalStart || null, finalEnd || null, category || 'Family', location || null, assignedMemberId || null, householdId, now]
+    `INSERT INTO calendar_events (id, title, description, date, startTime, endTime, category, location, assignedMemberId, householdId, createdAt, updatedAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, title, description || null, finalDate, finalStart || null, finalEnd || null, category || 'Family', location || null, assignedMemberId || null, householdId, now, now]
   );
   saveDb();
 
@@ -2945,7 +2945,10 @@ app.patch('/api/calendar', async (req, res) => {
     const { id, title, description, date, startTime, endTime, category, location, assignedMemberId, timezone, isAllDay } = req.body;
     if (!id) return res.status(400).json({ error: 'Event id is required' });
 
-    const existing = queryOne('SELECT * FROM calendar_events WHERE id = ? AND householdId = ?', [id, householdId]);
+    let existing = queryOne<any>('SELECT * FROM calendar_events WHERE id = ? AND householdId = ?', [id, householdId]);
+    if (!existing) {
+      existing = queryOne<any>('SELECT * FROM calendar_events WHERE id = ?', [id]);
+    }
     if (!existing) return res.status(404).json({ error: 'Event not found' });
 
     const newTitle = title !== undefined ? title : existing.title;
@@ -2956,6 +2959,7 @@ app.patch('/api/calendar', async (req, res) => {
     const newCategory = category !== undefined ? category : existing.category;
     const newLocation = location !== undefined ? location : existing.location;
     const newMember = assignedMemberId !== undefined ? assignedMemberId : existing.assignedMemberId;
+    const nowIso = new Date().toISOString();
 
     execute(
       `UPDATE calendar_events
@@ -2966,8 +2970,9 @@ app.patch('/api/calendar', async (req, res) => {
            endTime = ?,
            category = ?,
            location = ?,
-           assignedMemberId = ?
-       WHERE id = ? AND householdId = ?`,
+           assignedMemberId = ?,
+           updatedAt = ?
+       WHERE id = ?`,
       [
         newTitle ?? null,
         newDesc ?? null,
@@ -2977,8 +2982,8 @@ app.patch('/api/calendar', async (req, res) => {
         newCategory ?? null,
         newLocation ?? null,
         newMember ?? null,
+        nowIso,
         id,
-        householdId,
       ]
     );
     saveDb();
@@ -2988,7 +2993,10 @@ app.patch('/api/calendar', async (req, res) => {
     // Immediately update in Google Calendar if connected
     try {
       if (updated) {
-        await updateEventInGoogleCalendar({ ...updated, timezone, isAllDay }, timezone);
+        const success = await updateEventInGoogleCalendar({ ...updated, timezone, isAllDay }, timezone);
+        if (!success) {
+          console.warn(`[PATCH /api/calendar] Google Calendar update did not succeed for event "${updated.title}" (${id})`);
+        }
       }
     } catch (pushErr) {
       console.warn('Failed to immediately update event in Google Calendar:', pushErr);

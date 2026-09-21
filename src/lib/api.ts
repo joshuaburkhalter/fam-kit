@@ -978,6 +978,7 @@ export const api = {
 
     const res = await fetchJson<any>('/calendar', {
       method: 'PATCH',
+      headers: householdId ? { 'x-household-id': householdId } : undefined,
       body: JSON.stringify({
         id,
         title: data.title,

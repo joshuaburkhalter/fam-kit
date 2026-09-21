@@ -300,6 +300,12 @@ function initSchema(db: Database) {
     db.run(`ALTER TABLE calendar_events ADD COLUMN isGoogleEvent INTEGER NOT NULL DEFAULT 0`);
   } catch {}
   try {
+    db.run(`ALTER TABLE calendar_events ADD COLUMN updatedAt TEXT`);
+  } catch {}
+  try {
+    db.run(`UPDATE calendar_events SET updatedAt = createdAt WHERE updatedAt IS NULL`);
+  } catch {}
+  try {
     db.run(`ALTER TABLE user_google_sync ADD COLUMN selectedCalendarIds TEXT DEFAULT '["primary"]'`);
   } catch {}
   try {
@@ -852,9 +858,9 @@ function seedDemoData(db: Database) {
   const dayAfterStr = new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0];
   const fridayStr = new Date(Date.now() + 86400000 * 4).toISOString().split('T')[0];
 
-  db.run(`INSERT INTO calendar_events VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, ['ev1', 'Leo Soccer Practice', '', tomorrowStr, '16:30', '17:45', 'Sports', 'Community Park Field #2', 'u3', householdId, now]);
-  db.run(`INSERT INTO calendar_events VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, ['ev2', 'Emma Ballet Class', '', dayAfterStr, '15:30', '16:30', 'School', 'Downtown Dance Studio', 'u4', householdId, now]);
-  db.run(`INSERT INTO calendar_events VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, ['ev3', 'Family Pizza & Movie Night 🍕', '', fridayStr, '18:30', '21:00', 'Family', 'Living Room', 'u1', householdId, now]);
+  db.run(`INSERT INTO calendar_events (id, title, description, date, startTime, endTime, category, location, assignedMemberId, householdId, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, ['ev1', 'Leo Soccer Practice', '', tomorrowStr, '16:30', '17:45', 'Sports', 'Community Park Field #2', 'u3', householdId, now, now]);
+  db.run(`INSERT INTO calendar_events (id, title, description, date, startTime, endTime, category, location, assignedMemberId, householdId, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, ['ev2', 'Emma Ballet Class', '', dayAfterStr, '15:30', '16:30', 'School', 'Downtown Dance Studio', 'u4', householdId, now, now]);
+  db.run(`INSERT INTO calendar_events (id, title, description, date, startTime, endTime, category, location, assignedMemberId, householdId, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, ['ev3', 'Family Pizza & Movie Night 🍕', '', fridayStr, '18:30', '21:00', 'Family', 'Living Room', 'u1', householdId, now, now]);
 }
 
 // Query helpers for JSON rows

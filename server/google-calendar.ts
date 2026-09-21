@@ -587,6 +587,7 @@ export async function syncUserGoogleCalendar(
             summary?: string;
             description?: string;
             location?: string;
+            updated?: string;
             start?: { date?: string; dateTime?: string };
             end?: { date?: string; dateTime?: string };
           }>;
@@ -637,12 +638,50 @@ export async function syncUserGoogleCalendar(
 
             const id = `gcal_${item.id.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
 
-            const existingEvent = queryOne<{ id: string }>(
-              'SELECT id FROM calendar_events WHERE id = ? OR (householdId = ? AND googleEventId = ?)',
+            const existingEvent = queryOne<{
+              id: string;
+              updatedAt?: string;
+              createdAt?: string;
+              date?: string;
+              startTime?: string;
+              endTime?: string;
+              title?: string;
+            }>(
+              'SELECT id, updatedAt, createdAt, date, startTime, endTime, title FROM calendar_events WHERE id = ? OR (householdId = ? AND googleEventId = ?)',
               [id, householdId, item.id]
             );
 
             if (existingEvent) {
+              // Concurrency / Stale Overwrite Protection:
+              // If the local event was updated in Homebase recently (within 60s) or has a newer
+              // updatedAt timestamp than Google's item.updated timestamp, DO NOT overwrite the
+              // user's local move/edits with stale Google data!
+              const localUpdatedMs = existingEvent.updatedAt
+                ? new Date(existingEvent.updatedAt).getTime()
+                : existingEvent.createdAt
+                ? new Date(existingEvent.createdAt).getTime()
+                : 0;
+              const googleUpdatedMs = item.updated ? new Date(item.updated).getTime() : 0;
+              const sixtySecondsAgo = Date.now() - 60000;
+
+              if (localUpdatedMs > sixtySecondsAgo || (googleUpdatedMs > 0 && localUpdatedMs > googleUpdatedMs)) {
+                // If the remote date/time doesn't match our newer local version, resync local version to Google
+                const dateMismatch =
+                  existingEvent.date !== date ||
+                  existingEvent.startTime !== startTime ||
+                  existingEvent.endTime !== endTime ||
+                  existingEvent.title !== title;
+                if (dateMismatch) {
+                  const fullLocal = queryOne('SELECT * FROM calendar_events WHERE id = ?', [existingEvent.id]);
+                  if (fullLocal) {
+                    updateEventInGoogleCalendar(fullLocal).catch((e) =>
+                      console.warn('[Google Sync] Background sync local to Google failed:', e)
+                    );
+                  }
+                }
+                continue;
+              }
+
               execute(
                 `UPDATE calendar_events
                  SET title = ?,
@@ -654,15 +693,16 @@ export async function syncUserGoogleCalendar(
                      assignedMemberId = ?,
                      googleCalendarId = ?,
                      googleEventId = ?,
-                     isGoogleEvent = 1
+                     isGoogleEvent = 1,
+                     updatedAt = ?
                  WHERE id = ?`,
-                [title, description, date, startTime, endTime, location, assignedMemberId, calId, item.id, existingEvent.id]
+                [title, description, date, startTime, endTime, location, assignedMemberId, calId, item.id, item.updated || nowIso, existingEvent.id]
               );
             } else {
               execute(
-                `INSERT OR REPLACE INTO calendar_events (id, title, description, date, startTime, endTime, category, location, assignedMemberId, householdId, isGoogleEvent, googleEventId, googleCalendarId, createdAt)
-                 VALUES (?, ?, ?, ?, ?, ?, 'Google Calendar', ?, ?, ?, 1, ?, ?, ?)`,
-                [id, title, description, date, startTime, endTime, location, assignedMemberId, householdId, item.id, calId, nowIso]
+                `INSERT OR REPLACE INTO calendar_events (id, title, description, date, startTime, endTime, category, location, assignedMemberId, householdId, isGoogleEvent, googleEventId, googleCalendarId, createdAt, updatedAt)
+                 VALUES (?, ?, ?, ?, ?, ?, 'Google Calendar', ?, ?, ?, 1, ?, ?, ?, ?)`,
+                [id, title, description, date, startTime, endTime, location, assignedMemberId, householdId, item.id, calId, nowIso, item.updated || nowIso]
               );
             }
             totalSynced++;
@@ -983,7 +1023,7 @@ function normalizeTimeStr(timeStr?: string | null): string {
 /**
  * Format a Homebase event into a Google Calendar API resource
  */
-function buildGoogleEventResource(event: any, targetTimeZone?: string) {
+function buildGoogleEventResource(event: any, targetTimeZone?: string, isPatch = false) {
   const summary = event.title?.trim() || '(No Title)';
   const description = event.description?.trim() || undefined;
   const location = event.location?.trim() || undefined;
@@ -1002,8 +1042,8 @@ function buildGoogleEventResource(event: any, targetTimeZone?: string) {
       summary,
       description,
       location,
-      start: { date: startDateStr },
-      end: { date: endDateStr },
+      start: isPatch ? { date: startDateStr, dateTime: null } : { date: startDateStr },
+      end: isPatch ? { date: endDateStr, dateTime: null } : { date: endDateStr },
     };
   }
 
@@ -1050,14 +1090,12 @@ function buildGoogleEventResource(event: any, targetTimeZone?: string) {
     summary,
     description,
     location,
-    start: {
-      dateTime: `${startDateStr}T${cleanStart}`,
-      timeZone: tz,
-    },
-    end: {
-      dateTime: `${endDateStr}T${cleanEnd}`,
-      timeZone: tz,
-    },
+    start: isPatch
+      ? { dateTime: `${startDateStr}T${cleanStart}`, timeZone: tz, date: null }
+      : { dateTime: `${startDateStr}T${cleanStart}`, timeZone: tz },
+    end: isPatch
+      ? { dateTime: `${endDateStr}T${cleanEnd}`, timeZone: tz, date: null }
+      : { dateTime: `${endDateStr}T${cleanEnd}`, timeZone: tz },
   };
 }
 
@@ -1128,13 +1166,15 @@ export async function pushEventToGoogleCalendar(
             if (retryRes.ok) {
               const retryGcal = (await retryRes.json()) as { id?: string };
               if (retryGcal?.id) {
+                const nowIso = new Date().toISOString();
                 execute(
                   `UPDATE calendar_events
                    SET googleEventId = ?,
                        googleCalendarId = ?,
-                       isGoogleEvent = 1
+                       isGoogleEvent = 1,
+                       updatedAt = ?
                    WHERE id = ?`,
-                  [retryGcal.id, fallbackCalId, event.id]
+                  [retryGcal.id, fallbackCalId, nowIso, event.id]
                 );
                 saveDb();
                 return { googleEventId: retryGcal.id, googleCalendarId: fallbackCalId };
@@ -1156,13 +1196,15 @@ export async function pushEventToGoogleCalendar(
     const gcalEvent = (await res.json()) as { id?: string };
     if (!gcalEvent || !gcalEvent.id) return null;
 
+    const nowIso = new Date().toISOString();
     execute(
       `UPDATE calendar_events
        SET googleEventId = ?,
            googleCalendarId = ?,
-           isGoogleEvent = 1
+           isGoogleEvent = 1,
+           updatedAt = ?
        WHERE id = ?`,
-      [gcalEvent.id, target.calendarId, event.id]
+      [gcalEvent.id, target.calendarId, nowIso, event.id]
     );
     saveDb();
 
@@ -1216,7 +1258,7 @@ export async function updateEventInGoogleCalendar(event: any, clientTimeZone?: s
 
   const calTz = await getCalendarTimeZone(googleCalendarId, accessToken);
   const targetTz = calTz || clientTimeZone || fullEvent.timezone || 'America/Chicago';
-  const resource = buildGoogleEventResource(fullEvent, targetTz);
+  const resource = buildGoogleEventResource(fullEvent, targetTz, true);
   const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(
     googleCalendarId
   )}/events/${encodeURIComponent(googleEventId)}`;
@@ -1233,10 +1275,33 @@ export async function updateEventInGoogleCalendar(event: any, clientTimeZone?: s
 
     if (!res.ok) {
       const errText = await res.text();
+      // If 404 (event was deleted from Google Calendar or moved), re-push as new event
+      if (res.status === 404) {
+        console.warn(`[updateEventInGoogleCalendar] Event "${fullEvent.title}" (${googleEventId}) not found on Google. Re-pushing...`);
+        const pushed = await pushEventToGoogleCalendar(fullEvent, fullEvent.assignedMemberId, clientTimeZone);
+        return Boolean(pushed);
+      }
+      // If 403 (calendar is read-only), re-push or move to user's writable primary calendar
+      if (res.status === 403 && (errText.includes('requiredAccessLevel') || errText.includes('writer access'))) {
+        calendarAccessRoleCache.set(googleCalendarId, 'reader');
+        const fallbackCalId = record.googleEmail || 'primary';
+        if (googleCalendarId !== fallbackCalId) {
+          console.warn(`[updateEventInGoogleCalendar] Calendar "${googleCalendarId}" is read-only. Retrying push with primary "${fallbackCalId}"...`);
+          const pushed = await pushEventToGoogleCalendar(
+            { ...fullEvent, googleEventId: null, googleCalendarId: fallbackCalId },
+            fullEvent.assignedMemberId,
+            clientTimeZone
+          );
+          return Boolean(pushed);
+        }
+      }
       console.warn(`[updateEventInGoogleCalendar] Google API error (${res.status}) for "${fullEvent.title}" (${fullEvent.id}):`, errText);
       return false;
     }
 
+    const nowIso = new Date().toISOString();
+    execute('UPDATE calendar_events SET updatedAt = ? WHERE id = ?', [nowIso, event.id]);
+    saveDb();
     return true;
   } catch (err) {
     console.warn('[updateEventInGoogleCalendar] Network or unexpected error:', err);
