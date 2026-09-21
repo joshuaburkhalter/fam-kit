@@ -481,7 +481,22 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
         {/* Camera Viewfinder */}
         {!lookupResult && (
           <div className="space-y-4">
-            {isScanningCamera ? (
+            {cameraError ? (
+              <div className="p-4 bg-slate-900/80 rounded-2xl border border-white/10 space-y-3 text-center">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-400 flex items-center justify-center mx-auto">
+                  <AlertCircle className="w-5 h-5" />
+                </div>
+                <p className="text-xs text-amber-300 max-w-sm mx-auto">{cameraError}</p>
+                <button
+                  type="button"
+                  onClick={startCamera}
+                  className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl text-xs font-bold transition-all cursor-pointer inline-flex items-center gap-1.5"
+                >
+                  <Camera className="w-3.5 h-3.5" />
+                  <span>Retry Camera</span>
+                </button>
+              </div>
+            ) : (
               <div className="relative aspect-video rounded-2xl overflow-hidden bg-black border border-white/10 shadow-inner">
                 {cameraLoading && (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-20">
@@ -518,7 +533,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 
                 {/* Floating Success Notification Toast */}
                 {lastScannedToast && (
-                  <div className="absolute top-3 left-3 right-16 z-30 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="absolute top-3 left-3 right-4 z-30 animate-in fade-in slide-in-from-top-2 duration-200">
                     <div className="p-2.5 bg-emerald-950/90 border border-emerald-500/50 backdrop-blur-md rounded-xl text-white shadow-xl flex items-center gap-2">
                       <div className="w-6 h-6 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center shrink-0 font-bold text-xs">
                         {lastScannedToast.isDuplicate ? '+' : <Check className="w-3.5 h-3.5 stroke-[3]" />}
@@ -545,15 +560,6 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                   </div>
                 )}
 
-                {/* Close camera button */}
-                <button
-                  type="button"
-                  onClick={stopCamera}
-                  className="absolute top-3 right-3 px-3 py-1.5 bg-slate-950/80 hover:bg-slate-900 backdrop-blur-md rounded-xl text-xs font-semibold text-white border border-white/10 shadow-md cursor-pointer transition-colors z-10"
-                >
-                  Pause
-                </button>
-
                 {/* Manual Scan Trigger (Instant scan fallback) */}
                 <div className="absolute bottom-3 left-0 right-0 px-4 flex justify-center z-10">
                   <button
@@ -566,27 +572,6 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                     <span>{hasBarcodeDetector ? 'Instant Barcode Scan' : 'Scan Centered Item'}</span>
                   </button>
                 </div>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={startCamera}
-                className="w-full py-6 px-4 rounded-2xl border-2 border-dashed border-white/10 hover:border-emerald-500/40 bg-slate-900/60 hover:bg-emerald-500/5 transition-all flex flex-col items-center justify-center gap-2.5 group cursor-pointer"
-              >
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 text-slate-950 flex items-center justify-center group-hover:scale-110 transition-transform shadow-md shadow-emerald-500/20">
-                  <Camera className="w-6 h-6 stroke-[2.2]" />
-                </div>
-                <div className="text-center">
-                  <p className="text-sm font-bold text-white">Turn Camera On</p>
-                  <p className="text-xs text-slate-400 mt-0.5">Point camera at the barcode on any packaging</p>
-                </div>
-              </button>
-            )}
-
-            {cameraError && (
-              <div className="flex items-start gap-2 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs text-amber-300">
-                <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-                <span>{cameraError}</span>
               </div>
             )}
 
@@ -643,35 +628,6 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                 </button>
               </div>
             )}
-
-            {/* Manual Barcode Digits Input */}
-            <div className="space-y-2 pt-2 border-t border-white/10">
-              <label className="text-xs font-semibold text-slate-300 block">
-                Or enter UPC / EAN barcode digits manually
-              </label>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <input
-                    type="text"
-                    placeholder="e.g. 041303001407"
-                    value={manualCode}
-                    onChange={(e) => setManualCode(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleDetectedBarcode(manualCode);
-                    }}
-                    className="w-full px-3.5 py-2.5 bg-slate-900 border border-white/10 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handleDetectedBarcode(manualCode)}
-                  disabled={!manualCode.trim() || isLookingUp}
-                  className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-500/20 flex items-center gap-1.5 shrink-0 cursor-pointer"
-                >
-                  {isLookingUp ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Lookup'}
-                </button>
-              </div>
-            </div>
           </div>
         )}
 

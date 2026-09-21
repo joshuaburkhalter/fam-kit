@@ -188,7 +188,6 @@ export const MealsPage: React.FC = () => {
   // Pantry state & modals
   const [pantryFilter, setPantryFilter] = useState<'all' | 'fridge' | 'freezer' | 'pantry' | 'expiring' | 'staples'>('all');
   const [pantrySearchQuery, setPantrySearchQuery] = useState('');
-  const [isPantryFabOpen, setIsPantryFabOpen] = useState(false);
   const [isBarcodeModalOpen, setIsBarcodeModalOpen] = useState(false);
   const [isVisionModalOpen, setIsVisionModalOpen] = useState(false);
   const [isEditInventoryModalOpen, setIsEditInventoryModalOpen] = useState(false);
@@ -205,12 +204,6 @@ export const MealsPage: React.FC = () => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
-
-  const pantryFabRef = useFabAutoClose<HTMLDivElement>({
-    isOpen: isPantryFabOpen,
-    onClose: () => setIsPantryFabOpen(false),
-    ignore: isBarcodeModalOpen || isVisionModalOpen || isEditInventoryModalOpen,
-  });
 
   // Recipe search & tags
   const [searchQuery, setSearchQuery] = useState('');
@@ -1709,30 +1702,6 @@ export const MealsPage: React.FC = () => {
                       </div>
                       <span className="font-bold text-white">AI Photo Scan</span>
                     </button>
-
-                    <div className="h-px bg-white/10 my-1" />
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsPantryAddMenuOpen(false);
-                        setEditingInventoryItem(null);
-                        setInventoryFormName('');
-                        setInventoryFormCategory('Other');
-                        setInventoryFormLocation('pantry');
-                        setInventoryFormQuantity('');
-                        setInventoryFormUnit('');
-                        setInventoryFormDays(7);
-                        setInventoryFormIsStock(false);
-                        setIsEditInventoryModalOpen(true);
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/10 transition-colors text-left cursor-pointer"
-                    >
-                      <div className="w-7 h-7 rounded-lg bg-teal-500/15 text-teal-400 flex items-center justify-center shrink-0">
-                        <Pencil className="w-4 h-4" />
-                      </div>
-                      <span className="font-bold text-white">Manual Entry</span>
-                    </button>
                   </div>
                 )}
               </div>
@@ -2188,7 +2157,29 @@ export const MealsPage: React.FC = () => {
 
           {/* ================= 2b. PANTRY TAB ================= */}
           {visitedTabs['pantry'] && (
-            <div className={activeTab === 'pantry' ? 'space-y-4' : 'hidden'}>
+            <div className={activeTab === 'pantry' ? 'space-y-3' : 'hidden'}>
+              {/* Search Bar for Pantry */}
+              <div className="relative">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Search pantry items..."
+                  value={pantrySearchQuery}
+                  onChange={(e) => setPantrySearchQuery(e.target.value)}
+                  className="w-full bg-slate-900/80 border border-white/10 rounded-2xl pl-10 pr-9 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/50 transition-colors"
+                />
+                {pantrySearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setPantrySearchQuery('')}
+                    className="p-1 text-slate-400 hover:text-white absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer"
+                    title="Clear search"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
               {/* Location & Status Filter Chips */}
               <div
                 className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar"
@@ -2625,103 +2616,7 @@ export const MealsPage: React.FC = () => {
               </div>
             )}
 
-            {activeTab === 'pantry' && (
-              <div
-                ref={pantryFabRef}
-                className={`fab-dock-transition pointer-events-auto h-[50px] border shadow-2xl flex items-center overflow-hidden ${
-                  isPantryFabOpen
-                    ? 'w-full rounded-3xl border-white/25 bg-slate-900/95 backdrop-blur-xl shadow-emerald-500/10 px-2.5'
-                    : 'w-[50px] rounded-full border-emerald-400/40 bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 cursor-pointer shadow-xl shadow-emerald-500/30 hover:scale-105 active:scale-95 justify-center'
-                }`}
-              >
-                {!isPantryFabOpen ? (
-                  <button
-                    type="button"
-                    onClick={() => setIsPantryFabOpen(true)}
-                    className="w-full h-full flex items-center justify-center text-slate-950 cursor-pointer"
-                    title="Pantry Actions & Search"
-                  >
-                    <Plus className="w-6 h-6 stroke-[2.5]" />
-                  </button>
-                ) : (
-                  <div className="w-full flex items-center gap-2 animate-in fade-in duration-200">
-                    {/* Far left: Close button */}
-                    <button
-                      type="button"
-                      onClick={() => setIsPantryFabOpen(false)}
-                      className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center shrink-0 transition-colors cursor-pointer"
-                      title="Close"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
 
-                    {/* Secondary action 1 on the left: Scan Barcode */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsPantryFabOpen(false);
-                        setIsBarcodeModalOpen(true);
-                      }}
-                      className="h-8 px-2 sm:px-2.5 rounded-xl bg-white/5 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-400 border border-white/10 hover:border-emerald-500/30 text-xs font-bold flex items-center gap-1.5 transition-all shrink-0 cursor-pointer"
-                      title="Scan Barcode"
-                    >
-                      <Barcode className="w-3.5 h-3.5 text-emerald-400 stroke-[2.2]" />
-                      <span className="hidden sm:inline">Barcode</span>
-                    </button>
-
-                    {/* Secondary action 2 on the left: Photo Scan */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsPantryFabOpen(false);
-                        setIsVisionModalOpen(true);
-                      }}
-                      className="h-8 px-2 sm:px-2.5 rounded-xl bg-white/5 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-400 border border-white/10 hover:border-emerald-500/30 text-xs font-bold flex items-center gap-1.5 transition-all shrink-0 cursor-pointer"
-                      title="AI Photo Scan (fridge/shelf/receipt)"
-                    >
-                      <Camera className="w-3.5 h-3.5 text-purple-400 stroke-[2.2]" />
-                      <span className="hidden sm:inline">Photo</span>
-                    </button>
-
-                    {/* Middle: Search text input */}
-                    <div className="flex-1 min-w-0 flex items-center relative">
-                      <input
-                        type="text"
-                        placeholder="Search pantry..."
-                        value={pantrySearchQuery}
-                        onChange={(e) => setPantrySearchQuery(e.target.value)}
-                        className="w-full bg-transparent border-none text-xs text-white placeholder-slate-500 focus:outline-none py-1.5 px-1"
-                      />
-                      {pantrySearchQuery && (
-                        <button
-                          type="button"
-                          onClick={() => setPantrySearchQuery('')}
-                          className="p-1 text-slate-400 hover:text-white shrink-0 cursor-pointer"
-                          title="Clear search"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Far right: Main action button (+ Add Item) */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsPantryFabOpen(false);
-                        setEditingInventoryItem(null);
-                        setIsEditInventoryModalOpen(true);
-                      }}
-                      className="h-8 px-3.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20 shrink-0 active:scale-95 cursor-pointer"
-                      title="Add item manually"
-                    >
-                      <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-                      <span className="hidden sm:inline">Add</span>
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
 
             {activeTab === 'history' && (
               <button
