@@ -2848,27 +2848,30 @@ app.post('/api/inventory/:id/restock-to-grocery', (req, res) => {
 });
 
 // 6. Calendar API
-app.get('/api/calendar', async (req, res) => {
+app.get('/api/calendar', (req, res) => {
   const householdId = getHouseholdId(req);
   const memberId = req.query.memberId as string;
 
-  // Freshness check: if connected users haven't synced in the last 60 seconds, sync and prune deletions before returning events
-  try {
-    const statuses = getHouseholdGoogleSyncStatus(householdId);
-    const oneMinAgo = Date.now() - 60 * 1000;
-    const needsSync = statuses.some((s) => !s.lastSyncedAt || new Date(s.lastSyncedAt).getTime() < oneMinAgo);
-    if (needsSync) {
-      await syncAllConnectedHouseholdCalendars(householdId);
-    }
-  } catch (syncErr) {
-    console.warn('Auto freshness sync error:', syncErr);
-  }
-
+  // Immediately pull local events from SQLite database (<5ms response time)
   const events = memberId && memberId !== 'all'
     ? queryAll('SELECT * FROM calendar_events WHERE householdId = ? AND assignedMemberId = ? ORDER BY date ASC, startTime ASC', [householdId, memberId])
     : queryAll('SELECT * FROM calendar_events WHERE householdId = ? ORDER BY date ASC, startTime ASC', [householdId]);
 
   res.json(events);
+
+  // Non-blocking background sync: check if Google Calendar has pending changes without delaying the response
+  try {
+    const statuses = getHouseholdGoogleSyncStatus(householdId);
+    const twoMinAgo = Date.now() - 2 * 60 * 1000;
+    const needsSync = statuses.some((s) => !s.lastSyncedAt || new Date(s.lastSyncedAt).getTime() < twoMinAgo);
+    if (needsSync) {
+      syncAllConnectedHouseholdCalendars(householdId).catch((syncErr) => {
+        console.warn('Background auto-sync error:', syncErr);
+      });
+    }
+  } catch (syncErr) {
+    console.warn('Background sync status check error:', syncErr);
+  }
 });
 
 function cleanDateStr(d: any): string {

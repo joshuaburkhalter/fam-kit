@@ -145,16 +145,36 @@ function parseNaturalLanguageEvent(raw: string, members: { id: string; name: str
   };
 }
 
+// Module-level calendar cache for instant zero-latency page transitions
+let calendarCache: { householdId: string; events: CalendarEvent[] } | null = null;
+
 export const CalendarPage: React.FC = () => {
   const { currentUser, household, users } = usePWA();
-  const [events, setEvents] = useState<CalendarEvent[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [events, setEvents] = useState<CalendarEvent[]>(() => {
+    if (calendarCache && household && calendarCache.householdId === household.id) {
+      return calendarCache.events;
+    }
+    return [];
+  });
+  const [isLoading, setIsLoading] = useState<boolean>(() => {
+    return !calendarCache || calendarCache.householdId !== household?.id;
+  });
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [daysCount, setDaysCount] = useState<number>(14);
   const [showPastEvents, setShowPastEvents] = useState<boolean>(false);
   const [pastDaysCount, setPastDaysCount] = useState<number>(14);
   const [selectedMemberId, setSelectedMemberId] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'all' | 'events-only'>('all');
+
+  const setEventsWithCache = (updater: CalendarEvent[] | ((prev: CalendarEvent[]) => CalendarEvent[])) => {
+    setEvents((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      if (household) {
+        calendarCache = { householdId: household.id, events: next };
+      }
+      return next;
+    });
+  };
 
   // Unified Add / Edit Bottom Sheet State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -185,12 +205,15 @@ export const CalendarPage: React.FC = () => {
     ignore: isModalOpen,
   });
 
-  const loadData = async () => {
+  const loadData = async (silent = false) => {
     if (!household) return;
-    setIsLoading(true);
+    const hasCache = calendarCache && calendarCache.householdId === household.id;
+    if (!silent && !hasCache) {
+      setIsLoading(true);
+    }
     try {
       const eventData = await api.getCalendarEvents(household.id);
-      setEvents(eventData);
+      setEventsWithCache(eventData);
     } catch (err) {
       console.error('Failed to load calendar events:', err);
     } finally {
@@ -203,7 +226,7 @@ export const CalendarPage: React.FC = () => {
     setIsSyncing(true);
     try {
       await api.syncGoogleCalendar();
-      await loadData();
+      await loadData(true);
     } catch (err) {
       console.error('Failed to sync Google Calendar:', err);
     } finally {
@@ -213,6 +236,12 @@ export const CalendarPage: React.FC = () => {
 
   useEffect(() => {
     loadData();
+
+    // Silent background poll 4s after mount to capture any async Google Calendar sync updates
+    const timer = setTimeout(() => {
+      loadData(true);
+    }, 4000);
+    return () => clearTimeout(timer);
   }, [household]);
 
   // Live Current Time state to follow hours of the day along the timeline
@@ -352,7 +381,7 @@ export const CalendarPage: React.FC = () => {
           location: formLocation.trim() || undefined,
           assigned_user_id: formAssignedUser || undefined,
         });
-        setEvents((prev) => prev.map((it) => (it.id === editingEventId ? updated : it)));
+        setEventsWithCache((prev) => prev.map((it) => (it.id === editingEventId ? updated : it)));
       } else {
         const created = await api.createCalendarEvent(household.id, {
           title: formTitle.trim(),
@@ -363,7 +392,7 @@ export const CalendarPage: React.FC = () => {
           location: formLocation.trim() || undefined,
           assigned_user_id: formAssignedUser || undefined,
         });
-        setEvents((prev) => [...prev, created]);
+        setEventsWithCache((prev) => [...prev, created]);
       }
       setIsModalOpen(false);
     } catch (err) {
@@ -375,7 +404,7 @@ export const CalendarPage: React.FC = () => {
 
   const handleDeleteEvent = async (id: string) => {
     try {
-      setEvents((prev) => prev.filter((ev) => ev.id !== id));
+      setEventsWithCache((prev) => prev.filter((ev) => ev.id !== id));
       await api.deleteCalendarEvent(id);
     } catch (err) {
       console.error('Failed to delete event:', err);
