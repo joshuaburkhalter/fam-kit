@@ -1681,7 +1681,7 @@ export const MealsPage: React.FC = () => {
                 </button>
 
                 {isPantryAddMenuOpen && (
-                  <div className="absolute right-0 top-full mt-2 w-52 bg-slate-900/95 backdrop-blur-xl border border-white/15 rounded-2xl p-1.5 shadow-2xl shadow-slate-950/80 z-50 animate-in fade-in zoom-in-95 duration-150 space-y-1">
+                  <div className="absolute right-0 top-full mt-2 w-48 bg-slate-900/95 backdrop-blur-xl border border-white/15 rounded-2xl p-1.5 shadow-2xl shadow-slate-950/80 z-50 animate-in fade-in zoom-in-95 duration-150 space-y-1">
                     <button
                       type="button"
                       onClick={() => {
@@ -1693,10 +1693,7 @@ export const MealsPage: React.FC = () => {
                       <div className="w-7 h-7 rounded-lg bg-emerald-500/15 text-emerald-400 flex items-center justify-center shrink-0">
                         <Barcode className="w-4 h-4" />
                       </div>
-                      <div>
-                        <div className="font-bold text-white">Scan Barcode</div>
-                        <div className="text-[10px] text-slate-400">Continuous batch scanner</div>
-                      </div>
+                      <span className="font-bold text-white">Scan Barcode</span>
                     </button>
 
                     <button
@@ -1710,10 +1707,7 @@ export const MealsPage: React.FC = () => {
                       <div className="w-7 h-7 rounded-lg bg-purple-500/15 text-purple-400 flex items-center justify-center shrink-0">
                         <Camera className="w-4 h-4" />
                       </div>
-                      <div>
-                        <div className="font-bold text-white">AI Photo Scan</div>
-                        <div className="text-[10px] text-slate-400">Snap fridge & pantry shelves</div>
-                      </div>
+                      <span className="font-bold text-white">AI Photo Scan</span>
                     </button>
 
                     <div className="h-px bg-white/10 my-1" />
@@ -1737,10 +1731,7 @@ export const MealsPage: React.FC = () => {
                       <div className="w-7 h-7 rounded-lg bg-teal-500/15 text-teal-400 flex items-center justify-center shrink-0">
                         <Pencil className="w-4 h-4" />
                       </div>
-                      <div>
-                        <div className="font-bold text-white">Manual Entry</div>
-                        <div className="text-[10px] text-slate-400">Type item details</div>
-                      </div>
+                      <span className="font-bold text-white">Manual Entry</span>
                     </button>
                   </div>
                 )}
