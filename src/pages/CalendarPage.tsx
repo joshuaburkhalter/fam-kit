@@ -307,17 +307,21 @@ export const CalendarPage: React.FC = () => {
           </h1>
         </div>
 
-        {/* Sync & Action Dropdown */}
+        {/* Add Event & Sync Dropdown */}
         <div className="relative" ref={syncMenuRef}>
           <button
             type="button"
             onClick={() => setIsSyncMenuOpen(!isSyncMenuOpen)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-white/10 hover:border-white/20 text-slate-300 hover:text-white hover:bg-slate-800 text-xs font-semibold transition-all cursor-pointer shadow-xs active:scale-95"
-            title="Calendar Options"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer"
+            title="Add Event or Sync"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-emerald-400' : 'text-slate-400'}`} />
-            <span>{isSyncing ? 'Syncing...' : 'Sync'}</span>
-            <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isSyncMenuOpen ? 'rotate-180' : ''}`} />
+            <Plus className="w-4 h-4 stroke-[2.5]" />
+            <span>Add Event</span>
+            {isSyncing ? (
+              <RefreshCw className="w-3.5 h-3.5 stroke-[2.5] animate-spin" />
+            ) : (
+              <ChevronDown className={`w-3.5 h-3.5 stroke-[2.5] transition-transform duration-200 ${isSyncMenuOpen ? 'rotate-180' : ''}`} />
+            )}
           </button>
 
           {isSyncMenuOpen && (
