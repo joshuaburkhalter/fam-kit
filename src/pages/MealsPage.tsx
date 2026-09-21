@@ -229,7 +229,12 @@ export const MealsPage: React.FC = () => {
 
   // Notification Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastAction, setToastAction] = useState<{ label: string; onClick: () => void } | undefined>(undefined);
   const toastTimeoutRef = useRef<any>(null);
+
+  // Pantry check-off animation state
+  const [crossingOffPantryIds, setCrossingOffPantryIds] = useState<Record<string, boolean>>({});
+  const pantryCrossingTimersRef = useRef<Record<string, any>>({});
 
   // Transient feedback for adding to planner and grocery
   const [justAddedRecipeId, setJustAddedRecipeId] = useState<string | null>(null);
@@ -241,10 +246,14 @@ export const MealsPage: React.FC = () => {
   const cookModeHistoryPushedRef = useRef(false);
   const isNavigatingBackRef = useRef(false);
 
-  const showToast = (msg: string) => {
+  const showToast = (msg: string, action?: { label: string; onClick: () => void }) => {
     if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
     setToastMessage(msg);
-    toastTimeoutRef.current = setTimeout(() => setToastMessage(null), 3500);
+    setToastAction(action);
+    toastTimeoutRef.current = setTimeout(() => {
+      setToastMessage(null);
+      setToastAction(undefined);
+    }, action ? 5000 : 3500);
   };
 
   useEffect(() => {
@@ -254,6 +263,7 @@ export const MealsPage: React.FC = () => {
       if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
       if (justAddedTimeoutRef.current) clearTimeout(justAddedTimeoutRef.current);
       if (justAddedGroceryTimeoutRef.current) clearTimeout(justAddedGroceryTimeoutRef.current);
+      Object.values(pantryCrossingTimersRef.current).forEach((t) => clearTimeout(t));
     };
   }, []);
 
@@ -945,6 +955,82 @@ export const MealsPage: React.FC = () => {
 
   const handleRestockPantryItem = handleToggleRestockPantryItem;
 
+  // Check off / consume pantry item with haptic check, animation, and undo toast
+  const handleCheckOffPantryItem = (item: InventoryItem) => {
+    if (!householdId) return;
+    const itemId = item.id;
+    if (crossingOffPantryIds[itemId]) return;
+
+    triggerHapticCheck();
+    setCrossingOffPantryIds((prev) => ({ ...prev, [itemId]: true }));
+
+    pantryCrossingTimersRef.current[itemId] = setTimeout(async () => {
+      delete pantryCrossingTimersRef.current[itemId];
+      setCrossingOffPantryIds((prev) => {
+        const next = { ...prev };
+        delete next[itemId];
+        return next;
+      });
+
+      // Optimistically remove from state
+      const previousItems = inventoryItems;
+      setInventoryItems((prev) => {
+        const updated = prev.filter((i) => i.id !== itemId);
+        if (mealsDataCache && mealsDataCache.householdId === householdId) {
+          mealsDataCache.inventoryItems = updated;
+        }
+        return updated;
+      });
+
+      // Show toast with Undo action
+      showToast(`Used up "${item.name}"`, {
+        label: 'Undo',
+        onClick: async () => {
+          try {
+            const restored = await api.addInventoryItem({
+              name: item.name,
+              category: item.category,
+              location: item.location,
+              quantity: item.quantity,
+              unit: item.unit,
+              expiryDate: item.expiryDate,
+              isStock: item.isStock,
+              restockCadenceDays: item.restockCadenceDays,
+            });
+            setInventoryItems((prev) => {
+              const updated = [restored, ...prev.filter((i) => i.id !== restored.id)];
+              if (mealsDataCache && mealsDataCache.householdId === householdId) {
+                mealsDataCache.inventoryItems = updated;
+              }
+              return updated;
+            });
+            showToast(`Restored "${item.name}"`);
+          } catch (err) {
+            console.error('Failed to restore inventory item', err);
+            try {
+              const refreshed = await api.getInventory(householdId);
+              setInventoryItems(refreshed);
+              if (mealsDataCache && mealsDataCache.householdId === householdId) {
+                mealsDataCache.inventoryItems = refreshed;
+              }
+            } catch {}
+          }
+        },
+      });
+
+      try {
+        await api.deleteInventoryItem(itemId);
+      } catch (err) {
+        console.error('Failed to delete checked off inventory item', err);
+        setInventoryItems(previousItems);
+        if (mealsDataCache && mealsDataCache.householdId === householdId) {
+          mealsDataCache.inventoryItems = previousItems;
+        }
+        showToast(`Failed to remove "${item.name}"`);
+      }
+    }, 380);
+  };
+
   // Submit Manual Log Form
   const handleSubmitManualLog = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1307,7 +1393,14 @@ export const MealsPage: React.FC = () => {
   return (
     <div className="max-w-4xl mx-auto px-3 sm:px-6 pt-3 pb-36 md:pb-28 space-y-4">
       {/* Toast Notification */}
-      <Toast message={toastMessage} onClose={() => setToastMessage(null)} />
+      <Toast
+        message={toastMessage}
+        onClose={() => {
+          setToastMessage(null);
+          setToastAction(undefined);
+        }}
+        action={toastAction}
+      />
 
       {/* ================= IF RECIPE DETAIL IS OPEN ================= */}
       {selectedRecipe ? (
@@ -2369,6 +2462,7 @@ export const MealsPage: React.FC = () => {
                     {filteredItems.map((item) => {
                       const locMeta = getLocationMeta(item.location);
                       const badge = getFreshnessBadge(item.freshness, item.daysUntilExpiry);
+                      const isCrossing = Boolean(crossingOffPantryIds[item.id]);
 
                       return (
                         <div
@@ -2377,68 +2471,95 @@ export const MealsPage: React.FC = () => {
                             setEditingInventoryItem(item);
                             setIsEditInventoryModalOpen(true);
                           }}
-                          className="glass-panel rounded-2xl border border-white/10 px-3.5 py-2.5 flex flex-col justify-center gap-1.5 hover:border-emerald-500/30 transition-all shadow-md group cursor-pointer"
+                          className={`glass-panel rounded-2xl border border-white/10 px-3.5 py-2.5 flex items-center gap-3 hover:border-emerald-500/30 transition-all shadow-md group cursor-pointer ${
+                            isCrossing ? 'animate-row-crossing opacity-60' : ''
+                          }`}
                         >
-                          {/* Line 1: Location icon + Item name + Staple Star & Freshness Badge */}
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                              <span className="text-sm shrink-0" title={locMeta.label}>{locMeta.icon}</span>
-                              <h4 className="text-sm font-bold text-white group-hover:text-emerald-300 transition-colors truncate">
-                                {item.name}
-                              </h4>
-                              {item.isStock && (
-                                <Star className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400 shrink-0" title="Pantry Staple" />
-                              )}
+                          {/* Checkbox */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCheckOffPantryItem(item);
+                            }}
+                            className={`relative w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition-all cursor-pointer ${
+                              isCrossing
+                                ? 'border-emerald-500 bg-emerald-500 text-slate-950 shadow-sm shadow-emerald-500/30 animate-check-pop'
+                                : 'border-white/20 bg-slate-900/80 hover:border-emerald-500 text-transparent'
+                            }`}
+                            title="Mark as used / finished"
+                          >
+                            <CheckSparkle trigger={isCrossing} />
+                            {isCrossing && (
+                              <Check className="w-3.5 h-3.5 text-slate-950 font-bold stroke-[3]" />
+                            )}
+                          </button>
+
+                          {/* Card Content */}
+                          <div className="flex-1 min-w-0 flex flex-col justify-center gap-1.5">
+                            {/* Line 1: Location icon + Item name + Staple Star & Freshness Badge */}
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                <span className="text-sm shrink-0" title={locMeta.label}>{locMeta.icon}</span>
+                                <h4 className={`text-sm font-bold transition-colors truncate ${
+                                  isCrossing ? 'line-through text-slate-400' : 'text-white group-hover:text-emerald-300'
+                                }`}>
+                                  {item.name}
+                                </h4>
+                                {item.isStock && (
+                                  <Star className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400 shrink-0" title="Pantry Staple" />
+                                )}
+                              </div>
+
+                              <span
+                                className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${badge.bgColor} ${badge.color} ${badge.borderColor} flex items-center gap-1 shrink-0 whitespace-nowrap`}
+                              >
+                                <span className={`w-1.5 h-1.5 rounded-full ${badge.dotColor}`} />
+                                <span>{badge.label}</span>
+                              </span>
                             </div>
 
-                            <span
-                              className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${badge.bgColor} ${badge.color} ${badge.borderColor} flex items-center gap-1 shrink-0 whitespace-nowrap`}
-                            >
-                              <span className={`w-1.5 h-1.5 rounded-full ${badge.dotColor}`} />
-                              <span>{badge.label}</span>
-                            </span>
-                          </div>
+                            {/* Line 2: Category · Quantity · Cadence & Restock button */}
+                            <div className="flex items-center justify-between gap-2 text-[11px] text-slate-400">
+                              <div className="flex items-center gap-1.5 min-w-0 truncate">
+                                <span className="text-slate-300 truncate">{item.category || 'Pantry'}</span>
+                                {item.quantity && (
+                                  <>
+                                    <span className="text-slate-600">·</span>
+                                    <span className="text-emerald-400 font-semibold truncate">{item.quantity}</span>
+                                  </>
+                                )}
+                                {item.isStock && item.restockCadenceDays && (
+                                  <>
+                                    <span className="text-slate-600">·</span>
+                                    <span className="text-yellow-400/90 text-[10px] truncate">every {item.restockCadenceDays}d</span>
+                                  </>
+                                )}
+                              </div>
 
-                          {/* Line 2: Category · Quantity · Cadence & Restock button */}
-                          <div className="flex items-center justify-between gap-2 text-[11px] text-slate-400">
-                            <div className="flex items-center gap-1.5 min-w-0 truncate">
-                              <span className="text-slate-300 truncate">{item.category || 'Pantry'}</span>
-                              {item.quantity && (
-                                <>
-                                  <span className="text-slate-600">·</span>
-                                  <span className="text-emerald-400 font-semibold truncate">{item.quantity}</span>
-                                </>
-                              )}
-                              {item.isStock && item.restockCadenceDays && (
-                                <>
-                                  <span className="text-slate-600">·</span>
-                                  <span className="text-yellow-400/90 text-[10px] truncate">every {item.restockCadenceDays}d</span>
-                                </>
-                              )}
+                              {(() => {
+                                const inGrocery = isPantryItemInGrocery(item);
+                                return (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => handleToggleRestockPantryItem(item, e)}
+                                    className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold flex items-center gap-1 shrink-0 whitespace-nowrap transition-all cursor-pointer ${
+                                      inGrocery
+                                        ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold shadow-sm shadow-emerald-500/20'
+                                        : 'bg-white/5 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-400 border border-white/10 hover:border-emerald-500/30'
+                                    }`}
+                                    title={inGrocery ? 'In Grocery List (click to remove)' : 'Add to Grocery List'}
+                                  >
+                                    {inGrocery ? (
+                                      <Check className="w-3 h-3 stroke-[3]" />
+                                    ) : (
+                                      <ShoppingCart className="w-3 h-3 text-emerald-400" />
+                                    )}
+                                    <span>{inGrocery ? 'In List' : 'Restock'}</span>
+                                  </button>
+                                );
+                              })()}
                             </div>
-
-                            {(() => {
-                              const inGrocery = isPantryItemInGrocery(item);
-                              return (
-                                <button
-                                  type="button"
-                                  onClick={(e) => handleToggleRestockPantryItem(item, e)}
-                                  className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold flex items-center gap-1 shrink-0 whitespace-nowrap transition-all cursor-pointer ${
-                                    inGrocery
-                                      ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold shadow-sm shadow-emerald-500/20'
-                                      : 'bg-white/5 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-400 border border-white/10 hover:border-emerald-500/30'
-                                  }`}
-                                  title={inGrocery ? 'In Grocery List (click to remove)' : 'Add to Grocery List'}
-                                >
-                                  {inGrocery ? (
-                                    <Check className="w-3 h-3 stroke-[3]" />
-                                  ) : (
-                                    <ShoppingCart className="w-3 h-3 text-emerald-400" />
-                                  )}
-                                  <span>{inGrocery ? 'In List' : 'Restock'}</span>
-                                </button>
-                              );
-                            })()}
                           </div>
                         </div>
                       );

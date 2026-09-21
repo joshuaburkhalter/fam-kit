@@ -8,6 +8,10 @@ export interface ToastProps {
   duration?: number;
   icon?: React.ReactNode;
   type?: 'success' | 'error';
+  action?: {
+    label: string;
+    onClick: () => void;
+  };
 }
 
 export const Toast: React.FC<ToastProps> = ({
@@ -16,6 +20,7 @@ export const Toast: React.FC<ToastProps> = ({
   duration = 3200,
   icon,
   type = 'success',
+  action,
 }) => {
   const [renderedMessage, setRenderedMessage] = useState<string | null>(message);
   const [isShowing, setIsShowing] = useState<boolean>(false);
@@ -85,6 +90,19 @@ export const Toast: React.FC<ToastProps> = ({
           </div>
           <span className="truncate sm:text-wrap leading-tight">{renderedMessage}</span>
         </div>
+        {action && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              action.onClick();
+              handleDismiss();
+            }}
+            className="px-2.5 py-1 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 font-bold text-xs shrink-0 cursor-pointer border border-emerald-500/40 transition-colors"
+          >
+            {action.label}
+          </button>
+        )}
         <button
           type="button"
           onClick={(e) => {
