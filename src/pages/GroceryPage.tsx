@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Plus,
   Check,
@@ -58,7 +58,10 @@ export const GroceryPage: React.FC = () => {
     return groceryDataCache ? groceryDataCache.lists : [];
   });
   const [localAisles, setLocalAisles] = useState<Aisle[]>(() => {
-    return groceryDataCache?.aislesByList?.['grocery'] || (groceryDataCache && groceryDataCache.aisles.length > 0 ? groceryDataCache.aisles : aisles);
+    if (activeListType === 'grocery') {
+      return groceryDataCache?.aislesByList?.['grocery'] || (groceryDataCache && groceryDataCache.aisles.length > 0 ? groceryDataCache.aisles : aisles);
+    }
+    return groceryDataCache?.aislesByList?.[activeListType] || [];
   });
   const [newItemName, setNewItemName] = useState('');
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
@@ -111,10 +114,10 @@ export const GroceryPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (aisles.length > 0) {
+    if (activeListType === 'grocery' && aisles.length > 0) {
       setLocalAisles(aisles);
     }
-  }, [aisles]);
+  }, [aisles, activeListType]);
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -147,9 +150,15 @@ export const GroceryPage: React.FC = () => {
         ? groceryDataCache.aislesByList?.[targetListId]
         : undefined;
 
+    const sanitizedCachedAisles = cachedAisles
+      ? cachedAisles.filter((a) =>
+          targetListId === 'grocery' ? (!a.list_id || a.list_id === 'grocery') : a.list_id === targetListId
+        )
+      : undefined;
+
     if (cachedItems !== undefined) {
       setItems(cachedItems);
-      setLocalAisles(cachedAisles || (targetListId === 'grocery' ? aisles : []));
+      setLocalAisles(sanitizedCachedAisles || (targetListId === 'grocery' ? aisles : []));
       setIsLoading(false);
     } else {
       // Clear stale items immediately so the previous list never flashes while loading the new one
@@ -169,23 +178,27 @@ export const GroceryPage: React.FC = () => {
       const data = await api.getGroceryData(householdId, targetListId);
       if (!isMountedRef.current) return;
 
+      const targetAisles = (data.aisles || []).filter((a) =>
+        targetListId === 'grocery' ? (!a.list_id || a.list_id === 'grocery') : a.list_id === targetListId
+      );
+
       if (!groceryDataCache || groceryDataCache.householdId !== householdId) {
         groceryDataCache = {
           householdId,
           itemsByList: {},
           aislesByList: {},
           lists: data.lists,
-          aisles: data.aisles,
+          aisles: targetAisles,
         };
       }
       groceryDataCache.itemsByList[targetListId] = data.items;
       if (!groceryDataCache.aislesByList) {
         groceryDataCache.aislesByList = {};
       }
-      groceryDataCache.aislesByList[targetListId] = data.aisles;
+      groceryDataCache.aislesByList[targetListId] = targetAisles;
       groceryDataCache.lists = data.lists;
       if (targetListId === 'grocery') {
-        groceryDataCache.aisles = data.aisles;
+        groceryDataCache.aisles = targetAisles;
       }
       if (data.suggestions && data.suggestions.length > 0) {
         groceryDataCache.suggestions = data.suggestions;
@@ -194,7 +207,7 @@ export const GroceryPage: React.FC = () => {
 
       if (activeListTypeRef.current === targetListId) {
         setItems(data.items);
-        setLocalAisles(data.aisles);
+        setLocalAisles(targetAisles);
       }
       setCustomLists(data.lists);
     } catch (err) {
@@ -250,7 +263,7 @@ export const GroceryPage: React.FC = () => {
       setSuggestions((prev) => {
         const next = [...prev];
         const matchIdx = next.findIndex((s) => s.name.toLowerCase() === item.name.toLowerCase());
-        const aisle = (localAisles.length > 0 ? localAisles : aisles).find((a) => a.id === item.aisle_id);
+        const aisle = effectiveAisles.find((a) => a.id === item.aisle_id);
         const entry: GrocerySuggestion = {
           name: item.name,
           aisleId: item.aisle_id,
@@ -300,7 +313,7 @@ export const GroceryPage: React.FC = () => {
       setIsAutocompleteDismissed(true);
       setSelectedSuggestionIndex(-1);
 
-      const aisle = (localAisles.length > 0 ? localAisles : aisles).find((a) => a.id === item.aisle_id);
+      const aisle = effectiveAisles.find((a) => a.id === item.aisle_id);
       showToast(`Added ${item.name} to ${aisle?.name || sug.category || 'Grocery'}`);
     } catch (err: any) {
       console.error('Failed to add suggested item:', err);
@@ -423,7 +436,7 @@ export const GroceryPage: React.FC = () => {
     if (!editingItem || !editName.trim()) return;
     setIsSavingEdit(true);
     try {
-      const selectedAisle = localAisles.find((a) => a.id === editAisleId);
+      const selectedAisle = effectiveAisles.find((a) => a.id === editAisleId);
       await api.updateGroceryItem(editingItem.id, {
         name: editName.trim(),
         quantity: editQuantity.trim() || null,
@@ -484,7 +497,7 @@ export const GroceryPage: React.FC = () => {
 
   const handleQuickMoveItem = async (targetAisleId: string) => {
     if (!movingItem) return;
-    const targetAisle = localAisles.find((a) => a.id === targetAisleId);
+    const targetAisle = effectiveAisles.find((a) => a.id === targetAisleId);
     if (!targetAisle) return;
 
     const itemToMove = movingItem;
@@ -597,7 +610,10 @@ export const GroceryPage: React.FC = () => {
       );
 
       setLocalAisles((prev) => {
-        const next = [...prev, newAisle];
+        const base = prev.filter((a) =>
+          activeListType === 'grocery' ? (!a.list_id || a.list_id === 'grocery') : a.list_id === activeListType
+        );
+        const next = [...base, newAisle];
         if (groceryDataCache && groceryDataCache.householdId === householdId) {
           if (!groceryDataCache.aislesByList) groceryDataCache.aislesByList = {};
           groceryDataCache.aislesByList[activeListType] = next;
@@ -608,7 +624,9 @@ export const GroceryPage: React.FC = () => {
         return next;
       });
 
-      refreshAisles();
+      if (activeListType === 'grocery') {
+        refreshAisles();
+      }
       showToast(`Category "${catName}" added to ${currentListName}`);
       setNewCategoryName('');
       setIsNewCategoryModalOpen(false);
@@ -652,9 +670,19 @@ export const GroceryPage: React.FC = () => {
   const activeItems = items.filter((it) => !it.is_completed);
   const completedItems = items.filter((it) => it.is_completed);
 
-  // Sort aisles by display_order
-  const effectiveAisles = localAisles.length > 0 ? localAisles : (activeListType === 'grocery' ? aisles : []);
-  const sortedAisles = [...effectiveAisles].sort((a, b) => a.display_order - b.display_order);
+  // Filter and sort aisles strictly by active list
+  const effectiveAisles = useMemo(() => {
+    if (activeListType === 'grocery') {
+      const groceryAisles = localAisles.filter((a) => !a.list_id || a.list_id === 'grocery');
+      return groceryAisles.length > 0 ? groceryAisles : aisles;
+    }
+    return localAisles.filter((a) => a.list_id === activeListType);
+  }, [localAisles, activeListType, aisles]);
+
+  const sortedAisles = useMemo(
+    () => [...effectiveAisles].sort((a, b) => a.display_order - b.display_order),
+    [effectiveAisles]
+  );
 
   const itemsByAisle: { aisle: Aisle; items: GroceryItem[] }[] = [];
   const uncategorizedItems: GroceryItem[] = [];
@@ -809,7 +837,9 @@ export const GroceryPage: React.FC = () => {
       const reorderedIds = reorderedVisible.map((entry) => entry.aisle.id);
 
       setLocalAisles((prevAisles) => {
-        const base = prevAisles.length > 0 ? [...prevAisles] : [...aisles];
+        const base = prevAisles.length > 0
+          ? [...prevAisles.filter((a) => (activeListType === 'grocery' ? (!a.list_id || a.list_id === 'grocery') : a.list_id === activeListType))]
+          : (activeListType === 'grocery' ? [...aisles] : []);
         const visibleSet = new Set(reorderedIds);
 
         reorderedIds.forEach((id, idx) => {
@@ -829,12 +859,18 @@ export const GroceryPage: React.FC = () => {
         const sorted = [...base].sort((a, b) => a.display_order - b.display_order);
 
         if (groceryDataCache && householdId && groceryDataCache.householdId === householdId) {
-          groceryDataCache.aisles = sorted;
+          if (!groceryDataCache.aislesByList) groceryDataCache.aislesByList = {};
+          groceryDataCache.aislesByList[activeListType] = sorted;
+          if (activeListType === 'grocery') {
+            groceryDataCache.aisles = sorted;
+          }
         }
 
         api.reorderAisles(householdId, sorted.map((a) => a.id))
           .then(() => {
-            refreshAisles();
+            if (activeListType === 'grocery') {
+              refreshAisles();
+            }
             showToast('Category order saved');
           })
           .catch((err) => {
@@ -1744,7 +1780,7 @@ export const GroceryPage: React.FC = () => {
             </div>
           </div>
 
-          {localAisles.length > 0 && (
+          {effectiveAisles.length > 0 && (
             <div>
               <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
                 {isGroceryList ? 'Store Aisle / Category' : 'Category / Section'}
@@ -1755,7 +1791,7 @@ export const GroceryPage: React.FC = () => {
                 className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500"
               >
                 <option value="">Uncategorized / Other</option>
-                {localAisles.map((a) => (
+                {effectiveAisles.map((a) => (
                   <option key={a.id} value={a.id}>
                     {a.name}
                   </option>
