@@ -166,6 +166,22 @@ export function saveCategoryPreference(
 }
 
 /**
+ * Removes a household's learned aisle/category preference for an item name.
+ */
+export function deleteCategoryPreference(householdId: string, rawName: string): void {
+  if (!householdId || !rawName) return;
+  const normalized = normalizeItemKey(rawName);
+  if (!normalized) return;
+
+  execute('DELETE FROM grocery_category_preferences WHERE householdId = ? AND (normalizedName = ? OR normalizedName = ?)', [
+    householdId,
+    normalized,
+    stemItemKey(normalized),
+  ]);
+  saveDb();
+}
+
+/**
  * Resolves the appropriate aisle and category for an item by checking:
  * 1. Explicitly provided aisleId (if valid)
  * 2. Household's learned category preference (exact or fuzzy/token match)

@@ -672,7 +672,9 @@ export const GroceryPage: React.FC = () => {
       const aisleItems = activeItems.filter(
         (it) =>
           !placedItemIds.has(it.id) &&
-          (it.aisle_id === aisle.id || (it as any).category?.toLowerCase() === aisle.name.toLowerCase())
+          it.category !== 'Other' &&
+          it.category !== 'Uncategorized' &&
+          (it.aisle_id === aisle.id || (!it.aisle_id && it.category?.toLowerCase() === aisle.name.toLowerCase()))
       );
       aisleItems.forEach((it) => placedItemIds.add(it.id));
       if (aisleItems.length > 0 || !isGroceryList) {
@@ -865,7 +867,7 @@ export const GroceryPage: React.FC = () => {
       // Optimistic update
       setItems((prev) =>
         prev.map((i) =>
-          i.id === itemToMove.id ? { ...i, aisle_id: '', category: '' } : i
+          i.id === itemToMove.id ? { ...i, aisle_id: '', category: 'Other' } : i
         )
       );
 
@@ -874,7 +876,7 @@ export const GroceryPage: React.FC = () => {
           groceryDataCache.itemsByList[activeListTypeRef.current] = groceryDataCache.itemsByList[
             activeListTypeRef.current
           ].map((i) =>
-            i.id === itemToMove.id ? { ...i, aisle_id: '', category: '' } : i
+            i.id === itemToMove.id ? { ...i, aisle_id: '', category: 'Other' } : i
           );
         }
       }
@@ -882,7 +884,7 @@ export const GroceryPage: React.FC = () => {
       try {
         await api.updateGroceryItem(itemToMove.id, {
           aisleId: null,
-          category: null,
+          category: 'Other',
         });
         showToast(`Moved "${itemToMove.name}" to Uncategorized`);
       } catch (err: any) {
@@ -1038,6 +1040,10 @@ export const GroceryPage: React.FC = () => {
         }
       }
 
+      if (foundAisleId && foundAisleId.startsWith('uncategorized')) {
+        foundAisleId = 'uncategorized';
+      }
+
       if (foundAisleId !== hoveredAisleIdRef.current) {
         hoveredAisleIdRef.current = foundAisleId;
         setHoveredAisleId(foundAisleId);
@@ -1062,7 +1068,21 @@ export const GroceryPage: React.FC = () => {
       upEv.stopPropagation();
 
       const dragged = draggingItemRef.current;
-      const targetId = hoveredAisleIdRef.current;
+      let targetId = hoveredAisleIdRef.current;
+      if (!targetId) {
+        const testX = dragRowLayoutRef.current
+          ? dragRowLayoutRef.current.left + dragRowLayoutRef.current.width / 2
+          : upEv.clientX;
+        const testY = upEv.clientY;
+        const elUnderPoint = document.elementFromPoint(testX, testY);
+        const targetCard = elUnderPoint?.closest('[data-category-drop-id]');
+        if (targetCard) {
+          targetId = targetCard.getAttribute('data-category-drop-id');
+        }
+      }
+      if (targetId && targetId.startsWith('uncategorized')) {
+        targetId = 'uncategorized';
+      }
       const sourceId = sourceAisleIdRef.current;
 
       isItemDraggingRef.current = false;
@@ -1454,6 +1474,29 @@ export const GroceryPage: React.FC = () => {
           </div>
         )}
 
+        {/* Top Drop Target for Uncategorized (accessible without scrolling all the way to bottom) */}
+        {hasCategories && draggingItem && sourceAisleIdRef.current !== 'uncategorized' && (
+          <div
+            data-category-drop-id="uncategorized"
+            ref={(el) => {
+              if (el) cardElementsRef.current.set('uncategorized_top', el);
+              else cardElementsRef.current.delete('uncategorized_top');
+            }}
+            className={`rounded-2xl border border-dashed py-3.5 px-4 text-center transition-all duration-200 cursor-pointer ${
+              hoveredAisleId === 'uncategorized'
+                ? 'border-emerald-400 ring-2 ring-emerald-500/60 bg-emerald-500/20 scale-[1.01] shadow-lg shadow-emerald-950/50'
+                : 'border-white/20 bg-slate-900/40 hover:border-white/30'
+            }`}
+          >
+            <p className={`text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 ${
+              hoveredAisleId === 'uncategorized' ? 'text-emerald-300 animate-pulse' : 'text-slate-400'
+            }`}>
+              <span>📦</span>
+              <span>{hoveredAisleId === 'uncategorized' ? 'Drop here to make Uncategorized' : 'Move to Uncategorized'}</span>
+            </p>
+          </div>
+        )}
+
         {hasCategories &&
           itemsByAisle.map(({ aisle, items: aisleItems }, idx) => {
             const isCollapsed = collapsedAisles[aisle.id];
@@ -1708,8 +1751,8 @@ export const GroceryPage: React.FC = () => {
           <div
             data-category-drop-id="uncategorized"
             ref={(el) => {
-              if (el) cardElementsRef.current.set('uncategorized', el);
-              else cardElementsRef.current.delete('uncategorized');
+              if (el) cardElementsRef.current.set('uncategorized_bottom', el);
+              else cardElementsRef.current.delete('uncategorized_bottom');
             }}
             className={`glass-panel rounded-3xl border overflow-hidden shadow-sm transition-all duration-200 ${
               draggingItem && hoveredAisleId === 'uncategorized' && sourceAisleIdRef.current !== 'uncategorized'
@@ -1846,8 +1889,8 @@ export const GroceryPage: React.FC = () => {
           <div
             data-category-drop-id="uncategorized"
             ref={(el) => {
-              if (el) cardElementsRef.current.set('uncategorized', el);
-              else cardElementsRef.current.delete('uncategorized');
+              if (el) cardElementsRef.current.set('uncategorized_bottom', el);
+              else cardElementsRef.current.delete('uncategorized_bottom');
             }}
             className={`rounded-3xl border border-dashed p-4 text-center transition-all duration-200 ${
               hoveredAisleId === 'uncategorized'

@@ -80,6 +80,7 @@ export interface GroceryItem {
   id: string;
   household_id: string;
   aisle_id: string;
+  category?: string;
   name: string;
   quantity?: string;
   unit?: string;

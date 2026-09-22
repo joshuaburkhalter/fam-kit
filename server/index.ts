@@ -46,6 +46,7 @@ import {
 } from './shelfLife.js';
 import {
   saveCategoryPreference,
+  deleteCategoryPreference,
   resolveAisleForGroceryItem,
   getHouseholdGrocerySuggestions,
 } from './groceryPreferences.js';
@@ -1758,7 +1759,7 @@ app.get('/api/grocery', (req, res) => {
   if (!listId) {
     const deliAisle = aisles.find((a) => /deli|prepared/i.test(a.name));
     for (const it of items) {
-      if (!it.aisleId) {
+      if (!it.aisleId && it.category !== 'Other' && it.category !== 'Uncategorized') {
         const matched = resolveAisleForGroceryItem(householdId, it.name, aisles, it.category);
         if (matched && matched.aisleId) {
           it.aisleId = matched.aisleId;
@@ -1908,10 +1909,14 @@ app.patch('/api/grocery', (req, res) => {
 
   const updated = queryOne<any>('SELECT * FROM grocery_items WHERE id = ?', [id]);
 
-  // If item was moved to a different aisle/category, remember this preference for the household
-  if ((aisleId !== undefined || category !== undefined) && updated && updated.aisleId) {
+  // If item was moved to a different aisle/category, update household preference
+  if ((aisleId !== undefined || category !== undefined) && updated) {
     const householdId = getHouseholdId(req);
-    saveCategoryPreference(householdId, updated.name, updated.aisleId, updated.category || 'Other');
+    if (aisleId === null || aisleId === '' || category === 'Other' || category === 'Uncategorized') {
+      deleteCategoryPreference(householdId, updated.name);
+    } else if (updated.aisleId) {
+      saveCategoryPreference(householdId, updated.name, updated.aisleId, updated.category || 'Other');
+    }
   }
 
   if (checked === true && updated) {
