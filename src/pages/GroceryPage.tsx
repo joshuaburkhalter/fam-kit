@@ -108,6 +108,8 @@ export const GroceryPage: React.FC = () => {
   hoveredAisleIdRef.current = hoveredAisleId;
   const draggingItemRef = useRef<GroceryItem | null>(null);
   draggingItemRef.current = draggingItem;
+  const sourceAisleIdRef = useRef<string>('uncategorized');
+  const dragListenersCleanupRef = useRef<(() => void) | null>(null);
 
   const matchingSuggestions = React.useMemo(() => {
     const q = newItemName.trim().toLowerCase();
@@ -126,6 +128,9 @@ export const GroceryPage: React.FC = () => {
       isMountedRef.current = false;
       Object.values(crossingTimersRef.current).forEach((t) => clearTimeout(t));
       clearTimeout(itemLongPressTimerRef.current);
+      if (dragListenersCleanupRef.current) {
+        dragListenersCleanupRef.current();
+      }
     };
   }, []);
 
@@ -939,17 +944,23 @@ export const GroceryPage: React.FC = () => {
   };
 
   // Item Long-Press & Drag Handlers
-  const handleItemPointerDown = (e: React.PointerEvent, item: GroceryItem) => {
+  const handleItemPointerDown = (
+    e: React.PointerEvent,
+    item: GroceryItem,
+    sourceAisleId: string
+  ) => {
     if (e.button !== 0) return;
     if ((e.target as HTMLElement).closest('button, input, a, select')) return;
 
+    if (dragListenersCleanupRef.current) {
+      dragListenersCleanupRef.current();
+    }
+
     itemPointerStartRef.current = { x: e.clientX, y: e.clientY };
     pendingDragItemRef.current = item;
+    sourceAisleIdRef.current = sourceAisleId || item.aisle_id || 'uncategorized';
     hasItemDraggedRef.current = false;
     isItemDraggingRef.current = false;
-
-    const currentTarget = e.currentTarget as HTMLElement;
-    const pointerId = e.pointerId;
 
     clearTimeout(itemLongPressTimerRef.current);
     itemLongPressTimerRef.current = setTimeout(() => {
@@ -958,121 +969,140 @@ export const GroceryPage: React.FC = () => {
       setDraggingItem(item);
       draggingItemRef.current = item;
       setDragPointerPos({ x: itemPointerStartRef.current.x, y: itemPointerStartRef.current.y });
+      document.body.style.userSelect = 'none';
       try {
-        currentTarget.setPointerCapture(pointerId);
+        if ('vibrate' in navigator) navigator.vibrate(35);
       } catch {}
-      try {
-        if ('vibrate' in navigator) navigator.vibrate(30);
-      } catch {}
-    }, 320);
-  };
+    }, 300);
 
-  const handleItemPointerMove = (e: React.PointerEvent) => {
-    if (!isItemDraggingRef.current) {
-      if (pendingDragItemRef.current) {
-        const dx = e.clientX - itemPointerStartRef.current.x;
-        const dy = e.clientY - itemPointerStartRef.current.y;
+    const onGlobalPointerMove = (moveEv: PointerEvent) => {
+      if (!isItemDraggingRef.current) {
+        const dx = moveEv.clientX - itemPointerStartRef.current.x;
+        const dy = moveEv.clientY - itemPointerStartRef.current.y;
         if (Math.hypot(dx, dy) > 10) {
           clearTimeout(itemLongPressTimerRef.current);
           pendingDragItemRef.current = null;
+          cleanup();
+        }
+        return;
+      }
+
+      if (moveEv.cancelable) moveEv.preventDefault();
+      setDragPointerPos({ x: moveEv.clientX, y: moveEv.clientY });
+
+      // Edge auto-scrolling
+      const edgeThreshold = 90;
+      if (moveEv.clientY < edgeThreshold) {
+        window.scrollBy({ top: -10, behavior: 'auto' });
+      } else if (moveEv.clientY > window.innerHeight - edgeThreshold) {
+        window.scrollBy({ top: 10, behavior: 'auto' });
+      }
+
+      // Hit-test category drop targets
+      let foundAisleId: string | null = null;
+      const elUnderPoint = document.elementFromPoint(moveEv.clientX, moveEv.clientY);
+      const targetCard = elUnderPoint?.closest('[data-category-drop-id]');
+      if (targetCard) {
+        foundAisleId = targetCard.getAttribute('data-category-drop-id');
+      }
+
+      if (!foundAisleId) {
+        for (const [aisleId, cardEl] of cardElementsRef.current.entries()) {
+          if (!cardEl) continue;
+          const rect = cardEl.getBoundingClientRect();
+          if (
+            moveEv.clientX >= rect.left - 20 &&
+            moveEv.clientX <= rect.right + 20 &&
+            moveEv.clientY >= rect.top - 8 &&
+            moveEv.clientY <= rect.bottom + 8
+          ) {
+            foundAisleId = aisleId;
+            break;
+          }
         }
       }
-      return;
-    }
 
-    setDragPointerPos({ x: e.clientX, y: e.clientY });
-
-    // Edge auto-scrolling
-    const edgeThreshold = 80;
-    if (e.clientY < edgeThreshold) {
-      window.scrollBy({ top: -8, behavior: 'auto' });
-    } else if (e.clientY > window.innerHeight - edgeThreshold) {
-      window.scrollBy({ top: 8, behavior: 'auto' });
-    }
-
-    // Check which category card is currently under pointer
-    let foundAisleId: string | null = null;
-    for (const [aisleId, el] of cardElementsRef.current.entries()) {
-      if (!el) continue;
-      const rect = el.getBoundingClientRect();
-      if (
-        e.clientX >= rect.left - 20 &&
-        e.clientX <= rect.right + 20 &&
-        e.clientY >= rect.top &&
-        e.clientY <= rect.bottom
-      ) {
-        foundAisleId = aisleId;
-        break;
+      if (foundAisleId !== hoveredAisleIdRef.current) {
+        hoveredAisleIdRef.current = foundAisleId;
+        setHoveredAisleId(foundAisleId);
+        if (foundAisleId && foundAisleId !== sourceAisleIdRef.current) {
+          try {
+            if ('vibrate' in navigator) navigator.vibrate(15);
+          } catch {}
+        }
       }
-    }
+    };
 
-    if (foundAisleId !== hoveredAisleIdRef.current) {
-      hoveredAisleIdRef.current = foundAisleId;
-      setHoveredAisleId(foundAisleId);
-      if (foundAisleId) {
-        try {
-          if ('vibrate' in navigator) navigator.vibrate(12);
-        } catch {}
+    const onGlobalPointerUp = (upEv: PointerEvent) => {
+      cleanup();
+      clearTimeout(itemLongPressTimerRef.current);
+
+      if (!isItemDraggingRef.current) {
+        pendingDragItemRef.current = null;
+        return;
       }
-    }
-  };
 
-  const handleItemPointerUp = (e: React.PointerEvent) => {
-    clearTimeout(itemLongPressTimerRef.current);
+      if (upEv.cancelable) upEv.preventDefault();
+      upEv.stopPropagation();
 
-    if (!isItemDraggingRef.current) {
+      const dragged = draggingItemRef.current;
+      const targetId = hoveredAisleIdRef.current;
+      const sourceId = sourceAisleIdRef.current;
+
+      isItemDraggingRef.current = false;
+      setDraggingItem(null);
+      draggingItemRef.current = null;
+      setHoveredAisleId(null);
+      hoveredAisleIdRef.current = null;
       pendingDragItemRef.current = null;
-      return;
-    }
 
-    e.preventDefault();
-    e.stopPropagation();
+      setTimeout(() => {
+        hasItemDraggedRef.current = false;
+      }, 250);
 
-    try {
-      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-    } catch {}
-
-    const draggedItem = draggingItemRef.current;
-    const targetAisleId = hoveredAisleIdRef.current;
-
-    isItemDraggingRef.current = false;
-    setDraggingItem(null);
-    draggingItemRef.current = null;
-    setHoveredAisleId(null);
-    hoveredAisleIdRef.current = null;
-    pendingDragItemRef.current = null;
-
-    setTimeout(() => {
-      hasItemDraggedRef.current = false;
-    }, 200);
-
-    if (draggedItem && targetAisleId) {
-      const currentCategory = draggedItem.aisle_id || 'uncategorized';
-      if (currentCategory !== targetAisleId) {
+      if (dragged && targetId && targetId !== sourceId) {
         try {
-          if ('vibrate' in navigator) navigator.vibrate(25);
+          if ('vibrate' in navigator) navigator.vibrate(30);
         } catch {}
-        moveItemToCategory(draggedItem, targetAisleId);
+        moveItemToCategory(dragged, targetId);
       }
-    }
-  };
+    };
 
-  const handleItemPointerCancel = (e: React.PointerEvent) => {
-    clearTimeout(itemLongPressTimerRef.current);
-    if (isItemDraggingRef.current) {
-      try {
-        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-      } catch {}
-    }
-    isItemDraggingRef.current = false;
-    setDraggingItem(null);
-    draggingItemRef.current = null;
-    setHoveredAisleId(null);
-    hoveredAisleIdRef.current = null;
-    pendingDragItemRef.current = null;
-    setTimeout(() => {
-      hasItemDraggedRef.current = false;
-    }, 200);
+    const onGlobalPointerCancel = () => {
+      cleanup();
+      clearTimeout(itemLongPressTimerRef.current);
+      isItemDraggingRef.current = false;
+      setDraggingItem(null);
+      draggingItemRef.current = null;
+      setHoveredAisleId(null);
+      hoveredAisleIdRef.current = null;
+      pendingDragItemRef.current = null;
+      setTimeout(() => {
+        hasItemDraggedRef.current = false;
+      }, 250);
+    };
+
+    const onGlobalTouchMove = (touchEv: TouchEvent) => {
+      if (isItemDraggingRef.current && touchEv.cancelable) {
+        touchEv.preventDefault();
+      }
+    };
+
+    const cleanup = () => {
+      window.removeEventListener('pointermove', onGlobalPointerMove);
+      window.removeEventListener('pointerup', onGlobalPointerUp);
+      window.removeEventListener('pointercancel', onGlobalPointerCancel);
+      window.removeEventListener('touchmove', onGlobalTouchMove);
+      document.body.style.userSelect = '';
+      dragListenersCleanupRef.current = null;
+    };
+
+    dragListenersCleanupRef.current = cleanup;
+
+    window.addEventListener('pointermove', onGlobalPointerMove, { passive: false });
+    window.addEventListener('pointerup', onGlobalPointerUp, { passive: false });
+    window.addEventListener('pointercancel', onGlobalPointerCancel, { passive: false });
+    window.addEventListener('touchmove', onGlobalTouchMove, { passive: false });
   };
 
   const currentList = customLists.find((l) => l.id === activeListType);
@@ -1434,12 +1464,13 @@ export const GroceryPage: React.FC = () => {
             const isItemHovered = Boolean(
               draggingItem &&
               hoveredAisleId === aisle.id &&
-              draggingItem.aisle_id !== aisle.id
+              sourceAisleIdRef.current !== aisle.id
             );
 
             return (
               <div
                 key={aisle.id}
+                data-category-drop-id={aisle.id}
                 ref={(el) => {
                   if (el) {
                     cardElementsRef.current.set(aisle.id, el);
@@ -1553,10 +1584,7 @@ export const GroceryPage: React.FC = () => {
                           <div
                             key={item.id}
                             onClick={() => handleToggleItem(item.id)}
-                            onPointerDown={(e) => handleItemPointerDown(e, item)}
-                            onPointerMove={handleItemPointerMove}
-                            onPointerUp={handleItemPointerUp}
-                            onPointerCancel={handleItemPointerCancel}
+                            onPointerDown={(e) => handleItemPointerDown(e, item, aisle.id)}
                             className={`flex items-center justify-between px-3.5 py-2 transition-all cursor-pointer group hover:bg-white/5 gap-2 min-h-[42px] select-none touch-manipulation ${
                               isCrossing ? 'animate-row-crossing' : ''
                             } ${
@@ -1656,19 +1684,20 @@ export const GroceryPage: React.FC = () => {
         {/* Uncategorized Items (if list has categories) */}
         {hasCategories && uncategorizedItems.length > 0 && (
           <div
+            data-category-drop-id="uncategorized"
             ref={(el) => {
               if (el) cardElementsRef.current.set('uncategorized', el);
               else cardElementsRef.current.delete('uncategorized');
             }}
             className={`glass-panel rounded-3xl border overflow-hidden shadow-sm transition-all duration-200 ${
-              draggingItem && hoveredAisleId === 'uncategorized' && (draggingItem.aisle_id || (draggingItem as any).category)
+              draggingItem && hoveredAisleId === 'uncategorized' && sourceAisleIdRef.current !== 'uncategorized'
                 ? 'border-emerald-400 ring-2 ring-emerald-500/60 bg-emerald-500/10 scale-[1.01] shadow-lg shadow-emerald-950/50'
                 : 'border-white/10'
             }`}
           >
             <div
               className={`flex items-center justify-between px-3.5 py-2.5 border-b border-white/5 transition-colors ${
-                draggingItem && hoveredAisleId === 'uncategorized' && (draggingItem.aisle_id || (draggingItem as any).category)
+                draggingItem && hoveredAisleId === 'uncategorized' && sourceAisleIdRef.current !== 'uncategorized'
                   ? 'bg-emerald-500/20 border-emerald-500/40'
                   : 'bg-slate-900/40'
               }`}
@@ -1682,7 +1711,7 @@ export const GroceryPage: React.FC = () => {
                   {uncategorizedItems.length}
                 </span>
               </div>
-              {draggingItem && hoveredAisleId === 'uncategorized' && (draggingItem.aisle_id || (draggingItem as any).category) && (
+              {draggingItem && hoveredAisleId === 'uncategorized' && sourceAisleIdRef.current !== 'uncategorized' && (
                 <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-300 bg-emerald-500/30 border border-emerald-400/50 px-2 py-0.5 rounded-full animate-pulse shrink-0">
                   Drop here
                 </span>
@@ -1697,10 +1726,7 @@ export const GroceryPage: React.FC = () => {
                   <div
                     key={item.id}
                     onClick={() => handleToggleItem(item.id)}
-                    onPointerDown={(e) => handleItemPointerDown(e, item)}
-                    onPointerMove={handleItemPointerMove}
-                    onPointerUp={handleItemPointerUp}
-                    onPointerCancel={handleItemPointerCancel}
+                    onPointerDown={(e) => handleItemPointerDown(e, item, 'uncategorized')}
                     className={`flex items-center justify-between px-3.5 py-2 hover:bg-white/5 transition-all cursor-pointer group gap-2 min-h-[42px] select-none touch-manipulation ${
                       isCrossing ? 'animate-row-crossing' : ''
                     } ${
@@ -1794,8 +1820,9 @@ export const GroceryPage: React.FC = () => {
         )}
 
         {/* Uncategorized Drop Target when empty */}
-        {hasCategories && uncategorizedItems.length === 0 && draggingItem && (draggingItem.aisle_id || (draggingItem as any).category) && (
+        {hasCategories && uncategorizedItems.length === 0 && draggingItem && sourceAisleIdRef.current !== 'uncategorized' && (
           <div
+            data-category-drop-id="uncategorized"
             ref={(el) => {
               if (el) cardElementsRef.current.set('uncategorized', el);
               else cardElementsRef.current.delete('uncategorized');
