@@ -52,7 +52,6 @@ import { BarcodeScannerModal } from '../components/inventory/BarcodeScannerModal
 import { VisionScanModal } from '../components/inventory/VisionScanModal';
 import { EditInventoryModal } from '../components/inventory/EditInventoryModal';
 import { getFreshnessBadge, getLocationMeta } from '../lib/shelfLife';
-import { useFabAutoClose } from '../hooks/useFabAutoClose';
 import { Toast } from '../components/ui/Toast';
 
 interface MealsDataCache {
@@ -129,9 +128,6 @@ export const MealsPage: React.FC = () => {
     setActiveTab(tab);
     setVisitedTabs((prev) => (prev[tab] ? prev : { ...prev, [tab]: true }));
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
-    if (tab !== 'recipes') {
-      setIsRecipeFabOpen(false);
-    }
     setIsPantryAddMenuOpen(false);
 
     // Persist subtab in session cache and localStorage
@@ -210,14 +206,6 @@ export const MealsPage: React.FC = () => {
   const [isRecipePickerOpen, setIsRecipePickerOpen] = useState(false);
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
   const [recipeSearch, setRecipeSearch] = useState('');
-
-  // Multi-action Recipe FAB
-  const [isRecipeFabOpen, setIsRecipeFabOpen] = useState(false);
-  const recipeFabRef = useFabAutoClose<HTMLDivElement>({
-    isOpen: isRecipeFabOpen,
-    onClose: () => setIsRecipeFabOpen(false),
-    ignore: isScraperOpen || isEditRecipeModalOpen || Boolean(selectedRecipe),
-  });
 
   // Pantry state & modals
   const [pantryFilter, setPantryFilter] = useState<'all' | 'fridge' | 'freezer' | 'pantry' | 'expiring' | 'staples'>('all');
@@ -1550,7 +1538,7 @@ export const MealsPage: React.FC = () => {
     selectedRecipe.instructions.every((_, idx) => completedSteps[idx]);
 
   return (
-    <div className="max-w-4xl mx-auto px-3 sm:px-6 pt-3 pb-36 md:pb-28 space-y-4">
+    <div className="max-w-4xl mx-auto px-3 sm:px-6 pt-3 pb-28 md:pb-20 space-y-4">
       {/* Toast Notification */}
       <Toast
         message={toastMessage}
@@ -2892,130 +2880,6 @@ export const MealsPage: React.FC = () => {
               )}
             </div>
           )}
-        </div>
-      )}
-
-      {/* ================= FLOATING ACTION BUTTONS (FAB) ================= */}
-      {!selectedRecipe && (
-        <div className="fixed bottom-[calc(76px+1rem+env(safe-area-inset-bottom,0px))] md:bottom-8 left-0 right-0 z-40 px-4 pointer-events-none">
-          <div className="max-w-4xl mx-auto pointer-events-none flex justify-end">
-            {activeTab === 'recipes' && (
-              <div
-                ref={recipeFabRef}
-                className={`fab-dock-transition pointer-events-auto h-[50px] border shadow-2xl flex items-center overflow-hidden ${
-                  isRecipeFabOpen
-                    ? 'w-full rounded-3xl border-white/25 bg-slate-900/95 backdrop-blur-xl shadow-emerald-500/10 px-2.5'
-                    : 'w-[50px] rounded-full border-emerald-400/40 bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 cursor-pointer shadow-xl shadow-emerald-500/30 hover:scale-105 active:scale-95 justify-center'
-                }`}
-              >
-                {!isRecipeFabOpen ? (
-                  <button
-                    type="button"
-                    onClick={() => setIsRecipeFabOpen(true)}
-                    className="w-full h-full flex items-center justify-center text-slate-950 cursor-pointer"
-                    title="Search & Actions"
-                  >
-                    <Search className="w-5 h-5 stroke-[2.2]" />
-                  </button>
-                ) : (
-                  <div className="w-full flex items-center gap-2 animate-in fade-in duration-200">
-                    {/* Far left: Close button */}
-                    <button
-                      type="button"
-                      onClick={() => setIsRecipeFabOpen(false)}
-                      className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center shrink-0 transition-colors cursor-pointer"
-                      title="Close"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-
-                    {/* Secondary action 1 on the left: Create Recipe */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsRecipeFabOpen(false);
-                        setEditingRecipe(null);
-                        setIsEditRecipeModalOpen(true);
-                      }}
-                      className="h-8 px-2 sm:px-2.5 rounded-xl bg-white/5 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-400 border border-white/10 hover:border-emerald-500/30 text-xs font-bold flex items-center gap-1.5 transition-all shrink-0 cursor-pointer"
-                      title="Create recipe from scratch"
-                    >
-                      <Pencil className="w-3.5 h-3.5 text-emerald-400 stroke-[2.2]" />
-                      <span className="hidden sm:inline">Create</span>
-                    </button>
-
-                    {/* Secondary action 2 on the left: Add Recipe */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsRecipeFabOpen(false);
-                        setScraperInitialMode('url');
-                        setIsScraperOpen(true);
-                      }}
-                      className="h-8 px-2 sm:px-2.5 rounded-xl bg-white/5 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-400 border border-white/10 hover:border-emerald-500/30 text-xs font-bold flex items-center gap-1.5 transition-all shrink-0 cursor-pointer"
-                      title="Add recipe (import from web link or scan)"
-                    >
-                      <Plus className="w-3.5 h-3.5 text-emerald-400 stroke-[2.5]" />
-                      <span className="hidden sm:inline">Add</span>
-                    </button>
-
-                    {/* Form wrapping middle search input and right search button */}
-                    <form
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                        (document.activeElement as HTMLElement)?.blur();
-                      }}
-                      className="flex-1 min-w-0 flex items-center gap-2"
-                    >
-                      {/* Middle: Search text input */}
-                      <div className="flex-1 min-w-0 flex items-center relative">
-                        <input
-                          type="text"
-                          placeholder="Search recipes..."
-                          value={searchQuery}
-                          onChange={(e) => setSearchQuery(e.target.value)}
-                          className="w-full bg-transparent border-none text-xs text-white placeholder-slate-500 focus:outline-none py-1.5 px-1"
-                        />
-                        {searchQuery && (
-                          <button
-                            type="button"
-                            onClick={() => setSearchQuery('')}
-                            className="p-1 text-slate-400 hover:text-white shrink-0 cursor-pointer"
-                            title="Clear search"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-
-                      {/* Far right: Main action button (Search) */}
-                      <button
-                        type="submit"
-                        className="h-8 px-3.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20 shrink-0 active:scale-95 cursor-pointer"
-                        title="Search recipes"
-                      >
-                        <Search className="w-3.5 h-3.5 stroke-[2.5]" />
-                        <span className="hidden sm:inline">Search</span>
-                      </button>
-                    </form>
-                  </div>
-                )}
-              </div>
-            )}
-
-
-
-            {activeTab === 'history' && (
-              <button
-                type="button"
-                onClick={() => setIsLogModalOpen(true)}
-                className="pointer-events-auto w-[50px] h-[50px] rounded-full border border-emerald-400/40 bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 cursor-pointer shadow-xl shadow-emerald-500/30 hover:scale-105 active:scale-95 flex items-center justify-center transition-transform"
-                title="Log a Cooked Meal"
-              >
-                <Plus className="w-6 h-6 stroke-[2.5]" />
-              </button>
-            )}
-          </div>
         </div>
       )}
 
