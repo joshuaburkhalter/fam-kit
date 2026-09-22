@@ -19,6 +19,7 @@
     "date-fns": "^4.1.0",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "heic2any": "^0.0.4",
     "ios-haptics": "^3.1.1",
     "lucide-react": "^0.475.0",
     "react": "^19.0.0",

@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { usePWA } from '../context/PWAContext';
 import { isUserAdmin } from '../types';
+import { compressImageFile } from '../lib/imageCompression';
 
 interface EditProfileModalProps {
   isOpen: boolean;
@@ -30,50 +31,6 @@ const AVATAR_COLORS = [
   '#06b6d4', // Cyan
   '#ef4444', // Red
 ];
-
-// Helper to compress and convert image file to optimized base64
-function compressImage(file: File, maxSize: number = 256): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        let width = img.width;
-        let height = img.height;
-
-        if (width > height) {
-          if (width > maxSize) {
-            height = Math.round((height * maxSize) / width);
-            width = maxSize;
-          }
-        } else {
-          if (height > maxSize) {
-            width = Math.round((width * maxSize) / height);
-            height = maxSize;
-          }
-        }
-
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          resolve(e.target?.result as string);
-          return;
-        }
-
-        ctx.drawImage(img, 0, 0, width, height);
-        // High quality JPEG compression for snappy storage and rendering
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-        resolve(dataUrl);
-      };
-      img.onerror = () => reject(new Error('Failed to read image file'));
-      img.src = e.target?.result as string;
-    };
-    reader.onerror = () => reject(new Error('Failed to read file'));
-    reader.readAsDataURL(file);
-  });
-}
 
 const isValidPhoto = (imgStr?: string | null): boolean => {
   if (!imgStr || typeof imgStr !== 'string') return false;
@@ -120,19 +77,23 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.type.startsWith('image/')) {
-      setErrorMessage('Please select a valid image file (JPG, PNG, WebP).');
+    const isLikelyImage =
+      (file.type && file.type.startsWith('image/')) ||
+      /\.(jpe?g|png|webp|gif|heic|heif|bmp|tiff)$/i.test(file.name || '');
+
+    if (!isLikelyImage) {
+      setErrorMessage('Please select a valid image file (JPG, PNG, WebP, HEIC).');
       return;
     }
 
     try {
       setIsProcessingPhoto(true);
       setErrorMessage(null);
-      const compressedDataUrl = await compressImage(file, 300);
-      setAvatarImage(compressedDataUrl);
+      const res = await compressImageFile(file, { maxWidth: 320, maxHeight: 320, quality: 0.85 });
+      setAvatarImage(res.dataUrl);
     } catch (err: any) {
       console.error('Image compression failed:', err);
-      setErrorMessage('Could not process this image. Please try another.');
+      setErrorMessage(err?.message || 'Could not process this image. Please try another.');
     } finally {
       setIsProcessingPhoto(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -278,17 +239,27 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isProcessingPhoto}
-                    className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer border border-slate-700"
+                    className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer border border-slate-700 disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    <Upload className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>{isValidPhoto(avatarImage) ? 'Change Photo' : 'Upload Photo'}</span>
+                    {isProcessingPhoto ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" />
+                        <span>Processing Photo...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>{isValidPhoto(avatarImage) ? 'Change Photo' : 'Upload Photo'}</span>
+                      </>
+                    )}
                   </button>
 
                   {isValidPhoto(avatarImage) && (
                     <button
                       type="button"
                       onClick={handleRemovePhoto}
-                      className="px-2.5 py-1.5 rounded-xl text-rose-400 hover:bg-rose-500/10 text-xs font-medium flex items-center gap-1 transition-colors cursor-pointer"
+                      disabled={isProcessingPhoto}
+                      className="px-2.5 py-1.5 rounded-xl text-rose-400 hover:bg-rose-500/10 text-xs font-medium flex items-center gap-1 transition-colors cursor-pointer disabled:opacity-50"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                       <span>Remove</span>
@@ -300,7 +271,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,.heic,.heif,image/*"
                   onChange={handleFileChange}
                   className="hidden"
                 />

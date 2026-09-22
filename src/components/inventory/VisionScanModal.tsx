@@ -3,6 +3,7 @@ import { Drawer } from '../ui/Drawer';
 import { Camera, Upload, Check, Loader2, Sparkles, AlertCircle, Zap, Plus, ArrowLeft } from 'lucide-react';
 import { api } from '../../lib/api';
 import { inferStorageLocation } from '../../lib/shelfLife';
+import { compressImageFile } from '../../lib/imageCompression';
 import type { PantryLocation } from '../../types';
 
 interface RecognizedItem {
@@ -121,21 +122,22 @@ export const VisionScanModal: React.FC<VisionScanModalProps> = ({
     processImage(base64, 'image/jpeg');
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setError(null);
-    const mime = file.type || 'image/jpeg';
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
+    try {
       stopLiveCamera();
-      setImagePreview(result);
-      processImage(result, mime);
-    };
-    reader.readAsDataURL(file);
-    e.target.value = '';
+      const res = await compressImageFile(file, { maxWidth: 1280, maxHeight: 1280, quality: 0.85 });
+      setImagePreview(res.dataUrl);
+      processImage(res.dataUrl, res.mimeType);
+    } catch (err: any) {
+      console.error('Vision scan image processing failed:', err);
+      setError(err?.message || 'Could not process this image. Please try another.');
+    } finally {
+      e.target.value = '';
+    }
   };
 
   const processImage = async (base64: string, type: string) => {
@@ -236,7 +238,7 @@ export const VisionScanModal: React.FC<VisionScanModalProps> = ({
           type="file"
           ref={cameraInputRef}
           onChange={handleFileChange}
-          accept="image/*"
+          accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,.heic,.heif,image/*"
           capture="environment"
           className="hidden"
         />
@@ -244,7 +246,7 @@ export const VisionScanModal: React.FC<VisionScanModalProps> = ({
           type="file"
           ref={galleryInputRef}
           onChange={handleFileChange}
-          accept="image/*"
+          accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,.heic,.heif,image/*"
           className="hidden"
         />
 

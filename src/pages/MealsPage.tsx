@@ -1627,7 +1627,7 @@ export const MealsPage: React.FC = () => {
               <input
                 ref={photoFileInputRef}
                 type="file"
-                accept="image/*"
+                accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,.heic,.heif,image/*"
                 capture="environment"
                 className="hidden"
                 onChange={handleTakeOrReplacePhoto}
