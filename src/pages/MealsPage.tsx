@@ -1515,6 +1515,31 @@ export const MealsPage: React.FC = () => {
     return { groupedLogs: logs, sortedDates: dates };
   }, [mealLogs]);
 
+  // Memoized filtered inventory items for Pantry
+  const filteredInventoryItems = useMemo(() => {
+    const query = pantrySearchQuery.toLowerCase().trim();
+    return inventoryItems.filter((item) => {
+      if (
+        query &&
+        !item.name.toLowerCase().includes(query) &&
+        !(item.category && item.category.toLowerCase().includes(query))
+      ) {
+        return false;
+      }
+      if (pantryFilter === 'all') return true;
+      if (pantryFilter === 'fridge' || pantryFilter === 'freezer' || pantryFilter === 'pantry') {
+        return item.location === pantryFilter;
+      }
+      if (pantryFilter === 'expiring') {
+        return item.freshness === 'expiring_soon' || item.freshness === 'expired';
+      }
+      if (pantryFilter === 'staples') {
+        return item.isStock;
+      }
+      return true;
+    });
+  }, [inventoryItems, pantrySearchQuery, pantryFilter]);
+
   const hasProgress =
     Object.values(checkedIngredients).some(Boolean) ||
     Object.values(completedSteps).some(Boolean);
@@ -1935,14 +1960,16 @@ export const MealsPage: React.FC = () => {
       ) : (
         /* ================= MAIN MEALS VIEW (TABS) ================= */
         <div className="space-y-4">
-          {/* Header Bar: Title */}
-          <div className="flex items-center justify-between">
-            <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight flex items-center gap-2.5">
-              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 shadow-md shadow-emerald-500/20">
-                <ChefHat className="w-5 h-5 stroke-[2.5]" />
+          {/* Consistent Mobile-First Header */}
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-md shadow-emerald-500/20 text-slate-950 shrink-0">
+                <ChefHat className="w-5 h-5 stroke-[2.2]" />
               </div>
-              Meals
-            </h1>
+              <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white flex items-center gap-2">
+                Meals
+              </h1>
+            </div>
 
             {/* Top Right Action Button for active subtab */}
             {activeTab === 'recipes' && (
@@ -1952,10 +1979,10 @@ export const MealsPage: React.FC = () => {
                   setScraperInitialMode('url');
                   setIsScraperOpen(true);
                 }}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer"
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer shrink-0"
                 title="Add recipe"
               >
-                <Plus className="w-4 h-4 stroke-[2.5]" />
+                <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
                 <span>Add Recipe</span>
               </button>
             )}
@@ -1965,10 +1992,10 @@ export const MealsPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsPantryAddMenuOpen(!isPantryAddMenuOpen)}
-                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer"
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer shrink-0"
                   title="Add to Pantry"
                 >
-                  <Plus className="w-4 h-4 stroke-[2.5]" />
+                  <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
                   <span>Add Item</span>
                   <ChevronDown className={`w-3.5 h-3.5 stroke-[2.5] transition-transform duration-200 ${isPantryAddMenuOpen ? 'rotate-180' : ''}`} />
                 </button>
@@ -2011,10 +2038,10 @@ export const MealsPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setIsRecipePickerOpen(true)}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer"
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer shrink-0"
                 title="Add meal to planner"
               >
-                <Plus className="w-4 h-4 stroke-[2.5]" />
+                <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
                 <span>Add Meal</span>
               </button>
             )}
@@ -2023,10 +2050,10 @@ export const MealsPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setIsLogModalOpen(true)}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer"
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer shrink-0"
                 title="Log a cooked meal"
               >
-                <Plus className="w-4 h-4 stroke-[2.5]" />
+                <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
                 <span>Log Meal</span>
               </button>
             )}
@@ -2505,26 +2532,35 @@ export const MealsPage: React.FC = () => {
           {/* ================= 2b. PANTRY TAB ================= */}
           {visitedTabs['pantry'] && (
             <div className={activeTab === 'pantry' ? 'space-y-3' : 'hidden'}>
-              {/* Search Bar for Pantry */}
-              <div className="relative">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="Search pantry items..."
-                  value={pantrySearchQuery}
-                  onChange={(e) => setPantrySearchQuery(e.target.value)}
-                  className="w-full bg-slate-900/80 border border-white/10 rounded-2xl pl-10 pr-9 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/50 transition-colors"
-                />
-                {pantrySearchQuery && (
-                  <button
-                    type="button"
-                    onClick={() => setPantrySearchQuery('')}
-                    className="p-1 text-slate-400 hover:text-white absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer"
-                    title="Clear search"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
+              {/* Inline Search Bar for Pantry (same height and style as Lists, Recipes, Planner: h-8, rounded-xl) */}
+              <div className="relative z-20">
+                <div className="h-8 flex items-center gap-1.5 bg-slate-900/90 border border-white/10 hover:border-white/20 focus-within:border-emerald-500/50 rounded-xl px-1.5 transition-all shadow-md">
+                  <div className="w-5 h-5 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0 text-emerald-400">
+                    <Search className="w-3.5 h-3.5 stroke-[2.2]" />
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Search pantry items..."
+                    value={pantrySearchQuery}
+                    onChange={(e) => setPantrySearchQuery(e.target.value)}
+                    className="flex-1 min-w-0 bg-transparent border-none text-xs text-white placeholder-slate-500 focus:outline-none py-1 px-1 font-medium"
+                  />
+                  {pantrySearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setPantrySearchQuery('')}
+                      className="p-0.5 text-slate-400 hover:text-white cursor-pointer"
+                      title="Clear search"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  {pantrySearchQuery && (
+                    <div className="text-[10px] text-emerald-400 font-semibold px-1.5 py-0.5 bg-emerald-500/10 rounded-md shrink-0 border border-emerald-500/20">
+                      {filteredInventoryItems.length} {filteredInventoryItems.length === 1 ? 'item' : 'items'}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Location & Status Filter Chips */}
@@ -2579,68 +2615,41 @@ export const MealsPage: React.FC = () => {
               {/* Inventory Items Grid */}
               {isLoading ? (
                 <div className="py-12 text-center text-xs text-slate-400">Loading pantry inventory...</div>
-              ) : (() => {
-                const query = pantrySearchQuery.toLowerCase().trim();
-                const filteredItems = inventoryItems.filter((item) => {
-                  if (
-                    query &&
-                    !item.name.toLowerCase().includes(query) &&
-                    !(item.category && item.category.toLowerCase().includes(query))
-                  ) {
-                    return false;
-                  }
-                  if (pantryFilter === 'all') return true;
-                  if (pantryFilter === 'fridge' || pantryFilter === 'freezer' || pantryFilter === 'pantry') {
-                    return item.location === pantryFilter;
-                  }
-                  if (pantryFilter === 'expiring') {
-                    return item.freshness === 'expiring_soon' || item.freshness === 'expired';
-                  }
-                  if (pantryFilter === 'staples') {
-                    return item.isStock;
-                  }
-                  return true;
-                });
-
-                if (filteredItems.length === 0) {
-                  return (
-                    <div className="py-16 text-center glass-panel rounded-3xl p-8 border border-white/5 space-y-3">
-                      <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center mx-auto">
-                        <Package className="w-6 h-6" />
-                      </div>
-                      <h3 className="text-base font-bold text-white">
-                        {inventoryItems.length === 0 ? 'Your pantry is empty' : 'No matching items'}
-                      </h3>
-                      <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                        {inventoryItems.length === 0
-                          ? 'Scan barcodes, snap photos of your fridge/receipt, or add items to track freshness and prevent duplicate buying!'
-                          : 'Try changing your search keywords or active filter.'}
-                      </p>
-                      {inventoryItems.length === 0 && (
-                        <div className="flex items-center justify-center gap-2 pt-2">
-                          <button
-                            onClick={() => setIsBarcodeModalOpen(true)}
-                            className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-4 py-2 rounded-2xl text-xs font-bold inline-flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20 cursor-pointer"
-                          >
-                            <Barcode className="w-4 h-4 stroke-[2.5]" />
-                            <span>Scan Barcode</span>
-                          </button>
-                          <button
-                            onClick={() => setIsVisionModalOpen(true)}
-                            className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-2xl text-xs font-bold inline-flex items-center gap-1.5 transition-all shadow-md shadow-purple-600/20 cursor-pointer"
-                          >
-                            <Camera className="w-4 h-4" />
-                            <span>AI Photo Scan</span>
-                          </button>
-                        </div>
-                      )}
+              ) : filteredInventoryItems.length === 0 ? (
+                <div className="py-16 text-center glass-panel rounded-3xl p-8 border border-white/5 space-y-3">
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center mx-auto">
+                    <Package className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-base font-bold text-white">
+                    {inventoryItems.length === 0 ? 'Your pantry is empty' : 'No matching items'}
+                  </h3>
+                  <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                    {inventoryItems.length === 0
+                      ? 'Scan barcodes, snap photos of your fridge/receipt, or add items to track freshness and prevent duplicate buying!'
+                      : 'Try changing your search keywords or active filter.'}
+                  </p>
+                  {inventoryItems.length === 0 && (
+                    <div className="flex items-center justify-center gap-2 pt-2">
+                      <button
+                        onClick={() => setIsBarcodeModalOpen(true)}
+                        className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-4 py-2 rounded-2xl text-xs font-bold inline-flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20 cursor-pointer"
+                      >
+                        <Barcode className="w-4 h-4 stroke-[2.5]" />
+                        <span>Scan Barcode</span>
+                      </button>
+                      <button
+                        onClick={() => setIsVisionModalOpen(true)}
+                        className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-2xl text-xs font-bold inline-flex items-center gap-1.5 transition-all shadow-md shadow-purple-600/20 cursor-pointer"
+                      >
+                        <Camera className="w-4 h-4" />
+                        <span>AI Photo Scan</span>
+                      </button>
                     </div>
-                  );
-                }
-
-                return (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                    {filteredItems.map((item) => {
+                  )}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                  {filteredInventoryItems.map((item) => {
                       const locMeta = getLocationMeta(item.location);
                       const badge = getFreshnessBadge(item.freshness, item.daysUntilExpiry);
                       const isCrossing = Boolean(crossingOffPantryIds[item.id]);
@@ -2748,8 +2757,7 @@ export const MealsPage: React.FC = () => {
                       );
                     })}
                   </div>
-                );
-              })()}
+                )}
             </div>
           )}
 

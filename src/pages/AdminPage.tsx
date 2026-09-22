@@ -513,7 +513,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onBack }) => {
             <ShieldCheck className="w-6 h-6" />
           </div>
           <div className="flex items-center gap-2">
-            <h1 className="text-lg sm:text-xl font-black text-white tracking-tight">Admin Command Center</h1>
+            <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">Admin Command Center</h1>
             <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
               Superadmin
             </span>

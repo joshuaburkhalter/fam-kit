@@ -563,13 +563,13 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
 
   return (
     <div className="max-w-3xl mx-auto px-3 sm:px-6 pt-3 pb-36 md:pb-28 space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between pb-1">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 font-black shadow-lg shadow-emerald-500/20 shrink-0">
-            <SettingsIcon className="w-5 h-5 stroke-[2.5]" />
+      {/* Consistent Mobile-First Header */}
+      <div className="flex items-center justify-between mb-1">
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-md shadow-emerald-500/20 text-slate-950 shrink-0">
+            <SettingsIcon className="w-5 h-5 stroke-[2.2]" />
           </div>
-          <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">Settings</h1>
+          <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2">Settings</h1>
         </div>
 
         <div className="text-right shrink-0">
