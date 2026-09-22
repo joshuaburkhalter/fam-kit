@@ -229,19 +229,26 @@ export const MealsPage: React.FC = () => {
   const [isPantryAddMenuOpen, setIsPantryAddMenuOpen] = useState(false);
   const pantryAddDropdownRef = useRef<HTMLDivElement>(null);
 
+  const recipeSearchContainerRef = useRef<HTMLDivElement>(null);
+  const recipeSearchInputRef = useRef<HTMLInputElement>(null);
+  const [isTagDropdownOpen, setIsTagDropdownOpen] = useState(false);
+  const [selectedTagIndex, setSelectedTagIndex] = useState(-1);
+
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (pantryAddDropdownRef.current && !pantryAddDropdownRef.current.contains(e.target as Node)) {
         setIsPantryAddMenuOpen(false);
+      }
+      if (recipeSearchContainerRef.current && !recipeSearchContainerRef.current.contains(e.target as Node)) {
+        setIsTagDropdownOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Recipe search & tags
+  // Recipe search query
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedTag, setSelectedTag] = useState<string | null>(null);
 
   // Quick Date Picker Modal
   const [quickDateMeal, setQuickDateMeal] = useState<WeeklyMeal | null>(null);
@@ -1385,47 +1392,116 @@ export const MealsPage: React.FC = () => {
     });
   };
 
-  // Recipe filtering for Recipe Box (memoized)
-  const filteredRecipes = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    const tagQuery = selectedTag ? selectedTag.toLowerCase().trim().replace(/^#+/, '') : null;
+  const hasAiRecipes = useMemo(() => recipes.some((r) => isAiRecipe(r)), [recipes]);
 
-    return recipes.filter((r) => {
-      const matchesSearch =
-        !q ||
-        r.title.toLowerCase().includes(q) ||
-        r.tags?.some((t) => t.toLowerCase().includes(q));
+  // Aggregated unique tags with recipe counts (sorted by count descending, then alphabetically)
+  const aggregatedTags = useMemo(() => {
+    const counts: Record<string, { display: string; count: number; isAi?: boolean }> = {};
 
-      const matchesTag =
-        !tagQuery ||
-        (tagQuery === 'ai'
-          ? isAiRecipe(r)
-          : r.tags?.some((t) => t.toLowerCase().trim().replace(/^#+/, '') === tagQuery));
+    if (hasAiRecipes) {
+      const aiCount = recipes.filter((r) => isAiRecipe(r)).length;
+      counts['ai'] = { display: 'AI Recipes', count: aiCount, isAi: true };
+    }
 
-      return matchesSearch && matchesTag;
-    });
-  }, [recipes, searchQuery, selectedTag]);
-
-  // Case-insensitive deduplicated tags list (no matching duplicates)
-  const allUniqueTags = useMemo(() => {
-    const seen = new Set<string>();
-    const result: string[] = [];
     for (const r of recipes) {
       for (const t of r.tags || []) {
         const clean = t.trim().replace(/^#+/, '').trim();
         if (!clean) continue;
         const lower = clean.toLowerCase();
         if (lower === 'ai') continue;
-        if (!seen.has(lower)) {
-          seen.add(lower);
-          result.push(clean);
+        if (!counts[lower]) {
+          counts[lower] = { display: clean, count: 0 };
         }
+        counts[lower].count += 1;
       }
     }
-    return result;
-  }, [recipes]);
 
-  const hasAiRecipes = useMemo(() => recipes.some((r) => isAiRecipe(r)), [recipes]);
+    return Object.values(counts).sort((a, b) => b.count - a.count || a.display.localeCompare(b.display));
+  }, [recipes, hasAiRecipes]);
+
+  const allUniqueTags = useMemo(() => aggregatedTags.map((t) => t.display), [aggregatedTags]);
+
+  const matchingTags = useMemo(() => {
+    if (!isTagDropdownOpen) return [];
+    const q = searchQuery.trim().toLowerCase().replace(/^#+/, '');
+    if (!q) {
+      return aggregatedTags.slice(0, 8);
+    }
+    return aggregatedTags
+      .filter((tag) => tag.display.toLowerCase().includes(q) || (tag.isAi && 'ai recipes'.includes(q)))
+      .slice(0, 8);
+  }, [searchQuery, aggregatedTags, isTagDropdownOpen]);
+
+  // Recipe filtering for Recipe Box (memoized)
+  const filteredRecipes = useMemo(() => {
+    const raw = searchQuery.trim().toLowerCase();
+    if (!raw) return recipes;
+
+    const isTagOnly = raw.startsWith('#');
+    const q = raw.replace(/^#+/, '').trim();
+    if (!q) return recipes;
+
+    return recipes.filter((r) => {
+      const matchesAi = (q === 'ai' || q === 'ai recipes') && isAiRecipe(r);
+      const matchesTag =
+        matchesAi ||
+        r.tags?.some((t) => {
+          const clean = t.toLowerCase().trim().replace(/^#+/, '');
+          return isTagOnly ? clean === q || clean.startsWith(q) : clean.includes(q);
+        });
+
+      if (isTagOnly) {
+        return matchesTag;
+      }
+
+      const matchesTitle = r.title.toLowerCase().includes(q);
+      const matchesDescription = r.description?.toLowerCase().includes(q);
+      const matchesIngredient = r.ingredients?.some((i) => i.item?.toLowerCase().includes(q));
+
+      return matchesTitle || matchesTag || matchesDescription || matchesIngredient;
+    });
+  }, [recipes, searchQuery]);
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!isTagDropdownOpen || matchingTags.length === 0) {
+      if (e.key === 'ArrowDown' && matchingTags.length > 0) {
+        e.preventDefault();
+        setIsTagDropdownOpen(true);
+        setSelectedTagIndex(0);
+      }
+      return;
+    }
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedTagIndex((prev) => (prev < matchingTags.length - 1 ? prev + 1 : 0));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedTagIndex((prev) => (prev > 0 ? prev - 1 : matchingTags.length - 1));
+    } else if (e.key === 'Enter') {
+      if (selectedTagIndex >= 0 && selectedTagIndex < matchingTags.length) {
+        e.preventDefault();
+        const selected = matchingTags[selectedTagIndex];
+        handleSelectTagSuggestion(selected);
+      } else {
+        setIsTagDropdownOpen(false);
+        (e.target as HTMLElement).blur();
+      }
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setIsTagDropdownOpen(false);
+    }
+  };
+
+  const handleSelectTagSuggestion = (tag: { display: string; isAi?: boolean }) => {
+    if (tag.isAi) {
+      setSearchQuery('#AI');
+    } else {
+      setSearchQuery(`#${tag.display}`);
+    }
+    setIsTagDropdownOpen(false);
+    setSelectedTagIndex(-1);
+  };
 
   // Group Meal Logs by date for History (memoized)
   const { groupedLogs, sortedDates } = useMemo(() => {
@@ -2010,70 +2086,93 @@ export const MealsPage: React.FC = () => {
           {/* ================= 1. RECIPES TAB ================= */}
           {visitedTabs['recipes'] && (
             <div className={activeTab === 'recipes' ? 'space-y-4' : 'hidden'}>
-              {/* Tag Filters */}
-              <div
-                className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar"
-                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-              >
-                {searchQuery && (
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-semibold whitespace-nowrap">
-                    <span>"{searchQuery}"</span>
+              {/* Inline Search Bar with Tag Autocomplete (replaces pills, styled consistently with quick add bars: h-8, rounded-xl) */}
+              <div className="relative z-20" ref={recipeSearchContainerRef}>
+                <div className="h-8 flex items-center gap-1.5 bg-slate-900/90 border border-white/10 hover:border-white/20 focus-within:border-emerald-500/50 rounded-xl px-1.5 transition-all shadow-md">
+                  <div className="w-5 h-5 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0 text-emerald-400">
+                    <Search className="w-3.5 h-3.5 stroke-[2.2]" />
+                  </div>
+                  <input
+                    ref={recipeSearchInputRef}
+                    type="text"
+                    placeholder="Search recipes or filter by tag (e.g. #dinner, chicken, quick)..."
+                    value={searchQuery}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value);
+                      setIsTagDropdownOpen(true);
+                      setSelectedTagIndex(-1);
+                    }}
+                    onFocus={() => {
+                      setIsTagDropdownOpen(true);
+                    }}
+                    onKeyDown={handleSearchKeyDown}
+                    className="flex-1 min-w-0 bg-transparent border-none text-xs text-white placeholder-slate-500 focus:outline-none py-1 px-1 font-medium"
+                  />
+                  {searchQuery && (
                     <button
-                      onClick={() => setSearchQuery('')}
-                      className="p-0.5 hover:text-white cursor-pointer"
+                      type="button"
+                      onClick={() => {
+                        setSearchQuery('');
+                        setIsTagDropdownOpen(false);
+                      }}
+                      className="p-0.5 text-slate-400 hover:text-white cursor-pointer"
                       title="Clear search"
                     >
-                      <X className="w-3 h-3" />
+                      <X className="w-3.5 h-3.5" />
                     </button>
+                  )}
+                  {searchQuery && (
+                    <div className="text-[10px] text-emerald-400 font-semibold px-1.5 py-0.5 bg-emerald-500/10 rounded-md shrink-0 border border-emerald-500/20">
+                      {filteredRecipes.length} {filteredRecipes.length === 1 ? 'recipe' : 'recipes'}
+                    </div>
+                  )}
+                </div>
+
+                {/* Autocomplete Suggestions Dropdown Popover */}
+                {isTagDropdownOpen && matchingTags.length > 0 && (
+                  <div className="absolute left-0 right-0 top-full mt-1.5 bg-slate-900/95 backdrop-blur-xl border border-white/15 rounded-2xl p-1.5 shadow-2xl shadow-black/80 max-h-56 overflow-y-auto z-40 animate-in fade-in zoom-in-95 duration-150">
+                    <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between border-b border-white/5 pb-1 mb-1">
+                      <span className="flex items-center gap-1.5">
+                        <Tag className="w-3 h-3 text-emerald-400" />
+                        <span>Filter by Tag</span>
+                      </span>
+                      <span className="text-[9px] text-slate-500 font-normal">Tap or press Enter</span>
+                    </div>
+                    <div className="space-y-0.5">
+                      {matchingTags.map((tagItem, idx) => {
+                        const isSelected = idx === selectedTagIndex;
+                        return (
+                          <button
+                            key={tagItem.display}
+                            type="button"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              handleSelectTagSuggestion(tagItem);
+                            }}
+                            onMouseEnter={() => setSelectedTagIndex(idx)}
+                            className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl text-left transition-colors cursor-pointer ${
+                              isSelected
+                                ? 'bg-emerald-500/20 text-white'
+                                : 'hover:bg-white/5 text-slate-200'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              {tagItem.isAi ? (
+                                <Sparkles className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                              ) : (
+                                <span className="text-emerald-400 font-bold text-xs shrink-0">#</span>
+                              )}
+                              <span className="text-xs font-semibold truncate">{tagItem.display}</span>
+                            </div>
+                            <span className="text-[10px] font-medium text-slate-400 bg-white/5 px-2 py-0.5 rounded-lg shrink-0">
+                              {tagItem.count} {tagItem.count === 1 ? 'recipe' : 'recipes'}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
-                <button
-                  onClick={() => setSelectedTag(null)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
-                    selectedTag === null
-                      ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
-                      : 'bg-slate-900/80 text-slate-400 hover:text-white border border-white/5'
-                  }`}
-                >
-                  All ({recipes.length})
-                </button>
-
-                {hasAiRecipes && (
-                  <button
-                    onClick={() => setSelectedTag(selectedTag === 'ai' ? null : 'ai')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap flex items-center gap-1 transition-all cursor-pointer ${
-                      selectedTag === 'ai'
-                        ? 'bg-gradient-to-tr from-emerald-400 to-teal-300 text-slate-950 shadow-md shadow-emerald-500/20'
-                        : 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 hover:bg-emerald-500/20'
-                    }`}
-                  >
-                    <Sparkles className="w-3 h-3 text-emerald-400" />
-                    <span>AI Recipes</span>
-                  </button>
-                )}
-
-                {allUniqueTags
-                  .filter((t) => t.toLowerCase() !== 'ai')
-                  .slice(0, 15)
-                  .map((tag) => {
-                    const isSelected =
-                      selectedTag !== null &&
-                      selectedTag.toLowerCase().trim().replace(/^#+/, '') ===
-                        tag.toLowerCase().trim().replace(/^#+/, '');
-                    return (
-                      <button
-                        key={tag.toLowerCase()}
-                        onClick={() => setSelectedTag(isSelected ? null : tag)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                          isSelected
-                            ? 'bg-emerald-500 text-slate-950 font-bold shadow-md shadow-emerald-500/20'
-                            : 'bg-slate-900/80 hover:bg-slate-850 text-slate-300 border border-white/5'
-                        }`}
-                      >
-                        #{tag}
-                      </button>
-                    );
-                  })}
               </div>
 
               {/* Recipe Cards Grid */}
@@ -2154,10 +2253,14 @@ export const MealsPage: React.FC = () => {
                                   return (
                                     <span
                                       key={idx}
-                                      className={`text-[10px] px-2 py-0.5 rounded-md border flex items-center gap-0.5 ${
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSearchQuery(isAi ? '#AI' : `#${cleanTag}`);
+                                      }}
+                                      className={`text-[10px] px-2 py-0.5 rounded-md border flex items-center gap-0.5 cursor-pointer hover:border-emerald-400/50 transition-colors ${
                                         isAi
                                           ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30 font-semibold'
-                                          : 'bg-white/5 text-slate-400 border-white/5'
+                                          : 'bg-white/5 text-slate-400 border-white/5 hover:text-white'
                                       }`}
                                     >
                                       {isAi && <Sparkles className="w-2.5 h-2.5 text-emerald-400" />}
