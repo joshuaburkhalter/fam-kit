@@ -98,6 +98,7 @@ export const GroceryPage: React.FC = () => {
   const [draggingItem, setDraggingItem] = useState<GroceryItem | null>(null);
   const [dragPointerPos, setDragPointerPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [hoveredAisleId, setHoveredAisleId] = useState<string | null>(null);
+  const [dragRowLayout, setDragRowLayout] = useState<{ left: number; width: number; height: number; offsetY: number } | null>(null);
 
   const itemLongPressTimerRef = useRef<any>(null);
   const itemPointerStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -109,6 +110,7 @@ export const GroceryPage: React.FC = () => {
   const draggingItemRef = useRef<GroceryItem | null>(null);
   draggingItemRef.current = draggingItem;
   const sourceAisleIdRef = useRef<string>('uncategorized');
+  const dragRowLayoutRef = useRef<{ left: number; width: number; height: number; offsetY: number } | null>(null);
   const dragListenersCleanupRef = useRef<(() => void) | null>(null);
 
   const matchingSuggestions = React.useMemo(() => {
@@ -956,6 +958,16 @@ export const GroceryPage: React.FC = () => {
       dragListenersCleanupRef.current();
     }
 
+    const rowEl = e.currentTarget as HTMLElement;
+    const rowRect = rowEl.getBoundingClientRect();
+    const layout = {
+      left: rowRect.left,
+      width: rowRect.width,
+      height: rowRect.height,
+      offsetY: e.clientY - rowRect.top,
+    };
+    dragRowLayoutRef.current = layout;
+
     itemPointerStartRef.current = { x: e.clientX, y: e.clientY };
     pendingDragItemRef.current = item;
     sourceAisleIdRef.current = sourceAisleId || item.aisle_id || 'uncategorized';
@@ -968,6 +980,7 @@ export const GroceryPage: React.FC = () => {
       hasItemDraggedRef.current = true;
       setDraggingItem(item);
       draggingItemRef.current = item;
+      setDragRowLayout(layout);
       setDragPointerPos({ x: itemPointerStartRef.current.x, y: itemPointerStartRef.current.y });
       document.body.style.userSelect = 'none';
       try {
@@ -998,9 +1011,14 @@ export const GroceryPage: React.FC = () => {
         window.scrollBy({ top: 10, behavior: 'auto' });
       }
 
-      // Hit-test category drop targets
+      // Hit-test category drop targets using row center X coordinate
       let foundAisleId: string | null = null;
-      const elUnderPoint = document.elementFromPoint(moveEv.clientX, moveEv.clientY);
+      const testX = dragRowLayoutRef.current
+        ? dragRowLayoutRef.current.left + dragRowLayoutRef.current.width / 2
+        : moveEv.clientX;
+      const testY = moveEv.clientY;
+
+      const elUnderPoint = document.elementFromPoint(testX, testY);
       const targetCard = elUnderPoint?.closest('[data-category-drop-id]');
       if (targetCard) {
         foundAisleId = targetCard.getAttribute('data-category-drop-id');
@@ -1011,10 +1029,8 @@ export const GroceryPage: React.FC = () => {
           if (!cardEl) continue;
           const rect = cardEl.getBoundingClientRect();
           if (
-            moveEv.clientX >= rect.left - 20 &&
-            moveEv.clientX <= rect.right + 20 &&
-            moveEv.clientY >= rect.top - 8 &&
-            moveEv.clientY <= rect.bottom + 8
+            testY >= rect.top - 8 &&
+            testY <= rect.bottom + 8
           ) {
             foundAisleId = aisleId;
             break;
@@ -1052,6 +1068,8 @@ export const GroceryPage: React.FC = () => {
       isItemDraggingRef.current = false;
       setDraggingItem(null);
       draggingItemRef.current = null;
+      setDragRowLayout(null);
+      dragRowLayoutRef.current = null;
       setHoveredAisleId(null);
       hoveredAisleIdRef.current = null;
       pendingDragItemRef.current = null;
@@ -1074,6 +1092,8 @@ export const GroceryPage: React.FC = () => {
       isItemDraggingRef.current = false;
       setDraggingItem(null);
       draggingItemRef.current = null;
+      setDragRowLayout(null);
+      dragRowLayoutRef.current = null;
       setHoveredAisleId(null);
       hoveredAisleIdRef.current = null;
       pendingDragItemRef.current = null;
@@ -1094,6 +1114,8 @@ export const GroceryPage: React.FC = () => {
       window.removeEventListener('pointercancel', onGlobalPointerCancel);
       window.removeEventListener('touchmove', onGlobalTouchMove);
       document.body.style.userSelect = '';
+      setDragRowLayout(null);
+      dragRowLayoutRef.current = null;
       dragListenersCleanupRef.current = null;
     };
 
@@ -2252,33 +2274,46 @@ export const GroceryPage: React.FC = () => {
         </form>
       </Drawer>
 
-      {/* Floating Drag Preview for List Item */}
-      {draggingItem && (
+      {/* Floating Drag Preview for List Item (Y-axis locked to list width) */}
+      {draggingItem && dragRowLayout && (
         <div
           style={{
             position: 'fixed',
-            left: `${dragPointerPos.x}px`,
-            top: `${dragPointerPos.y}px`,
-            transform: 'translate(-50%, -50%) scale(1.05)',
+            left: `${dragRowLayout.left}px`,
+            width: `${dragRowLayout.width}px`,
+            top: `${dragPointerPos.y - dragRowLayout.offsetY}px`,
             pointerEvents: 'none',
             zIndex: 9999,
           }}
-          className="flex items-center gap-3 px-4 py-2.5 rounded-2xl bg-slate-900/95 border-2 border-emerald-400 text-white shadow-2xl shadow-emerald-950/80 backdrop-blur-md min-w-[220px] max-w-[340px]"
+          className="flex items-center justify-between px-3.5 py-2 rounded-2xl bg-slate-900/98 border-2 border-emerald-400 text-white shadow-2xl shadow-emerald-950/90 backdrop-blur-md select-none"
         >
-          <div className="w-5 h-5 rounded-lg border border-emerald-500/60 bg-emerald-500/20 flex items-center justify-center shrink-0">
-            <GripVertical className="w-3.5 h-3.5 text-emerald-400" />
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <div className="w-5 h-5 rounded-md border border-emerald-500/60 bg-emerald-500/20 flex items-center justify-center shrink-0">
+              <GripVertical className="w-3.5 h-3.5 text-emerald-400" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold truncate text-white">
+                  {draggingItem.name}
+                </span>
+                {draggingItem.quantity && (
+                  <span className="text-xs font-mono text-slate-400 shrink-0">
+                    ({draggingItem.quantity}{draggingItem.unit ? ` ${draggingItem.unit}` : ''})
+                  </span>
+                )}
+              </div>
+              {draggingItem.notes && (
+                <p className="text-[11px] text-emerald-400/80 truncate leading-tight mt-0.5">
+                  {draggingItem.notes}
+                </p>
+              )}
+            </div>
           </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-bold text-white truncate">{draggingItem.name}</p>
-            {draggingItem.quantity && (
-              <p className="text-[11px] text-slate-400 font-mono">
-                {draggingItem.quantity}{draggingItem.unit ? ` ${draggingItem.unit}` : ''}
-              </p>
-            )}
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-300 bg-emerald-500/20 border border-emerald-400/40 px-2 py-0.5 rounded-full">
+              Moving
+            </span>
           </div>
-          <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/20 border border-emerald-500/30 px-2 py-0.5 rounded-full shrink-0">
-            Moving
-          </span>
         </div>
       )}
 
