@@ -94,6 +94,21 @@ export const GroceryPage: React.FC = () => {
   const [isAutocompleteDismissed, setIsAutocompleteDismissed] = useState<boolean>(false);
   const [movingItem, setMovingItem] = useState<GroceryItem | null>(null);
 
+  // Long-press & drag-to-category state for items
+  const [draggingItem, setDraggingItem] = useState<GroceryItem | null>(null);
+  const [dragPointerPos, setDragPointerPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [hoveredAisleId, setHoveredAisleId] = useState<string | null>(null);
+
+  const itemLongPressTimerRef = useRef<any>(null);
+  const itemPointerStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const pendingDragItemRef = useRef<GroceryItem | null>(null);
+  const isItemDraggingRef = useRef<boolean>(false);
+  const hasItemDraggedRef = useRef<boolean>(false);
+  const hoveredAisleIdRef = useRef<string | null>(null);
+  hoveredAisleIdRef.current = hoveredAisleId;
+  const draggingItemRef = useRef<GroceryItem | null>(null);
+  draggingItemRef.current = draggingItem;
+
   const matchingSuggestions = React.useMemo(() => {
     const q = newItemName.trim().toLowerCase();
     if (!q || q.length < 1 || isAutocompleteDismissed || activeListType !== 'grocery') return [];
@@ -110,6 +125,7 @@ export const GroceryPage: React.FC = () => {
     return () => {
       isMountedRef.current = false;
       Object.values(crossingTimersRef.current).forEach((t) => clearTimeout(t));
+      clearTimeout(itemLongPressTimerRef.current);
     };
   }, []);
 
@@ -341,6 +357,7 @@ export const GroceryPage: React.FC = () => {
   };
 
   const handleToggleItem = async (id: string) => {
+    if (hasItemDraggedRef.current || isItemDraggingRef.current) return;
     const item = items.find((it) => it.id === id);
     if (!item) return;
 
@@ -495,55 +512,6 @@ export const GroceryPage: React.FC = () => {
     }
   };
 
-  const handleQuickMoveItem = async (targetAisleId: string) => {
-    if (!movingItem) return;
-    const targetAisle = effectiveAisles.find((a) => a.id === targetAisleId);
-    if (!targetAisle) return;
-
-    const itemToMove = movingItem;
-    setMovingItem(null);
-
-    // Optimistic update
-    setItems((prev) =>
-      prev.map((i) =>
-        i.id === itemToMove.id ? { ...i, aisle_id: targetAisleId, category: targetAisle.name } : i
-      )
-    );
-
-    if (groceryDataCache && householdId && groceryDataCache.householdId === householdId) {
-      if (groceryDataCache.itemsByList[activeListTypeRef.current]) {
-        groceryDataCache.itemsByList[activeListTypeRef.current] = groceryDataCache.itemsByList[
-          activeListTypeRef.current
-        ].map((i) =>
-          i.id === itemToMove.id ? { ...i, aisle_id: targetAisleId, category: targetAisle.name } : i
-        );
-      }
-    }
-
-    setSuggestions((prev) => {
-      const next = [...prev];
-      const matchIdx = next.findIndex((s) => s.name.toLowerCase() === itemToMove.name.trim().toLowerCase());
-      if (matchIdx >= 0) {
-        next[matchIdx] = { ...next[matchIdx], aisleId: targetAisle.id, category: targetAisle.name };
-      } else {
-        next.unshift({ name: itemToMove.name.trim(), aisleId: targetAisle.id, category: targetAisle.name });
-      }
-      if (groceryDataCache) groceryDataCache.suggestions = next;
-      return next;
-    });
-
-    try {
-      await api.updateGroceryItem(itemToMove.id, {
-        aisleId: targetAisle.id,
-        category: targetAisle.name,
-      });
-      showToast(`Moved to ${targetAisle.name} • Remembered for next time`);
-    } catch (err: any) {
-      console.error('Failed to move item:', err);
-      showToast('Failed to move item.');
-      loadData(activeListTypeRef.current, false);
-    }
-  };
 
   const handleClearCompleted = async () => {
     if (!household) return;
@@ -881,6 +849,230 @@ export const GroceryPage: React.FC = () => {
         return sorted;
       });
     }
+  };
+
+  const moveItemToCategory = async (itemToMove: GroceryItem, targetAisleId: string) => {
+    if (!itemToMove) return;
+
+    if (targetAisleId === 'uncategorized') {
+      // Optimistic update
+      setItems((prev) =>
+        prev.map((i) =>
+          i.id === itemToMove.id ? { ...i, aisle_id: '', category: '' } : i
+        )
+      );
+
+      if (groceryDataCache && householdId && groceryDataCache.householdId === householdId) {
+        if (groceryDataCache.itemsByList[activeListTypeRef.current]) {
+          groceryDataCache.itemsByList[activeListTypeRef.current] = groceryDataCache.itemsByList[
+            activeListTypeRef.current
+          ].map((i) =>
+            i.id === itemToMove.id ? { ...i, aisle_id: '', category: '' } : i
+          );
+        }
+      }
+
+      try {
+        await api.updateGroceryItem(itemToMove.id, {
+          aisleId: null,
+          category: null,
+        });
+        showToast(`Moved "${itemToMove.name}" to Uncategorized`);
+      } catch (err: any) {
+        console.error('Failed to move item:', err);
+        showToast('Failed to move item.');
+        loadData(activeListTypeRef.current, false);
+      }
+      return;
+    }
+
+    const targetAisle = effectiveAisles.find((a) => a.id === targetAisleId);
+    if (!targetAisle) return;
+
+    // Optimistic update
+    setItems((prev) =>
+      prev.map((i) =>
+        i.id === itemToMove.id ? { ...i, aisle_id: targetAisleId, category: targetAisle.name } : i
+      )
+    );
+
+    if (groceryDataCache && householdId && groceryDataCache.householdId === householdId) {
+      if (groceryDataCache.itemsByList[activeListTypeRef.current]) {
+        groceryDataCache.itemsByList[activeListTypeRef.current] = groceryDataCache.itemsByList[
+          activeListTypeRef.current
+        ].map((i) =>
+          i.id === itemToMove.id ? { ...i, aisle_id: targetAisleId, category: targetAisle.name } : i
+        );
+      }
+    }
+
+    setSuggestions((prev) => {
+      const next = [...prev];
+      const matchIdx = next.findIndex((s) => s.name.toLowerCase() === itemToMove.name.trim().toLowerCase());
+      if (matchIdx >= 0) {
+        next[matchIdx] = { ...next[matchIdx], aisleId: targetAisle.id, category: targetAisle.name };
+      } else {
+        next.unshift({ name: itemToMove.name.trim(), aisleId: targetAisle.id, category: targetAisle.name });
+      }
+      if (groceryDataCache) groceryDataCache.suggestions = next;
+      return next;
+    });
+
+    try {
+      await api.updateGroceryItem(itemToMove.id, {
+        aisleId: targetAisle.id,
+        category: targetAisle.name,
+      });
+      showToast(`Moved to ${targetAisle.name} • Remembered for next time`);
+    } catch (err: any) {
+      console.error('Failed to move item:', err);
+      showToast('Failed to move item.');
+      loadData(activeListTypeRef.current, false);
+    }
+  };
+
+  const handleQuickMoveItem = async (targetAisleId: string) => {
+    if (!movingItem) return;
+    const item = movingItem;
+    setMovingItem(null);
+    await moveItemToCategory(item, targetAisleId);
+  };
+
+  // Item Long-Press & Drag Handlers
+  const handleItemPointerDown = (e: React.PointerEvent, item: GroceryItem) => {
+    if (e.button !== 0) return;
+    if ((e.target as HTMLElement).closest('button, input, a, select')) return;
+
+    itemPointerStartRef.current = { x: e.clientX, y: e.clientY };
+    pendingDragItemRef.current = item;
+    hasItemDraggedRef.current = false;
+    isItemDraggingRef.current = false;
+
+    const currentTarget = e.currentTarget as HTMLElement;
+    const pointerId = e.pointerId;
+
+    clearTimeout(itemLongPressTimerRef.current);
+    itemLongPressTimerRef.current = setTimeout(() => {
+      isItemDraggingRef.current = true;
+      hasItemDraggedRef.current = true;
+      setDraggingItem(item);
+      draggingItemRef.current = item;
+      setDragPointerPos({ x: itemPointerStartRef.current.x, y: itemPointerStartRef.current.y });
+      try {
+        currentTarget.setPointerCapture(pointerId);
+      } catch {}
+      try {
+        if ('vibrate' in navigator) navigator.vibrate(30);
+      } catch {}
+    }, 320);
+  };
+
+  const handleItemPointerMove = (e: React.PointerEvent) => {
+    if (!isItemDraggingRef.current) {
+      if (pendingDragItemRef.current) {
+        const dx = e.clientX - itemPointerStartRef.current.x;
+        const dy = e.clientY - itemPointerStartRef.current.y;
+        if (Math.hypot(dx, dy) > 10) {
+          clearTimeout(itemLongPressTimerRef.current);
+          pendingDragItemRef.current = null;
+        }
+      }
+      return;
+    }
+
+    setDragPointerPos({ x: e.clientX, y: e.clientY });
+
+    // Edge auto-scrolling
+    const edgeThreshold = 80;
+    if (e.clientY < edgeThreshold) {
+      window.scrollBy({ top: -8, behavior: 'auto' });
+    } else if (e.clientY > window.innerHeight - edgeThreshold) {
+      window.scrollBy({ top: 8, behavior: 'auto' });
+    }
+
+    // Check which category card is currently under pointer
+    let foundAisleId: string | null = null;
+    for (const [aisleId, el] of cardElementsRef.current.entries()) {
+      if (!el) continue;
+      const rect = el.getBoundingClientRect();
+      if (
+        e.clientX >= rect.left - 20 &&
+        e.clientX <= rect.right + 20 &&
+        e.clientY >= rect.top &&
+        e.clientY <= rect.bottom
+      ) {
+        foundAisleId = aisleId;
+        break;
+      }
+    }
+
+    if (foundAisleId !== hoveredAisleIdRef.current) {
+      hoveredAisleIdRef.current = foundAisleId;
+      setHoveredAisleId(foundAisleId);
+      if (foundAisleId) {
+        try {
+          if ('vibrate' in navigator) navigator.vibrate(12);
+        } catch {}
+      }
+    }
+  };
+
+  const handleItemPointerUp = (e: React.PointerEvent) => {
+    clearTimeout(itemLongPressTimerRef.current);
+
+    if (!isItemDraggingRef.current) {
+      pendingDragItemRef.current = null;
+      return;
+    }
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {}
+
+    const draggedItem = draggingItemRef.current;
+    const targetAisleId = hoveredAisleIdRef.current;
+
+    isItemDraggingRef.current = false;
+    setDraggingItem(null);
+    draggingItemRef.current = null;
+    setHoveredAisleId(null);
+    hoveredAisleIdRef.current = null;
+    pendingDragItemRef.current = null;
+
+    setTimeout(() => {
+      hasItemDraggedRef.current = false;
+    }, 200);
+
+    if (draggedItem && targetAisleId) {
+      const currentCategory = draggedItem.aisle_id || 'uncategorized';
+      if (currentCategory !== targetAisleId) {
+        try {
+          if ('vibrate' in navigator) navigator.vibrate(25);
+        } catch {}
+        moveItemToCategory(draggedItem, targetAisleId);
+      }
+    }
+  };
+
+  const handleItemPointerCancel = (e: React.PointerEvent) => {
+    clearTimeout(itemLongPressTimerRef.current);
+    if (isItemDraggingRef.current) {
+      try {
+        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+      } catch {}
+    }
+    isItemDraggingRef.current = false;
+    setDraggingItem(null);
+    draggingItemRef.current = null;
+    setHoveredAisleId(null);
+    hoveredAisleIdRef.current = null;
+    pendingDragItemRef.current = null;
+    setTimeout(() => {
+      hasItemDraggedRef.current = false;
+    }, 200);
   };
 
   const currentList = customLists.find((l) => l.id === activeListType);
@@ -1239,6 +1431,11 @@ export const GroceryPage: React.FC = () => {
             }
 
             const currentSlot = (isDragging && dragTargetIndex >= 0 ? dragTargetIndex : idx) + 1;
+            const isItemHovered = Boolean(
+              draggingItem &&
+              hoveredAisleId === aisle.id &&
+              draggingItem.aisle_id !== aisle.id
+            );
 
             return (
               <div
@@ -1264,16 +1461,22 @@ export const GroceryPage: React.FC = () => {
                     ? 'transform 220ms cubic-bezier(0.2, 0, 0, 1)'
                     : undefined,
                 }}
-                className={`glass-panel rounded-3xl border overflow-hidden relative ${
+                className={`glass-panel rounded-3xl border overflow-hidden relative transition-all duration-200 ${
                   isDragging
                     ? 'border-emerald-400 ring-2 ring-emerald-400/80 shadow-2xl shadow-emerald-950/90 scale-[1.02] bg-slate-900/98 z-50 opacity-95'
+                    : isItemHovered
+                    ? 'border-emerald-400 ring-2 ring-emerald-500/60 bg-emerald-500/10 scale-[1.01] shadow-lg shadow-emerald-950/50'
                     : 'border-white/10 shadow-sm'
                 }`}
               >
                 {/* Aisle Category Header */}
                 <div
                   className={`w-full flex items-center justify-between px-3 py-2.5 sm:px-3.5 sm:py-3 border-b border-white/5 transition-colors select-none ${
-                    isDragging ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-slate-900/40 hover:bg-slate-900/60'
+                    isDragging
+                      ? 'bg-emerald-500/10 border-emerald-500/30'
+                      : isItemHovered
+                      ? 'bg-emerald-500/20 border-emerald-500/40'
+                      : 'bg-slate-900/40 hover:bg-slate-900/60'
                   }`}
                 >
                   {/* Drag Handle */}
@@ -1309,7 +1512,11 @@ export const GroceryPage: React.FC = () => {
                       <span className="text-xs font-bold uppercase tracking-wider text-slate-200 truncate">
                         {aisle.name}
                       </span>
-                      {isDragging ? (
+                      {isItemHovered ? (
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-300 bg-emerald-500/30 border border-emerald-400/50 px-2 py-0.5 rounded-full animate-pulse shrink-0">
+                          Drop here
+                        </span>
+                      ) : isDragging ? (
                         <span className="text-[10px] font-mono font-bold bg-emerald-400/25 text-emerald-300 border border-emerald-400/40 px-2 py-0.5 rounded-full animate-pulse shrink-0">
                           Slot #{currentSlot}
                         </span>
@@ -1341,12 +1548,19 @@ export const GroceryPage: React.FC = () => {
                       aisleItems.map((item) => {
                         const isCrossing = Boolean(crossingOffIds[item.id]);
                         const isChecked = item.is_completed || isCrossing;
+                        const isThisItemDragging = draggingItem?.id === item.id;
                         return (
                           <div
                             key={item.id}
                             onClick={() => handleToggleItem(item.id)}
-                            className={`flex items-center justify-between px-3.5 py-2 transition-all cursor-pointer group hover:bg-white/5 gap-2 min-h-[42px] ${
+                            onPointerDown={(e) => handleItemPointerDown(e, item)}
+                            onPointerMove={handleItemPointerMove}
+                            onPointerUp={handleItemPointerUp}
+                            onPointerCancel={handleItemPointerCancel}
+                            className={`flex items-center justify-between px-3.5 py-2 transition-all cursor-pointer group hover:bg-white/5 gap-2 min-h-[42px] select-none touch-manipulation ${
                               isCrossing ? 'animate-row-crossing' : ''
+                            } ${
+                              isThisItemDragging ? 'opacity-30 bg-emerald-500/10 border border-dashed border-emerald-500/40 rounded-xl' : ''
                             }`}
                           >
                             <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -1441,26 +1655,56 @@ export const GroceryPage: React.FC = () => {
 
         {/* Uncategorized Items (if list has categories) */}
         {hasCategories && uncategorizedItems.length > 0 && (
-          <div className="glass-panel rounded-3xl border border-white/10 overflow-hidden shadow-sm">
-            <div className="flex items-center gap-2.5 px-3.5 py-2.5 bg-slate-900/40 border-b border-white/5">
-              <div className="w-2.5 h-2.5 rounded-full bg-slate-600 shrink-0" />
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-400 truncate">
-                Other / Uncategorized
-              </span>
-              <span className="text-[10px] font-mono bg-white/5 px-2 py-0.5 rounded-full text-slate-400 shrink-0">
-                {uncategorizedItems.length}
-              </span>
+          <div
+            ref={(el) => {
+              if (el) cardElementsRef.current.set('uncategorized', el);
+              else cardElementsRef.current.delete('uncategorized');
+            }}
+            className={`glass-panel rounded-3xl border overflow-hidden shadow-sm transition-all duration-200 ${
+              draggingItem && hoveredAisleId === 'uncategorized' && (draggingItem.aisle_id || (draggingItem as any).category)
+                ? 'border-emerald-400 ring-2 ring-emerald-500/60 bg-emerald-500/10 scale-[1.01] shadow-lg shadow-emerald-950/50'
+                : 'border-white/10'
+            }`}
+          >
+            <div
+              className={`flex items-center justify-between px-3.5 py-2.5 border-b border-white/5 transition-colors ${
+                draggingItem && hoveredAisleId === 'uncategorized' && (draggingItem.aisle_id || (draggingItem as any).category)
+                  ? 'bg-emerald-500/20 border-emerald-500/40'
+                  : 'bg-slate-900/40'
+              }`}
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-2.5 h-2.5 rounded-full bg-slate-600 shrink-0" />
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-400 truncate">
+                  Other / Uncategorized
+                </span>
+                <span className="text-[10px] font-mono bg-white/5 px-2 py-0.5 rounded-full text-slate-400 shrink-0">
+                  {uncategorizedItems.length}
+                </span>
+              </div>
+              {draggingItem && hoveredAisleId === 'uncategorized' && (draggingItem.aisle_id || (draggingItem as any).category) && (
+                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-300 bg-emerald-500/30 border border-emerald-400/50 px-2 py-0.5 rounded-full animate-pulse shrink-0">
+                  Drop here
+                </span>
+              )}
             </div>
             <div className="divide-y divide-white/5">
               {uncategorizedItems.map((item) => {
                 const isCrossing = Boolean(crossingOffIds[item.id]);
                 const isChecked = item.is_completed || isCrossing;
+                const isThisItemDragging = draggingItem?.id === item.id;
                 return (
                   <div
                     key={item.id}
                     onClick={() => handleToggleItem(item.id)}
-                    className={`flex items-center justify-between px-3.5 py-2 hover:bg-white/5 transition-all cursor-pointer group gap-2 min-h-[42px] ${
+                    onPointerDown={(e) => handleItemPointerDown(e, item)}
+                    onPointerMove={handleItemPointerMove}
+                    onPointerUp={handleItemPointerUp}
+                    onPointerCancel={handleItemPointerCancel}
+                    className={`flex items-center justify-between px-3.5 py-2 hover:bg-white/5 transition-all cursor-pointer group gap-2 min-h-[42px] select-none touch-manipulation ${
                       isCrossing ? 'animate-row-crossing' : ''
+                    } ${
+                      isThisItemDragging ? 'opacity-30 bg-emerald-500/10 border border-dashed border-emerald-500/40 rounded-xl' : ''
                     }`}
                   >
                     <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -1546,6 +1790,27 @@ export const GroceryPage: React.FC = () => {
                 );
               })}
             </div>
+          </div>
+        )}
+
+        {/* Uncategorized Drop Target when empty */}
+        {hasCategories && uncategorizedItems.length === 0 && draggingItem && (draggingItem.aisle_id || (draggingItem as any).category) && (
+          <div
+            ref={(el) => {
+              if (el) cardElementsRef.current.set('uncategorized', el);
+              else cardElementsRef.current.delete('uncategorized');
+            }}
+            className={`rounded-3xl border border-dashed p-4 text-center transition-all duration-200 ${
+              hoveredAisleId === 'uncategorized'
+                ? 'border-emerald-400 ring-2 ring-emerald-500/60 bg-emerald-500/15 scale-[1.01]'
+                : 'border-white/20 bg-slate-900/30'
+            }`}
+          >
+            <p className={`text-xs font-bold uppercase tracking-wider ${
+              hoveredAisleId === 'uncategorized' ? 'text-emerald-300' : 'text-slate-400'
+            }`}>
+              {hoveredAisleId === 'uncategorized' ? 'Drop here to remove category' : 'Drop here to move to Uncategorized'}
+            </p>
           </div>
         )}
 
@@ -1959,6 +2224,37 @@ export const GroceryPage: React.FC = () => {
           />
         </form>
       </Drawer>
+
+      {/* Floating Drag Preview for List Item */}
+      {draggingItem && (
+        <div
+          style={{
+            position: 'fixed',
+            left: `${dragPointerPos.x}px`,
+            top: `${dragPointerPos.y}px`,
+            transform: 'translate(-50%, -50%) scale(1.05)',
+            pointerEvents: 'none',
+            zIndex: 9999,
+          }}
+          className="flex items-center gap-3 px-4 py-2.5 rounded-2xl bg-slate-900/95 border-2 border-emerald-400 text-white shadow-2xl shadow-emerald-950/80 backdrop-blur-md min-w-[220px] max-w-[340px]"
+        >
+          <div className="w-5 h-5 rounded-lg border border-emerald-500/60 bg-emerald-500/20 flex items-center justify-center shrink-0">
+            <GripVertical className="w-3.5 h-3.5 text-emerald-400" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-bold text-white truncate">{draggingItem.name}</p>
+            {draggingItem.quantity && (
+              <p className="text-[11px] text-slate-400 font-mono">
+                {draggingItem.quantity}{draggingItem.unit ? ` ${draggingItem.unit}` : ''}
+              </p>
+            )}
+          </div>
+          <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/20 border border-emerald-500/30 px-2 py-0.5 rounded-full shrink-0">
+            Moving
+          </span>
+        </div>
+      )}
+
       <Toast message={toastMessage} onClose={() => setToastMessage(null)} />
     </div>
   );
