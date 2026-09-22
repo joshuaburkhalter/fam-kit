@@ -238,7 +238,7 @@ export const VisionScanModal: React.FC<VisionScanModalProps> = ({
           type="file"
           ref={cameraInputRef}
           onChange={handleFileChange}
-          accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,.heic,.heif,image/*"
+          accept="image/jpeg,image/png,image/webp"
           capture="environment"
           className="hidden"
         />
@@ -246,7 +246,7 @@ export const VisionScanModal: React.FC<VisionScanModalProps> = ({
           type="file"
           ref={galleryInputRef}
           onChange={handleFileChange}
-          accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,.heic,.heif,image/*"
+          accept="image/jpeg,image/png,image/webp"
           className="hidden"
         />
 

@@ -123,6 +123,59 @@ app.get('/api/version', (_req, res) => {
   res.json({ buildId: APP_BUILD_ID, timestamp: new Date().toISOString() });
 });
 
+// Convert and optimize images (handles HEIC/HEIF transcoding via Node and sharp)
+app.post('/api/convert-image', async (req, res) => {
+  try {
+    const { imageBase64, maxWidth = 1280, maxHeight = 1280, quality = 85 } = req.body;
+    if (!imageBase64) {
+      return res.status(400).json({ error: 'Missing imageBase64' });
+    }
+
+    const cleanBase64 = imageBase64.replace(/^data:[^;]+;base64,/, '');
+    const buffer = Buffer.from(cleanBase64, 'base64');
+
+    let processedBuffer: Buffer = buffer;
+
+    // Check if HEIC/HEIF and transcode using heic-convert
+    try {
+      const heicConvert = (await import('heic-convert')).default;
+      const converted = await heicConvert({
+        buffer,
+        format: 'JPEG',
+        quality: 0.9,
+      });
+      processedBuffer = Buffer.from(converted);
+    } catch {
+      // If heic-convert fails, it might be standard JPEG/PNG/WebP, proceed to sharp
+    }
+
+    const sharpModule = (await import('sharp')).default;
+    const finalBuffer = await sharpModule(processedBuffer)
+      .rotate()
+      .resize({
+        width: Math.min(Number(maxWidth) || 1280, 2048),
+        height: Math.min(Number(maxHeight) || 1280, 2048),
+        fit: 'inside',
+        withoutEnlargement: true,
+      })
+      .jpeg({ quality: Math.min(Math.max(Math.round(Number(quality) <= 1 ? Number(quality) * 100 : Number(quality)) || 85, 50), 95) })
+      .toBuffer();
+
+    const outputBase64 = finalBuffer.toString('base64');
+    const dataUrl = `data:image/jpeg;base64,${outputBase64}`;
+
+    res.json({
+      success: true,
+      dataUrl,
+      base64: outputBase64,
+      mimeType: 'image/jpeg',
+    });
+  } catch (err: any) {
+    console.error('Server image conversion error:', err);
+    res.status(500).json({ error: err.message || 'Failed to convert image' });
+  }
+});
+
 // Helper: Get active user from request headers
 function getAuthUser(req: express.Request) {
   const authHeader = req.headers['authorization'];

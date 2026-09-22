@@ -1,6 +1,7 @@
 /**
  * High-performance browser-side image compression utility for profile photos, recipe images, and inventory items.
- * Handles high-resolution mobile photos, EXIF orientation, and automatically transcodes HEIC/HEIF photos (standard on iOS/iPhones).
+ * Handles high-resolution mobile photos, EXIF orientation, and automatically transcodes HEIC/HEIF photos
+ * using native browser capabilities, client-side fallback, and server-assisted conversion.
  */
 
 export interface CompressedImageResult {
@@ -42,9 +43,8 @@ function isHeicImage(file: File | Blob): boolean {
 
 /**
  * Transcodes an HEIC/HEIF blob to a standard JPEG blob via dynamic import of heic2any.
- * Dynamic import ensures the ~600KB parser is only loaded when an HEIC image is actually processed.
  */
-async function convertHeicToJpeg(blob: Blob): Promise<Blob> {
+async function convertHeicToJpegClient(blob: Blob): Promise<Blob> {
   const { default: heic2any } = await import('heic2any');
   const result = await heic2any({
     blob,
@@ -52,6 +52,49 @@ async function convertHeicToJpeg(blob: Blob): Promise<Blob> {
     quality: 0.9,
   });
   return Array.isArray(result) ? result[0] : result;
+}
+
+/**
+ * Server-assisted image conversion and optimization fallback.
+ * Uses Node.js heic-convert and sharp for bulletproof conversion of modern iOS HEIC/HEIF photos.
+ */
+async function convertViaServer(
+  fileOrBlob: File | Blob,
+  maxWidth: number,
+  maxHeight: number,
+  quality: number
+): Promise<CompressedImageResult> {
+  const base64 = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.readAsDataURL(fileOrBlob);
+  });
+
+  const res = await fetch('/api/convert-image', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      imageBase64: base64,
+      maxWidth,
+      maxHeight,
+      quality: Math.round(quality <= 1 ? quality * 100 : quality),
+    }),
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'Image conversion failed');
+  }
+
+  const result = await res.json();
+  return {
+    dataUrl: result.dataUrl,
+    base64: result.base64,
+    mimeType: result.mimeType || 'image/jpeg',
+    width: maxWidth,
+    height: maxHeight,
+  };
 }
 
 /**
@@ -155,42 +198,43 @@ export async function compressImageFile(
 
   let currentBlob: Blob = file;
 
-  // 1. If explicit HEIC/HEIF detected, transcode upfront
+  // 1. If explicit HEIC/HEIF detected, attempt client-side transcode or fall through to server
   if (isHeicImage(currentBlob)) {
     try {
-      currentBlob = await convertHeicToJpeg(currentBlob);
-    } catch (err: any) {
-      console.error('HEIC upfront conversion failed:', err);
-      throw new Error('Unable to process HEIC photo. Please select a JPG or PNG.');
+      currentBlob = await convertHeicToJpegClient(currentBlob);
+    } catch (clientHeicErr) {
+      console.warn('Client-side heic2any failed; delegating to server conversion:', clientHeicErr);
+      try {
+        return await convertViaServer(file, maxWidth, maxHeight, quality);
+      } catch (serverErr) {
+        console.error('Server conversion also failed:', serverErr);
+        throw new Error('Unable to process HEIC photo. Please try a JPG or PNG.');
+      }
     }
   }
 
-  let canvas: HTMLCanvasElement;
+  // 2. Render to canvas
   try {
-    canvas = await renderBlobToCanvas(currentBlob, maxWidth, maxHeight);
+    const canvas = await renderBlobToCanvas(currentBlob, maxWidth, maxHeight);
+    const mimeType = 'image/jpeg';
+    const dataUrl = canvas.toDataURL(mimeType, quality);
+    const base64 = dataUrl.replace(/^data:image\/\w+;base64,/, '');
+
+    return {
+      dataUrl,
+      base64,
+      mimeType,
+      width: canvas.width,
+      height: canvas.height,
+    };
   } catch (primaryErr) {
-    // 2. Fallback: If primary decoding failed, it may be an HEIC file whose MIME type
-    // was not set by the browser (very common when picking photos from iOS files or cloud drives).
+    // 3. Fallback: If client decoding failed, delegate to server conversion
     try {
-      console.info('Initial image decode failed; attempting HEIC transcode fallback...');
-      const fallbackConverted = await convertHeicToJpeg(currentBlob);
-      canvas = await renderBlobToCanvas(fallbackConverted, maxWidth, maxHeight);
-    } catch {
-      console.error('All image decoding strategies failed:', primaryErr);
-      throw new Error('Could not process this image. Please ensure the file is an image (JPG, PNG, WebP, or HEIC).');
+      console.info('Client-side canvas render failed; attempting server conversion...');
+      return await convertViaServer(file, maxWidth, maxHeight, quality);
+    } catch (serverErr) {
+      console.error('All image decoding strategies failed:', primaryErr, serverErr);
+      throw new Error('Could not process this image. Please select a JPG or PNG photo.');
     }
   }
-
-  // 3. Render out optimized JPEG data URL
-  const mimeType = 'image/jpeg';
-  const dataUrl = canvas.toDataURL(mimeType, quality);
-  const base64 = dataUrl.replace(/^data:image\/\w+;base64,/, '');
-
-  return {
-    dataUrl,
-    base64,
-    mimeType,
-    width: canvas.width,
-    height: canvas.height,
-  };
 }

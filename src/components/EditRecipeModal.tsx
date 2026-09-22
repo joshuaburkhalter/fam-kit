@@ -205,7 +205,7 @@ export const EditRecipeModal: React.FC<EditRecipeModalProps> = ({
           <input
             ref={photoInputRef}
             type="file"
-            accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,.heic,.heif,image/*"
+            accept="image/jpeg,image/png,image/webp"
             className="hidden"
             onChange={async (e) => {
               const file = e.target.files?.[0];

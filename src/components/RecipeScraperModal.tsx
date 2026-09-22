@@ -389,7 +389,7 @@ export const RecipeScraperModal: React.FC<RecipeScraperModalProps> = ({
       <input
         ref={cameraInputRef}
         type="file"
-        accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,.heic,.heif,image/*"
+        accept="image/jpeg,image/png,image/webp"
         capture="environment"
         className="hidden"
         onChange={handleFilesAdded}
@@ -397,7 +397,7 @@ export const RecipeScraperModal: React.FC<RecipeScraperModalProps> = ({
       <input
         ref={galleryInputRef}
         type="file"
-        accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,.heic,.heif,image/*"
+        accept="image/jpeg,image/png,image/webp"
         multiple
         className="hidden"
         onChange={handleFilesAdded}
