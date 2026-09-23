@@ -253,12 +253,21 @@ export const GroceryPage: React.FC = () => {
 
   const [isAddingItem, setIsAddingItem] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastAction, setToastAction] = useState<{ label: string; onClick: () => void } | undefined>(undefined);
   const toastTimeoutRef = useRef<any>(null);
 
-  const showToast = (msg: string) => {
+  const showToast = (
+    msg: string,
+    action?: { label: string; onClick: () => void },
+    duration: number = 3600
+  ) => {
     if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
     setToastMessage(msg);
-    toastTimeoutRef.current = setTimeout(() => setToastMessage(null), 3000);
+    setToastAction(action);
+    toastTimeoutRef.current = setTimeout(() => {
+      setToastMessage(null);
+      setToastAction(undefined);
+    }, duration);
   };
 
   const handleAddItem = async (e?: React.FormEvent) => {
@@ -431,19 +440,54 @@ export const GroceryPage: React.FC = () => {
   };
 
   const handleDeleteItem = async (id: string) => {
+    const itemToDelete = items.find((it) => it.id === id);
+    if (!itemToDelete) return;
+
+    setItems((prev) => {
+      const next = prev.filter((it) => it.id !== id);
+      if (groceryDataCache && householdId && groceryDataCache.householdId === householdId) {
+        groceryDataCache.itemsByList[activeListType] = next;
+      }
+      return next;
+    });
+
     try {
-      setItems((prev) => {
-        const next = prev.filter((it) => it.id !== id);
-        if (groceryDataCache && householdId && groceryDataCache.householdId === householdId) {
-          groceryDataCache.itemsByList[activeListType] = next;
-        }
-        return next;
-      });
       await api.deleteGroceryItem(id);
     } catch (err) {
       console.error('Failed to delete item:', err);
       loadData(activeListType, false);
+      return;
     }
+
+    showToast(`Deleted "${itemToDelete.name}"`, {
+      label: 'Undo',
+      onClick: async () => {
+        try {
+          const restored = await api.addGroceryItem(effectiveHouseholdId, {
+            name: itemToDelete.name,
+            quantity: itemToDelete.quantity,
+            unit: itemToDelete.unit,
+            notes: itemToDelete.notes,
+            category: itemToDelete.category,
+            aisle_id: itemToDelete.aisle_id,
+            list_type: itemToDelete.list_type || activeListType,
+            added_by_user_id: currentUser?.id,
+            added_by_user_name: currentUser?.name,
+          });
+          setItems((prev) => {
+            const next = [...prev, restored];
+            if (groceryDataCache && groceryDataCache.householdId === effectiveHouseholdId) {
+              groceryDataCache.itemsByList[activeListType] = next;
+            }
+            return next;
+          });
+          showToast(`Restored "${itemToDelete.name}"`);
+        } catch (e) {
+          console.error('Failed to restore item:', e);
+          showToast('Failed to restore item');
+        }
+      },
+    });
   };
 
   const handleEditItem = (item: GroceryItem) => {
@@ -2360,7 +2404,14 @@ export const GroceryPage: React.FC = () => {
         </div>
       )}
 
-      <Toast message={toastMessage} onClose={() => setToastMessage(null)} />
+      <Toast
+        message={toastMessage}
+        action={toastAction}
+        onClose={() => {
+          setToastMessage(null);
+          setToastAction(undefined);
+        }}
+      />
     </div>
   );
 };

@@ -2422,7 +2422,7 @@ app.get('/api/meals/week', (req, res) => {
 
 app.post('/api/meals/week', (req, res) => {
   const householdId = getHouseholdId(req);
-  const { title, recipeId, notes, weekStartDate } = req.body;
+  const { title, recipeId, notes, weekStartDate, scheduledDate } = req.body;
 
   if (!title) {
     return res.status(400).json({ error: 'Title is required' });
@@ -2435,6 +2435,9 @@ app.post('/api/meals/week', (req, res) => {
       [householdId, recipeId]
     );
     if (existing) {
+      if (scheduledDate !== undefined) {
+        execute('UPDATE weekly_meals SET scheduledDate = ? WHERE id = ?', [scheduledDate || null, existing.id]);
+      }
       const current = queryOne('SELECT * FROM weekly_meals WHERE id = ?', [existing.id]);
       return res.json(current ? { ...current, isMade: Boolean(current.isMade) } : { id: existing.id, title });
     }
@@ -2445,9 +2448,9 @@ app.post('/api/meals/week', (req, res) => {
   const weekStart = weekStartDate || now.split('T')[0];
 
   execute(
-    `INSERT INTO weekly_meals (id, title, recipeId, notes, isMade, madeDate, weekStartDate, householdId, createdAt)
-     VALUES (?, ?, ?, ?, 0, NULL, ?, ?, ?)`,
-    [id, title, recipeId || null, notes || null, weekStart, householdId, now]
+    `INSERT INTO weekly_meals (id, title, recipeId, notes, isMade, madeDate, scheduledDate, weekStartDate, householdId, createdAt)
+     VALUES (?, ?, ?, ?, 0, NULL, ?, ?, ?, ?)`,
+    [id, title, recipeId || null, notes || null, scheduledDate || null, weekStart, householdId, now]
   );
 
   const actor = getAuthUser(req);
@@ -2469,7 +2472,7 @@ app.post('/api/meals/week', (req, res) => {
 });
 
 app.patch('/api/meals/week', (req, res) => {
-  const { id, isMade, madeDate, title, notes } = req.body;
+  const { id, isMade, madeDate, title, notes, scheduledDate } = req.body;
   if (!id) return res.status(400).json({ error: 'ID is required' });
 
   if (isMade !== undefined) {
@@ -2481,6 +2484,9 @@ app.patch('/api/meals/week', (req, res) => {
   }
   if (title !== undefined) execute('UPDATE weekly_meals SET title = ? WHERE id = ?', [title, id]);
   if (notes !== undefined) execute('UPDATE weekly_meals SET notes = ? WHERE id = ?', [notes, id]);
+  if (scheduledDate !== undefined) {
+    execute('UPDATE weekly_meals SET scheduledDate = ? WHERE id = ?', [scheduledDate || null, id]);
+  }
 
   const updated = queryOne('SELECT * FROM weekly_meals WHERE id = ?', [id]);
   res.json(updated ? { ...updated, isMade: Boolean(updated.isMade) } : {});

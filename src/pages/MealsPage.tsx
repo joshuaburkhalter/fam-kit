@@ -3,6 +3,7 @@ import {
   ChefHat,
   Utensils,
   Calendar,
+  Calendar as CalendarIcon,
   Plus,
   Trash2,
   Check,
@@ -22,6 +23,7 @@ import {
   Zap,
   ChevronRight,
   ChevronDown,
+  ChevronUp,
   Flame,
   ArrowLeft,
   Link2,
@@ -37,7 +39,9 @@ import {
 import { compressImageFile } from '../lib/imageCompression';
 import {
   format,
+  addDays,
   isToday,
+  isTomorrow,
   isYesterday,
   parseISO,
 } from 'date-fns';
@@ -237,6 +241,16 @@ export const MealsPage: React.FC = () => {
 
   // Recipe search query
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Crossing off meals (cooked check animation)
+  const [crossingOffMealIds, setCrossingOffMealIds] = useState<{ [id: string]: boolean }>({});
+  const mealCrossingTimersRef = useRef<{ [id: string]: any }>({});
+
+  // 14-Day Calendar Schedule Drawer
+  const [schedulingMeal, setSchedulingMeal] = useState<WeeklyMeal | null>(null);
+  const [isScheduleDrawerOpen, setIsScheduleDrawerOpen] = useState(false);
+  const [isScheduleExpanded, setIsScheduleExpanded] = useState(false);
+  const [customScheduleDate, setCustomScheduleDate] = useState('');
 
   // Quick Date Picker Modal
   const [quickDateMeal, setQuickDateMeal] = useState<WeeklyMeal | null>(null);
@@ -697,6 +711,125 @@ export const MealsPage: React.FC = () => {
    * CORE ACTION: Mark meal as cooked on a given day.
    * Logs to History and removes it from the Planner on deck list!
    */
+  /**
+   * CORE ACTION: Mark meal as cooked directly on the card with crossing animation.
+   * Logs to History for today and removes it from active Planner on deck list!
+   */
+  const handleCheckCookedMeal = (meal: WeeklyMeal) => {
+    if (!householdId) return;
+    const mealId = meal.id;
+    if (crossingOffMealIds[mealId]) return;
+
+    triggerHapticCheck();
+    setCrossingOffMealIds((prev) => ({ ...prev, [mealId]: true }));
+
+    mealCrossingTimersRef.current[mealId] = setTimeout(async () => {
+      delete mealCrossingTimersRef.current[mealId];
+      setCrossingOffMealIds((prev) => {
+        const next = { ...prev };
+        delete next[mealId];
+        return next;
+      });
+
+      try {
+        const todayStr = format(new Date(), 'yyyy-MM-dd');
+        const newLog = await api.logMealMade(householdId, {
+          title: meal.title,
+          recipe_id: meal.recipe_id,
+          date: todayStr,
+          notes: meal.notes,
+          cooked_by_user_id: currentUser?.id,
+          weekly_meal_id: meal.id,
+        });
+
+        await api.deleteWeeklyMeal(meal.id);
+
+        setMeals((prev) => prev.filter((m) => m.id !== meal.id));
+        setMealLogs((prev) => [newLog, ...prev]);
+
+        if (mealsDataCache && mealsDataCache.householdId === householdId) {
+          mealsDataCache.meals = mealsDataCache.meals.filter((m) => m.id !== meal.id);
+          mealsDataCache.mealLogs = [newLog, ...mealsDataCache.mealLogs];
+        }
+
+        showToast(`Cooked "${meal.title}"! Moved to History`, {
+          label: 'Undo',
+          onClick: async () => {
+            await handleMoveBackToPlanner(newLog);
+          },
+        });
+      } catch (err) {
+        console.error('Failed to record cooked meal', err);
+        showToast('Error recording meal');
+      }
+    }, 360);
+  };
+
+  /**
+   * Put meal on the calendar and update its scheduled date
+   */
+  const handleScheduleMeal = async (meal: WeeklyMeal | null, dateStr: string) => {
+    if (!meal || !householdId) return;
+
+    try {
+      const eventTitle = `🍽️ ${meal.title}`;
+      const newEvent = await api.createCalendarEvent(householdId, {
+        title: eventTitle,
+        description: meal.notes || (meal.recipe_id ? 'Planned dinner from recipe box' : 'Planned dinner'),
+        start_time: `${dateStr}T18:00:00`,
+        end_time: `${dateStr}T19:00:00`,
+        is_all_day: false,
+      });
+
+      await api.updateWeeklyMeal(meal.id, {
+        scheduled_date: dateStr,
+      });
+
+      setMeals((prev) =>
+        prev.map((m) => (m.id === meal.id ? { ...m, scheduled_date: dateStr } : m))
+      );
+      if (mealsDataCache && mealsDataCache.householdId === householdId) {
+        mealsDataCache.meals = mealsDataCache.meals.map((m) =>
+          m.id === meal.id ? { ...m, scheduled_date: dateStr } : m
+        );
+      }
+
+      setIsScheduleDrawerOpen(false);
+      setSchedulingMeal(null);
+
+      const day = parseISO(dateStr);
+      const dayLabel = isToday(day)
+        ? 'Today'
+        : isTomorrow(day)
+        ? 'Tomorrow'
+        : format(day, 'EEE, MMM d');
+
+      showToast(`Scheduled "${meal.title}" for ${dayLabel}!`, {
+        label: 'Undo',
+        onClick: async () => {
+          try {
+            await api.deleteCalendarEvent(newEvent.id);
+            await api.updateWeeklyMeal(meal.id, { scheduled_date: null });
+            setMeals((prev) =>
+              prev.map((m) => (m.id === meal.id ? { ...m, scheduled_date: undefined } : m))
+            );
+            if (mealsDataCache && mealsDataCache.householdId === householdId) {
+              mealsDataCache.meals = mealsDataCache.meals.map((m) =>
+                m.id === meal.id ? { ...m, scheduled_date: undefined } : m
+              );
+            }
+            showToast(`Removed "${meal.title}" from calendar`);
+          } catch (err) {
+            console.error('Failed to undo schedule:', err);
+          }
+        },
+      });
+    } catch (err) {
+      console.error('Failed to schedule meal:', err);
+      showToast('Failed to schedule meal');
+    }
+  };
+
   const handleMarkMealCooked = async (meal: WeeklyMeal, dateStr: string) => {
     if (!householdId) return;
     try {
@@ -761,30 +894,73 @@ export const MealsPage: React.FC = () => {
     }
   };
 
-  // Delete from Planner list
-  const handleDeletePlannerMeal = async (id: string, e?: React.MouseEvent) => {
+  // Delete from Planner list with Undo
+  const handleDeletePlannerMeal = async (meal: WeeklyMeal, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     try {
-      await api.deleteWeeklyMeal(id);
-      setMeals((prev) => prev.filter((m) => m.id !== id));
+      await api.deleteWeeklyMeal(meal.id);
+      setMeals((prev) => prev.filter((m) => m.id !== meal.id));
       if (mealsDataCache && mealsDataCache.householdId === householdId) {
-        mealsDataCache.meals = mealsDataCache.meals.filter((m) => m.id !== id);
+        mealsDataCache.meals = mealsDataCache.meals.filter((m) => m.id !== meal.id);
       }
-      showToast('Removed from Planner');
+      showToast(`Removed "${meal.title}" from Planner`, {
+        label: 'Undo',
+        onClick: async () => {
+          if (!householdId) return;
+          try {
+            const restored = await api.addWeeklyMeal(householdId, {
+              title: meal.title,
+              recipe_id: meal.recipe_id,
+              notes: meal.notes,
+              scheduled_date: meal.scheduled_date,
+            });
+            setMeals((prev) => [restored, ...prev]);
+            if (mealsDataCache && mealsDataCache.householdId === householdId) {
+              mealsDataCache.meals = [restored, ...mealsDataCache.meals];
+            }
+            showToast(`Restored "${meal.title}" to Planner`);
+          } catch (err) {
+            console.error('Failed to restore meal:', err);
+            showToast('Failed to restore meal');
+          }
+        },
+      });
     } catch (err) {
       console.error('Failed to delete meal', err);
     }
   };
 
-  // Delete log entry
-  const handleDeleteLog = async (id: string) => {
+  // Delete log entry with Undo
+  const handleDeleteLog = async (log: MealLog) => {
     try {
-      await api.deleteMealLog(id);
-      setMealLogs((prev) => prev.filter((l) => l.id !== id));
+      await api.deleteMealLog(log.id);
+      setMealLogs((prev) => prev.filter((l) => l.id !== log.id));
       if (mealsDataCache && mealsDataCache.householdId === householdId) {
-        mealsDataCache.mealLogs = mealsDataCache.mealLogs.filter((l) => l.id !== id);
+        mealsDataCache.mealLogs = mealsDataCache.mealLogs.filter((l) => l.id !== log.id);
       }
-      showToast('Log entry removed');
+      showToast(`Deleted log for "${log.title}"`, {
+        label: 'Undo',
+        onClick: async () => {
+          if (!householdId) return;
+          try {
+            const restored = await api.logMealMade(householdId, {
+              title: log.title,
+              recipe_id: log.recipe_id,
+              date: log.date,
+              notes: log.notes,
+              cooked_by_user_id: log.cooked_by_user_id,
+            });
+            setMealLogs((prev) => [restored, ...prev]);
+            if (mealsDataCache && mealsDataCache.householdId === householdId) {
+              mealsDataCache.mealLogs = [restored, ...mealsDataCache.mealLogs];
+            }
+            showToast(`Restored log for "${log.title}"`);
+          } catch (err) {
+            console.error('Failed to restore log:', err);
+            showToast('Failed to restore log');
+          }
+        },
+      });
     } catch (err) {
       console.error('Failed to delete log', err);
     }
@@ -2392,122 +2568,138 @@ export const MealsPage: React.FC = () => {
                   </p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                   {meals.map((meal) => {
                     const linkedRecipe = meal.recipe_id ? recipeMap.get(meal.recipe_id) : undefined;
+                    const isCrossing = Boolean(crossingOffMealIds[meal.id]);
+
                     return (
                       <div
                         key={meal.id}
-                        className="glass-panel rounded-2xl border border-white/10 p-3.5 flex flex-col justify-between gap-3 hover:border-emerald-500/30 transition-all shadow-lg group"
+                        className={`glass-panel rounded-2xl border border-white/10 px-3.5 py-2.5 flex items-center gap-3 hover:border-emerald-500/30 transition-all shadow-md group ${
+                          isCrossing ? 'animate-row-crossing opacity-60' : ''
+                        }`}
                       >
-                        <div className="flex items-start gap-3">
-                          {/* Recipe Thumbnail */}
-                          {linkedRecipe?.image_url ? (
-                            <img
-                              src={linkedRecipe.image_url}
-                              alt={meal.title}
-                              onClick={() => handleSelectRecipe(linkedRecipe)}
-                              className="w-14 h-14 rounded-xl object-cover border border-white/10 shrink-0 cursor-pointer hover:opacity-90"
-                              referrerPolicy="no-referrer"
-                            />
-                          ) : (
-                            <div className="w-14 h-14 rounded-xl bg-slate-900 border border-white/10 flex items-center justify-center text-emerald-400 shrink-0">
-                              <ChefHat className="w-6 h-6 opacity-75" />
-                            </div>
+                        {/* Checkbox for cooked */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCheckCookedMeal(meal);
+                          }}
+                          className={`relative w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition-all cursor-pointer ${
+                            isCrossing
+                              ? 'border-emerald-500 bg-emerald-500 text-slate-950 shadow-sm shadow-emerald-500/30 animate-check-pop'
+                              : 'border-white/20 bg-slate-900/80 hover:border-emerald-500 text-transparent'
+                          }`}
+                          title="Mark as cooked (moves to History)"
+                        >
+                          <CheckSparkle trigger={isCrossing} />
+                          {isCrossing && (
+                            <Check className="w-3.5 h-3.5 text-slate-950 font-bold stroke-[3]" />
                           )}
+                        </button>
 
-                          {/* Meal Info */}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-start justify-between gap-1">
-                              <h3
+                        {/* Card Content (2 lines) */}
+                        <div className="flex-1 min-w-0 flex flex-col justify-center gap-1.5">
+                          {/* Line 1: Icon/Image + Meal title + Scheduled Date / cook time badge */}
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                              <span className="text-sm shrink-0" title="Planned meal">🍳</span>
+                              <h4
                                 onClick={() => linkedRecipe && handleSelectRecipe(linkedRecipe)}
-                                className={`text-sm font-bold text-white truncate ${
+                                className={`text-sm font-bold transition-colors truncate ${
                                   linkedRecipe ? 'cursor-pointer hover:text-emerald-300' : ''
+                                } ${
+                                  isCrossing ? 'line-through text-slate-400' : 'text-white group-hover:text-emerald-300'
                                 }`}
                               >
                                 {meal.title}
-                              </h3>
+                              </h4>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {meal.scheduled_date && (
+                                <span
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSchedulingMeal(meal);
+                                    setIsScheduleDrawerOpen(true);
+                                  }}
+                                  className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-emerald-500/10 text-emerald-400 border-emerald-500/20 flex items-center gap-1 shrink-0 whitespace-nowrap cursor-pointer hover:bg-emerald-500/20"
+                                  title="Change scheduled date"
+                                >
+                                  <Calendar className="w-3 h-3" />
+                                  <span>{format(parseISO(meal.scheduled_date), 'EEE, MMM d')}</span>
+                                </span>
+                              )}
+                              {linkedRecipe?.cook_time_minutes && (
+                                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full border bg-pink-500/10 text-pink-400 border-pink-500/20 flex items-center gap-0.5 shrink-0 whitespace-nowrap">
+                                  <Clock className="w-2.5 h-2.5" />
+                                  <span>{linkedRecipe.cook_time_minutes}m</span>
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Line 2: Subtitle/Notes · Actions (Shop, Schedule, Delete) */}
+                          <div className="flex items-center justify-between gap-2 text-[11px] text-slate-400">
+                            <div className="flex items-center gap-1.5 min-w-0 truncate">
+                              {meal.notes ? (
+                                <span className="text-slate-400 truncate">{meal.notes}</span>
+                              ) : linkedRecipe ? (
+                                <span className="text-slate-400 truncate">{linkedRecipe.ingredients?.length || 0} ingredients</span>
+                              ) : (
+                                <span className="text-slate-500 truncate">Planned dinner</span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {linkedRecipe && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => handleToggleShopIngredients(linkedRecipe, e)}
+                                  className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                                    isRecipeInGrocery(linkedRecipe.title)
+                                      ? 'text-emerald-400 bg-emerald-500/15 border border-emerald-500/30'
+                                      : 'text-slate-400 hover:text-pink-400 hover:bg-pink-500/10'
+                                  }`}
+                                  title={isRecipeInGrocery(linkedRecipe.title) ? 'In Grocery (click to remove)' : 'Add ingredients to Grocery List'}
+                                >
+                                  <ShoppingCart className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+
+                              {/* Schedule Button */}
                               <button
-                                onClick={(e) => handleDeletePlannerMeal(meal.id, e)}
-                                className="text-slate-500 hover:text-rose-400 p-1 -mr-1 transition-colors cursor-pointer"
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSchedulingMeal(meal);
+                                  setIsScheduleDrawerOpen(true);
+                                }}
+                                className={`px-2 py-0.5 rounded-lg border font-semibold text-[11px] flex items-center gap-1 transition-all cursor-pointer ${
+                                  meal.scheduled_date
+                                    ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/25'
+                                    : 'bg-white/5 hover:bg-white/10 text-slate-300 border-white/10'
+                                }`}
+                                title="Schedule on calendar"
+                              >
+                                <Calendar className="w-3 h-3 text-emerald-400" />
+                                <span>{meal.scheduled_date ? 'Reschedule' : 'Schedule'}</span>
+                              </button>
+
+                              {/* Delete button with Undo */}
+                              <button
+                                type="button"
+                                onClick={(e) => handleDeletePlannerMeal(meal, e)}
+                                className="p-1 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
                                 title="Remove from Planner"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             </div>
-
-                            {meal.notes && (
-                              <p className="text-[11px] text-slate-400 line-clamp-1 mt-0.5">{meal.notes}</p>
-                            )}
-
-                            {linkedRecipe && (
-                              <div className="flex items-center gap-2 text-[10px] text-slate-400 mt-1">
-                                {linkedRecipe.cook_time_minutes && (
-                                  <span className="flex items-center gap-0.5">
-                                    <Clock className="w-3 h-3 text-pink-400" />
-                                    {linkedRecipe.cook_time_minutes}m
-                                  </span>
-                                )}
-                                <span>· {linkedRecipe.ingredients?.length || 0} ingredients</span>
-                              </div>
-                            )}
                           </div>
-                        </div>
-
-                        {/* Card Action Buttons */}
-                        <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/5 text-xs">
-                          <div className="flex items-center gap-1.5">
-                            {linkedRecipe && (
-                              <>
-                                {(() => {
-                                  const inGrocery = isRecipeInGrocery(linkedRecipe.title);
-                                  const isJustAddedGrocery = justAddedGroceryId === linkedRecipe.id;
-                                  return (
-                                    <button
-                                      onClick={(e) => handleToggleShopIngredients(linkedRecipe, e)}
-                                      className={`px-2.5 py-1.5 rounded-xl font-semibold text-[11px] flex items-center gap-1 transition-all cursor-pointer ${
-                                        inGrocery
-                                          ? 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30'
-                                          : 'bg-pink-500/10 hover:bg-pink-500/20 text-pink-400 hover:text-pink-300 border border-pink-500/20'
-                                      }`}
-                                      title={inGrocery ? 'In Grocery (click to remove)' : 'Add ingredients to grocery list'}
-                                    >
-                                      {inGrocery ? (
-                                        <>
-                                          <Check className="w-3 h-3 stroke-[2.5]" />
-                                          <span>{isJustAddedGrocery ? 'Added!' : 'Shopped'}</span>
-                                        </>
-                                      ) : (
-                                        <>
-                                          <ShoppingCart className="w-3 h-3" />
-                                          <span>Shop</span>
-                                        </>
-                                      )}
-                                    </button>
-                                  );
-                                })()}
-                                <button
-                                  onClick={() => handleSelectRecipe(linkedRecipe)}
-                                  className="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-200 font-semibold text-[11px] border border-white/10 flex items-center gap-1 transition-all cursor-pointer"
-                                >
-                                  <Flame className="w-3 h-3 text-amber-400" />
-                                  <span>Cook</span>
-                                </button>
-                              </>
-                            )}
-                          </div>
-
-                          {/* Mark as Cooked */}
-                          <button
-                            onClick={() => {
-                              setQuickDateMeal(meal);
-                              setTargetDate(format(new Date(), 'yyyy-MM-dd'));
-                            }}
-                            className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-[11px] flex items-center gap-1 shadow-sm transition-all active:scale-95 cursor-pointer ml-auto"
-                          >
-                            <Check className="w-3 h-3 stroke-[3]" />
-                            <span>Mark Cooked</span>
-                          </button>
                         </div>
                       </div>
                     );
@@ -2862,7 +3054,7 @@ export const MealsPage: React.FC = () => {
                                     <span className="hidden sm:inline">Return to Planner</span>
                                   </button>
                                   <button
-                                    onClick={() => handleDeleteLog(log.id)}
+                                    onClick={() => handleDeleteLog(log)}
                                     className="p-1.5 text-slate-500 hover:text-rose-400 transition-colors cursor-pointer"
                                     title="Delete log entry"
                                   >
@@ -2883,56 +3075,146 @@ export const MealsPage: React.FC = () => {
         </div>
       )}
 
-      {/* ================= DRAWER: QUICK DATE PICKER MODAL ================= */}
+      {/* ================= DRAWER: SCHEDULE MEAL QUICK PICK (14 DAYS) ================= */}
       <Drawer
-        isOpen={Boolean(quickDateMeal)}
-        onClose={() => setQuickDateMeal(null)}
+        isOpen={isScheduleDrawerOpen && Boolean(schedulingMeal)}
+        onClose={() => {
+          setIsScheduleDrawerOpen(false);
+          setSchedulingMeal(null);
+          setIsScheduleExpanded(false);
+        }}
         width="max-w-md"
-        title="Mark as Cooked"
-        subtitle={`When did you make "${quickDateMeal?.title}"?`}
+        icon={<CalendarIcon className="w-5 h-5 text-slate-950" />}
+        title="Schedule Meal"
+        subtitle={`Pick a date for "${schedulingMeal?.title}"`}
       >
-        {quickDateMeal && (
-          <div className="p-4 space-y-4">
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => handleMarkMealCooked(quickDateMeal, format(new Date(), 'yyyy-MM-dd'))}
-                className="p-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex flex-col items-center gap-1 transition-all shadow-md shadow-emerald-500/20 cursor-pointer"
-              >
-                <Check className="w-5 h-5 stroke-[3]" />
-                <span>Cooked Today</span>
-              </button>
-              <button
-                onClick={() => {
-                  const yesterday = new Date();
-                  yesterday.setDate(yesterday.getDate() - 1);
-                  handleMarkMealCooked(quickDateMeal, format(yesterday, 'yyyy-MM-dd'));
-                }}
-                className="p-3 rounded-2xl bg-slate-900 hover:bg-slate-850 text-slate-200 border border-white/10 font-bold text-xs flex flex-col items-center gap-1 transition-all cursor-pointer"
-              >
-                <Clock className="w-5 h-5 text-amber-400" />
-                <span>Cooked Yesterday</span>
-              </button>
-            </div>
+        <div className="p-4 space-y-4">
+          <p className="text-xs text-slate-400">
+            Select a day to place this dinner on the family calendar:
+          </p>
 
-            <div className="pt-2 border-t border-white/10 space-y-2">
-              <label className="text-xs font-semibold text-slate-400">Or pick a specific date:</label>
+          {/* Quick-Pick 14 Days List */}
+          <div className="space-y-1.5 max-h-[58vh] overflow-y-auto pr-1">
+            {(() => {
+              const count = isScheduleExpanded ? 28 : 14;
+              const days = Array.from({ length: count }, (_, i) => addDays(new Date(), i));
+              return days.map((day) => {
+                const dateStr = format(day, 'yyyy-MM-dd');
+                const isSelected = schedulingMeal?.scheduled_date === dateStr;
+                const isCurrentDay = isToday(day);
+                const dayLabel = isCurrentDay
+                  ? 'Today'
+                  : isTomorrow(day)
+                  ? 'Tomorrow'
+                  : format(day, 'EEEE');
+
+                return (
+                  <button
+                    key={dateStr}
+                    type="button"
+                    onClick={() => handleScheduleMeal(schedulingMeal, dateStr)}
+                    className={`w-full p-2.5 sm:p-3 rounded-2xl border text-left flex items-center justify-between gap-3 transition-all cursor-pointer ${
+                      isSelected
+                        ? 'bg-emerald-500/20 border-emerald-500 ring-2 ring-emerald-500/40 shadow-md shadow-emerald-950/50'
+                        : isCurrentDay
+                        ? 'bg-slate-900/90 border-emerald-500/30 hover:border-emerald-500/60'
+                        : 'bg-slate-900/50 border-white/10 hover:border-white/20 hover:bg-slate-900/80'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div
+                        className={`w-10 h-10 rounded-xl flex flex-col items-center justify-center shrink-0 border ${
+                          isSelected
+                            ? 'bg-emerald-500 text-slate-950 font-bold border-emerald-400 shadow-sm'
+                            : isCurrentDay
+                            ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                            : 'bg-white/5 text-slate-300 border-white/10'
+                        }`}
+                      >
+                        <span className="text-[10px] uppercase font-bold tracking-wider leading-none">
+                          {format(day, 'EEE')}
+                        </span>
+                        <span className="text-sm font-black leading-tight">
+                          {format(day, 'd')}
+                        </span>
+                      </div>
+
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`text-xs font-bold truncate ${
+                              isSelected
+                                ? 'text-emerald-300'
+                                : isCurrentDay
+                                ? 'text-white'
+                                : 'text-slate-200'
+                            }`}
+                          >
+                            {dayLabel}
+                          </span>
+                          {isCurrentDay && (
+                            <span className="text-[9px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-md border border-emerald-500/30">
+                              Today
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[11px] text-slate-400 truncate block">
+                          {format(day, 'MMMM d, yyyy')}
+                        </span>
+                      </div>
+                    </div>
+
+                    {isSelected ? (
+                      <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-300 bg-emerald-500/20 px-2.5 py-1 rounded-full border border-emerald-500/40 shrink-0">
+                        <Check className="w-3.5 h-3.5 stroke-[3]" />
+                        <span>Scheduled</span>
+                      </span>
+                    ) : (
+                      <span className="text-xs text-slate-500 hover:text-emerald-400 shrink-0 font-medium">
+                        Select →
+                      </span>
+                    )}
+                  </button>
+                );
+              });
+            })()}
+          </div>
+
+          {/* Expand / Custom Date Option */}
+          <div className="pt-2 border-t border-white/10 space-y-3">
+            <button
+              type="button"
+              onClick={() => setIsScheduleExpanded(!isScheduleExpanded)}
+              className="w-full py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <span>{isScheduleExpanded ? 'Show 14 Days Only' : 'Show 28 Days (4 Weeks)'}</span>
+              {isScheduleExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            </button>
+
+            <div className="p-3 rounded-2xl bg-slate-900/60 border border-white/10 space-y-2">
+              <label className="text-xs font-semibold text-slate-300 block">
+                Or pick any custom date:
+              </label>
               <div className="flex items-center gap-2">
                 <input
                   type="date"
-                  value={targetDate}
-                  onChange={(e) => setTargetDate(e.target.value)}
-                  className="flex-1 bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+                  min={format(new Date(), 'yyyy-MM-dd')}
+                  value={customScheduleDate}
+                  onChange={(e) => setCustomScheduleDate(e.target.value)}
+                  className="flex-1 bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
                 />
                 <button
-                  onClick={() => handleMarkMealCooked(quickDateMeal, targetDate)}
-                  className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-all cursor-pointer"
+                  type="button"
+                  disabled={!customScheduleDate}
+                  onClick={() => handleScheduleMeal(schedulingMeal, customScheduleDate)}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 disabled:opacity-40 text-slate-950 font-bold text-xs transition-all cursor-pointer shrink-0"
                 >
-                  Save
+                  Schedule
                 </button>
               </div>
             </div>
           </div>
-        )}
+        </div>
       </Drawer>
 
       {/* ================= DRAWER: QUICK PICK RECIPE MODAL ================= */}
@@ -3252,6 +3534,7 @@ export const MealsPage: React.FC = () => {
           showToast(`Saved "${savedItem.name}" to pantry!`);
         }}
         onDeleted={(deletedId) => {
+          const deletedItem = editingInventoryItem;
           setInventoryItems((prev) => {
             const next = prev.filter((i) => i.id !== deletedId);
             if (mealsDataCache && mealsDataCache.householdId === householdId) {
@@ -3259,7 +3542,32 @@ export const MealsPage: React.FC = () => {
             }
             return next;
           });
-          showToast('Removed item from pantry');
+          showToast(`Removed "${deletedItem?.name || 'item'}" from pantry`, {
+            label: 'Undo',
+            onClick: async () => {
+              if (!deletedItem) return;
+              try {
+                const restored = await api.addInventoryItem({
+                  name: deletedItem.name,
+                  category: deletedItem.category,
+                  location: deletedItem.location,
+                  quantity: deletedItem.quantity,
+                  unit: deletedItem.unit,
+                  expiresAt: deletedItem.expiresAt,
+                  isStock: deletedItem.isStock,
+                  restockCadenceDays: deletedItem.restockCadenceDays,
+                });
+                setInventoryItems((prev) => [restored, ...prev]);
+                if (mealsDataCache && mealsDataCache.householdId === householdId) {
+                  mealsDataCache.inventoryItems = [restored, ...(mealsDataCache.inventoryItems || [])];
+                }
+                showToast(`Restored "${restored.name}" to pantry`);
+              } catch (err) {
+                console.error('Failed to restore item:', err);
+                showToast('Failed to restore item');
+              }
+            },
+          });
         }}
       />
     </div>

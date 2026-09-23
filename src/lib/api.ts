@@ -760,6 +760,7 @@ export const api = {
       notes: m.notes,
       is_made: Boolean(m.isMade),
       made_date: m.madeDate,
+      scheduled_date: m.scheduledDate,
       week_start_date: m.weekStartDate,
       created_at: m.createdAt || '',
     }));
@@ -771,6 +772,7 @@ export const api = {
       title: string;
       recipe_id?: string;
       notes?: string;
+      scheduled_date?: string;
       week_start_date?: string;
     }
   ): Promise<WeeklyMeal> => {
@@ -780,6 +782,7 @@ export const api = {
         title: data.title,
         recipeId: data.recipe_id,
         notes: data.notes,
+        scheduledDate: data.scheduled_date,
         weekStartDate: data.week_start_date,
       }),
     });
@@ -791,6 +794,7 @@ export const api = {
       notes: res.notes,
       is_made: Boolean(res.isMade),
       made_date: res.madeDate,
+      scheduled_date: res.scheduledDate,
       week_start_date: res.weekStartDate,
       created_at: res.createdAt || '',
     };
@@ -801,6 +805,7 @@ export const api = {
     data: {
       is_made?: boolean;
       made_date?: string;
+      scheduled_date?: string | null;
       title?: string;
       notes?: string;
     }
@@ -811,6 +816,7 @@ export const api = {
         id,
         isMade: data.is_made,
         madeDate: data.made_date,
+        scheduledDate: data.scheduled_date,
         title: data.title,
         notes: data.notes,
       }),
@@ -823,6 +829,7 @@ export const api = {
       notes: res.notes,
       is_made: Boolean(res.isMade),
       made_date: res.madeDate,
+      scheduled_date: res.scheduledDate,
       week_start_date: res.weekStartDate,
       created_at: res.createdAt || '',
     };

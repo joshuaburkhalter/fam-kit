@@ -29,6 +29,7 @@ import type { CalendarEvent } from '../types';
 import { usePWA } from '../context/PWAContext';
 import { api } from '../lib/api';
 import { Drawer } from '../components/ui/Drawer';
+import { Toast } from '../components/ui/Toast';
 
 // Module-level calendar cache for instant zero-latency page transitions
 let calendarCache: { householdId: string; events: CalendarEvent[] } | null = null;
@@ -50,6 +51,24 @@ export const CalendarPage: React.FC = () => {
   const [pastDaysCount, setPastDaysCount] = useState<number>(14);
   const [selectedMemberId, setSelectedMemberId] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'all' | 'events-only'>('all');
+
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastAction, setToastAction] = useState<{ label: string; onClick: () => void } | undefined>(undefined);
+  const toastTimeoutRef = useRef<any>(null);
+
+  const showToast = (
+    msg: string,
+    action?: { label: string; onClick: () => void },
+    duration: number = 3600
+  ) => {
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    setToastMessage(msg);
+    setToastAction(action);
+    toastTimeoutRef.current = setTimeout(() => {
+      setToastMessage(null);
+      setToastAction(undefined);
+    }, duration);
+  };
 
   const setEventsWithCache = (updater: CalendarEvent[] | ((prev: CalendarEvent[]) => CalendarEvent[])) => {
     setEvents((prev) => {
@@ -284,13 +303,40 @@ export const CalendarPage: React.FC = () => {
   };
 
   const handleDeleteEvent = async (id: string) => {
+    const eventToDelete = events.find((ev) => ev.id === id);
+    if (!eventToDelete) return;
+
     try {
       setEventsWithCache((prev) => prev.filter((ev) => ev.id !== id));
       await api.deleteCalendarEvent(id);
     } catch (err) {
       console.error('Failed to delete event:', err);
       loadData();
+      return;
     }
+
+    showToast(`Deleted "${eventToDelete.title}"`, {
+      label: 'Undo',
+      onClick: async () => {
+        if (!household) return;
+        try {
+          const restored = await api.createCalendarEvent(household.id, {
+            title: eventToDelete.title,
+            description: eventToDelete.description,
+            start_time: eventToDelete.start_time,
+            end_time: eventToDelete.end_time,
+            is_all_day: eventToDelete.is_all_day,
+            location: eventToDelete.location,
+            assigned_user_id: eventToDelete.assigned_user_id,
+          });
+          setEventsWithCache((prev) => [...prev, restored]);
+          showToast(`Restored "${eventToDelete.title}"`);
+        } catch (err) {
+          console.error('Failed to restore event:', err);
+          showToast('Failed to restore event');
+        }
+      },
+    });
   };
 
   return (
@@ -1001,6 +1047,15 @@ export const CalendarPage: React.FC = () => {
           </div>
         </form>
       </Drawer>
+
+      <Toast
+        message={toastMessage}
+        action={toastAction}
+        onClose={() => {
+          setToastMessage(null);
+          setToastAction(undefined);
+        }}
+      />
     </div>
   );
 };

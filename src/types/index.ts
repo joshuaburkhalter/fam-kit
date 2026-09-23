@@ -150,6 +150,7 @@ export interface WeeklyMeal {
   notes?: string;
   is_made: boolean;
   made_date?: string;
+  scheduled_date?: string;
   week_start_date: string;
   created_at: string;
 }
