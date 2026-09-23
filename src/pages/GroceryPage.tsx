@@ -17,7 +17,7 @@ import {
   ArrowRightLeft,
   Sparkles,
 } from 'lucide-react';
-import type { GroceryItem, Aisle, CustomList, GrocerySuggestion } from '../types';
+import type { GroceryItem, Aisle, CustomList, GrocerySuggestion, InventoryItem } from '../types';
 import { usePWA } from '../context/PWAContext';
 import { api } from '../lib/api';
 import { CheckSparkle, triggerHapticCheck } from '../components/CheckSparkle';
@@ -31,6 +31,7 @@ interface GroceryDataCache {
   lists: CustomList[];
   aisles: Aisle[];
   suggestions?: GrocerySuggestion[];
+  inventoryItems?: InventoryItem[];
 }
 
 let groceryDataCache: GroceryDataCache | null = null;
@@ -62,6 +63,9 @@ export const GroceryPage: React.FC = () => {
       return groceryDataCache?.aislesByList?.['grocery'] || (groceryDataCache && groceryDataCache.aisles.length > 0 ? groceryDataCache.aisles : aisles);
     }
     return groceryDataCache?.aislesByList?.[activeListType] || [];
+  });
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>(() => {
+    return groceryDataCache?.inventoryItems || [];
   });
   const [newItemName, setNewItemName] = useState('');
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
@@ -198,7 +202,10 @@ export const GroceryPage: React.FC = () => {
     }
 
     try {
-      const data = await api.getGroceryData(householdId, targetListId);
+      const [data, invItems] = await Promise.all([
+        api.getGroceryData(householdId, targetListId),
+        api.getInventory().catch(() => [] as InventoryItem[]),
+      ]);
       if (!isMountedRef.current) return;
 
       const targetAisles = (data.aisles || []).filter((a) =>
@@ -212,6 +219,7 @@ export const GroceryPage: React.FC = () => {
           aislesByList: {},
           lists: data.lists,
           aisles: targetAisles,
+          inventoryItems: invItems,
         };
       }
       groceryDataCache.itemsByList[targetListId] = data.items;
@@ -220,6 +228,10 @@ export const GroceryPage: React.FC = () => {
       }
       groceryDataCache.aislesByList[targetListId] = targetAisles;
       groceryDataCache.lists = data.lists;
+      if (invItems) {
+        groceryDataCache.inventoryItems = invItems;
+        setInventoryItems(invItems);
+      }
       if (targetListId === 'grocery') {
         groceryDataCache.aisles = targetAisles;
       }
@@ -270,6 +282,65 @@ export const GroceryPage: React.FC = () => {
     }, duration);
   };
 
+  // Helper to cross-reference grocery items with active household pantry inventory
+  const getPantryMatch = (itemName: string): InventoryItem | undefined => {
+    if (!itemName || !inventoryItems || inventoryItems.length === 0) return undefined;
+    const clean = itemName.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').trim();
+    if (!clean) return undefined;
+    const words = clean
+      .split(/\s+/)
+      .filter(
+        (w) =>
+          w.length > 2 &&
+          ![
+            'cup',
+            'cups',
+            'tbsp',
+            'tsp',
+            'oz',
+            'pound',
+            'pounds',
+            'gram',
+            'grams',
+            'can',
+            'cans',
+            'clove',
+            'cloves',
+            'slice',
+            'slices',
+            'large',
+            'small',
+            'medium',
+            'pack',
+            'packs',
+            'box',
+            'boxes',
+            'bag',
+            'bags',
+            'bottle',
+            'bottles',
+          ].includes(w)
+      );
+
+    return inventoryItems.find((inv) => {
+      const invClean = inv.name.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').trim();
+      if (invClean === clean || invClean.includes(clean) || clean.includes(invClean)) return true;
+      return words.some((w) => invClean.includes(w) && w.length >= 4);
+    });
+  };
+
+  const formatPantryTooltip = (pantryItem: InventoryItem) => {
+    const parts: string[] = [];
+    if (pantryItem.quantity) {
+      parts.push(`${pantryItem.quantity}${pantryItem.unit ? ` ${pantryItem.unit}` : ''}`);
+    }
+    if (pantryItem.location) {
+      parts.push(pantryItem.location.charAt(0).toUpperCase() + pantryItem.location.slice(1));
+    }
+    const details = parts.length > 0 ? ` (${parts.join(' • ')})` : '';
+    return `In pantry: ${pantryItem.name}${details}`;
+  };
+
   const handleAddItem = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const nameToAdd = newItemName.trim();
@@ -313,6 +384,13 @@ export const GroceryPage: React.FC = () => {
       setNewItemName('');
       setIsAutocompleteDismissed(false);
       setSelectedSuggestionIndex(-1);
+
+      const pantryMatch = getPantryMatch(item.name);
+      if (pantryMatch) {
+        showToast(
+          `Note: "${item.name}" is already in your ${pantryMatch.location || 'pantry'}`
+        );
+      }
     } catch (err: any) {
       console.error('Failed to add item:', err);
       showToast(err?.message || 'Error adding item. Please check connection.');
@@ -346,7 +424,14 @@ export const GroceryPage: React.FC = () => {
       setSelectedSuggestionIndex(-1);
 
       const aisle = effectiveAisles.find((a) => a.id === item.aisle_id);
-      showToast(`Added ${item.name} to ${aisle?.name || sug.category || 'Grocery'}`);
+      const pantryMatch = getPantryMatch(item.name);
+      if (pantryMatch) {
+        showToast(
+          `Added ${item.name} to ${aisle?.name || sug.category || 'Grocery'} (Already in ${pantryMatch.location || 'pantry'})`
+        );
+      } else {
+        showToast(`Added ${item.name} to ${aisle?.name || sug.category || 'Grocery'}`);
+      }
     } catch (err: any) {
       console.error('Failed to add suggested item:', err);
       showToast(err?.message || 'Error adding item. Please check connection.');
@@ -1447,6 +1532,7 @@ export const GroceryPage: React.FC = () => {
               {matchingSuggestions.map((sug, idx) => {
                 const isSelected = idx === selectedSuggestionIndex;
                 const aisle = effectiveAisles.find((a) => a.id === sug.aisleId);
+                const sugPantryMatch = getPantryMatch(sug.name);
                 return (
                   <button
                     key={`${sug.name}-${sug.aisleId}-${idx}`}
@@ -1459,6 +1545,14 @@ export const GroceryPage: React.FC = () => {
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="text-xs font-semibold truncate">{sug.name}</span>
+                      {sugPantryMatch && (
+                        <span
+                          className="text-[9px] px-1.5 py-0.5 rounded-full bg-slate-800/80 text-emerald-400 border border-emerald-500/20 shrink-0 font-medium"
+                          title={formatPantryTooltip(sugPantryMatch)}
+                        >
+                          ✓ In Pantry
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-2 shrink-0 ml-2">
                       <span
@@ -1666,6 +1760,7 @@ export const GroceryPage: React.FC = () => {
                         const isCrossing = Boolean(crossingOffIds[item.id]);
                         const isChecked = item.is_completed || isCrossing;
                         const isThisItemDragging = draggingItem?.id === item.id;
+                        const pantryMatch = getPantryMatch(item.name);
                         return (
                           <div
                             key={item.id}
@@ -1692,7 +1787,7 @@ export const GroceryPage: React.FC = () => {
                                 )}
                               </div>
                               <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 flex-wrap">
                                   <span
                                     className={`text-sm font-semibold truncate transition-colors ${
                                       isCrossing
@@ -1707,6 +1802,16 @@ export const GroceryPage: React.FC = () => {
                                   {item.quantity && (
                                     <span className="text-xs font-mono text-slate-400 shrink-0">
                                       ({item.quantity}{item.unit ? ` ${item.unit}` : ''})
+                                    </span>
+                                  )}
+                                  {pantryMatch && (
+                                    <span
+                                      className={`text-[10px] px-2 py-0.5 rounded-full bg-slate-800/80 text-emerald-400 border border-emerald-500/20 flex items-center gap-1 shrink-0 font-medium ${
+                                        isChecked ? 'opacity-50' : ''
+                                      }`}
+                                      title={formatPantryTooltip(pantryMatch)}
+                                    >
+                                      <span>✓ In Pantry</span>
                                     </span>
                                   )}
                                 </div>
@@ -1808,6 +1913,7 @@ export const GroceryPage: React.FC = () => {
                 const isCrossing = Boolean(crossingOffIds[item.id]);
                 const isChecked = item.is_completed || isCrossing;
                 const isThisItemDragging = draggingItem?.id === item.id;
+                const pantryMatch = getPantryMatch(item.name);
                 return (
                   <div
                     key={item.id}
@@ -1834,7 +1940,7 @@ export const GroceryPage: React.FC = () => {
                         )}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span
                             className={`text-sm font-semibold truncate transition-colors ${
                               isCrossing
@@ -1849,6 +1955,16 @@ export const GroceryPage: React.FC = () => {
                           {item.quantity && (
                             <span className="text-xs font-mono text-slate-400 shrink-0">
                               ({item.quantity}{item.unit ? ` ${item.unit}` : ''})
+                            </span>
+                          )}
+                          {pantryMatch && (
+                            <span
+                              className={`text-[10px] px-2 py-0.5 rounded-full bg-slate-800/80 text-emerald-400 border border-emerald-500/20 flex items-center gap-1 shrink-0 font-medium ${
+                                isChecked ? 'opacity-50' : ''
+                              }`}
+                              title={formatPantryTooltip(pantryMatch)}
+                            >
+                              <span>✓ In Pantry</span>
                             </span>
                           )}
                         </div>
@@ -1933,6 +2049,7 @@ export const GroceryPage: React.FC = () => {
             {activeItems.map((item) => {
               const isCrossing = Boolean(crossingOffIds[item.id]);
               const isChecked = item.is_completed || isCrossing;
+              const pantryMatch = getPantryMatch(item.name);
               return (
                 <div
                   key={item.id}
@@ -1956,7 +2073,7 @@ export const GroceryPage: React.FC = () => {
                       )}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span
                           className={`text-sm font-semibold truncate transition-colors ${
                             isCrossing
@@ -1971,6 +2088,16 @@ export const GroceryPage: React.FC = () => {
                         {item.quantity && (
                           <span className="text-xs font-mono text-slate-400 shrink-0">
                             ({item.quantity}{item.unit ? ` ${item.unit}` : ''})
+                          </span>
+                        )}
+                        {pantryMatch && (
+                          <span
+                            className={`text-[10px] px-2 py-0.5 rounded-full bg-slate-800/80 text-emerald-400 border border-emerald-500/20 flex items-center gap-1 shrink-0 font-medium ${
+                              isChecked ? 'opacity-50' : ''
+                            }`}
+                            title={formatPantryTooltip(pantryMatch)}
+                          >
+                            <span>✓ In Pantry</span>
                           </span>
                         )}
                       </div>
@@ -2031,27 +2158,37 @@ export const GroceryPage: React.FC = () => {
             </div>
 
             <div className="space-y-1">
-              {completedItems.map((item) => (
-                <div
-                  key={item.id}
-                  onClick={() => handleToggleItem(item.id)}
-                  className="flex items-center justify-between px-3 py-1.5 sm:px-3.5 sm:py-1.5 rounded-xl bg-slate-900/30 hover:bg-slate-900/60 transition-colors cursor-pointer group opacity-60 hover:opacity-100 gap-2 min-h-[38px]"
-                >
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <div className="w-5 h-5 rounded-md bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
-                      <Check className="w-3.5 h-3.5 font-bold" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm line-through text-slate-400 font-medium truncate">
-                          {item.name}
-                        </span>
-                        {item.quantity && (
-                          <span className="text-xs font-mono text-slate-500 shrink-0 line-through">
-                            ({item.quantity}{item.unit ? ` ${item.unit}` : ''})
-                          </span>
-                        )}
+              {completedItems.map((item) => {
+                const pantryMatch = getPantryMatch(item.name);
+                return (
+                  <div
+                    key={item.id}
+                    onClick={() => handleToggleItem(item.id)}
+                    className="flex items-center justify-between px-3 py-1.5 sm:px-3.5 sm:py-1.5 rounded-xl bg-slate-900/30 hover:bg-slate-900/60 transition-colors cursor-pointer group opacity-60 hover:opacity-100 gap-2 min-h-[38px]"
+                  >
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <div className="w-5 h-5 rounded-md bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                        <Check className="w-3.5 h-3.5 font-bold" />
                       </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm line-through text-slate-400 font-medium truncate">
+                            {item.name}
+                          </span>
+                          {item.quantity && (
+                            <span className="text-xs font-mono text-slate-500 shrink-0 line-through">
+                              ({item.quantity}{item.unit ? ` ${item.unit}` : ''})
+                            </span>
+                          )}
+                          {pantryMatch && (
+                            <span
+                              className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800/80 text-emerald-400/60 border border-emerald-500/20 flex items-center gap-1 shrink-0 font-medium"
+                              title={formatPantryTooltip(pantryMatch)}
+                            >
+                              <span>✓ In Pantry</span>
+                            </span>
+                          )}
+                        </div>
                       {item.notes && (
                         <p className="text-[11px] text-slate-500 line-through truncate leading-tight mt-0.5">
                           {item.notes}
@@ -2082,7 +2219,8 @@ export const GroceryPage: React.FC = () => {
                     </button>
                   </div>
                 </div>
-              ))}
+              );
+            })}
             </div>
           </div>
         )}
@@ -2118,9 +2256,23 @@ export const GroceryPage: React.FC = () => {
       >
         <form id="edit-grocery-item-form" onSubmit={handleSaveEdit} className="space-y-3.5">
           <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-              Item Name
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                Item Name
+              </label>
+              {editingItem && (() => {
+                const pm = getPantryMatch(editName || editingItem.name);
+                if (!pm) return null;
+                return (
+                  <span
+                    className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800/80 text-emerald-400 border border-emerald-500/20 flex items-center gap-1 font-medium"
+                    title={formatPantryTooltip(pm)}
+                  >
+                    <span>✓ In Pantry ({pm.location ? pm.location.charAt(0).toUpperCase() + pm.location.slice(1) : 'Pantry'})</span>
+                  </span>
+                );
+              })()}
+            </div>
             <input
               type="text"
               required
