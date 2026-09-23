@@ -3232,36 +3232,9 @@ export const MealsPage: React.FC = () => {
         subtitle={`Pick a date for "${schedulingMeal?.title}"`}
       >
         <div className="p-4 space-y-4">
-          {/* Unschedule Banner if meal is currently scheduled */}
-          {schedulingMeal?.scheduled_date && (
-            <div className="flex items-center justify-between p-3 rounded-2xl bg-rose-500/10 border border-rose-500/20">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-8 h-8 rounded-xl bg-rose-500/20 flex items-center justify-center text-rose-400 shrink-0">
-                  <CalendarIcon className="w-4 h-4" />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-xs font-bold text-rose-300 truncate">
-                    Scheduled for {format(parseISO(schedulingMeal.scheduled_date), 'EEE, MMM d')}
-                  </div>
-                  <div className="text-[10px] text-slate-400">
-                    Remove from calendar & clear date
-                  </div>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => handleUnscheduleMeal(schedulingMeal)}
-                className="px-3 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 border border-rose-500/30 text-xs font-bold transition-all cursor-pointer shrink-0 flex items-center gap-1.5"
-              >
-                <X className="w-3.5 h-3.5" />
-                <span>Unschedule</span>
-              </button>
-            </div>
-          )}
-
           <p className="text-xs text-slate-400">
             {schedulingMeal?.scheduled_date
-              ? 'Select another day to reschedule, or tap the current day to unschedule:'
+              ? 'Select a day to reschedule, or tap the current day to unschedule:'
               : 'Select a day to place this dinner on the family calendar:'}
           </p>
 
