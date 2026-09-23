@@ -653,6 +653,7 @@ export const api = {
         quantity: ing.amount,
         unit: ing.unit,
         category: ing.category,
+        list_type: 'grocery',
         notes: `For: ${recipe.title}`,
       });
       count++;
@@ -687,6 +688,7 @@ export const api = {
         quantity: ing.amount,
         unit: ing.unit,
         category: ing.category,
+        list_type: 'grocery',
         notes: `For: ${recipe.title}`,
       });
       count++;
@@ -908,6 +910,7 @@ export const api = {
               name: ing.item,
               quantity: ing.amount,
               unit: ing.unit,
+              list_type: 'grocery',
               notes: `For: ${rec.title}`,
             });
             addedCount++;

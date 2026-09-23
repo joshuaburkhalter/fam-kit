@@ -1549,6 +1549,7 @@ export const MealsPage: React.FC = () => {
           quantity: ing.amount,
           unit: ing.unit,
           category: ing.category,
+          list_type: 'grocery',
           notes: `For: ${selectedRecipe.title}`,
         });
 

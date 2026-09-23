@@ -49,6 +49,7 @@ import {
   deleteCategoryPreference,
   resolveAisleForGroceryItem,
   getHouseholdGrocerySuggestions,
+  recordGroceryHistoryItem,
 } from './groceryPreferences.js';
 
 dotenv.config();
@@ -1971,6 +1972,7 @@ app.post('/api/grocery', (req, res) => {
       const resolved = resolveAisleForGroceryItem(householdId, name, aisles, category || undefined, aisleId || undefined);
       finalAisleId = resolved.aisleId;
       finalCategory = resolved.category;
+      recordGroceryHistoryItem(householdId, name, finalAisleId, finalCategory);
     } else {
       const listAisles = queryAll<{ id: string; name: string }>(
         'SELECT id, name FROM aisles WHERE householdId = ? AND listId = ? ORDER BY orderIndex ASC',
@@ -2056,6 +2058,7 @@ app.patch('/api/grocery', (req, res) => {
       deleteCategoryPreference(householdId, updated.name);
     } else if (updated.aisleId) {
       saveCategoryPreference(householdId, updated.name, updated.aisleId, updated.category || 'Other');
+      recordGroceryHistoryItem(householdId, updated.name, updated.aisleId, updated.category || 'Other');
     }
   }
 

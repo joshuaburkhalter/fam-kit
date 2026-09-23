@@ -274,9 +274,51 @@ export function resolveAisleForGroceryItem(
   return { aisleId: defaultAisle.id, category: defaultAisle.name, source: 'fallback' };
 }
 
+export function recordGroceryHistoryItem(
+  householdId: string,
+  name: string,
+  aisleId?: string | null,
+  category?: string | null,
+  source: string = 'grocery'
+) {
+  if (!householdId || !name || !name.trim()) return;
+  const raw = name.trim();
+  const normalized = raw.toLowerCase();
+  const now = new Date().toISOString();
+  try {
+    execute(
+      `INSERT OR REPLACE INTO grocery_history (householdId, normalizedName, name, aisleId, category, source, lastAddedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [householdId, normalized, raw, aisleId || null, category || null, source, now]
+    );
+  } catch (err) {
+    console.error('Failed to record grocery history:', err);
+  }
+}
+
+export function extractIngredientName(raw: any): string | null {
+  if (!raw) return null;
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+    const cleaned = trimmed
+      .replace(/^[\d\s\/\.\-\u00BC-\u00BE\u2150-\u215E]+(cups?|tbsp?|teaspoons?|tablespoons?|tsps?|oz|ounces?|lbs?|pounds?|grams?|g|kg|cans?|cloves?|slices?|pinch|pkg|package|bunch|stalks?|pieces?)\s*(of\s+)?/i, '')
+      .replace(/^[\d\s\/\.\-\u00BC-\u00BE\u2150-\u215E]+\s+/, '')
+      .trim();
+    return cleaned || trimmed;
+  }
+  if (typeof raw === 'object') {
+    const val = raw.item || raw.name || raw.ingredient || raw.title;
+    if (typeof val === 'string' && val.trim()) {
+      return val.trim();
+    }
+  }
+  return null;
+}
+
 /**
  * Returns distinct historical grocery items for autocomplete suggestions.
- * Gathers from grocery_items, learned preferences, and pantry inventory,
+ * Gathers from grocery items, historical grocery items, recipes, learned preferences, and pantry inventory,
  * resolving each item to its remembered aisle.
  */
 export function getHouseholdGrocerySuggestions(
@@ -308,8 +350,33 @@ export function getHouseholdGrocerySuggestions(
     );
   } catch {}
 
-  // Query distinct names and latest/most frequent items strictly from grocery items
-  const rows = queryAll<{ name: string; aisleId?: string; category?: string; count: number }>(
+  const seen = new Set<string>();
+  const suggestions: GrocerySuggestion[] = [];
+
+  const addSuggestion = (rawName: string, explicitAisleId?: string, explicitCategory?: string) => {
+    const trimmed = rawName?.trim();
+    if (!trimmed) return;
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+
+    const resolved = resolveAisleForGroceryItem(
+      householdId,
+      trimmed,
+      aisles,
+      explicitCategory,
+      explicitAisleId
+    );
+
+    suggestions.push({
+      name: trimmed,
+      aisleId: resolved.aisleId,
+      category: resolved.category,
+    });
+  };
+
+  // 1. Current Grocery Items (currently active on the list)
+  const currentRows = queryAll<{ name: string; aisleId?: string; category?: string; count: number }>(
     `SELECT name, aisleId, category, COUNT(*) as count 
      FROM grocery_items 
      WHERE householdId = ? AND (listId IS NULL OR listId = 'grocery')
@@ -318,8 +385,55 @@ export function getHouseholdGrocerySuggestions(
      LIMIT 150`,
     [householdId]
   );
+  for (const r of currentRows) {
+    addSuggestion(r.name, r.aisleId, r.category);
+  }
 
-  // Also fetch grocery preferences that might not currently be on the active grocery list
+  // 2. Historical Grocery Items (all items previously entered into the grocery list, even if checked/cleared)
+  try {
+    const historyRows = queryAll<{ name: string; aisleId?: string; category?: string }>(
+      `SELECT name, aisleId, category 
+       FROM grocery_history 
+       WHERE householdId = ? 
+       ORDER BY lastAddedAt DESC 
+       LIMIT 250`,
+      [householdId]
+    );
+    for (const h of historyRows) {
+      addSuggestion(h.name, h.aisleId, h.category);
+    }
+  } catch {}
+
+  // 3. Recipe Ingredients (all ingredients entered in the household's recipes)
+  try {
+    const recipeRows = queryAll<{ title: string; ingredients: string }>(
+      `SELECT title, ingredients FROM recipes WHERE householdId = ? ORDER BY createdAt DESC`,
+      [householdId]
+    );
+    for (const rec of recipeRows) {
+      if (!rec.ingredients) continue;
+      let ingList: any[] = [];
+      try {
+        if (typeof rec.ingredients === 'string') {
+          ingList = JSON.parse(rec.ingredients);
+        } else if (Array.isArray(rec.ingredients)) {
+          ingList = rec.ingredients;
+        }
+      } catch {}
+
+      if (Array.isArray(ingList)) {
+        for (const ing of ingList) {
+          const ingName = extractIngredientName(ing);
+          const ingCategory = typeof ing === 'object' && ing ? ing.category : undefined;
+          if (ingName) {
+            addSuggestion(ingName, undefined, ingCategory);
+          }
+        }
+      }
+    }
+  } catch {}
+
+  // 4. Grocery Category Preferences
   const prefs = queryAll<{ rawName: string; aisleId: string; category: string }>(
     `SELECT rawName, aisleId, category FROM grocery_category_preferences 
      WHERE householdId = ? 
@@ -327,90 +441,23 @@ export function getHouseholdGrocerySuggestions(
          aisleId IN (SELECT id FROM aisles WHERE householdId = ? AND (listId IS NULL OR listId = 'grocery'))
          OR aisleId IS NULL
        )
-       AND normalizedName NOT IN (
-         SELECT LOWER(TRIM(name)) FROM grocery_items 
-         WHERE householdId = ? AND listId IS NOT NULL AND listId != 'grocery'
-         AND LOWER(TRIM(name)) NOT IN (
-           SELECT LOWER(TRIM(name)) FROM grocery_items 
-           WHERE householdId = ? AND (listId IS NULL OR listId = 'grocery')
-         )
-       )
      ORDER BY updatedAt DESC 
      LIMIT 50`,
-    [householdId, householdId, householdId, householdId]
+    [householdId, householdId]
   );
+  for (const p of prefs) {
+    addSuggestion(p.rawName, p.aisleId, p.category);
+  }
 
-  // Also include inventory items
+  // 5. Inventory Items (pantry inventory)
   const inventoryRows = queryAll<{ name: string; category?: string }>(
     `SELECT DISTINCT name, category FROM inventory_items 
      WHERE householdId = ? 
-     LIMIT 50`,
+     LIMIT 100`,
     [householdId]
   );
-
-  const seen = new Set<string>();
-  const suggestions: GrocerySuggestion[] = [];
-
-  // Process grocery items first (highest relevance)
-  for (const r of rows) {
-    const key = r.name.toLowerCase().trim();
-    if (!key || seen.has(key)) continue;
-    seen.add(key);
-
-    const resolved = resolveAisleForGroceryItem(
-      householdId,
-      r.name,
-      aisles,
-      r.category,
-      r.aisleId
-    );
-
-    suggestions.push({
-      name: r.name.trim(),
-      aisleId: resolved.aisleId,
-      category: resolved.category,
-    });
-  }
-
-  // Process learned preferences
-  for (const p of prefs) {
-    const key = p.rawName.toLowerCase().trim();
-    if (!key || seen.has(key)) continue;
-    seen.add(key);
-
-    const resolved = resolveAisleForGroceryItem(
-      householdId,
-      p.rawName,
-      aisles,
-      p.category,
-      p.aisleId
-    );
-
-    suggestions.push({
-      name: p.rawName.trim(),
-      aisleId: resolved.aisleId,
-      category: resolved.category,
-    });
-  }
-
-  // Process inventory items
   for (const inv of inventoryRows) {
-    const key = inv.name.toLowerCase().trim();
-    if (!key || seen.has(key)) continue;
-    seen.add(key);
-
-    const resolved = resolveAisleForGroceryItem(
-      householdId,
-      inv.name,
-      aisles,
-      inv.category
-    );
-
-    suggestions.push({
-      name: inv.name.trim(),
-      aisleId: resolved.aisleId,
-      category: resolved.category,
-    });
+    addSuggestion(inv.name, undefined, inv.category);
   }
 
   return suggestions;

@@ -105,6 +105,18 @@ function initSchema(db: Database) {
     );
     CREATE INDEX IF NOT EXISTS idx_grocery_pref_lookup ON grocery_category_preferences(householdId, normalizedName);
 
+    CREATE TABLE IF NOT EXISTS grocery_history (
+      householdId TEXT NOT NULL,
+      normalizedName TEXT NOT NULL,
+      name TEXT NOT NULL,
+      aisleId TEXT,
+      category TEXT,
+      source TEXT DEFAULT 'grocery',
+      lastAddedAt TEXT NOT NULL,
+      PRIMARY KEY (householdId, normalizedName)
+    );
+    CREATE INDEX IF NOT EXISTS idx_grocery_history_lookup ON grocery_history(householdId, normalizedName);
+
     CREATE TABLE IF NOT EXISTS custom_lists (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
@@ -280,6 +292,27 @@ function initSchema(db: Database) {
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL
       );
+    `);
+  } catch {}
+  try {
+    db.run(`
+      CREATE TABLE IF NOT EXISTS grocery_history (
+        householdId TEXT NOT NULL,
+        normalizedName TEXT NOT NULL,
+        name TEXT NOT NULL,
+        aisleId TEXT,
+        category TEXT,
+        source TEXT DEFAULT 'grocery',
+        lastAddedAt TEXT NOT NULL,
+        PRIMARY KEY (householdId, normalizedName)
+      );
+    `);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_grocery_history_lookup ON grocery_history (householdId, normalizedName)`);
+    db.run(`
+      INSERT OR IGNORE INTO grocery_history (householdId, normalizedName, name, aisleId, category, source, lastAddedAt)
+      SELECT householdId, LOWER(TRIM(name)), name, aisleId, category, 'grocery', createdAt
+      FROM grocery_items
+      WHERE (listId IS NULL OR listId = 'grocery') AND name IS NOT NULL AND TRIM(name) != ''
     `);
   } catch {}
   try {
