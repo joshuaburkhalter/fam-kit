@@ -384,6 +384,7 @@ app.post('/api/auth/register', (req, res) => {
     const displayName = (name && typeof name === 'string' && name.trim()) || cleanUsername;
     const userPassword = password !== undefined && password !== null ? String(password).trim() : 'password123';
     let targetHouseholdId: string;
+    let initialPromoUsed: string | null = null;
     const now = new Date().toISOString();
 
     if (action === 'create_household') {
@@ -395,7 +396,6 @@ app.post('/api/auth/register', (req, res) => {
       let initialStatus = 'unpaid';
       let initialPlan: string | null = null;
       let initialExpiresAt: string | null = null;
-      let initialPromoUsed: string | null = null;
 
       const promoInput = (req.body?.promoCode || '').trim().toUpperCase();
       if (promoInput) {
@@ -462,7 +462,7 @@ app.post('/api/auth/register', (req, res) => {
 
     if (initialPromoUsed) {
       try {
-        const cleanHouseName = (householdName && typeof householdName === 'string' ? householdName.trim() : '') || 'Family Household';
+        const cleanHouseName = (householdName && typeof householdName === 'string' ? householdName.trim() : '') || `${displayName}'s Family`;
         execute(
           `UPDATE promo_codes 
            SET claimedByUserName = COALESCE(claimedByUserName, ?),
@@ -482,7 +482,10 @@ app.post('/api/auth/register', (req, res) => {
       }
     }
 
-    const household = queryOne('SELECT * FROM households WHERE id = ?', [targetHouseholdId]);
+    let household = queryOne('SELECT * FROM households WHERE id = ?', [targetHouseholdId]);
+    if (!household) {
+      household = queryOne('SELECT * FROM households ORDER BY id ASC LIMIT 1');
+    }
     const user = {
       id: userId,
       name: displayName,
@@ -2327,7 +2330,8 @@ app.post('/api/recipes/:id/regenerate-image', async (req, res) => {
       description: string | null;
       ingredients: string | null;
       tags: string | null;
-    }>('SELECT id, title, description, ingredients, tags FROM recipes WHERE id = ? AND householdId = ?', [
+      imageUrl?: string | null;
+    }>('SELECT id, title, description, ingredients, tags, imageUrl FROM recipes WHERE id = ? AND householdId = ?', [
       id,
       householdId,
     ]);
@@ -3467,7 +3471,8 @@ app.get('/api/auth/google/status', (req, res) => {
 app.get('/api/auth/google/calendars', async (req, res) => {
   try {
     const householdId = getHouseholdId(req);
-    const userId = (req.query.userId as string) || getAuthUser(req) || 'u1';
+    const authUser = getAuthUser(req);
+    const userId = (req.query.userId as string) || authUser?.id || 'u1';
     const result = await getUserGoogleCalendars(householdId, userId);
     if (result.error) {
       return res.status(400).json({ error: result.error });
