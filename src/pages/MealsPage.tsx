@@ -57,6 +57,7 @@ import { VisionScanModal } from '../components/inventory/VisionScanModal';
 import { EditInventoryModal } from '../components/inventory/EditInventoryModal';
 import { getFreshnessBadge, getLocationMeta } from '../lib/shelfLife';
 import { Toast } from '../components/ui/Toast';
+import { clearCalendarCache } from './CalendarPage';
 
 interface MealsDataCache {
   householdId: string;
@@ -742,6 +743,15 @@ export const MealsPage: React.FC = () => {
           weekly_meal_id: meal.id,
         });
 
+        if (meal.calendar_event_id) {
+          try {
+            await api.deleteCalendarEvent(meal.calendar_event_id);
+          } catch (calErr) {
+            console.warn('Failed to delete calendar event for cooked meal:', calErr);
+          }
+        }
+        clearCalendarCache();
+
         await api.deleteWeeklyMeal(meal.id);
 
         setMeals((prev) => prev.filter((m) => m.id !== meal.id));
@@ -766,12 +776,81 @@ export const MealsPage: React.FC = () => {
   };
 
   /**
+   * Remove meal from the calendar and clear its scheduled date
+   */
+  const handleUnscheduleMeal = async (meal: WeeklyMeal | null) => {
+    if (!meal || !householdId) return;
+
+    const previousScheduledDate = meal.scheduled_date;
+
+    try {
+      if (meal.calendar_event_id) {
+        try {
+          await api.deleteCalendarEvent(meal.calendar_event_id);
+        } catch (e) {
+          console.warn('Failed to delete calendar event for meal:', e);
+        }
+      }
+
+      await api.updateWeeklyMeal(meal.id, {
+        scheduled_date: null,
+        calendar_event_id: null,
+      });
+
+      setMeals((prev) =>
+        prev.map((m) =>
+          m.id === meal.id ? { ...m, scheduled_date: undefined, calendar_event_id: undefined } : m
+        )
+      );
+      if (mealsDataCache && mealsDataCache.householdId === householdId) {
+        mealsDataCache.meals = mealsDataCache.meals.map((m) =>
+          m.id === meal.id ? { ...m, scheduled_date: undefined, calendar_event_id: undefined } : m
+        );
+      }
+
+      clearCalendarCache();
+      setIsScheduleDrawerOpen(false);
+      setSchedulingMeal(null);
+
+      showToast(`Removed "${meal.title}" from calendar`, {
+        label: 'Undo',
+        onClick: async () => {
+          if (previousScheduledDate) {
+            await handleScheduleMeal(
+              { ...meal, scheduled_date: undefined, calendar_event_id: undefined },
+              previousScheduledDate
+            );
+          }
+        },
+      });
+    } catch (err) {
+      console.error('Failed to unschedule meal:', err);
+      showToast('Failed to unschedule meal');
+    }
+  };
+
+  /**
    * Put meal on the calendar and update its scheduled date
    */
   const handleScheduleMeal = async (meal: WeeklyMeal | null, dateStr: string) => {
     if (!meal || !householdId) return;
 
+    // If tapping the already-scheduled day, toggle off (unschedule)
+    if (meal.scheduled_date === dateStr) {
+      await handleUnscheduleMeal(meal);
+      return;
+    }
+
     try {
+      // If previously scheduled with a calendar event, remove the old one first to avoid duplicate events
+      if (meal.calendar_event_id) {
+        try {
+          await api.deleteCalendarEvent(meal.calendar_event_id);
+        } catch (e) {
+          console.warn('Failed to remove previous calendar event on reschedule:', e);
+        }
+      }
+
       const eventTitle = `🍽️ ${meal.title}`;
       const newEvent = await api.createCalendarEvent(householdId, {
         title: eventTitle,
@@ -783,17 +862,21 @@ export const MealsPage: React.FC = () => {
 
       await api.updateWeeklyMeal(meal.id, {
         scheduled_date: dateStr,
+        calendar_event_id: newEvent.id,
       });
 
       setMeals((prev) =>
-        prev.map((m) => (m.id === meal.id ? { ...m, scheduled_date: dateStr } : m))
+        prev.map((m) =>
+          m.id === meal.id ? { ...m, scheduled_date: dateStr, calendar_event_id: newEvent.id } : m
+        )
       );
       if (mealsDataCache && mealsDataCache.householdId === householdId) {
         mealsDataCache.meals = mealsDataCache.meals.map((m) =>
-          m.id === meal.id ? { ...m, scheduled_date: dateStr } : m
+          m.id === meal.id ? { ...m, scheduled_date: dateStr, calendar_event_id: newEvent.id } : m
         );
       }
 
+      clearCalendarCache();
       setIsScheduleDrawerOpen(false);
       setSchedulingMeal(null);
 
@@ -809,15 +892,18 @@ export const MealsPage: React.FC = () => {
         onClick: async () => {
           try {
             await api.deleteCalendarEvent(newEvent.id);
-            await api.updateWeeklyMeal(meal.id, { scheduled_date: null });
+            await api.updateWeeklyMeal(meal.id, { scheduled_date: null, calendar_event_id: null });
             setMeals((prev) =>
-              prev.map((m) => (m.id === meal.id ? { ...m, scheduled_date: undefined } : m))
+              prev.map((m) =>
+                m.id === meal.id ? { ...m, scheduled_date: undefined, calendar_event_id: undefined } : m
+              )
             );
             if (mealsDataCache && mealsDataCache.householdId === householdId) {
               mealsDataCache.meals = mealsDataCache.meals.map((m) =>
-                m.id === meal.id ? { ...m, scheduled_date: undefined } : m
+                m.id === meal.id ? { ...m, scheduled_date: undefined, calendar_event_id: undefined } : m
               );
             }
+            clearCalendarCache();
             showToast(`Removed "${meal.title}" from calendar`);
           } catch (err) {
             console.error('Failed to undo schedule:', err);
@@ -841,6 +927,15 @@ export const MealsPage: React.FC = () => {
         cooked_by_user_id: currentUser?.id,
         weekly_meal_id: meal.id,
       });
+
+      if (meal.calendar_event_id) {
+        try {
+          await api.deleteCalendarEvent(meal.calendar_event_id);
+        } catch (calErr) {
+          console.warn('Failed to delete calendar event for cooked meal:', calErr);
+        }
+      }
+      clearCalendarCache();
 
       await api.deleteWeeklyMeal(meal.id);
 
@@ -898,6 +993,15 @@ export const MealsPage: React.FC = () => {
   const handleDeletePlannerMeal = async (meal: WeeklyMeal, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     try {
+      if (meal.calendar_event_id) {
+        try {
+          await api.deleteCalendarEvent(meal.calendar_event_id);
+        } catch (calErr) {
+          console.warn('Failed to delete calendar event for meal:', calErr);
+        }
+      }
+      clearCalendarCache();
+
       await api.deleteWeeklyMeal(meal.id);
       setMeals((prev) => prev.filter((m) => m.id !== meal.id));
       if (mealsDataCache && mealsDataCache.householdId === householdId) {
@@ -914,6 +1018,23 @@ export const MealsPage: React.FC = () => {
               notes: meal.notes,
               scheduled_date: meal.scheduled_date,
             });
+            if (meal.scheduled_date) {
+              try {
+                const eventTitle = `🍽️ ${meal.title}`;
+                const newEv = await api.createCalendarEvent(householdId, {
+                  title: eventTitle,
+                  description: meal.notes || (meal.recipe_id ? 'Planned dinner from recipe box' : 'Planned dinner'),
+                  start_time: `${meal.scheduled_date}T18:00:00`,
+                  end_time: `${meal.scheduled_date}T19:00:00`,
+                  is_all_day: false,
+                });
+                await api.updateWeeklyMeal(restored.id, { calendar_event_id: newEv.id });
+                restored.calendar_event_id = newEv.id;
+              } catch (evErr) {
+                console.warn('Failed to restore calendar event on undo:', evErr);
+              }
+            }
+            clearCalendarCache();
             setMeals((prev) => [restored, ...prev]);
             if (mealsDataCache && mealsDataCache.householdId === householdId) {
               mealsDataCache.meals = [restored, ...mealsDataCache.meals];
@@ -1279,6 +1400,14 @@ export const MealsPage: React.FC = () => {
           m.title.toLowerCase() === logForm.title.trim().toLowerCase()
       );
       if (matchedWeekly) {
+        if (matchedWeekly.calendar_event_id) {
+          try {
+            await api.deleteCalendarEvent(matchedWeekly.calendar_event_id);
+          } catch (calErr) {
+            console.warn('Failed to delete calendar event for matched meal:', calErr);
+          }
+        }
+        clearCalendarCache();
         await api.deleteWeeklyMeal(matchedWeekly.id);
         setMeals((prev) => prev.filter((m) => m.id !== matchedWeekly.id));
       }
@@ -2620,17 +2749,31 @@ export const MealsPage: React.FC = () => {
 
                             <div className="flex items-center gap-1.5 shrink-0">
                               {meal.scheduled_date && (
-                                <span
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSchedulingMeal(meal);
-                                    setIsScheduleDrawerOpen(true);
-                                  }}
-                                  className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-emerald-500/10 text-emerald-400 border-emerald-500/20 flex items-center gap-1 shrink-0 whitespace-nowrap cursor-pointer hover:bg-emerald-500/20"
-                                  title="Change scheduled date"
-                                >
-                                  <Calendar className="w-3 h-3" />
-                                  <span>{format(parseISO(meal.scheduled_date), 'EEE, MMM d')}</span>
+                                <span className="text-[10px] font-semibold pl-2 pr-1 py-0.5 rounded-full border bg-emerald-500/10 text-emerald-400 border-emerald-500/20 flex items-center gap-1 shrink-0 whitespace-nowrap">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSchedulingMeal(meal);
+                                      setIsScheduleDrawerOpen(true);
+                                    }}
+                                    className="flex items-center gap-1 hover:text-emerald-300 cursor-pointer"
+                                    title="Change scheduled date"
+                                  >
+                                    <Calendar className="w-3 h-3" />
+                                    <span>{format(parseISO(meal.scheduled_date), 'EEE, MMM d')}</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleUnscheduleMeal(meal);
+                                    }}
+                                    className="p-0.5 rounded-full hover:bg-emerald-500/20 text-emerald-400 hover:text-rose-300 transition-colors cursor-pointer"
+                                    title="Unschedule (remove from calendar)"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
                                 </span>
                               )}
                               {linkedRecipe?.cook_time_minutes && (
@@ -3089,8 +3232,37 @@ export const MealsPage: React.FC = () => {
         subtitle={`Pick a date for "${schedulingMeal?.title}"`}
       >
         <div className="p-4 space-y-4">
+          {/* Unschedule Banner if meal is currently scheduled */}
+          {schedulingMeal?.scheduled_date && (
+            <div className="flex items-center justify-between p-3 rounded-2xl bg-rose-500/10 border border-rose-500/20">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-xl bg-rose-500/20 flex items-center justify-center text-rose-400 shrink-0">
+                  <CalendarIcon className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-bold text-rose-300 truncate">
+                    Scheduled for {format(parseISO(schedulingMeal.scheduled_date), 'EEE, MMM d')}
+                  </div>
+                  <div className="text-[10px] text-slate-400">
+                    Remove from calendar & clear date
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleUnscheduleMeal(schedulingMeal)}
+                className="px-3 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 border border-rose-500/30 text-xs font-bold transition-all cursor-pointer shrink-0 flex items-center gap-1.5"
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>Unschedule</span>
+              </button>
+            </div>
+          )}
+
           <p className="text-xs text-slate-400">
-            Select a day to place this dinner on the family calendar:
+            {schedulingMeal?.scheduled_date
+              ? 'Select another day to reschedule, or tap the current day to unschedule:'
+              : 'Select a day to place this dinner on the family calendar:'}
           </p>
 
           {/* Quick-Pick 14 Days List */}
@@ -3113,6 +3285,7 @@ export const MealsPage: React.FC = () => {
                     key={dateStr}
                     type="button"
                     onClick={() => handleScheduleMeal(schedulingMeal, dateStr)}
+                    title={isSelected ? 'Click to unschedule this meal' : `Schedule for ${dayLabel}`}
                     className={`w-full p-2.5 sm:p-3 rounded-2xl border text-left flex items-center justify-between gap-3 transition-all cursor-pointer ${
                       isSelected
                         ? 'bg-emerald-500/20 border-emerald-500 ring-2 ring-emerald-500/40 shadow-md shadow-emerald-950/50'
@@ -3165,9 +3338,9 @@ export const MealsPage: React.FC = () => {
                     </div>
 
                     {isSelected ? (
-                      <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-300 bg-emerald-500/20 px-2.5 py-1 rounded-full border border-emerald-500/40 shrink-0">
-                        <Check className="w-3.5 h-3.5 stroke-[3]" />
-                        <span>Scheduled</span>
+                      <span className="flex items-center gap-1.5 text-[11px] font-bold text-rose-300 bg-rose-500/20 px-2.5 py-1 rounded-full border border-rose-500/40 shrink-0 hover:bg-rose-500/30 transition-colors">
+                        <X className="w-3.5 h-3.5 stroke-[2.5]" />
+                        <span>Unschedule</span>
                       </span>
                     ) : (
                       <span className="text-xs text-slate-500 hover:text-emerald-400 shrink-0 font-medium">
@@ -3207,9 +3380,13 @@ export const MealsPage: React.FC = () => {
                   type="button"
                   disabled={!customScheduleDate}
                   onClick={() => handleScheduleMeal(schedulingMeal, customScheduleDate)}
-                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 disabled:opacity-40 text-slate-950 font-bold text-xs transition-all cursor-pointer shrink-0"
+                  className={`px-4 py-2 rounded-xl font-bold text-xs transition-all cursor-pointer shrink-0 disabled:opacity-40 ${
+                    schedulingMeal?.scheduled_date === customScheduleDate
+                      ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30 hover:bg-rose-500/30'
+                      : 'bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950'
+                  }`}
                 >
-                  Schedule
+                  {schedulingMeal?.scheduled_date === customScheduleDate ? 'Unschedule' : 'Schedule'}
                 </button>
               </div>
             </div>

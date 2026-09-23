@@ -2422,7 +2422,7 @@ app.get('/api/meals/week', (req, res) => {
 
 app.post('/api/meals/week', (req, res) => {
   const householdId = getHouseholdId(req);
-  const { title, recipeId, notes, weekStartDate, scheduledDate } = req.body;
+  const { title, recipeId, notes, weekStartDate, scheduledDate, calendarEventId } = req.body;
 
   if (!title) {
     return res.status(400).json({ error: 'Title is required' });
@@ -2435,8 +2435,11 @@ app.post('/api/meals/week', (req, res) => {
       [householdId, recipeId]
     );
     if (existing) {
-      if (scheduledDate !== undefined) {
-        execute('UPDATE weekly_meals SET scheduledDate = ? WHERE id = ?', [scheduledDate || null, existing.id]);
+      if (scheduledDate !== undefined || calendarEventId !== undefined) {
+        execute(
+          'UPDATE weekly_meals SET scheduledDate = ?, calendarEventId = ? WHERE id = ?',
+          [scheduledDate || null, calendarEventId || null, existing.id]
+        );
       }
       const current = queryOne('SELECT * FROM weekly_meals WHERE id = ?', [existing.id]);
       return res.json(current ? { ...current, isMade: Boolean(current.isMade) } : { id: existing.id, title });
@@ -2448,9 +2451,9 @@ app.post('/api/meals/week', (req, res) => {
   const weekStart = weekStartDate || now.split('T')[0];
 
   execute(
-    `INSERT INTO weekly_meals (id, title, recipeId, notes, isMade, madeDate, scheduledDate, weekStartDate, householdId, createdAt)
-     VALUES (?, ?, ?, ?, 0, NULL, ?, ?, ?, ?)`,
-    [id, title, recipeId || null, notes || null, scheduledDate || null, weekStart, householdId, now]
+    `INSERT INTO weekly_meals (id, title, recipeId, notes, isMade, madeDate, scheduledDate, calendarEventId, weekStartDate, householdId, createdAt)
+     VALUES (?, ?, ?, ?, 0, NULL, ?, ?, ?, ?, ?)`,
+    [id, title, recipeId || null, notes || null, scheduledDate || null, calendarEventId || null, weekStart, householdId, now]
   );
 
   const actor = getAuthUser(req);
@@ -2471,9 +2474,79 @@ app.post('/api/meals/week', (req, res) => {
   res.json(saved ? { ...saved, isMade: Boolean(saved.isMade) } : { id, title });
 });
 
-app.patch('/api/meals/week', (req, res) => {
-  const { id, isMade, madeDate, title, notes, scheduledDate } = req.body;
+async function removeMealCalendarEvents(
+  householdId: string,
+  weeklyMealId?: string,
+  title?: string,
+  date?: string,
+  calendarEventId?: string
+) {
+  try {
+    const eventsToDelete: Array<{ id: string }> = [];
+
+    // 1. By calendarEventId if known
+    if (calendarEventId) {
+      const ev = queryOne<{ id: string }>(
+        'SELECT id FROM calendar_events WHERE id = ? AND householdId = ?',
+        [calendarEventId, householdId]
+      );
+      if (ev) eventsToDelete.push(ev);
+    }
+
+    // 2. By title and date (handles raw title, emoji-prefixed title, or fuzzy match)
+    if (title && date) {
+      const cleanTitle = title.replace(/^[🍽️🍳🥘🥗🍲🍝🍕🍔🥪\s]+/, '').trim();
+      const matched = queryAll<{ id: string }>(
+        `SELECT id FROM calendar_events 
+         WHERE householdId = ? 
+           AND date = ? 
+           AND (
+             title = ? 
+             OR title = ? 
+             OR title = ? 
+             OR LOWER(title) = LOWER(?)
+             OR LOWER(title) LIKE LOWER(?)
+           )`,
+        [
+          householdId,
+          date,
+          title,
+          `🍽️ ${title}`,
+          `🍽️ ${cleanTitle}`,
+          cleanTitle,
+          `%${cleanTitle}%`,
+        ]
+      );
+      for (const m of matched) {
+        if (!eventsToDelete.some((e) => e.id === m.id)) {
+          eventsToDelete.push(m);
+        }
+      }
+    }
+
+    for (const ev of eventsToDelete) {
+      try {
+        await deleteEventFromGoogleCalendar(ev.id, householdId);
+      } catch (gcalErr) {
+        console.warn('Failed to delete meal event from Google Calendar:', gcalErr);
+      }
+      execute('DELETE FROM calendar_events WHERE id = ?', [ev.id]);
+    }
+
+    if (eventsToDelete.length > 0) {
+      saveDb();
+    }
+  } catch (err) {
+    console.error('Error removing meal calendar events:', err);
+  }
+}
+
+app.patch('/api/meals/week', async (req, res) => {
+  const { id, isMade, madeDate, title, notes, scheduledDate, calendarEventId } = req.body;
+  const householdId = getHouseholdId(req);
   if (!id) return res.status(400).json({ error: 'ID is required' });
+
+  const existing = queryOne<any>('SELECT * FROM weekly_meals WHERE id = ?', [id]);
 
   if (isMade !== undefined) {
     execute('UPDATE weekly_meals SET isMade = ?, madeDate = ? WHERE id = ?', [
@@ -2484,17 +2557,37 @@ app.patch('/api/meals/week', (req, res) => {
   }
   if (title !== undefined) execute('UPDATE weekly_meals SET title = ? WHERE id = ?', [title, id]);
   if (notes !== undefined) execute('UPDATE weekly_meals SET notes = ? WHERE id = ?', [notes, id]);
+  if (calendarEventId !== undefined) {
+    execute('UPDATE weekly_meals SET calendarEventId = ? WHERE id = ?', [calendarEventId || null, id]);
+  }
   if (scheduledDate !== undefined) {
     execute('UPDATE weekly_meals SET scheduledDate = ? WHERE id = ?', [scheduledDate || null, id]);
+    if (!scheduledDate && calendarEventId === undefined) {
+      execute('UPDATE weekly_meals SET calendarEventId = NULL WHERE id = ?', [id]);
+    }
+
+    // If scheduledDate was cleared (unscheduled) or changed to a different date:
+    if (existing && existing.scheduledDate && (!scheduledDate || scheduledDate !== existing.scheduledDate)) {
+      await removeMealCalendarEvents(householdId, existing.id, existing.title, existing.scheduledDate, existing.calendarEventId);
+    }
   }
 
+  saveDb();
   const updated = queryOne('SELECT * FROM weekly_meals WHERE id = ?', [id]);
   res.json(updated ? { ...updated, isMade: Boolean(updated.isMade) } : {});
 });
 
-app.delete('/api/meals/week', (req, res) => {
+app.delete('/api/meals/week', async (req, res) => {
+  const householdId = getHouseholdId(req);
   const id = req.query.id as string;
-  if (id) execute('DELETE FROM weekly_meals WHERE id = ?', [id]);
+  if (id) {
+    const existing = queryOne<any>('SELECT * FROM weekly_meals WHERE id = ?', [id]);
+    if (existing && existing.scheduledDate) {
+      await removeMealCalendarEvents(householdId, existing.id, existing.title, existing.scheduledDate, existing.calendarEventId);
+    }
+    execute('DELETE FROM weekly_meals WHERE id = ?', [id]);
+    saveDb();
+  }
   res.json({ success: true });
 });
 
@@ -3143,12 +3236,26 @@ app.delete('/api/calendar', async (req, res) => {
   const householdId = getHouseholdId(req);
   const id = req.query.id as string;
   if (id) {
+    const ev = queryOne<any>('SELECT * FROM calendar_events WHERE id = ? AND householdId = ?', [id, householdId]);
     try {
       await deleteEventFromGoogleCalendar(id, householdId);
     } catch (gcalErr) {
       console.warn('Failed to delete event from Google Calendar:', gcalErr);
     }
     execute('DELETE FROM calendar_events WHERE id = ?', [id]);
+
+    // If this calendar event was linked to a weekly meal, clear its scheduledDate and calendarEventId
+    if (ev) {
+      const cleanTitle = ev.title.replace(/^[🍽️🍳🥘🥗🍲🍝🍕🍔🥪\s]+/, '').trim();
+      execute(
+        `UPDATE weekly_meals 
+         SET scheduledDate = NULL, calendarEventId = NULL 
+         WHERE householdId = ? 
+           AND (calendarEventId = ? OR (scheduledDate = ? AND (title = ? OR title = ? OR LOWER(title) = LOWER(?))))`,
+        [householdId, id, ev.date, ev.title, cleanTitle, cleanTitle]
+      );
+    }
+
     saveDb();
   }
   res.json({ success: true });

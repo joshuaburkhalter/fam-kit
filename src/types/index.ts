@@ -151,6 +151,7 @@ export interface WeeklyMeal {
   is_made: boolean;
   made_date?: string;
   scheduled_date?: string;
+  calendar_event_id?: string;
   week_start_date: string;
   created_at: string;
 }

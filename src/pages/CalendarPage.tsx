@@ -34,6 +34,10 @@ import { Toast } from '../components/ui/Toast';
 // Module-level calendar cache for instant zero-latency page transitions
 let calendarCache: { householdId: string; events: CalendarEvent[] } | null = null;
 
+export const clearCalendarCache = () => {
+  calendarCache = null;
+};
+
 export const CalendarPage: React.FC = () => {
   const { currentUser, household, users } = usePWA();
   const [events, setEvents] = useState<CalendarEvent[]>(() => {

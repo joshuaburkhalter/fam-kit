@@ -156,6 +156,7 @@ function initSchema(db: Database) {
       isMade INTEGER NOT NULL DEFAULT 0,
       madeDate TEXT,
       scheduledDate TEXT,
+      calendarEventId TEXT,
       weekStartDate TEXT NOT NULL,
       householdId TEXT NOT NULL,
       createdAt TEXT NOT NULL
@@ -353,6 +354,9 @@ function initSchema(db: Database) {
   } catch {}
   try {
     db.run(`ALTER TABLE weekly_meals ADD COLUMN scheduledDate TEXT`);
+  } catch {}
+  try {
+    db.run(`ALTER TABLE weekly_meals ADD COLUMN calendarEventId TEXT`);
   } catch {}
   try {
     db.run(`

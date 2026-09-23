@@ -908,20 +908,19 @@ export const GroceryPage: React.FC = () => {
     if (!itemToMove) return;
 
     if (targetAisleId === 'uncategorized') {
-      // Optimistic update
-      setItems((prev) =>
-        prev.map((i) =>
-          i.id === itemToMove.id ? { ...i, aisle_id: '', category: 'Other' } : i
-        )
-      );
+      // Optimistic update - cleanly append to end of items
+      setItems((prev) => {
+        const others = prev.filter((i) => i.id !== itemToMove.id);
+        return [...others, { ...itemToMove, aisle_id: '', category: 'Other' }];
+      });
 
       if (groceryDataCache && householdId && groceryDataCache.householdId === householdId) {
         if (groceryDataCache.itemsByList[activeListTypeRef.current]) {
-          groceryDataCache.itemsByList[activeListTypeRef.current] = groceryDataCache.itemsByList[
-            activeListTypeRef.current
-          ].map((i) =>
-            i.id === itemToMove.id ? { ...i, aisle_id: '', category: 'Other' } : i
-          );
+          const cachedOthers = groceryDataCache.itemsByList[activeListTypeRef.current].filter((i) => i.id !== itemToMove.id);
+          groceryDataCache.itemsByList[activeListTypeRef.current] = [
+            ...cachedOthers,
+            { ...itemToMove, aisle_id: '', category: 'Other' },
+          ];
         }
       }
 
@@ -942,20 +941,19 @@ export const GroceryPage: React.FC = () => {
     const targetAisle = effectiveAisles.find((a) => a.id === targetAisleId);
     if (!targetAisle) return;
 
-    // Optimistic update
-    setItems((prev) =>
-      prev.map((i) =>
-        i.id === itemToMove.id ? { ...i, aisle_id: targetAisleId, category: targetAisle.name } : i
-      )
-    );
+    // Optimistic update - cleanly append to end of items
+    setItems((prev) => {
+      const others = prev.filter((i) => i.id !== itemToMove.id);
+      return [...others, { ...itemToMove, aisle_id: targetAisleId, category: targetAisle.name }];
+    });
 
     if (groceryDataCache && householdId && groceryDataCache.householdId === householdId) {
       if (groceryDataCache.itemsByList[activeListTypeRef.current]) {
-        groceryDataCache.itemsByList[activeListTypeRef.current] = groceryDataCache.itemsByList[
-          activeListTypeRef.current
-        ].map((i) =>
-          i.id === itemToMove.id ? { ...i, aisle_id: targetAisleId, category: targetAisle.name } : i
-        );
+        const cachedOthers = groceryDataCache.itemsByList[activeListTypeRef.current].filter((i) => i.id !== itemToMove.id);
+        groceryDataCache.itemsByList[activeListTypeRef.current] = [
+          ...cachedOthers,
+          { ...itemToMove, aisle_id: targetAisleId, category: targetAisle.name },
+        ];
       }
     }
 
@@ -1580,11 +1578,11 @@ export const GroceryPage: React.FC = () => {
                     ? 'transform 220ms cubic-bezier(0.2, 0, 0, 1)'
                     : undefined,
                 }}
-                className={`glass-panel rounded-3xl border overflow-hidden relative transition-all duration-200 ${
+                className={`glass-panel rounded-3xl border overflow-hidden relative transition-colors duration-150 ${
                   isDragging
                     ? 'border-emerald-400 ring-2 ring-emerald-400/80 shadow-2xl shadow-emerald-950/90 scale-[1.02] bg-slate-900/98 z-50 opacity-95'
                     : isItemHovered
-                    ? 'border-emerald-400 ring-2 ring-emerald-500/60 bg-emerald-500/10 scale-[1.01] shadow-lg shadow-emerald-950/50'
+                    ? 'border-emerald-400 ring-2 ring-emerald-500/60 bg-emerald-500/10 shadow-lg shadow-emerald-950/50'
                     : 'border-white/10 shadow-sm'
                 }`}
               >
@@ -1673,10 +1671,10 @@ export const GroceryPage: React.FC = () => {
                             key={item.id}
                             onClick={() => handleToggleItem(item.id)}
                             onPointerDown={(e) => handleItemPointerDown(e, item, aisle.id)}
-                            className={`flex items-center justify-between px-3.5 py-2 transition-all cursor-pointer group hover:bg-white/5 gap-2 min-h-[42px] select-none touch-manipulation ${
+                            className={`flex items-center justify-between px-3.5 py-2 transition-colors duration-150 cursor-pointer group hover:bg-white/5 gap-2 min-h-[42px] select-none touch-manipulation ${
                               isCrossing ? 'animate-row-crossing' : ''
                             } ${
-                              isThisItemDragging ? 'opacity-30 bg-emerald-500/10 border border-dashed border-emerald-500/40 rounded-xl' : ''
+                              isThisItemDragging ? 'opacity-25 bg-slate-800/40 pointer-events-none' : ''
                             }`}
                           >
                             <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -1777,9 +1775,9 @@ export const GroceryPage: React.FC = () => {
               if (el) cardElementsRef.current.set('uncategorized', el);
               else cardElementsRef.current.delete('uncategorized');
             }}
-            className={`glass-panel rounded-3xl border overflow-hidden shadow-sm transition-all duration-200 ${
+            className={`glass-panel rounded-3xl border overflow-hidden shadow-sm transition-colors duration-150 ${
               draggingItem && hoveredAisleId === 'uncategorized' && sourceAisleIdRef.current !== 'uncategorized'
-                ? 'border-emerald-400 ring-2 ring-emerald-500/60 bg-emerald-500/10 scale-[1.01] shadow-lg shadow-emerald-950/50'
+                ? 'border-emerald-400 ring-2 ring-emerald-500/60 bg-emerald-500/10 shadow-lg shadow-emerald-950/50'
                 : 'border-white/10'
             }`}
           >
@@ -1815,10 +1813,10 @@ export const GroceryPage: React.FC = () => {
                     key={item.id}
                     onClick={() => handleToggleItem(item.id)}
                     onPointerDown={(e) => handleItemPointerDown(e, item, 'uncategorized')}
-                    className={`flex items-center justify-between px-3.5 py-2 hover:bg-white/5 transition-all cursor-pointer group gap-2 min-h-[42px] select-none touch-manipulation ${
+                    className={`flex items-center justify-between px-3.5 py-2 hover:bg-white/5 transition-colors duration-150 cursor-pointer group gap-2 min-h-[42px] select-none touch-manipulation ${
                       isCrossing ? 'animate-row-crossing' : ''
                     } ${
-                      isThisItemDragging ? 'opacity-30 bg-emerald-500/10 border border-dashed border-emerald-500/40 rounded-xl' : ''
+                      isThisItemDragging ? 'opacity-25 bg-slate-800/40 pointer-events-none' : ''
                     }`}
                   >
                     <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -1915,9 +1913,9 @@ export const GroceryPage: React.FC = () => {
               if (el) cardElementsRef.current.set('uncategorized', el);
               else cardElementsRef.current.delete('uncategorized');
             }}
-            className={`rounded-3xl border border-dashed p-4 text-center transition-all duration-200 ${
+            className={`rounded-3xl border border-dashed p-4 text-center transition-colors duration-150 ${
               hoveredAisleId === 'uncategorized'
-                ? 'border-emerald-400 ring-2 ring-emerald-500/60 bg-emerald-500/15 scale-[1.01]'
+                ? 'border-emerald-400 ring-2 ring-emerald-500/60 bg-emerald-500/15'
                 : 'border-white/20 bg-slate-900/30'
             }`}
           >
@@ -1939,7 +1937,7 @@ export const GroceryPage: React.FC = () => {
                 <div
                   key={item.id}
                   onClick={() => handleToggleItem(item.id)}
-                  className={`flex items-center justify-between px-3.5 py-2 hover:bg-white/5 transition-all cursor-pointer group gap-2 min-h-[42px] ${
+                  className={`flex items-center justify-between px-3.5 py-2 hover:bg-white/5 transition-colors duration-150 cursor-pointer group gap-2 min-h-[42px] ${
                     isCrossing ? 'animate-row-crossing' : ''
                   }`}
                 >
