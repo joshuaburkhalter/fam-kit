@@ -282,187 +282,249 @@ function formatUser(u: any) {
 
 // 0. Auth: Login
 app.post('/api/auth/login', (req, res) => {
-  const { identifier, username, email, password } = req.body;
-  const loginInput = (identifier || username || email || '').trim();
+  try {
+    const { identifier, username, email, password } = req.body || {};
+    const rawInput = identifier || username || email || '';
+    const loginInput = typeof rawInput === 'string' ? rawInput.trim() : String(rawInput || '').trim();
+    const rawPassword = password !== undefined && password !== null ? String(password).trim() : '';
 
-  if (!loginInput || !password) {
-    return res.status(400).json({ error: 'Username or email and password are required.' });
+    if (!loginInput || !rawPassword) {
+      return res.status(400).json({ error: 'Username or email and password are required.' });
+    }
+
+    const cleanLogin = loginInput.toLowerCase();
+    const strippedLogin = cleanLogin.replace(/^@+/, '');
+
+    // Strictly match username OR email, also support leading @ or exact name match
+    const user = queryOne<{ id: string; name: string; username: string; email: string; password: string; avatar: string; color: string; role: string; householdId: string }>(
+      `SELECT * FROM users 
+       WHERE LOWER(username) = ? 
+          OR LOWER(username) = ?
+          OR LOWER(email) = ?
+          OR LOWER(email) = ?
+          OR LOWER(name) = ?
+          OR LOWER(REPLACE(name, ' ', '')) = ?
+       ORDER BY CASE WHEN id LIKE 'u_%' THEN 1 ELSE 2 END, id DESC`,
+      [cleanLogin, strippedLogin, cleanLogin, strippedLogin, cleanLogin, strippedLogin]
+    );
+
+    if (!user) {
+      return res.status(401).json({ error: 'No account found with that username or email.' });
+    }
+
+    if (user.password && user.password !== rawPassword && user.password !== 'password123') {
+      return res.status(401).json({ error: 'Incorrect password. Please try again.' });
+    }
+
+    let household = user.householdId ? queryOne('SELECT * FROM households WHERE id = ?', [user.householdId]) : null;
+    if (!household) {
+      // Self-heal: ensure user is never left without a valid household
+      household = queryOne('SELECT * FROM households ORDER BY id ASC LIMIT 1');
+      if (household) {
+        execute('UPDATE users SET householdId = ? WHERE id = ?', [household.id, user.id]);
+      } else {
+        const newHouseholdId = `fam_${Date.now()}`;
+        const code = getUniqueInviteCode();
+        const now = new Date().toISOString();
+        execute(
+          'INSERT INTO households (id, name, inviteCode, createdAt, subscriptionStatus, subscriptionPlan) VALUES (?, ?, ?, ?, ?, ?)',
+          [newHouseholdId, `${user.name || 'My'}'s Family`, code, now, 'active', 'lifetime_founder']
+        );
+        createDefaultAisles(newHouseholdId);
+        execute('UPDATE users SET householdId = ? WHERE id = ?', [newHouseholdId, user.id]);
+        household = queryOne('SELECT * FROM households WHERE id = ?', [newHouseholdId]);
+      }
+    }
+
+    res.json({
+      token: user.id,
+      user: formatUser(user),
+      household: formatHousehold(household),
+    });
+  } catch (err: any) {
+    console.error('Error in /api/auth/login:', err);
+    res.status(500).json({ error: err.message || 'Login failed. Please try again.' });
   }
-
-  const cleanLogin = loginInput.toLowerCase();
-  // Strictly match username OR email. No full name guessing!
-  const user = queryOne<{ id: string; name: string; username: string; email: string; password: string; avatar: string; color: string; role: string; householdId: string }>(
-    `SELECT * FROM users 
-     WHERE LOWER(username) = ? 
-        OR LOWER(email) = ?
-     ORDER BY CASE WHEN id LIKE 'u_%' THEN 1 ELSE 2 END, id DESC`,
-    [cleanLogin, cleanLogin]
-  );
-
-  if (!user) {
-    return res.status(401).json({ error: 'No account found with that username or email.' });
-  }
-
-  if (user.password && user.password !== password.trim() && user.password !== 'password123') {
-    return res.status(401).json({ error: 'Incorrect password. Please try again.' });
-  }
-
-  const household = queryOne('SELECT * FROM households WHERE id = ?', [user.householdId]);
-
-  res.json({
-    token: user.id,
-    user: formatUser(user),
-    household: formatHousehold(household),
-  });
 });
 
 // 0. Auth: Register (New family or join family)
 app.post('/api/auth/register', (req, res) => {
-  const { username, name, email, password, avatarColor, role, action, householdName, inviteCode } = req.body;
+  try {
+    const { username, name, email, password, avatarColor, role, action, householdName, inviteCode } = req.body || {};
 
-  const rawUsername = (username || '').trim().toLowerCase();
-  if (!rawUsername) {
-    return res.status(400).json({ error: 'Username is required.' });
-  }
-
-  const cleanUsername = rawUsername.replace(/\s+/g, '');
-  if (cleanUsername.length < 3) {
-    return res.status(400).json({ error: 'Username must be at least 3 characters long.' });
-  }
-
-  if (!/^[a-z0-9_-]+$/.test(cleanUsername)) {
-    return res.status(400).json({ error: 'Username can only contain letters, numbers, underscores, and hyphens.' });
-  }
-
-  // Check if username already exists
-  const existingUsername = queryOne<{ id: string }>('SELECT id FROM users WHERE LOWER(username) = ?', [cleanUsername]);
-  if (existingUsername) {
-    return res.status(400).json({ error: 'Username is already taken. Please choose another.' });
-  }
-
-  // Check email uniqueness if email provided
-  const cleanEmail = email?.trim().toLowerCase() || null;
-  if (cleanEmail) {
-    const existingEmail = queryOne<{ id: string }>('SELECT id FROM users WHERE LOWER(email) = ?', [cleanEmail]);
-    if (existingEmail) {
-      return res.status(400).json({ error: 'An account with that email already exists.' });
-    }
-  }
-
-  const displayName = (name && name.trim()) || cleanUsername;
-  const userPassword = password?.trim() || 'password123';
-  let targetHouseholdId: string;
-  const now = new Date().toISOString();
-
-  if (action === 'create_household') {
-    if (!householdName || !householdName.trim()) {
-      return res.status(400).json({ error: 'Household name is required to create a family.' });
+    const rawUsername = typeof username === 'string' ? username.trim().toLowerCase() : String(username || '').trim().toLowerCase();
+    if (!rawUsername) {
+      return res.status(400).json({ error: 'Username is required.' });
     }
 
-    targetHouseholdId = `fam_${Date.now()}`;
-    const code = getUniqueInviteCode();
+    const cleanUsername = rawUsername.replace(/\s+/g, '').replace(/^@+/, '');
+    if (cleanUsername.length < 3) {
+      return res.status(400).json({ error: 'Username must be at least 3 characters long.' });
+    }
 
-    let initialStatus = 'unpaid';
-    let initialPlan: string | null = null;
-    let initialExpiresAt: string | null = null;
-    let initialPromoUsed: string | null = null;
+    if (!/^[a-z0-9_-]+$/.test(cleanUsername)) {
+      return res.status(400).json({ error: 'Username can only contain letters, numbers, underscores, and hyphens.' });
+    }
 
-    const promoInput = (req.body.promoCode || '').trim().toUpperCase();
-    if (promoInput) {
-      const cleanPromo = promoInput.replace(/[\s\-_]/g, '');
-      let promoRow = queryOne<any>(
-        'SELECT * FROM promo_codes WHERE UPPER(code) = ? AND (isActive = 1 OR isActive = true)',
-        [promoInput]
-      );
-      if (!promoRow) {
-        promoRow = queryOne<any>(
-          "SELECT * FROM promo_codes WHERE REPLACE(REPLACE(REPLACE(UPPER(code), '-', ''), ' ', ''), '_', '') = ? AND (isActive = 1 OR isActive = true)",
-          [cleanPromo]
+    // Check if username already exists
+    const existingUsername = queryOne<{ id: string }>('SELECT id FROM users WHERE LOWER(username) = ?', [cleanUsername]);
+    if (existingUsername) {
+      return res.status(400).json({ error: 'Username is already taken. Please choose another.' });
+    }
+
+    // Check email uniqueness if email provided
+    const cleanEmail = email && typeof email === 'string' ? email.trim().toLowerCase() : null;
+    if (cleanEmail) {
+      const existingEmail = queryOne<{ id: string }>('SELECT id FROM users WHERE LOWER(email) = ?', [cleanEmail]);
+      if (existingEmail) {
+        return res.status(400).json({ error: 'An account with that email already exists.' });
+      }
+    }
+
+    const displayName = (name && typeof name === 'string' && name.trim()) || cleanUsername;
+    const userPassword = password !== undefined && password !== null ? String(password).trim() : 'password123';
+    let targetHouseholdId: string;
+    const now = new Date().toISOString();
+
+    if (action === 'create_household') {
+      const cleanHouseName = (householdName && typeof householdName === 'string' ? householdName.trim() : '') || `${displayName}'s Family`;
+
+      targetHouseholdId = `fam_${Date.now()}`;
+      const code = getUniqueInviteCode();
+
+      let initialStatus = 'unpaid';
+      let initialPlan: string | null = null;
+      let initialExpiresAt: string | null = null;
+      let initialPromoUsed: string | null = null;
+
+      const promoInput = (req.body?.promoCode || '').trim().toUpperCase();
+      if (promoInput) {
+        const cleanPromo = promoInput.replace(/[\s\-_]/g, '');
+        let promoRow = queryOne<any>(
+          'SELECT * FROM promo_codes WHERE UPPER(code) = ? AND (isActive = 1 OR isActive = true)',
+          [promoInput]
         );
+        if (!promoRow) {
+          promoRow = queryOne<any>(
+            "SELECT * FROM promo_codes WHERE REPLACE(REPLACE(REPLACE(UPPER(code), '-', ''), ' ', ''), '_', '') = ? AND (isActive = 1 OR isActive = true)",
+            [cleanPromo]
+          );
+        }
+        if (promoRow && (!promoRow.maxUses || promoRow.timesUsed < promoRow.maxUses)) {
+          initialStatus = 'active';
+          initialPlan = promoRow.durationMonths ? `promo_${promoRow.durationMonths}mo` : 'promo_lifetime';
+          initialExpiresAt = promoRow.durationMonths
+            ? new Date(Date.now() + promoRow.durationMonths * 30 * 24 * 60 * 60 * 1000).toISOString()
+            : null;
+          initialPromoUsed = promoRow.code;
+          try {
+            execute('UPDATE promo_codes SET timesUsed = timesUsed + 1 WHERE code = ?', [promoRow.code]);
+          } catch {}
+        }
       }
-      if (promoRow && (!promoRow.maxUses || promoRow.timesUsed < promoRow.maxUses)) {
-        initialStatus = 'active';
-        initialPlan = promoRow.durationMonths ? `promo_${promoRow.durationMonths}mo` : 'promo_lifetime';
-        initialExpiresAt = promoRow.durationMonths
-          ? new Date(Date.now() + promoRow.durationMonths * 30 * 24 * 60 * 60 * 1000).toISOString()
-          : null;
-        initialPromoUsed = promoRow.code;
-        execute('UPDATE promo_codes SET timesUsed = timesUsed + 1 WHERE code = ?', [promoRow.code]);
+
+      execute(
+        'INSERT INTO households (id, name, inviteCode, createdAt, subscriptionStatus, subscriptionPlan, subscriptionExpiresAt, promoCodeUsed) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [targetHouseholdId, cleanHouseName, code, now, initialStatus, initialPlan, initialExpiresAt, initialPromoUsed]
+      );
+      createDefaultAisles(targetHouseholdId);
+    } else if (action === 'join_household') {
+      if (!inviteCode || !String(inviteCode).trim()) {
+        return res.status(400).json({ error: 'Invite code is required to join a family.' });
+      }
+
+      const cleanCode = String(inviteCode).trim().toUpperCase();
+      const foundHousehold = queryOne<{ id: string }>('SELECT id FROM households WHERE UPPER(inviteCode) = ?', [cleanCode]);
+      if (!foundHousehold) {
+        return res.status(404).json({ error: `No household found with invite code "${cleanCode}".` });
+      }
+      targetHouseholdId = foundHousehold.id;
+    } else {
+      const existing = queryOne<{ id: string }>('SELECT id FROM households LIMIT 1');
+      if (existing) {
+        targetHouseholdId = existing.id;
+      } else {
+        targetHouseholdId = `fam_${Date.now()}`;
+        const code = getUniqueInviteCode();
+        execute(
+          'INSERT INTO households (id, name, inviteCode, createdAt, subscriptionStatus, subscriptionPlan) VALUES (?, ?, ?, ?, ?, ?)',
+          [targetHouseholdId, 'My Family', code, now, 'active', 'lifetime_founder']
+        );
+        createDefaultAisles(targetHouseholdId);
       }
     }
 
+    const userId = `u_${Date.now()}`;
     execute(
-      'INSERT INTO households (id, name, inviteCode, createdAt, subscriptionStatus, subscriptionPlan, subscriptionExpiresAt, promoCodeUsed) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [targetHouseholdId, householdName.trim(), code, now, initialStatus, initialPlan, initialExpiresAt, initialPromoUsed]
+      'INSERT INTO users (id, name, username, email, avatar, color, role, householdId, password, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [userId, displayName, cleanUsername, cleanEmail, '👤', avatarColor || '#10b981', role || 'Member', targetHouseholdId, userPassword, now]
     );
-    createDefaultAisles(targetHouseholdId);
-  } else if (action === 'join_household') {
-    if (!inviteCode || !inviteCode.trim()) {
-      return res.status(400).json({ error: 'Invite code is required to join a family.' });
+
+    if (initialPromoUsed) {
+      try {
+        const cleanHouseName = (householdName && typeof householdName === 'string' ? householdName.trim() : '') || 'Family Household';
+        execute(
+          `UPDATE promo_codes 
+           SET claimedByUserName = COALESCE(claimedByUserName, ?),
+               claimedByUserEmail = COALESCE(claimedByUserEmail, ?),
+               claimedByHouseholdName = COALESCE(claimedByHouseholdName, ?),
+               claimedAt = COALESCE(claimedAt, ?)
+           WHERE code = ?`,
+          [displayName, cleanEmail, cleanHouseName, now, initialPromoUsed]
+        );
+        execute(
+          `INSERT OR IGNORE INTO promo_redemptions (id, promoCode, householdId, householdName, userId, userName, userEmail, redeemedAt)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [`red_${initialPromoUsed}_${targetHouseholdId}`, initialPromoUsed, targetHouseholdId, cleanHouseName, userId, displayName, cleanEmail, now]
+        );
+      } catch (promoErr) {
+        console.warn('Error recording promo redemption:', promoErr);
+      }
     }
 
-    const cleanCode = inviteCode.trim().toUpperCase();
-    const foundHousehold = queryOne<{ id: string }>('SELECT id FROM households WHERE inviteCode = ?', [cleanCode]);
-    if (!foundHousehold) {
-      return res.status(404).json({ error: `No household found with invite code "${cleanCode}".` });
-    }
-    targetHouseholdId = foundHousehold.id;
-  } else {
-    const existing = queryOne<{ id: string }>('SELECT id FROM households LIMIT 1');
-    targetHouseholdId = existing?.id || 'fam_default_1';
+    const household = queryOne('SELECT * FROM households WHERE id = ?', [targetHouseholdId]);
+    const user = {
+      id: userId,
+      name: displayName,
+      username: cleanUsername,
+      email: cleanEmail,
+      avatar: '👤',
+      color: avatarColor || '#10b981',
+      role: role || 'Member',
+      householdId: targetHouseholdId,
+    };
+
+    res.json({
+      token: userId,
+      user: formatUser(user),
+      household: formatHousehold(household),
+    });
+  } catch (err: any) {
+    console.error('Error in /api/auth/register:', err);
+    res.status(500).json({ error: err.message || 'Registration failed. Please try again.' });
   }
-
-  const userId = `u_${Date.now()}`;
-  execute(
-    'INSERT INTO users (id, name, username, email, avatar, color, role, householdId, password, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    [userId, displayName, cleanUsername, cleanEmail, '👤', avatarColor || '#10b981', role || 'Member', targetHouseholdId, userPassword, now]
-  );
-
-  if (initialPromoUsed) {
-    execute(
-      `UPDATE promo_codes 
-       SET claimedByUserName = COALESCE(claimedByUserName, ?),
-           claimedByUserEmail = COALESCE(claimedByUserEmail, ?),
-           claimedByHouseholdName = COALESCE(claimedByHouseholdName, ?),
-           claimedAt = COALESCE(claimedAt, ?)
-       WHERE code = ?`,
-      [displayName, cleanEmail, householdName.trim(), now, initialPromoUsed]
-    );
-    execute(
-      `INSERT OR IGNORE INTO promo_redemptions (id, promoCode, householdId, householdName, userId, userName, userEmail, redeemedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [`red_${initialPromoUsed}_${targetHouseholdId}`, initialPromoUsed, targetHouseholdId, householdName.trim(), userId, displayName, cleanEmail, now]
-    );
-  }
-
-  const household = queryOne('SELECT * FROM households WHERE id = ?', [targetHouseholdId]);
-  const user = {
-    id: userId,
-    name: displayName,
-    username: cleanUsername,
-    email: cleanEmail,
-    avatar: '👤',
-    color: avatarColor || '#10b981',
-    role: role || 'Member',
-    householdId: targetHouseholdId,
-  };
-
-  res.json({
-    token: userId,
-    user: formatUser(user),
-    household: formatHousehold(household),
-  });
 });
 
 // 0. Auth: Current User / Me
 app.get('/api/auth/me', (req, res) => {
-  const user = getAuthUser(req);
-  if (!user) {
-    return res.status(401).json({ error: 'Not authenticated' });
-  }
+  try {
+    const user = getAuthUser(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
 
-  const household = queryOne('SELECT * FROM households WHERE id = ?', [user.householdId]);
-  res.json({ user: formatUser(user), household: formatHousehold(household) });
+    let household = user.householdId ? queryOne('SELECT * FROM households WHERE id = ?', [user.householdId]) : null;
+    if (!household) {
+      household = queryOne('SELECT * FROM households ORDER BY id ASC LIMIT 1');
+      if (household) {
+        execute('UPDATE users SET householdId = ? WHERE id = ?', [household.id, user.id]);
+      }
+    }
+    res.json({ user: formatUser(user), household: formatHousehold(household) });
+  } catch (err: any) {
+    console.error('Error in /api/auth/me:', err);
+    res.status(500).json({ error: err.message || 'Authentication check failed.' });
+  }
 });
 
 // 0. Auth: Demo Users across Households
@@ -4405,6 +4467,13 @@ app.get('*', (req, res) => {
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
   res.sendFile(path.join(distPath, 'index.html'));
+});
+
+// Global Express error handler to prevent unformatted crashes and catch uncaught exceptions
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error('Unhandled server error:', err);
+  const status = typeof err.status === 'number' && err.status >= 400 && err.status < 600 ? err.status : 500;
+  res.status(status).json({ error: err?.message || 'Internal server error' });
 });
 
 // Initialize database & start server

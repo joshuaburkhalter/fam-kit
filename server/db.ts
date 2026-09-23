@@ -47,7 +47,13 @@ function initSchema(db: Database) {
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       inviteCode TEXT UNIQUE NOT NULL,
-      createdAt TEXT NOT NULL
+      createdAt TEXT NOT NULL,
+      subscriptionStatus TEXT DEFAULT 'unpaid',
+      subscriptionPlan TEXT,
+      subscriptionExpiresAt TEXT,
+      promoCodeUsed TEXT,
+      stripeCustomerId TEXT,
+      stripeSubscriptionId TEXT
     );
 
     CREATE TABLE IF NOT EXISTS users (
@@ -59,7 +65,8 @@ function initSchema(db: Database) {
       color TEXT NOT NULL DEFAULT '#10b981',
       role TEXT NOT NULL DEFAULT 'Parent',
       householdId TEXT NOT NULL,
-      password TEXT NOT NULL DEFAULT 'password123'
+      password TEXT NOT NULL DEFAULT 'password123',
+      createdAt TEXT
     );
 
     CREATE TABLE IF NOT EXISTS aisles (
@@ -883,14 +890,19 @@ function seedDemoData(db: Database) {
 export function queryAll<T = any>(sql: string, params: any[] = []): T[] {
   if (!dbInstance) return [];
   const safeParams = params.map((p) => (p === undefined ? null : p));
-  const stmt = dbInstance.prepare(sql);
-  stmt.bind(safeParams);
-  const rows: T[] = [];
-  while (stmt.step()) {
-    rows.push(stmt.getAsObject() as T);
+  try {
+    const stmt = dbInstance.prepare(sql);
+    stmt.bind(safeParams);
+    const rows: T[] = [];
+    while (stmt.step()) {
+      rows.push(stmt.getAsObject() as T);
+    }
+    stmt.free();
+    return rows;
+  } catch (err) {
+    console.error('Database query error:', err, 'SQL:', sql, 'Params:', safeParams);
+    return [];
   }
-  stmt.free();
-  return rows;
 }
 
 export function queryOne<T = any>(sql: string, params: any[] = []): T | null {
@@ -901,6 +913,11 @@ export function queryOne<T = any>(sql: string, params: any[] = []): T | null {
 export function execute(sql: string, params: any[] = []) {
   if (!dbInstance) return;
   const safeParams = params.map((p) => (p === undefined ? null : p));
-  dbInstance.run(sql, safeParams);
-  saveDb();
+  try {
+    dbInstance.run(sql, safeParams);
+    saveDb();
+  } catch (err) {
+    console.error('Database execute error:', err, 'SQL:', sql, 'Params:', safeParams);
+    throw err;
+  }
 }

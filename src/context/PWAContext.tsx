@@ -248,9 +248,14 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const login = async (identifier: string, password: string) => {
     const res = await api.login(identifier, password);
+    const householdId = res.household?.id || res.user?.household_id || res.user?.householdId || '';
     localStorage.setItem('famkit_auth_token', res.token);
-    localStorage.setItem('famkit_user_id', res.user.id);
-    localStorage.setItem('famkit_household_id', res.household.id);
+    if (res.user?.id) {
+      localStorage.setItem('famkit_user_id', res.user.id);
+    }
+    if (householdId) {
+      localStorage.setItem('famkit_household_id', householdId);
+    }
 
     const normUser = normalizeUser(res.user);
     const normH = normalizeHousehold(res.household);
@@ -267,15 +272,17 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       saveDeviceProfile(normUser, res.household?.name);
     }
 
-    try {
-      const [householdUsers, householdAisles] = await Promise.all([
-        api.getUsers(res.household.id),
-        api.getAisles(res.household.id),
-      ]);
-      setUsers(householdUsers);
-      setAisles(householdAisles);
-    } catch (e) {
-      console.error('Error fetching household data on login:', e);
+    if (householdId) {
+      try {
+        const [householdUsers, householdAisles] = await Promise.all([
+          api.getUsers(householdId),
+          api.getAisles(householdId),
+        ]);
+        setUsers(householdUsers);
+        setAisles(householdAisles);
+      } catch (e) {
+        console.error('Error fetching household data on login:', e);
+      }
     }
   };
 
@@ -292,9 +299,14 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     promoCode?: string;
   }) => {
     const res = await api.register(data);
+    const householdId = res.household?.id || res.user?.household_id || res.user?.householdId || '';
     localStorage.setItem('famkit_auth_token', res.token);
-    localStorage.setItem('famkit_user_id', res.user.id);
-    localStorage.setItem('famkit_household_id', res.household.id);
+    if (res.user?.id) {
+      localStorage.setItem('famkit_user_id', res.user.id);
+    }
+    if (householdId) {
+      localStorage.setItem('famkit_household_id', householdId);
+    }
 
     const normUser = normalizeUser(res.user);
     const normH = normalizeHousehold(res.household);
@@ -311,15 +323,17 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       saveDeviceProfile(normUser, res.household?.name);
     }
 
-    try {
-      const [householdUsers, householdAisles] = await Promise.all([
-        api.getUsers(res.household.id),
-        api.getAisles(res.household.id),
-      ]);
-      setUsers(householdUsers);
-      setAisles(householdAisles);
-    } catch (e) {
-      console.error('Error fetching household data on register:', e);
+    if (householdId) {
+      try {
+        const [householdUsers, householdAisles] = await Promise.all([
+          api.getUsers(householdId),
+          api.getAisles(householdId),
+        ]);
+        setUsers(householdUsers);
+        setAisles(householdAisles);
+      } catch (e) {
+        console.error('Error fetching household data on register:', e);
+      }
     }
   };
 
@@ -358,12 +372,16 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               saveDeviceProfile(normUser, h.name);
             }
 
-            const [householdUsers, householdAisles] = await Promise.all([
-              api.getUsers(h.id),
-              api.getAisles(h.id),
-            ]);
-            setUsers(householdUsers);
-            setAisles(householdAisles);
+            try {
+              const [householdUsers, householdAisles] = await Promise.all([
+                api.getUsers(h.id),
+                api.getAisles(h.id),
+              ]);
+              setUsers(householdUsers);
+              setAisles(householdAisles);
+            } catch (fetchErr) {
+              console.warn('Failed to prefetch household users and aisles on initAuth:', fetchErr);
+            }
           } else {
             logout();
           }
