@@ -83,7 +83,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
         {/* Left: Brand Logo & Household */}
         <div className="flex items-center gap-3">
           <div
-            onClick={() => setActiveTab('assistant')}
+            onClick={() => setActiveTab('grocery')}
             className="flex items-center gap-2.5 cursor-pointer group"
           >
             <HomebaseLogo size={36} />
@@ -106,17 +106,6 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
 
         {/* Center: Desktop Navigation tabs */}
         <nav className="hidden md:flex items-center gap-1 bg-slate-900/60 p-1 rounded-xl border border-white/5">
-          <button
-            onClick={() => setActiveTab('assistant')}
-            className={`px-3.5 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
-              activeTab === 'assistant'
-                ? 'bg-emerald-500 text-slate-950 font-bold shadow-md shadow-emerald-500/20'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-white/5 font-semibold'
-            }`}
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            AI Assistant
-          </button>
           <button
             onClick={() => setActiveTab('grocery')}
             className={`px-3.5 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition-all cursor-pointer ${

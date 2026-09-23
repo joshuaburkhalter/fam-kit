@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { PWAProvider } from './context/PWAContext';
 import { Navbar } from './components/Navbar';
 import { MobileNav } from './components/MobileNav';
-import { AssistantPage } from './pages/AssistantPage';
+import { FloatingAssistant } from './components/FloatingAssistant';
 import { GroceryPage } from './pages/GroceryPage';
 import { MealsPage } from './pages/MealsPage';
 import { CalendarPage } from './pages/CalendarPage';
@@ -18,7 +18,7 @@ import { AppUpdatingOverlay } from './components/AppUpdatingOverlay';
 import { Loader2, ArrowRight, CheckCircle2, X } from 'lucide-react';
 import { Toast } from './components/ui/Toast';
 
-const VALID_TABS = ['assistant', 'grocery', 'meals', 'recipes', 'calendar', 'settings', 'family', 'admin'];
+const VALID_TABS = ['grocery', 'meals', 'recipes', 'calendar', 'settings', 'family', 'admin'];
 const LAST_TAB_KEY = 'homebase_last_active_tab';
 
 function resolveInitialOverlayView(): 'privacy' | 'terms' | 'pricing' | null {
@@ -42,7 +42,7 @@ function resolveInitialOverlayView(): 'privacy' | 'terms' | 'pricing' | null {
 }
 
 function resolveInitialTab(): string {
-  if (typeof window === 'undefined') return 'assistant';
+  if (typeof window === 'undefined') return 'grocery';
 
   try {
     const params = new URLSearchParams(window.location.search);
@@ -82,7 +82,7 @@ function resolveInitialTab(): string {
     }
   } catch {}
 
-  return 'assistant';
+  return 'grocery';
 }
 
 export const AppContent: React.FC = () => {
@@ -133,7 +133,7 @@ export const AppContent: React.FC = () => {
 
     if (typeof window !== 'undefined') {
       const url = new URL(window.location.href);
-      if (tab === 'assistant') {
+      if (tab === 'grocery') {
         url.searchParams.delete('tab');
       } else {
         url.searchParams.set('tab', tab);
@@ -169,7 +169,7 @@ export const AppContent: React.FC = () => {
     if (typeof window === 'undefined') return;
     const currentTab = resolveInitialTab();
     const url = new URL(window.location.href);
-    if (currentTab !== 'assistant' && !url.searchParams.has('tab')) {
+    if (currentTab !== 'grocery' && !url.searchParams.has('tab')) {
       url.searchParams.set('tab', currentTab);
     }
     const newPath = url.pathname + (url.search ? url.search : '') + (url.hash ? url.hash : '');
@@ -213,7 +213,7 @@ export const AppContent: React.FC = () => {
       // 4. Tab navigation from history state or URL parameter
       const stateTab = e.state?.tab;
       const urlTab = params.get('tab');
-      const targetTab = stateTab || (urlTab && VALID_TABS.includes(urlTab) ? urlTab : 'assistant');
+      const targetTab = stateTab || (urlTab && VALID_TABS.includes(urlTab) ? urlTab : 'grocery');
       setActiveTabState((prev) => {
         if (prev !== targetTab) {
           try {
@@ -407,7 +407,6 @@ export const AppContent: React.FC = () => {
       />
 
       <main className="flex-1 w-full overflow-x-hidden">
-        {activeTab === 'assistant' && <AssistantPage />}
         {activeTab === 'grocery' && <GroceryPage />}
         {(activeTab === 'meals' || activeTab === 'recipes') && <MealsPage />}
         {activeTab === 'calendar' && <CalendarPage />}
@@ -420,7 +419,7 @@ export const AppContent: React.FC = () => {
               if (window.history.length > 1) {
                 window.history.back();
               } else {
-                setActiveTab('assistant');
+                setActiveTab('grocery');
               }
             }}
           />
@@ -428,6 +427,7 @@ export const AppContent: React.FC = () => {
       </main>
 
       <MobileNav activeTab={activeTab} setActiveTab={setActiveTab} />
+      <FloatingAssistant />
     </div>
   );
 };

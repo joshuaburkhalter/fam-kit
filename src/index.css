@@ -99,6 +99,20 @@ input, textarea, [contenteditable="true"], .selectable-text {
               box-shadow 0.2s ease;
 }
 
+/* Ghost chat smooth in / out transitions */
+.ghost-chat-in {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transition: opacity 0.28s cubic-bezier(0.16, 1, 0.3, 1), transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ghost-chat-out {
+  opacity: 0;
+  transform: translateY(12px) scale(0.98);
+  pointer-events: none;
+  transition: opacity 0.2s ease-in, transform 0.2s ease-in;
+}
+
 /* Glassmorphism helpers */
 .glass-panel {
   background: rgba(18, 24, 39, 0.75);
