@@ -285,7 +285,30 @@ export function getHouseholdGrocerySuggestions(
 ): GrocerySuggestion[] {
   if (!householdId) return [];
 
-  // Query distinct names and latest/most frequent items
+  // Clean up any historical preferences saved from custom lists
+  try {
+    execute(
+      `DELETE FROM grocery_category_preferences 
+       WHERE householdId = ? 
+         AND aisleId IN (SELECT id FROM aisles WHERE householdId = ? AND listId IS NOT NULL AND listId != 'grocery')`,
+      [householdId, householdId]
+    );
+    execute(
+      `DELETE FROM grocery_category_preferences 
+       WHERE householdId = ? 
+         AND normalizedName IN (
+           SELECT LOWER(TRIM(name)) FROM grocery_items 
+           WHERE householdId = ? AND listId IS NOT NULL AND listId != 'grocery'
+         )
+         AND normalizedName NOT IN (
+           SELECT LOWER(TRIM(name)) FROM grocery_items 
+           WHERE householdId = ? AND (listId IS NULL OR listId = 'grocery')
+         )`,
+      [householdId, householdId, householdId]
+    );
+  } catch {}
+
+  // Query distinct names and latest/most frequent items strictly from grocery items
   const rows = queryAll<{ name: string; aisleId?: string; category?: string; count: number }>(
     `SELECT name, aisleId, category, COUNT(*) as count 
      FROM grocery_items 
@@ -296,13 +319,25 @@ export function getHouseholdGrocerySuggestions(
     [householdId]
   );
 
-  // Also fetch preferences that might not currently be on the list
+  // Also fetch grocery preferences that might not currently be on the active grocery list
   const prefs = queryAll<{ rawName: string; aisleId: string; category: string }>(
     `SELECT rawName, aisleId, category FROM grocery_category_preferences 
      WHERE householdId = ? 
+       AND (
+         aisleId IN (SELECT id FROM aisles WHERE householdId = ? AND (listId IS NULL OR listId = 'grocery'))
+         OR aisleId IS NULL
+       )
+       AND normalizedName NOT IN (
+         SELECT LOWER(TRIM(name)) FROM grocery_items 
+         WHERE householdId = ? AND listId IS NOT NULL AND listId != 'grocery'
+         AND LOWER(TRIM(name)) NOT IN (
+           SELECT LOWER(TRIM(name)) FROM grocery_items 
+           WHERE householdId = ? AND (listId IS NULL OR listId = 'grocery')
+         )
+       )
      ORDER BY updatedAt DESC 
      LIMIT 50`,
-    [householdId]
+    [householdId, householdId, householdId, householdId]
   );
 
   // Also include inventory items

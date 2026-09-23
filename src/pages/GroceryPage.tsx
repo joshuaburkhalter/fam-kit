@@ -183,6 +183,14 @@ export const GroceryPage: React.FC = () => {
         )
       : undefined;
 
+    if (targetListId === 'grocery') {
+      setSuggestions(groceryDataCache?.suggestions || []);
+    } else {
+      setSuggestions([]);
+    }
+    setIsAutocompleteDismissed(true);
+    setSelectedSuggestionIndex(-1);
+
     if (cachedItems !== undefined) {
       setItems(cachedItems);
       setLocalAisles(sanitizedCachedAisles || (targetListId === 'grocery' ? aisles : []));
@@ -234,10 +242,12 @@ export const GroceryPage: React.FC = () => {
       }
       if (targetListId === 'grocery') {
         groceryDataCache.aisles = targetAisles;
-      }
-      if (data.suggestions && data.suggestions.length > 0) {
-        groceryDataCache.suggestions = data.suggestions;
-        setSuggestions(data.suggestions);
+        if (data.suggestions) {
+          groceryDataCache.suggestions = data.suggestions;
+          if (activeListTypeRef.current === 'grocery') {
+            setSuggestions(data.suggestions);
+          }
+        }
       }
 
       if (activeListTypeRef.current === targetListId) {
@@ -362,24 +372,26 @@ export const GroceryPage: React.FC = () => {
         return next;
       });
 
-      // Update suggestions pool
-      setSuggestions((prev) => {
-        const next = [...prev];
-        const matchIdx = next.findIndex((s) => s.name.toLowerCase() === item.name.toLowerCase());
-        const aisle = effectiveAisles.find((a) => a.id === item.aisle_id);
-        const entry: GrocerySuggestion = {
-          name: item.name,
-          aisleId: item.aisle_id,
-          category: aisle?.name || 'Grocery',
-        };
-        if (matchIdx >= 0) {
-          next[matchIdx] = entry;
-        } else {
-          next.unshift(entry);
-        }
-        if (groceryDataCache) groceryDataCache.suggestions = next;
-        return next;
-      });
+      // Update suggestions pool (strictly grocery items only, never custom lists)
+      if (activeListType === 'grocery') {
+        setSuggestions((prev) => {
+          const next = [...prev];
+          const matchIdx = next.findIndex((s) => s.name.toLowerCase() === item.name.toLowerCase());
+          const aisle = effectiveAisles.find((a) => a.id === item.aisle_id);
+          const entry: GrocerySuggestion = {
+            name: item.name,
+            aisleId: item.aisle_id,
+            category: aisle?.name || 'Grocery',
+          };
+          if (matchIdx >= 0) {
+            next[matchIdx] = entry;
+          } else {
+            next.unshift(entry);
+          }
+          if (groceryDataCache) groceryDataCache.suggestions = next;
+          return next;
+        });
+      }
 
       setNewItemName('');
       setIsAutocompleteDismissed(false);
@@ -441,6 +453,7 @@ export const GroceryPage: React.FC = () => {
   };
 
   const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (activeListType !== 'grocery') return;
     if (matchingSuggestions.length > 0) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -620,7 +633,7 @@ export const GroceryPage: React.FC = () => {
       }
 
       const wasAisleChanged = editingItem.aisle_id !== editAisleId;
-      if (wasAisleChanged && selectedAisle) {
+      if (activeListTypeRef.current === 'grocery' && wasAisleChanged && selectedAisle) {
         setSuggestions((prev) => {
           const next = [...prev];
           const matchIdx = next.findIndex((s) => s.name.toLowerCase() === editName.trim().toLowerCase());
@@ -1042,17 +1055,19 @@ export const GroceryPage: React.FC = () => {
       }
     }
 
-    setSuggestions((prev) => {
-      const next = [...prev];
-      const matchIdx = next.findIndex((s) => s.name.toLowerCase() === itemToMove.name.trim().toLowerCase());
-      if (matchIdx >= 0) {
-        next[matchIdx] = { ...next[matchIdx], aisleId: targetAisle.id, category: targetAisle.name };
-      } else {
-        next.unshift({ name: itemToMove.name.trim(), aisleId: targetAisle.id, category: targetAisle.name });
-      }
-      if (groceryDataCache) groceryDataCache.suggestions = next;
-      return next;
-    });
+    if (activeListTypeRef.current === 'grocery') {
+      setSuggestions((prev) => {
+        const next = [...prev];
+        const matchIdx = next.findIndex((s) => s.name.toLowerCase() === itemToMove.name.trim().toLowerCase());
+        if (matchIdx >= 0) {
+          next[matchIdx] = { ...next[matchIdx], aisleId: targetAisle.id, category: targetAisle.name };
+        } else {
+          next.unshift({ name: itemToMove.name.trim(), aisleId: targetAisle.id, category: targetAisle.name });
+        }
+        if (groceryDataCache) groceryDataCache.suggestions = next;
+        return next;
+      });
+    }
 
     try {
       await api.updateGroceryItem(itemToMove.id, {
@@ -1481,6 +1496,7 @@ export const GroceryPage: React.FC = () => {
             type="text"
             placeholder={`Add to ${currentListName}...`}
             value={newItemName}
+            autoComplete="off"
             onChange={(e) => {
               setNewItemName(e.target.value);
               setIsAutocompleteDismissed(false);
@@ -1518,8 +1534,8 @@ export const GroceryPage: React.FC = () => {
           </button>
         </form>
 
-        {/* Autocomplete Suggestions Dropdown Popover */}
-        {matchingSuggestions.length > 0 && (
+        {/* Autocomplete Suggestions Dropdown Popover (Grocery list only) */}
+        {activeListType === 'grocery' && matchingSuggestions.length > 0 && (
           <div className="absolute left-0 right-0 top-full mt-1.5 bg-slate-900/95 backdrop-blur-xl border border-white/15 rounded-2xl p-1.5 shadow-2xl shadow-black/80 max-h-56 overflow-y-auto z-40 animate-in fade-in zoom-in-95 duration-150">
             <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between border-b border-white/5 pb-1.5 mb-1">
               <span className="flex items-center gap-1.5">

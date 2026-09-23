@@ -2049,8 +2049,8 @@ app.patch('/api/grocery', (req, res) => {
 
   const updated = queryOne<any>('SELECT * FROM grocery_items WHERE id = ?', [id]);
 
-  // If item was moved to a different aisle/category, update household preference
-  if ((aisleId !== undefined || category !== undefined) && updated) {
+  // If item was moved to a different aisle/category, update household preference (ONLY for grocery list items)
+  if ((aisleId !== undefined || category !== undefined) && updated && (!updated.listId || updated.listId === 'grocery')) {
     const householdId = getHouseholdId(req);
     if (aisleId === null || aisleId === '' || category === 'Other' || category === 'Uncategorized') {
       deleteCategoryPreference(householdId, updated.name);
