@@ -246,6 +246,37 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onBack }) => {
     }
   };
 
+  // Update Household Subscription Handler
+  const handleUpdateHouseholdSubscription = async (
+    householdId: string,
+    newStatus: string,
+    plan: string = 'promo_lifetime'
+  ) => {
+    try {
+      await api.updateAdminHousehold(householdId, {
+        subscriptionStatus: newStatus,
+        subscriptionPlan: newStatus === 'unpaid' ? null : plan,
+      });
+      showToast(`Household subscription set to "${newStatus}"!`);
+      setHouseholdsList((prev) =>
+        prev.map((h) =>
+          h.id === householdId ? { ...h, subscriptionStatus: newStatus, subscriptionPlan: plan } : h
+        )
+      );
+      setUsersList((prev) =>
+        prev.map((u) =>
+          u.householdId === householdId
+            ? { ...u, subscriptionStatus: newStatus, subscriptionPlan: plan }
+            : u
+        )
+      );
+      loadAllData(true);
+    } catch (err: any) {
+      console.error('Failed to update household subscription:', err);
+      showToast(err.message || 'Failed to update household subscription');
+    }
+  };
+
   // Generate Code Handler
   const handleGenerateCode = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -986,6 +1017,17 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onBack }) => {
                         }`}>
                           {u.subscriptionStatus === 'lifetime_founder' ? 'VIP Lifetime' : u.subscriptionStatus || 'Unpaid'}
                         </span>
+                        {u.subscriptionStatus !== 'active' && u.subscriptionStatus !== 'lifetime_founder' && u.householdId && (
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateHouseholdSubscription(u.householdId, 'active', 'promo_lifetime')}
+                            className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/30 hover:bg-emerald-500/50 text-emerald-300 border border-emerald-500/40 cursor-pointer flex items-center gap-1 transition-all"
+                            title={`Activate full subscription for ${u.name}'s household`}
+                          >
+                            <CheckCircle2 className="w-3 h-3" />
+                            <span>Grant Access</span>
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1579,6 +1621,27 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onBack }) => {
                         }`}>
                           {h.subscriptionStatus === 'lifetime_founder' ? 'VIP Lifetime' : h.subscriptionStatus}
                         </span>
+
+                        {h.subscriptionStatus !== 'active' && h.subscriptionStatus !== 'lifetime_founder' ? (
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateHouseholdSubscription(h.id, 'active', 'promo_lifetime')}
+                            className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/30 hover:bg-emerald-500/50 text-emerald-300 border border-emerald-500/40 cursor-pointer flex items-center gap-1 transition-all"
+                            title={`Grant full access to ${h.name}`}
+                          >
+                            <CheckCircle2 className="w-3 h-3" />
+                            <span>Activate</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateHouseholdSubscription(h.id, 'unpaid')}
+                            className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-800 hover:bg-amber-500/20 text-slate-400 hover:text-amber-300 border border-white/5 hover:border-amber-500/30 cursor-pointer transition-all"
+                            title={`Set ${h.name} to unpaid`}
+                          >
+                            <span>Lock</span>
+                          </button>
+                        )}
 
                         <button
                           onClick={() => setHouseholdToDelete(h)}

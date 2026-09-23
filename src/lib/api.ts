@@ -1393,6 +1393,16 @@ export const api = {
     return fetchJson<AdminHousehold[]>('/admin/households');
   },
 
+  updateAdminHousehold: async (
+    householdId: string,
+    data: { subscriptionStatus?: string; subscriptionPlan?: string | null; subscriptionExpiresAt?: string | null; name?: string }
+  ): Promise<AdminHousehold> => {
+    return fetchJson<AdminHousehold>(`/admin/households/${encodeURIComponent(householdId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
   deleteAdminUser: async (userId: string): Promise<{ success: boolean; message?: string }> => {
     return fetchJson<{ success: boolean; message?: string }>(`/admin/users/${encodeURIComponent(userId)}`, {
       method: 'DELETE',

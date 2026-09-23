@@ -3,7 +3,7 @@ import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
-import { getDb, queryAll, queryOne, execute, saveDb, createDefaultAisles, generateSecureVoucherCode } from './db.js';
+import { getDb, queryAll, queryOne, execute, saveDb, createDefaultAisles, generateSecureVoucherCode, healHouseholdSubscriptions } from './db.js';
 import { getGeminiModel } from './gemini.js';
 import { parseRecipeFromUrl, parseRecipeFromHtml, parseRecipeFromImages, getCuratedFoodImage, findAccurateRecipePhoto, generateRecipeImageWithImagen } from './recipe-parser.js';
 import {
@@ -410,16 +410,38 @@ app.post('/api/auth/register', (req, res) => {
             [cleanPromo]
           );
         }
-        if (promoRow && (!promoRow.maxUses || promoRow.timesUsed < promoRow.maxUses)) {
-          initialStatus = 'active';
-          initialPlan = promoRow.durationMonths ? `promo_${promoRow.durationMonths}mo` : 'promo_lifetime';
-          initialExpiresAt = promoRow.durationMonths
-            ? new Date(Date.now() + promoRow.durationMonths * 30 * 24 * 60 * 60 * 1000).toISOString()
-            : null;
-          initialPromoUsed = promoRow.code;
-          try {
-            execute('UPDATE promo_codes SET timesUsed = timesUsed + 1 WHERE code = ?', [promoRow.code]);
-          } catch {}
+
+        if (promoRow) {
+          const isSameClaimant =
+            (cleanEmail && promoRow.claimedByUserEmail && promoRow.claimedByUserEmail.toLowerCase() === cleanEmail) ||
+            (displayName && promoRow.claimedByUserName && promoRow.claimedByUserName.toLowerCase() === displayName.toLowerCase()) ||
+            (cleanEmail && promoRow.assignedTo && promoRow.assignedTo.toLowerCase() === cleanEmail) ||
+            (displayName && promoRow.assignedTo && promoRow.assignedTo.toLowerCase() === displayName.toLowerCase()) ||
+            (cleanHouseName && promoRow.assignedTo && promoRow.assignedTo.toLowerCase() === cleanHouseName.toLowerCase());
+
+          const hasAvailableUses = !promoRow.maxUses || promoRow.timesUsed < promoRow.maxUses;
+
+          if (hasAvailableUses || isSameClaimant) {
+            initialStatus = 'active';
+            initialPlan = promoRow.durationMonths ? `promo_${promoRow.durationMonths}mo` : 'promo_lifetime';
+            initialExpiresAt = promoRow.durationMonths
+              ? new Date(Date.now() + promoRow.durationMonths * 30 * 24 * 60 * 60 * 1000).toISOString()
+              : null;
+            initialPromoUsed = promoRow.code;
+            if (hasAvailableUses && !isSameClaimant) {
+              try {
+                execute('UPDATE promo_codes SET timesUsed = timesUsed + 1 WHERE code = ?', [promoRow.code]);
+              } catch {}
+            }
+          } else {
+            return res.status(400).json({
+              error: 'This beta invite code has already reached its maximum redemptions.',
+            });
+          }
+        } else {
+          return res.status(400).json({
+            error: `Beta invite code "${promoInput}" is invalid or expired. Please check the code and try again.`,
+          });
         }
       }
 
@@ -439,6 +461,46 @@ app.post('/api/auth/register', (req, res) => {
         return res.status(404).json({ error: `No household found with invite code "${cleanCode}".` });
       }
       targetHouseholdId = foundHousehold.id;
+
+      const promoInput = (req.body?.promoCode || '').trim().toUpperCase();
+      if (promoInput) {
+        const cleanPromo = promoInput.replace(/[\s\-_]/g, '');
+        let promoRow = queryOne<any>(
+          'SELECT * FROM promo_codes WHERE UPPER(code) = ? AND (isActive = 1 OR isActive = true)',
+          [promoInput]
+        );
+        if (!promoRow) {
+          promoRow = queryOne<any>(
+            "SELECT * FROM promo_codes WHERE REPLACE(REPLACE(REPLACE(UPPER(code), '-', ''), ' ', ''), '_', '') = ? AND (isActive = 1 OR isActive = true)",
+            [cleanPromo]
+          );
+        }
+        if (promoRow) {
+          const isSameClaimant =
+            (cleanEmail && promoRow.claimedByUserEmail && promoRow.claimedByUserEmail.toLowerCase() === cleanEmail) ||
+            (displayName && promoRow.claimedByUserName && promoRow.claimedByUserName.toLowerCase() === displayName.toLowerCase()) ||
+            (cleanEmail && promoRow.assignedTo && promoRow.assignedTo.toLowerCase() === cleanEmail) ||
+            (displayName && promoRow.assignedTo && promoRow.assignedTo.toLowerCase() === displayName.toLowerCase());
+
+          const hasAvailableUses = !promoRow.maxUses || promoRow.timesUsed < promoRow.maxUses;
+          if (hasAvailableUses || isSameClaimant) {
+            const plan = promoRow.durationMonths ? `promo_${promoRow.durationMonths}mo` : 'promo_lifetime';
+            const expires = promoRow.durationMonths
+              ? new Date(Date.now() + promoRow.durationMonths * 30 * 24 * 60 * 60 * 1000).toISOString()
+              : null;
+            execute(
+              'UPDATE households SET subscriptionStatus = ?, subscriptionPlan = ?, subscriptionExpiresAt = ?, promoCodeUsed = ? WHERE id = ?',
+              ['active', plan, expires, promoRow.code, targetHouseholdId]
+            );
+            initialPromoUsed = promoRow.code;
+            if (hasAvailableUses && !isSameClaimant) {
+              try {
+                execute('UPDATE promo_codes SET timesUsed = timesUsed + 1 WHERE code = ?', [promoRow.code]);
+              } catch {}
+            }
+          }
+        }
+      }
     } else {
       const existing = queryOne<{ id: string }>('SELECT id FROM households LIMIT 1');
       if (existing) {
@@ -511,6 +573,7 @@ app.post('/api/auth/register', (req, res) => {
 // 0. Auth: Current User / Me
 app.get('/api/auth/me', (req, res) => {
   try {
+    healHouseholdSubscriptions();
     const user = getAuthUser(req);
     if (!user) {
       return res.status(401).json({ error: 'Not authenticated' });
@@ -582,6 +645,7 @@ function clearFailedPromoAttempts(key: string) {
 
 // 1. Subscription status for active household
 app.get('/api/subscription/status', (req, res) => {
+  healHouseholdSubscriptions();
   const householdId = getHouseholdId(req);
   const rawH = queryOne('SELECT * FROM households WHERE id = ?', [householdId]);
   if (!rawH) {
@@ -661,9 +725,26 @@ app.post('/api/subscription/redeem', (req, res) => {
     return res.status(400).json({ error: 'This invite code is currently disabled.' });
   }
 
+  const authUser = getAuthUser(req);
+  const targetHousehold = queryOne<any>('SELECT * FROM households WHERE id = ?', [householdId]);
+  const primaryUser = authUser || queryOne<any>('SELECT * FROM users WHERE householdId = ? ORDER BY id ASC LIMIT 1', [householdId]);
+  const personName = primaryUser?.name || null;
+  const personEmail = primaryUser?.email || null;
+  const houseName = targetHousehold?.name || 'Household';
+
   if (promo.maxUses && promo.maxUses > 0 && promo.timesUsed >= promo.maxUses) {
-    recordFailedPromoAttempt(clientKey);
-    return res.status(400).json({ error: 'This invite code has reached its maximum redemptions.' });
+    const isSameClaimant =
+      (personEmail && promo.claimedByUserEmail && promo.claimedByUserEmail.toLowerCase() === personEmail.toLowerCase()) ||
+      (personName && promo.claimedByUserName && promo.claimedByUserName.toLowerCase() === personName.toLowerCase()) ||
+      (personEmail && promo.assignedTo && promo.assignedTo.toLowerCase() === personEmail.toLowerCase()) ||
+      (personName && promo.assignedTo && promo.assignedTo.toLowerCase() === personName.toLowerCase()) ||
+      (houseName && promo.assignedTo && promo.assignedTo.toLowerCase() === houseName.toLowerCase()) ||
+      Boolean(queryOne('SELECT id FROM promo_redemptions WHERE UPPER(promoCode) = ? AND (householdId = ? OR (userEmail IS NOT NULL AND userEmail = ?))', [promo.code.toUpperCase(), householdId, personEmail || '']));
+
+    if (!isSameClaimant) {
+      recordFailedPromoAttempt(clientKey);
+      return res.status(400).json({ error: 'This invite code has reached its maximum redemptions.' });
+    }
   }
 
   clearFailedPromoAttempts(clientKey);
@@ -679,12 +760,6 @@ app.post('/api/subscription/redeem', (req, res) => {
     ['active', planName, expiresAt, promo.code, householdId]
   );
 
-  const authUser = getAuthUser(req);
-  const targetHousehold = queryOne<any>('SELECT * FROM households WHERE id = ?', [householdId]);
-  const primaryUser = authUser || queryOne<any>('SELECT * FROM users WHERE householdId = ? ORDER BY id ASC LIMIT 1', [householdId]);
-  const personName = primaryUser?.name || null;
-  const personEmail = primaryUser?.email || null;
-  const houseName = targetHousehold?.name || 'Household';
   const nowIso = new Date().toISOString();
 
   execute(
@@ -4197,6 +4272,8 @@ app.get('/api/admin/users', (req, res) => {
     return res.status(403).json({ error: 'Admin access required.' });
   }
 
+  healHouseholdSubscriptions();
+
   const users = queryAll<any>(`
     SELECT 
       u.id, u.name, u.username, u.email, u.avatar, u.color, u.role, u.householdId,
@@ -4274,6 +4351,8 @@ app.get('/api/admin/households', (req, res) => {
     return res.status(403).json({ error: 'Admin access required.' });
   }
 
+  healHouseholdSubscriptions();
+
   const households = queryAll<any>(`
     SELECT 
       h.*,
@@ -4287,6 +4366,54 @@ app.get('/api/admin/households', (req, res) => {
   `);
 
   res.json(households);
+});
+
+// Admin: Update Household (e.g. subscriptionStatus, subscriptionPlan, name)
+app.patch('/api/admin/households/:id', (req, res) => {
+  const user = getAuthUser(req);
+  if (!user || !isServerAdmin(user)) {
+    return res.status(403).json({ error: 'Admin access required.' });
+  }
+
+  const targetId = req.params.id;
+  const { subscriptionStatus, subscriptionPlan, subscriptionExpiresAt, name } = req.body;
+
+  const targetHousehold = queryOne<any>('SELECT * FROM households WHERE id = ?', [targetId]);
+  if (!targetHousehold) {
+    return res.status(404).json({ error: 'Household not found.' });
+  }
+
+  const updates: string[] = [];
+  const params: any[] = [];
+
+  if (subscriptionStatus !== undefined && typeof subscriptionStatus === 'string' && subscriptionStatus.trim()) {
+    updates.push('subscriptionStatus = ?');
+    params.push(subscriptionStatus.trim());
+  }
+
+  if (subscriptionPlan !== undefined) {
+    updates.push('subscriptionPlan = ?');
+    params.push(typeof subscriptionPlan === 'string' && subscriptionPlan.trim() ? subscriptionPlan.trim() : null);
+  }
+
+  if (subscriptionExpiresAt !== undefined) {
+    updates.push('subscriptionExpiresAt = ?');
+    params.push(typeof subscriptionExpiresAt === 'string' && subscriptionExpiresAt.trim() ? subscriptionExpiresAt.trim() : null);
+  }
+
+  if (name !== undefined && typeof name === 'string' && name.trim()) {
+    updates.push('name = ?');
+    params.push(name.trim());
+  }
+
+  if (updates.length > 0) {
+    params.push(targetId);
+    execute(`UPDATE households SET ${updates.join(', ')} WHERE id = ?`, params);
+    saveDb();
+  }
+
+  const updated = queryOne<any>('SELECT * FROM households WHERE id = ?', [targetId]);
+  res.json(formatHousehold(updated));
 });
 
 // Admin: Delete User

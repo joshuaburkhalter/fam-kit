@@ -682,6 +682,9 @@ function initSchema(db: Database) {
     } catch (err) {
       console.error('Error backfilling promo redemption details:', err);
     }
+
+    // Auto-heal household subscription status for any promo redemptions, promo codes, or assigned passes
+    healHouseholdSubscriptions(db);
   } catch (err) {
     console.error('Error seeding promo codes:', err);
   }
@@ -692,8 +695,8 @@ function initSchema(db: Database) {
     db.run(`DELETE FROM calendar_events WHERE householdId = 'fam_default_2' OR id LIKE 'ev_m%'`);
     db.run(`DELETE FROM meal_plans WHERE householdId = 'fam_default_2' OR id = 'm_miller_today'`);
     db.run(`DELETE FROM aisles WHERE householdId = 'fam_default_2'`);
-    db.run(`DELETE FROM users WHERE householdId = 'fam_default_2' OR email IN ('alex@miller.com', 'jamie@miller.com') OR id IN ('u5', 'u6') OR householdId IN (SELECT id FROM households WHERE name LIKE 'Test %')`);
-    db.run(`DELETE FROM households WHERE id = 'fam_default_2' OR name = 'The Miller Family' OR name LIKE 'Test %'`);
+    db.run(`DELETE FROM users WHERE householdId = 'fam_default_2' OR (householdId = 'fam_default_1' AND email IN ('alex@miller.com', 'jamie@miller.com')) OR id IN ('u5', 'u6')`);
+    db.run(`DELETE FROM households WHERE id = 'fam_default_2' OR (id = 'fam_default_1' AND name = 'The Miller Family')`);
     db.run(`DELETE FROM promo_codes WHERE code LIKE 'TEST-%'`);
   } catch (err) {
     console.error('Error cleaning up legacy demo seed data:', err);
@@ -707,7 +710,86 @@ function initSchema(db: Database) {
     seedDemoData(db);
   }
 
+  healHouseholdSubscriptions(db);
   saveDb();
+}
+
+export function healHouseholdSubscriptions(db?: Database) {
+  const targetDb = db || dbInstance;
+  if (!targetDb) return;
+
+  try {
+    // 1. Any household that has promoCodeUsed set, make sure subscriptionStatus is active
+    targetDb.run(`
+      UPDATE households
+      SET subscriptionStatus = 'active',
+          subscriptionPlan = COALESCE(
+            subscriptionPlan,
+            (SELECT CASE WHEN p.durationMonths IS NOT NULL THEN 'promo_' || p.durationMonths || 'mo' ELSE 'promo_lifetime' END FROM promo_codes p WHERE UPPER(p.code) = UPPER(households.promoCodeUsed) LIMIT 1),
+            'promo_lifetime'
+          )
+      WHERE (subscriptionStatus IS NULL OR subscriptionStatus = '' OR subscriptionStatus = 'unpaid')
+        AND promoCodeUsed IS NOT NULL AND promoCodeUsed != ''
+        AND UPPER(promoCodeUsed) NOT IN (SELECT UPPER(code) FROM deleted_promo_codes);
+    `);
+
+    // 2. Any household that is in promo_redemptions, ensure active
+    targetDb.run(`
+      UPDATE households
+      SET subscriptionStatus = 'active',
+          promoCodeUsed = COALESCE(
+            promoCodeUsed,
+            (SELECT promoCode FROM promo_redemptions WHERE householdId = households.id ORDER BY redeemedAt DESC LIMIT 1)
+          ),
+          subscriptionPlan = COALESCE(subscriptionPlan, 'promo_lifetime')
+      WHERE (subscriptionStatus IS NULL OR subscriptionStatus = '' OR subscriptionStatus = 'unpaid')
+        AND id IN (SELECT householdId FROM promo_redemptions WHERE householdId IS NOT NULL);
+    `);
+
+    // 3. Any household whose members' email or name matches claimedByUserEmail / claimedByUserName / assignedTo in promo_codes
+    targetDb.run(`
+      UPDATE households
+      SET subscriptionStatus = 'active',
+          promoCodeUsed = COALESCE(
+            promoCodeUsed,
+            (
+              SELECT p.code FROM promo_codes p
+              JOIN users u ON u.householdId = households.id
+              WHERE (
+                (u.email IS NOT NULL AND u.email != '' AND LOWER(u.email) = LOWER(p.claimedByUserEmail))
+                OR (u.name IS NOT NULL AND u.name != '' AND LOWER(u.name) = LOWER(p.claimedByUserName))
+                OR (p.assignedTo IS NOT NULL AND p.assignedTo != '' AND (
+                      LOWER(u.name) = LOWER(p.assignedTo)
+                      OR (u.email IS NOT NULL AND LOWER(u.email) = LOWER(p.assignedTo))
+                      OR LOWER(households.name) = LOWER(p.assignedTo)
+                      OR LOWER(households.name) LIKE '%' || LOWER(p.assignedTo) || '%'
+                   ))
+              )
+              AND UPPER(p.code) NOT IN (SELECT UPPER(code) FROM deleted_promo_codes)
+              ORDER BY p.rowid DESC LIMIT 1
+            )
+          ),
+          subscriptionPlan = COALESCE(subscriptionPlan, 'promo_lifetime')
+      WHERE (subscriptionStatus IS NULL OR subscriptionStatus = '' OR subscriptionStatus = 'unpaid')
+        AND EXISTS (
+          SELECT 1 FROM promo_codes p
+          JOIN users u ON u.householdId = households.id
+          WHERE (
+            (u.email IS NOT NULL AND u.email != '' AND LOWER(u.email) = LOWER(p.claimedByUserEmail))
+            OR (u.name IS NOT NULL AND u.name != '' AND LOWER(u.name) = LOWER(p.claimedByUserName))
+            OR (p.assignedTo IS NOT NULL AND p.assignedTo != '' AND (
+                  LOWER(u.name) = LOWER(p.assignedTo)
+                  OR (u.email IS NOT NULL AND LOWER(u.email) = LOWER(p.assignedTo))
+                  OR LOWER(households.name) = LOWER(p.assignedTo)
+                  OR LOWER(households.name) LIKE '%' || LOWER(p.assignedTo) || '%'
+               ))
+          )
+          AND UPPER(p.code) NOT IN (SELECT UPPER(code) FROM deleted_promo_codes)
+        );
+    `);
+  } catch (err) {
+    console.error('Error in healHouseholdSubscriptions:', err);
+  }
 }
 
 export function generateSecureVoucherCode(prefix: string = 'HB'): string {
