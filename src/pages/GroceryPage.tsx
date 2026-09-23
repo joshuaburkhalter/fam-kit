@@ -1518,28 +1518,7 @@ export const GroceryPage: React.FC = () => {
           </div>
         )}
 
-        {/* Top Drop Target for Uncategorized (accessible without scrolling all the way to bottom) */}
-        {hasCategories && draggingItem && sourceAisleIdRef.current !== 'uncategorized' && (
-          <div
-            data-category-drop-id="uncategorized"
-            ref={(el) => {
-              if (el) cardElementsRef.current.set('uncategorized_top', el);
-              else cardElementsRef.current.delete('uncategorized_top');
-            }}
-            className={`rounded-2xl border border-dashed py-3.5 px-4 text-center transition-all duration-200 cursor-pointer ${
-              hoveredAisleId === 'uncategorized'
-                ? 'border-emerald-400 ring-2 ring-emerald-500/60 bg-emerald-500/20 scale-[1.01] shadow-lg shadow-emerald-950/50'
-                : 'border-white/20 bg-slate-900/40 hover:border-white/30'
-            }`}
-          >
-            <p className={`text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 ${
-              hoveredAisleId === 'uncategorized' ? 'text-emerald-300 animate-pulse' : 'text-slate-400'
-            }`}>
-              <span>📦</span>
-              <span>{hoveredAisleId === 'uncategorized' ? 'Drop here to make Uncategorized' : 'Move to Uncategorized'}</span>
-            </p>
-          </div>
-        )}
+
 
         {hasCategories &&
           itemsByAisle.map(({ aisle, items: aisleItems }, idx) => {
@@ -1795,8 +1774,8 @@ export const GroceryPage: React.FC = () => {
           <div
             data-category-drop-id="uncategorized"
             ref={(el) => {
-              if (el) cardElementsRef.current.set('uncategorized_bottom', el);
-              else cardElementsRef.current.delete('uncategorized_bottom');
+              if (el) cardElementsRef.current.set('uncategorized', el);
+              else cardElementsRef.current.delete('uncategorized');
             }}
             className={`glass-panel rounded-3xl border overflow-hidden shadow-sm transition-all duration-200 ${
               draggingItem && hoveredAisleId === 'uncategorized' && sourceAisleIdRef.current !== 'uncategorized'
@@ -1933,8 +1912,8 @@ export const GroceryPage: React.FC = () => {
           <div
             data-category-drop-id="uncategorized"
             ref={(el) => {
-              if (el) cardElementsRef.current.set('uncategorized_bottom', el);
-              else cardElementsRef.current.delete('uncategorized_bottom');
+              if (el) cardElementsRef.current.set('uncategorized', el);
+              else cardElementsRef.current.delete('uncategorized');
             }}
             className={`rounded-3xl border border-dashed p-4 text-center transition-all duration-200 ${
               hoveredAisleId === 'uncategorized'
