@@ -9,7 +9,8 @@
     "dev:server": "tsx watch server/index.ts",
     "build": "vite build",
     "start": "tsx server/index.ts",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "verify-deploy": "tsx scripts/verify-deploy.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
