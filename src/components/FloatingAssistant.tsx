@@ -350,31 +350,35 @@ export const FloatingAssistant: React.FC = () => {
 
   return (
     <>
-      {/* Light backdrop when expanded allowing user to tap outside to close */}
+      {/* Transparent blurred backdrop when expanded allowing user to tap outside to close */}
       {(isExpanded || isGhostClosing) && (
         <div
-          className={`fixed inset-0 z-30 bg-slate-950/40 backdrop-blur-xs transition-opacity duration-200 cursor-pointer ${
+          className={`fixed inset-0 z-30 bg-slate-950/35 backdrop-blur-md transition-opacity duration-200 cursor-pointer ${
             isGhostClosing ? 'opacity-0 pointer-events-none' : 'opacity-100'
           }`}
           onClick={() => handleSmoothClose(false)}
         />
       )}
 
-      {/* Dock Container: Stays anchored above mobile bottom nav across all pages */}
+      {/* Dock Container: Stays anchored above mobile bottom nav across all pages and reaches top of screen when expanded */}
       <div
         ref={dockContainerRef}
-        className="fixed bottom-[calc(72px+0.85rem+env(safe-area-inset-bottom,0px))] md:bottom-8 left-0 right-0 z-40 px-3 sm:px-6 pointer-events-none"
+        className={`fixed inset-x-0 z-40 px-3 sm:px-6 pointer-events-none flex flex-col items-center justify-end ${
+          isExpanded || isGhostClosing
+            ? 'top-[calc(0.5rem+env(safe-area-inset-top,0px))] md:top-4 bottom-[calc(72px+0.85rem+env(safe-area-inset-bottom,0px))] md:bottom-8'
+            : 'bottom-[calc(72px+0.85rem+env(safe-area-inset-bottom,0px))] md:bottom-8'
+        }`}
       >
-        <div className="max-w-2xl w-full mx-auto pointer-events-none flex flex-col items-end">
-          {/* Chat history floats / ghosts directly ABOVE the expanding FAB dock */}
+        <div className="max-w-2xl w-full h-full pointer-events-none flex flex-col justify-end items-end">
+          {/* Chat history floats / ghosts directly ABOVE the expanding FAB dock, filling up to the top of screen */}
           {(isExpanded || isGhostClosing) && (
             <div
-              className={`w-full max-h-[58vh] sm:max-h-[460px] rounded-3xl bg-slate-950/90 backdrop-blur-2xl border border-white/15 shadow-2xl shadow-black/90 flex flex-col overflow-hidden mb-2.5 pointer-events-auto ${
+              className={`flex-1 w-full min-h-0 rounded-3xl bg-slate-950/30 backdrop-blur-2xl border border-white/15 shadow-2xl shadow-black/60 flex flex-col overflow-hidden mb-2.5 pointer-events-auto ${
                 isGhostClosing ? 'ghost-chat-out' : 'ghost-chat-in'
               }`}
             >
-              {/* Minimal Header */}
-              <div className="px-4 py-2.5 border-b border-white/10 flex items-center justify-between gap-2 bg-gradient-to-r from-slate-900/90 via-slate-950/90 to-slate-900/90 shrink-0">
+              {/* Minimal Transparent Header */}
+              <div className="px-4 py-2.5 border-b border-white/10 flex items-center justify-between gap-2 bg-slate-900/30 backdrop-blur-md shrink-0">
                 <div className="flex items-center gap-2 min-w-0">
                   <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 font-black shadow-md shadow-emerald-500/20 shrink-0">
                     <Sparkles className="w-4 h-4 stroke-[2.2]" />
@@ -431,9 +435,9 @@ export const FloatingAssistant: React.FC = () => {
               </div>
 
               {/* Scrollable Message Thread or Suggestions */}
-              <div ref={chatContainerRef} className="flex-1 overflow-y-auto px-3.5 py-3 space-y-3.5 text-xs">
+              <div ref={chatContainerRef} className="flex-1 min-h-0 overflow-y-auto px-3.5 py-3 space-y-3.5 text-xs">
                 {messages.length === 0 ? (
-                  <div className="py-5 px-2 text-center flex flex-col items-center">
+                  <div className="py-6 px-2 text-center flex flex-col items-center justify-center h-full my-auto">
                     <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-500 via-teal-400 to-cyan-400 flex items-center justify-center text-slate-950 shadow-xl shadow-emerald-500/25 mb-2.5">
                       <Sparkles className="w-6 h-6 stroke-[2.2]" />
                     </div>
@@ -482,8 +486,8 @@ export const FloatingAssistant: React.FC = () => {
                         <div
                           className={`max-w-[85%] rounded-2xl p-3 shadow-md ${
                             isAi
-                              ? 'bg-slate-900/90 text-slate-100 rounded-tl-sm border border-white/10'
-                              : 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-medium rounded-tr-sm'
+                              ? 'bg-slate-900/50 backdrop-blur-md text-slate-100 rounded-tl-sm border border-white/10'
+                              : 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-medium rounded-tr-sm shadow-emerald-500/20'
                           }`}
                         >
                           {msg.imageUrl && (
@@ -562,7 +566,7 @@ export const FloatingAssistant: React.FC = () => {
                     <div className="w-6 h-6 rounded-lg bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 shrink-0 shadow-sm">
                       <Sparkles className="w-3 h-3" />
                     </div>
-                    <div className="bg-slate-900/90 px-3 py-2 rounded-2xl rounded-tl-sm border border-white/10 flex items-center gap-1 shadow-md">
+                    <div className="bg-slate-900/60 backdrop-blur-md px-3 py-2 rounded-2xl rounded-tl-sm border border-white/10 flex items-center gap-1 shadow-md">
                       <span className="w-1.5 h-1.5 rounded-full bg-slate-300 animate-ios-dot" style={{ animationDelay: '0ms' }} />
                       <span className="w-1.5 h-1.5 rounded-full bg-slate-300 animate-ios-dot" style={{ animationDelay: '200ms' }} />
                       <span className="w-1.5 h-1.5 rounded-full bg-slate-300 animate-ios-dot" style={{ animationDelay: '400ms' }} />
@@ -579,7 +583,7 @@ export const FloatingAssistant: React.FC = () => {
           {selectedImage && isExpanded && (
             <div
               data-fab-keep-open
-              className="w-full mb-2 pointer-events-auto flex items-center justify-between p-2 bg-slate-900/95 backdrop-blur-xl rounded-2xl border border-white/15 shadow-xl animate-in fade-in slide-in-from-bottom-2 duration-150"
+              className="w-full mb-2 pointer-events-auto flex items-center justify-between p-2 bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-white/15 shadow-xl animate-in fade-in slide-in-from-bottom-2 duration-150 shrink-0"
             >
               <div className="flex items-center gap-2 min-w-0">
                 <img
@@ -603,9 +607,9 @@ export const FloatingAssistant: React.FC = () => {
 
           {/* The Animated Expanding Dock & FAB: in-place horizontal expand from 50px circle to full width */}
           <div
-            className={`fab-dock-transition pointer-events-auto h-[50px] border shadow-2xl flex items-center overflow-hidden ${
+            className={`fab-dock-transition pointer-events-auto h-[50px] border shadow-2xl flex items-center overflow-hidden shrink-0 ${
               isExpanded
-                ? 'w-full rounded-3xl border-white/25 bg-slate-900/95 backdrop-blur-xl shadow-emerald-500/10 px-2.5'
+                ? 'w-full rounded-3xl border-white/25 bg-slate-900/80 backdrop-blur-xl shadow-emerald-500/10 px-2.5'
                 : 'w-[50px] rounded-full border-emerald-400/40 bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 cursor-pointer shadow-xl shadow-emerald-500/30 hover:scale-105 active:scale-95 justify-center'
             }`}
           >
@@ -680,7 +684,7 @@ export const FloatingAssistant: React.FC = () => {
                       ? 'Listening to your voice...'
                       : 'Ask Assistant (e.g. "Add milk", "Plan dinners", "Soccer at 5")...'
                   }
-                  className="flex-1 min-w-0 bg-transparent border-none text-xs text-white placeholder-slate-500 focus:outline-none py-1.5 px-1"
+                  className="flex-1 min-w-0 bg-transparent border-none text-base sm:text-xs text-white placeholder-slate-500 focus:outline-none py-1.5 px-1"
                 />
 
                 {/* Send Button */}

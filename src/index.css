@@ -100,17 +100,35 @@ input, textarea, [contenteditable="true"], .selectable-text {
 }
 
 /* Ghost chat smooth in / out transitions */
+@keyframes ghostChatEnter {
+  0% {
+    opacity: 0;
+    transform: translateY(16px) scale(0.97);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes ghostChatExit {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+}
+
 .ghost-chat-in {
-  opacity: 1;
-  transform: translateY(0) scale(1);
-  transition: opacity 0.28s cubic-bezier(0.16, 1, 0.3, 1), transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: ghostChatEnter 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .ghost-chat-out {
-  opacity: 0;
-  transform: translateY(12px) scale(0.98);
+  animation: ghostChatExit 0.2s ease-in forwards;
   pointer-events: none;
-  transition: opacity 0.2s ease-in, transform 0.2s ease-in;
 }
 
 /* Full screen transparent blurred overlay transitions */
