@@ -113,6 +113,22 @@ input, textarea, [contenteditable="true"], .selectable-text {
   transition: opacity 0.2s ease-in, transform 0.2s ease-in;
 }
 
+/* Full screen transparent blurred overlay transitions */
+.overlay-blur-in {
+  opacity: 1;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: opacity 0.28s cubic-bezier(0.16, 1, 0.3, 1), backdrop-filter 0.28s ease, -webkit-backdrop-filter 0.28s ease;
+}
+
+.overlay-blur-out {
+  opacity: 0;
+  backdrop-filter: blur(0px);
+  -webkit-backdrop-filter: blur(0px);
+  pointer-events: none;
+  transition: opacity 0.22s ease-in, backdrop-filter 0.22s ease, -webkit-backdrop-filter 0.22s ease;
+}
+
 /* Glassmorphism helpers */
 .glass-panel {
   background: rgba(18, 24, 39, 0.75);
