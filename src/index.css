@@ -99,11 +99,14 @@ input, textarea, [contenteditable="true"], .selectable-text {
               box-shadow 0.2s ease;
 }
 
-/* Ghost chat smooth in / out transitions */
+/* Ghost chat smooth animate open / close transitions */
 @keyframes ghostChatEnter {
   0% {
     opacity: 0;
-    transform: translateY(16px) scale(0.97);
+    transform: translateY(100%) scale(0.96);
+  }
+  25% {
+    opacity: 1;
   }
   100% {
     opacity: 1;
@@ -118,33 +121,57 @@ input, textarea, [contenteditable="true"], .selectable-text {
   }
   100% {
     opacity: 0;
-    transform: translateY(12px) scale(0.98);
+    transform: translateY(100%) scale(0.96);
   }
 }
 
 .ghost-chat-in {
-  animation: ghostChatEnter 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transform-origin: bottom center;
+  animation: ghostChatEnter 0.36s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity;
 }
 
 .ghost-chat-out {
-  animation: ghostChatExit 0.2s ease-in forwards;
+  transform-origin: bottom center;
+  animation: ghostChatExit 0.24s cubic-bezier(0.4, 0, 1, 1) forwards;
   pointer-events: none;
+  will-change: transform, opacity;
 }
 
 /* Full screen transparent blurred overlay transitions */
-.overlay-blur-in {
-  opacity: 1;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  transition: opacity 0.28s cubic-bezier(0.16, 1, 0.3, 1), backdrop-filter 0.28s ease, -webkit-backdrop-filter 0.28s ease;
+@keyframes overlayFadeIn {
+  from {
+    opacity: 0;
+    backdrop-filter: blur(0px);
+    -webkit-backdrop-filter: blur(0px);
+  }
+  to {
+    opacity: 1;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
 }
 
-.overlay-blur-out {
-  opacity: 0;
-  backdrop-filter: blur(0px);
-  -webkit-backdrop-filter: blur(0px);
+@keyframes overlayFadeOut {
+  from {
+    opacity: 1;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+  to {
+    opacity: 0;
+    backdrop-filter: blur(0px);
+    -webkit-backdrop-filter: blur(0px);
+  }
+}
+
+.overlay-fade-in {
+  animation: overlayFadeIn 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.overlay-fade-out {
+  animation: overlayFadeOut 0.22s ease-in forwards;
   pointer-events: none;
-  transition: opacity 0.22s ease-in, backdrop-filter 0.22s ease, -webkit-backdrop-filter 0.22s ease;
 }
 
 /* Safe area utilities for iOS notch, Dynamic Island, and home indicator */

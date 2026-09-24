@@ -105,7 +105,7 @@ export const FloatingAssistant: React.FC = () => {
       setIsExpanded(false);
       setIsGhostClosing(false);
       closedByPopstateRef.current = false;
-    }, 200);
+    }, 240);
   };
 
   const handleOpen = () => {
@@ -353,8 +353,8 @@ export const FloatingAssistant: React.FC = () => {
       {/* Transparent blurred backdrop when expanded allowing user to tap outside to close */}
       {(isExpanded || isGhostClosing) && (
         <div
-          className={`fixed inset-0 z-30 bg-slate-950/35 backdrop-blur-md transition-opacity duration-200 cursor-pointer ${
-            isGhostClosing ? 'opacity-0 pointer-events-none' : 'opacity-100'
+          className={`fixed inset-0 z-30 bg-slate-950/35 cursor-pointer ${
+            isGhostClosing ? 'overlay-fade-out' : 'overlay-fade-in'
           }`}
           onClick={() => handleSmoothClose(false)}
         />
@@ -607,7 +607,7 @@ export const FloatingAssistant: React.FC = () => {
 
           {/* The Animated Expanding Dock & FAB: in-place horizontal expand from 50px circle to full width */}
           <div
-            className={`fab-dock-transition pointer-events-auto h-[50px] border shadow-2xl flex items-center overflow-hidden shrink-0 ${
+            className={`fab-dock-transition relative z-10 pointer-events-auto h-[50px] border shadow-2xl flex items-center overflow-hidden shrink-0 ${
               isExpanded
                 ? 'w-full rounded-3xl border-white/25 bg-slate-900/80 backdrop-blur-xl shadow-emerald-500/10 px-2.5'
                 : 'w-[50px] rounded-full border-emerald-400/40 bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 cursor-pointer shadow-xl shadow-emerald-500/30 hover:scale-105 active:scale-95 justify-center'
