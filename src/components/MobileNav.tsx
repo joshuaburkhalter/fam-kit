@@ -19,7 +19,7 @@ export const MobileNav: React.FC<MobileNavProps> = ({ activeTab, setActiveTab })
   ];
 
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 glass-panel border-t border-white/10 px-2 h-[76px] flex items-center pb-safe">
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 glass-panel border-t border-white/10 px-2 h-[calc(72px+env(safe-area-inset-bottom,0px))] flex items-center pb-[env(safe-area-inset-bottom,0px)]">
       <div className="w-full flex items-center justify-around">
         {tabs.map((tab) => {
           const Icon = tab.icon;

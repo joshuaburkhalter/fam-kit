@@ -24,7 +24,7 @@ export const LegalPage: React.FC<LegalPageProps> = ({ type, onBack }) => {
   return (
     <div className="min-h-screen bg-[#080b12] text-slate-100 selection:bg-emerald-500/30 selection:text-emerald-300">
       {/* Top Header Bar */}
-      <header className="sticky top-0 z-40 bg-[#080b12]/90 backdrop-blur-xl border-b border-white/5 px-4 sm:px-8 py-4">
+      <header className="sticky top-0 z-40 bg-[#080b12]/90 backdrop-blur-xl border-b border-white/5 px-4 sm:px-8 pt-[calc(1rem+env(safe-area-inset-top,0px))] pb-4">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <button
             onClick={handleBack}

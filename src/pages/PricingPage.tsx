@@ -122,7 +122,7 @@ export const PricingPage: React.FC<PricingPageProps> = ({ onBack, onOpenAuth }) 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-emerald-500/30 selection:text-emerald-300">
       {/* 1. Header */}
-      <header className="sticky top-0 z-50 w-full glass-panel border-b border-white/10 bg-slate-950/80 backdrop-blur-md px-4 sm:px-8 py-3.5">
+      <header className="sticky top-0 z-50 w-full glass-panel border-b border-white/10 bg-slate-950/80 backdrop-blur-md px-4 sm:px-8 pt-[calc(0.875rem+env(safe-area-inset-top,0px))] pb-3.5">
         <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             {onBack && (

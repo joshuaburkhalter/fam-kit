@@ -371,7 +371,7 @@ export const FloatingAssistant: React.FC = () => {
           }}
         >
           {/* Top Header */}
-          <div className="w-full max-w-2xl mx-auto px-4 py-3 sm:py-4 flex items-center justify-between gap-3 border-b border-white/10 shrink-0">
+          <div className="w-full max-w-2xl mx-auto px-4 pt-[calc(0.75rem+env(safe-area-inset-top,0px))] pb-3 sm:py-4 flex items-center justify-between gap-3 border-b border-white/10 shrink-0">
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 font-black shadow-md shadow-emerald-500/20 shrink-0">
                 <Sparkles className="w-4 h-4 stroke-[2.2]" />

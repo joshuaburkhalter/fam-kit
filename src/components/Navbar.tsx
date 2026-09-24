@@ -78,7 +78,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
   }, [currentUser]);
 
   return (
-    <header className="sticky top-0 z-40 w-full glass-panel border-b border-white/10 px-4 py-3">
+    <header className="sticky top-0 z-40 w-full glass-panel border-b border-white/10 px-4 pt-[calc(0.75rem+env(safe-area-inset-top,0px))] pb-3">
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-2">
         {/* Left: Brand Logo & Household */}
         <div className="flex items-center gap-3">

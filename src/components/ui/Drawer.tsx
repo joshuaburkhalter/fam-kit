@@ -143,7 +143,7 @@ export const Drawer: React.FC<DrawerProps> = ({
         {customHeader ? (
           customHeader
         ) : (
-          <div className="p-4 sm:p-5 border-b border-white/10 flex items-center justify-between gap-3 bg-gradient-to-r from-slate-900 via-[#0a0f1d] to-slate-900 shrink-0">
+          <div className="px-4 pt-[calc(1rem+env(safe-area-inset-top,0px))] pb-4 sm:p-5 border-b border-white/10 flex items-center justify-between gap-3 bg-gradient-to-r from-slate-900 via-[#0a0f1d] to-slate-900 shrink-0">
             <div className="flex items-center gap-3 min-w-0">
               {icon && (
                 <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 font-black shadow-lg shadow-emerald-500/20 shrink-0">
@@ -186,7 +186,7 @@ export const Drawer: React.FC<DrawerProps> = ({
 
         {/* Optional Footer */}
         {footer && (
-          <div className="p-3.5 sm:p-4 border-t border-white/10 bg-slate-950/80 flex items-center justify-end gap-2 text-xs shrink-0">
+          <div className="px-4 pt-3.5 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] sm:p-4 border-t border-white/10 bg-slate-950/80 flex items-center justify-end gap-2 text-xs shrink-0">
             {footer}
           </div>
         )}
