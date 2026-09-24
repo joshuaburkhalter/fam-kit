@@ -350,22 +350,22 @@ export const FloatingAssistant: React.FC = () => {
 
   return (
     <>
-      {/* Transparent blurred backdrop when expanded allowing user to tap outside to close */}
+      {/* Transparent blurred backdrop when expanded allowing user to tap outside to close (sits below the top bar) */}
       {(isExpanded || isGhostClosing) && (
         <div
-          className={`fixed inset-0 z-30 bg-slate-950/35 cursor-pointer ${
+          className={`fixed inset-x-0 bottom-0 top-[calc(4.25rem+env(safe-area-inset-top,0px))] md:top-[4.25rem] z-30 bg-slate-950/45 cursor-pointer ${
             isGhostClosing ? 'overlay-fade-out' : 'overlay-fade-in'
           }`}
           onClick={() => handleSmoothClose(false)}
         />
       )}
 
-      {/* Dock Container: Stays anchored above mobile bottom nav across all pages and reaches top of screen when expanded */}
+      {/* Dock Container: Stays anchored above mobile bottom nav and below the top bar */}
       <div
         ref={dockContainerRef}
         className={`fixed inset-x-0 z-40 px-3 sm:px-6 pointer-events-none flex flex-col items-center justify-end ${
           isExpanded || isGhostClosing
-            ? 'top-[calc(0.5rem+env(safe-area-inset-top,0px))] md:top-4 bottom-[calc(72px+0.85rem+env(safe-area-inset-bottom,0px))] md:bottom-8'
+            ? 'top-[calc(4.75rem+env(safe-area-inset-top,0px))] md:top-[4.75rem] bottom-[calc(72px+0.85rem+env(safe-area-inset-bottom,0px))] md:bottom-8'
             : 'bottom-[calc(72px+0.85rem+env(safe-area-inset-bottom,0px))] md:bottom-8'
         }`}
       >
