@@ -370,73 +370,73 @@ export const FloatingAssistant: React.FC = () => {
         }`}
       >
         <div className="max-w-2xl w-full h-full pointer-events-none flex flex-col justify-end items-end">
-          {/* Chat history floats / ghosts directly ABOVE the expanding FAB dock, filling up to the top of screen */}
+          {/* Chat history floats transparently directly ABOVE the expanding FAB dock */}
           {(isExpanded || isGhostClosing) && (
-            <div className="flex-1 w-full min-h-0 overflow-hidden flex flex-col justify-end pointer-events-none px-4 -mx-4 pb-2.5">
+            <div className="flex-1 w-full min-h-0 overflow-hidden flex flex-col justify-end pointer-events-none pb-2">
               <div
-                className={`w-full flex-1 min-h-0 rounded-3xl bg-slate-950/30 backdrop-blur-2xl border border-white/15 shadow-2xl shadow-black/60 flex flex-col overflow-hidden pointer-events-auto ${
+                className={`w-full flex-1 min-h-0 flex flex-col pointer-events-auto ${
                   isGhostClosing ? 'ghost-chat-out' : 'ghost-chat-in'
                 }`}
               >
-                {/* Minimal Transparent Header */}
-                <div className="px-4 py-2.5 border-b border-white/10 flex items-center justify-between gap-2 bg-slate-900/30 backdrop-blur-md shrink-0">
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 font-black shadow-md shadow-emerald-500/20 shrink-0">
-                    <Sparkles className="w-4 h-4 stroke-[2.2]" />
+                {/* Floating Borderless Header */}
+                <div className="px-2 py-2 flex items-center justify-between gap-2 shrink-0">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-7 h-7 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 font-black shadow-md shadow-emerald-500/20 shrink-0">
+                      <Sparkles className="w-4 h-4 stroke-[2.2]" />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="text-xs font-bold text-white tracking-tight flex items-center gap-1.5 truncate">
+                        Homebase Assistant
+                        {isSpeaking && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-pink-500/20 text-pink-400 text-[10px] font-semibold animate-pulse border border-pink-500/30">
+                            Speaking
+                          </span>
+                        )}
+                      </h3>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <h3 className="text-xs font-bold text-white tracking-tight flex items-center gap-1.5 truncate">
-                      Homebase Assistant
-                      {isSpeaking && (
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-pink-500/20 text-pink-400 text-[10px] font-semibold animate-pulse border border-pink-500/30">
-                          Speaking
-                        </span>
-                      )}
-                    </h3>
-                  </div>
-                </div>
 
-                <div className="flex items-center gap-1.5 shrink-0">
-                  {/* Auto audio speech toggle */}
-                  <button
-                    type="button"
-                    onClick={() => setAutoAudioResponses(!autoAudioResponses)}
-                    className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all border cursor-pointer ${
-                      autoAudioResponses
-                        ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/25'
-                        : 'bg-white/5 hover:bg-white/10 text-slate-400 border-white/10'
-                    }`}
-                    title={autoAudioResponses ? 'Voice playback ON (tap to mute)' : 'Voice playback MUTED (tap to unmute)'}
-                  >
-                    {autoAudioResponses ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
-                  </button>
-
-                  {/* Clear / New Chat */}
-                  {messages.length > 0 && (
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {/* Auto audio speech toggle */}
                     <button
                       type="button"
-                      onClick={handleClearChat}
-                      className="w-7 h-7 rounded-lg flex items-center justify-center bg-white/5 hover:bg-red-500/20 text-slate-400 hover:text-red-400 border border-white/10 transition-colors cursor-pointer"
-                      title="Clear conversation"
+                      onClick={() => setAutoAudioResponses(!autoAudioResponses)}
+                      className={`w-7 h-7 rounded-xl flex items-center justify-center transition-all border cursor-pointer ${
+                        autoAudioResponses
+                          ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/30'
+                          : 'bg-white/5 hover:bg-white/10 text-slate-400 border-white/10'
+                      }`}
+                      title={autoAudioResponses ? 'Voice playback ON (tap to mute)' : 'Voice playback MUTED (tap to unmute)'}
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      {autoAudioResponses ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
                     </button>
-                  )}
 
-                  {/* Minimize / Collapse */}
-                  <button
-                    type="button"
-                    onClick={() => handleSmoothClose(false)}
-                    className="w-7 h-7 rounded-lg flex items-center justify-center bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white border border-white/10 transition-colors cursor-pointer"
-                    title="Minimize assistant"
-                  >
-                    <ChevronDown className="w-4 h-4" />
-                  </button>
+                    {/* Clear / New Chat */}
+                    {messages.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleClearChat}
+                        className="w-7 h-7 rounded-xl flex items-center justify-center bg-white/5 hover:bg-red-500/20 text-slate-400 hover:text-red-400 border border-white/10 transition-colors cursor-pointer"
+                        title="Clear conversation"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+
+                    {/* Minimize / Collapse */}
+                    <button
+                      type="button"
+                      onClick={() => handleSmoothClose(false)}
+                      className="w-7 h-7 rounded-xl flex items-center justify-center bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white border border-white/10 transition-colors cursor-pointer"
+                      title="Minimize assistant"
+                    >
+                      <ChevronDown className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
-              </div>
 
-              {/* Scrollable Message Thread or Suggestions */}
-              <div ref={chatContainerRef} className="flex-1 min-h-0 overflow-y-auto px-3.5 py-3 space-y-3.5 text-xs">
+                {/* Scrollable Message Thread or Suggestions */}
+                <div ref={chatContainerRef} className="flex-1 min-h-0 overflow-y-auto px-1 py-2 space-y-3 text-xs scrollbar-none">
                 {messages.length === 0 ? (
                   <div className="py-6 px-2 text-center flex flex-col items-center justify-center h-full my-auto">
                     <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-500 via-teal-400 to-cyan-400 flex items-center justify-center text-slate-950 shadow-xl shadow-emerald-500/25 mb-2.5">
