@@ -372,13 +372,14 @@ export const FloatingAssistant: React.FC = () => {
         <div className="max-w-2xl w-full h-full pointer-events-none flex flex-col justify-end items-end">
           {/* Chat history floats / ghosts directly ABOVE the expanding FAB dock, filling up to the top of screen */}
           {(isExpanded || isGhostClosing) && (
-            <div
-              className={`flex-1 w-full min-h-0 rounded-3xl bg-slate-950/30 backdrop-blur-2xl border border-white/15 shadow-2xl shadow-black/60 flex flex-col overflow-hidden mb-2.5 pointer-events-auto ${
-                isGhostClosing ? 'ghost-chat-out' : 'ghost-chat-in'
-              }`}
-            >
-              {/* Minimal Transparent Header */}
-              <div className="px-4 py-2.5 border-b border-white/10 flex items-center justify-between gap-2 bg-slate-900/30 backdrop-blur-md shrink-0">
+            <div className="flex-1 w-full min-h-0 overflow-hidden flex flex-col justify-end pointer-events-none px-4 -mx-4 pb-2.5">
+              <div
+                className={`w-full flex-1 min-h-0 rounded-3xl bg-slate-950/30 backdrop-blur-2xl border border-white/15 shadow-2xl shadow-black/60 flex flex-col overflow-hidden pointer-events-auto ${
+                  isGhostClosing ? 'ghost-chat-out' : 'ghost-chat-in'
+                }`}
+              >
+                {/* Minimal Transparent Header */}
+                <div className="px-4 py-2.5 border-b border-white/10 flex items-center justify-between gap-2 bg-slate-900/30 backdrop-blur-md shrink-0">
                 <div className="flex items-center gap-2 min-w-0">
                   <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 font-black shadow-md shadow-emerald-500/20 shrink-0">
                     <Sparkles className="w-4 h-4 stroke-[2.2]" />
@@ -577,7 +578,8 @@ export const FloatingAssistant: React.FC = () => {
                 <div ref={chatBottomRef} />
               </div>
             </div>
-          )}
+          </div>
+        )}
 
           {/* Attached image preview above dock */}
           {selectedImage && isExpanded && (
