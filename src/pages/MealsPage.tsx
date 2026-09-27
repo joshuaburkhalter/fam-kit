@@ -732,8 +732,39 @@ export const MealsPage: React.FC = () => {
         return next;
       });
 
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const tempLogId = `temp-log-${Date.now()}`;
+      const optimisticLog: MealLog = {
+        id: tempLogId,
+        household_id: householdId,
+        title: meal.title,
+        recipe_id: meal.recipe_id,
+        date: todayStr,
+        notes: meal.notes,
+        cooked_by_user_id: currentUser?.id,
+        created_at: new Date().toISOString(),
+      };
+
+      // 1. Immediately remove meal from planner and add to history (0ms lag after 360ms strike animation)
+      setMeals((prev) => prev.filter((m) => m.id !== mealId));
+      setMealLogs((prev) => [optimisticLog, ...prev]);
+
+      if (mealsDataCache && mealsDataCache.householdId === householdId) {
+        mealsDataCache.meals = mealsDataCache.meals.filter((m) => m.id !== mealId);
+        mealsDataCache.mealLogs = [optimisticLog, ...mealsDataCache.mealLogs];
+      }
+      clearCalendarCache();
+
+      // 2. Immediately show Undo toast
+      showToast(`Cooked "${meal.title}"! Moved to History`, {
+        label: 'Undo',
+        onClick: async () => {
+          await handleMoveBackToPlanner(optimisticLog);
+        },
+      });
+
+      // 3. Background server sync
       try {
-        const todayStr = format(new Date(), 'yyyy-MM-dd');
         const newLog = await api.logMealMade(householdId, {
           title: meal.title,
           recipe_id: meal.recipe_id,
@@ -750,26 +781,25 @@ export const MealsPage: React.FC = () => {
             console.warn('Failed to delete calendar event for cooked meal:', calErr);
           }
         }
-        clearCalendarCache();
 
         await api.deleteWeeklyMeal(meal.id);
 
-        setMeals((prev) => prev.filter((m) => m.id !== meal.id));
-        setMealLogs((prev) => [newLog, ...prev]);
-
+        // Replace optimistic log with real newLog
+        setMealLogs((prev) => prev.map((l) => (l.id === tempLogId ? newLog : l)));
         if (mealsDataCache && mealsDataCache.householdId === householdId) {
-          mealsDataCache.meals = mealsDataCache.meals.filter((m) => m.id !== meal.id);
-          mealsDataCache.mealLogs = [newLog, ...mealsDataCache.mealLogs];
+          mealsDataCache.mealLogs = mealsDataCache.mealLogs.map((l) => (l.id === tempLogId ? newLog : l));
         }
-
-        showToast(`Cooked "${meal.title}"! Moved to History`, {
-          label: 'Undo',
-          onClick: async () => {
-            await handleMoveBackToPlanner(newLog);
-          },
-        });
       } catch (err) {
         console.error('Failed to record cooked meal', err);
+        // Rollback on failure
+        setMeals((prev) => (prev.some((m) => m.id === meal.id) ? prev : [meal, ...prev]));
+        setMealLogs((prev) => prev.filter((l) => l.id !== tempLogId));
+        if (mealsDataCache && mealsDataCache.householdId === householdId) {
+          if (!mealsDataCache.meals.some((m) => m.id === meal.id)) {
+            mealsDataCache.meals = [meal, ...mealsDataCache.meals];
+          }
+          mealsDataCache.mealLogs = mealsDataCache.mealLogs.filter((l) => l.id !== tempLogId);
+        }
         showToast('Error recording meal');
       }
     }, 360);
@@ -778,55 +808,101 @@ export const MealsPage: React.FC = () => {
   /**
    * Remove meal from the calendar and clear its scheduled date
    */
-  const handleUnscheduleMeal = async (meal: WeeklyMeal | null) => {
+  const handleUnscheduleMeal = (meal: WeeklyMeal | null) => {
     if (!meal || !householdId) return;
 
     const previousScheduledDate = meal.scheduled_date;
+    const previousCalendarEventId = meal.calendar_event_id;
+    const mealId = meal.id;
+    const mealTitle = meal.title;
 
-    try {
-      if (meal.calendar_event_id) {
-        try {
-          await api.deleteCalendarEvent(meal.calendar_event_id);
-        } catch (e) {
-          console.warn('Failed to delete calendar event for meal:', e);
-        }
-      }
-
-      await api.updateWeeklyMeal(meal.id, {
-        scheduled_date: null,
-        calendar_event_id: null,
-      });
-
-      setMeals((prev) =>
-        prev.map((m) =>
-          m.id === meal.id ? { ...m, scheduled_date: undefined, calendar_event_id: undefined } : m
-        )
+    // 1. Immediately clear scheduled date & calendar event in UI state & cache (0ms lag)
+    setMeals((prev) =>
+      prev.map((m) =>
+        m.id === mealId ? { ...m, scheduled_date: undefined, calendar_event_id: undefined } : m
+      )
+    );
+    if (mealsDataCache && mealsDataCache.householdId === householdId) {
+      mealsDataCache.meals = mealsDataCache.meals.map((m) =>
+        m.id === mealId ? { ...m, scheduled_date: undefined, calendar_event_id: undefined } : m
       );
-      if (mealsDataCache && mealsDataCache.householdId === householdId) {
-        mealsDataCache.meals = mealsDataCache.meals.map((m) =>
-          m.id === meal.id ? { ...m, scheduled_date: undefined, calendar_event_id: undefined } : m
-        );
-      }
+    }
 
-      clearCalendarCache();
-      setIsScheduleDrawerOpen(false);
-      setSchedulingMeal(null);
+    clearCalendarCache();
+    setIsScheduleDrawerOpen(false);
+    setSchedulingMeal(null);
 
-      showToast(`Removed "${meal.title}" from calendar`, {
-        label: 'Undo',
-        onClick: async () => {
-          if (previousScheduledDate) {
-            await handleScheduleMeal(
-              { ...meal, scheduled_date: undefined, calendar_event_id: undefined },
-              previousScheduledDate
+    let undoTriggered = false;
+
+    // 2. Immediately show Undo toast
+    showToast(`Removed "${mealTitle}" from calendar`, {
+      label: 'Undo',
+      onClick: async () => {
+        undoTriggered = true;
+        if (previousScheduledDate) {
+          // Immediately restore date in UI
+          setMeals((prev) =>
+            prev.map((m) =>
+              m.id === mealId
+                ? { ...m, scheduled_date: previousScheduledDate, calendar_event_id: previousCalendarEventId }
+                : m
+            )
+          );
+          if (mealsDataCache && mealsDataCache.householdId === householdId) {
+            mealsDataCache.meals = mealsDataCache.meals.map((m) =>
+              m.id === mealId
+                ? { ...m, scheduled_date: previousScheduledDate, calendar_event_id: previousCalendarEventId }
+                : m
             );
           }
-        },
-      });
-    } catch (err) {
-      console.error('Failed to unschedule meal:', err);
-      showToast('Failed to unschedule meal');
-    }
+          clearCalendarCache();
+
+          // Reschedule on server in background
+          await handleScheduleMeal(
+            { ...meal, scheduled_date: undefined, calendar_event_id: undefined },
+            previousScheduledDate
+          );
+        }
+      },
+    });
+
+    // 3. Background server deletion
+    (async () => {
+      try {
+        if (previousCalendarEventId) {
+          try {
+            await api.deleteCalendarEvent(previousCalendarEventId);
+          } catch (e) {
+            console.warn('Failed to delete calendar event for meal:', e);
+          }
+        }
+
+        await api.updateWeeklyMeal(mealId, {
+          scheduled_date: null,
+          calendar_event_id: null,
+        });
+      } catch (err) {
+        console.error('Failed to unschedule meal in background:', err);
+        if (!undoTriggered && previousScheduledDate) {
+          // Rollback local state
+          setMeals((prev) =>
+            prev.map((m) =>
+              m.id === mealId
+                ? { ...m, scheduled_date: previousScheduledDate, calendar_event_id: previousCalendarEventId }
+                : m
+            )
+          );
+          if (mealsDataCache && mealsDataCache.householdId === householdId) {
+            mealsDataCache.meals = mealsDataCache.meals.map((m) =>
+              m.id === mealId
+                ? { ...m, scheduled_date: previousScheduledDate, calendar_event_id: previousCalendarEventId }
+                : m
+            );
+          }
+          showToast('Failed to unschedule meal');
+        }
+      }
+    })();
   };
 
   /**
@@ -966,6 +1042,28 @@ export const MealsPage: React.FC = () => {
   // Move a logged meal back to the planner (Undo action)
   const handleMoveBackToPlanner = async (log: MealLog) => {
     if (!householdId) return;
+
+    const tempMealId = `temp-meal-${Date.now()}`;
+    const optimisticMeal: WeeklyMeal = {
+      id: tempMealId,
+      household_id: householdId,
+      title: log.title,
+      recipe_id: log.recipe_id,
+      notes: log.notes,
+      is_made: false,
+      week_start_date: new Date().toISOString().split('T')[0],
+      created_at: new Date().toISOString(),
+    };
+
+    // Optimistically update UI state immediately
+    setMeals((prev) => [optimisticMeal, ...prev]);
+    setMealLogs((prev) => prev.filter((l) => l.id !== log.id));
+    if (mealsDataCache && mealsDataCache.householdId === householdId) {
+      mealsDataCache.meals = [optimisticMeal, ...mealsDataCache.meals];
+      mealsDataCache.mealLogs = mealsDataCache.mealLogs.filter((l) => l.id !== log.id);
+    }
+    showToast(`↩ Returned "${log.title}" to Planner!`);
+
     try {
       const added = await api.addWeeklyMeal(householdId, {
         title: log.title,
@@ -973,118 +1071,198 @@ export const MealsPage: React.FC = () => {
         notes: log.notes,
       });
 
-      await api.deleteMealLog(log.id);
-
-      setMeals((prev) => [added, ...prev]);
-      setMealLogs((prev) => prev.filter((l) => l.id !== log.id));
-
-      if (mealsDataCache && mealsDataCache.householdId === householdId) {
-        mealsDataCache.meals = [added, ...mealsDataCache.meals];
-        mealsDataCache.mealLogs = mealsDataCache.mealLogs.filter((l) => l.id !== log.id);
+      if (!log.id.startsWith('temp-')) {
+        try {
+          await api.deleteMealLog(log.id);
+        } catch (delErr) {
+          console.warn('Failed to delete meal log during move back:', delErr);
+        }
       }
 
-      showToast(`↩ Returned "${log.title}" to Planner!`);
+      setMeals((prev) => prev.map((m) => (m.id === tempMealId ? added : m)));
+      if (mealsDataCache && mealsDataCache.householdId === householdId) {
+        mealsDataCache.meals = mealsDataCache.meals.map((m) => (m.id === tempMealId ? added : m));
+      }
     } catch (err) {
       console.error('Failed to move meal back', err);
+      // Rollback
+      setMeals((prev) => prev.filter((m) => m.id !== tempMealId));
+      setMealLogs((prev) => [log, ...prev]);
+      if (mealsDataCache && mealsDataCache.householdId === householdId) {
+        mealsDataCache.meals = mealsDataCache.meals.filter((m) => m.id !== tempMealId);
+        mealsDataCache.mealLogs = [log, ...mealsDataCache.mealLogs];
+      }
+      showToast(`Failed to return "${log.title}" to Planner`);
     }
   };
 
   // Delete from Planner list with Undo
-  const handleDeletePlannerMeal = async (meal: WeeklyMeal, e?: React.MouseEvent) => {
+  const handleDeletePlannerMeal = (meal: WeeklyMeal, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    try {
-      if (meal.calendar_event_id) {
+    if (!householdId) return;
+
+    const mealToDelete = { ...meal };
+    const mealId = meal.id;
+
+    // 1. Immediately remove from local state & cache (0ms lag, card disappears off the screen instantly)
+    setMeals((prev) => prev.filter((m) => m.id !== mealId));
+    if (mealsDataCache && mealsDataCache.householdId === householdId) {
+      mealsDataCache.meals = mealsDataCache.meals.filter((m) => m.id !== mealId);
+    }
+    clearCalendarCache();
+
+    let undoClicked = false;
+
+    // 2. Immediately show Undo toast
+    showToast(`Removed "${mealToDelete.title}" from Planner`, {
+      label: 'Undo',
+      onClick: async () => {
+        undoClicked = true;
+
+        // Immediately restore card to local state & cache (0ms lag, card reappears instantly)
+        setMeals((prev) => (prev.some((m) => m.id === mealToDelete.id) ? prev : [mealToDelete, ...prev]));
+        if (mealsDataCache && mealsDataCache.householdId === householdId) {
+          if (!mealsDataCache.meals.some((m) => m.id === mealToDelete.id)) {
+            mealsDataCache.meals = [mealToDelete, ...mealsDataCache.meals];
+          }
+        }
+        clearCalendarCache();
+
         try {
-          await api.deleteCalendarEvent(meal.calendar_event_id);
-        } catch (calErr) {
-          console.warn('Failed to delete calendar event for meal:', calErr);
+          // Re-create on server
+          let newCalendarEventId = mealToDelete.calendar_event_id;
+          if (mealToDelete.scheduled_date) {
+            try {
+              const eventTitle = `🍽️ ${mealToDelete.title}`;
+              const newEv = await api.createCalendarEvent(householdId, {
+                title: eventTitle,
+                description: mealToDelete.notes || (mealToDelete.recipe_id ? 'Planned dinner from recipe box' : 'Planned dinner'),
+                start_time: `${mealToDelete.scheduled_date}T18:00:00`,
+                end_time: `${mealToDelete.scheduled_date}T19:00:00`,
+                is_all_day: false,
+              });
+              newCalendarEventId = newEv.id;
+            } catch (evErr) {
+              console.warn('Failed to restore calendar event on undo:', evErr);
+            }
+          }
+
+          const restored = await api.addWeeklyMeal(householdId, {
+            title: mealToDelete.title,
+            recipe_id: mealToDelete.recipe_id,
+            notes: mealToDelete.notes,
+            scheduled_date: mealToDelete.scheduled_date,
+            calendar_event_id: newCalendarEventId,
+          });
+
+          // Replace placeholder id with restored server record
+          setMeals((prev) =>
+            prev.map((m) => (m.id === mealToDelete.id ? restored : m))
+          );
+          if (mealsDataCache && mealsDataCache.householdId === householdId) {
+            mealsDataCache.meals = mealsDataCache.meals.map((m) =>
+              m.id === mealToDelete.id ? restored : m
+            );
+          }
+          clearCalendarCache();
+          showToast(`Restored "${mealToDelete.title}" to Planner`);
+        } catch (err) {
+          console.error('Failed to restore meal:', err);
+          showToast('Failed to restore meal');
+        }
+      },
+    });
+
+    // 3. Background server execution
+    (async () => {
+      try {
+        if (mealToDelete.calendar_event_id) {
+          try {
+            await api.deleteCalendarEvent(mealToDelete.calendar_event_id);
+          } catch (calErr) {
+            console.warn('Failed to delete calendar event for meal:', calErr);
+          }
+        }
+        await api.deleteWeeklyMeal(mealToDelete.id);
+      } catch (err) {
+        console.error('Failed to delete meal in background', err);
+        if (!undoClicked) {
+          // Rollback if background deletion failed and user didn't click undo
+          setMeals((prev) => (prev.some((m) => m.id === mealToDelete.id) ? prev : [mealToDelete, ...prev]));
+          if (mealsDataCache && mealsDataCache.householdId === householdId) {
+            if (!mealsDataCache.meals.some((m) => m.id === mealToDelete.id)) {
+              mealsDataCache.meals = [mealToDelete, ...mealsDataCache.meals];
+            }
+          }
+          showToast(`Failed to remove "${mealToDelete.title}"`);
         }
       }
-      clearCalendarCache();
-
-      await api.deleteWeeklyMeal(meal.id);
-      setMeals((prev) => prev.filter((m) => m.id !== meal.id));
-      if (mealsDataCache && mealsDataCache.householdId === householdId) {
-        mealsDataCache.meals = mealsDataCache.meals.filter((m) => m.id !== meal.id);
-      }
-      showToast(`Removed "${meal.title}" from Planner`, {
-        label: 'Undo',
-        onClick: async () => {
-          if (!householdId) return;
-          try {
-            const restored = await api.addWeeklyMeal(householdId, {
-              title: meal.title,
-              recipe_id: meal.recipe_id,
-              notes: meal.notes,
-              scheduled_date: meal.scheduled_date,
-            });
-            if (meal.scheduled_date) {
-              try {
-                const eventTitle = `🍽️ ${meal.title}`;
-                const newEv = await api.createCalendarEvent(householdId, {
-                  title: eventTitle,
-                  description: meal.notes || (meal.recipe_id ? 'Planned dinner from recipe box' : 'Planned dinner'),
-                  start_time: `${meal.scheduled_date}T18:00:00`,
-                  end_time: `${meal.scheduled_date}T19:00:00`,
-                  is_all_day: false,
-                });
-                await api.updateWeeklyMeal(restored.id, { calendar_event_id: newEv.id });
-                restored.calendar_event_id = newEv.id;
-              } catch (evErr) {
-                console.warn('Failed to restore calendar event on undo:', evErr);
-              }
-            }
-            clearCalendarCache();
-            setMeals((prev) => [restored, ...prev]);
-            if (mealsDataCache && mealsDataCache.householdId === householdId) {
-              mealsDataCache.meals = [restored, ...mealsDataCache.meals];
-            }
-            showToast(`Restored "${meal.title}" to Planner`);
-          } catch (err) {
-            console.error('Failed to restore meal:', err);
-            showToast('Failed to restore meal');
-          }
-        },
-      });
-    } catch (err) {
-      console.error('Failed to delete meal', err);
-    }
+    })();
   };
 
   // Delete log entry with Undo
-  const handleDeleteLog = async (log: MealLog) => {
-    try {
-      await api.deleteMealLog(log.id);
-      setMealLogs((prev) => prev.filter((l) => l.id !== log.id));
-      if (mealsDataCache && mealsDataCache.householdId === householdId) {
-        mealsDataCache.mealLogs = mealsDataCache.mealLogs.filter((l) => l.id !== log.id);
-      }
-      showToast(`Deleted log for "${log.title}"`, {
-        label: 'Undo',
-        onClick: async () => {
-          if (!householdId) return;
-          try {
-            const restored = await api.logMealMade(householdId, {
-              title: log.title,
-              recipe_id: log.recipe_id,
-              date: log.date,
-              notes: log.notes,
-              cooked_by_user_id: log.cooked_by_user_id,
-            });
-            setMealLogs((prev) => [restored, ...prev]);
-            if (mealsDataCache && mealsDataCache.householdId === householdId) {
-              mealsDataCache.mealLogs = [restored, ...mealsDataCache.mealLogs];
-            }
-            showToast(`Restored log for "${log.title}"`);
-          } catch (err) {
-            console.error('Failed to restore log:', err);
-            showToast('Failed to restore log');
-          }
-        },
-      });
-    } catch (err) {
-      console.error('Failed to delete log', err);
+  const handleDeleteLog = (log: MealLog) => {
+    const logToDelete = { ...log };
+    const logId = log.id;
+
+    // Immediately remove from state and cache (0ms)
+    setMealLogs((prev) => prev.filter((l) => l.id !== logId));
+    if (mealsDataCache && mealsDataCache.householdId === householdId) {
+      mealsDataCache.mealLogs = mealsDataCache.mealLogs.filter((l) => l.id !== logId);
     }
+
+    let undoClicked = false;
+
+    showToast(`Deleted log for "${logToDelete.title}"`, {
+      label: 'Undo',
+      onClick: async () => {
+        undoClicked = true;
+        if (!householdId) return;
+
+        // Immediately restore to state and cache
+        setMealLogs((prev) => [logToDelete, ...prev]);
+        if (mealsDataCache && mealsDataCache.householdId === householdId) {
+          mealsDataCache.mealLogs = [logToDelete, ...mealsDataCache.mealLogs];
+        }
+
+        try {
+          const restored = await api.logMealMade(householdId, {
+            title: logToDelete.title,
+            recipe_id: logToDelete.recipe_id,
+            date: logToDelete.date,
+            notes: logToDelete.notes,
+            cooked_by_user_id: logToDelete.cooked_by_user_id,
+          });
+          setMealLogs((prev) => prev.map((l) => (l.id === logToDelete.id ? restored : l)));
+          if (mealsDataCache && mealsDataCache.householdId === householdId) {
+            mealsDataCache.mealLogs = mealsDataCache.mealLogs.map((l) =>
+              l.id === logToDelete.id ? restored : l
+            );
+          }
+          showToast(`Restored log for "${logToDelete.title}"`);
+        } catch (err) {
+          console.error('Failed to restore log:', err);
+          showToast('Failed to restore log');
+        }
+      },
+    });
+
+    (async () => {
+      try {
+        if (!logToDelete.id.startsWith('temp-')) {
+          await api.deleteMealLog(logToDelete.id);
+        }
+      } catch (err) {
+        console.error('Failed to delete log in background', err);
+        if (!undoClicked) {
+          setMealLogs((prev) => [logToDelete, ...prev]);
+          if (mealsDataCache && mealsDataCache.householdId === householdId) {
+            mealsDataCache.mealLogs = [logToDelete, ...mealsDataCache.mealLogs];
+          }
+          showToast('Failed to delete log');
+        }
+      }
+    })();
   };
 
   // Quick add custom dish (e.g. "Takeout Pizza" or "Leftovers")

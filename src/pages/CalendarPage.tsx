@@ -306,23 +306,25 @@ export const CalendarPage: React.FC = () => {
     }
   };
 
-  const handleDeleteEvent = async (id: string) => {
+  const handleDeleteEvent = (id: string) => {
     const eventToDelete = events.find((ev) => ev.id === id);
     if (!eventToDelete) return;
 
-    try {
-      setEventsWithCache((prev) => prev.filter((ev) => ev.id !== id));
-      await api.deleteCalendarEvent(id);
-    } catch (err) {
-      console.error('Failed to delete event:', err);
-      loadData();
-      return;
-    }
+    // Immediately remove from UI state & cache, and close modal (0ms lag)
+    setEventsWithCache((prev) => prev.filter((ev) => ev.id !== id));
+    setIsModalOpen(false);
+
+    let undoClicked = false;
 
     showToast(`Deleted "${eventToDelete.title}"`, {
       label: 'Undo',
       onClick: async () => {
+        undoClicked = true;
         if (!household) return;
+
+        // Immediately restore to UI state & cache
+        setEventsWithCache((prev) => (prev.some((ev) => ev.id === eventToDelete.id) ? prev : [...prev, eventToDelete]));
+
         try {
           const restored = await api.createCalendarEvent(household.id, {
             title: eventToDelete.title,
@@ -333,7 +335,7 @@ export const CalendarPage: React.FC = () => {
             location: eventToDelete.location,
             assigned_user_id: eventToDelete.assigned_user_id,
           });
-          setEventsWithCache((prev) => [...prev, restored]);
+          setEventsWithCache((prev) => prev.map((ev) => (ev.id === eventToDelete.id ? restored : ev)));
           showToast(`Restored "${eventToDelete.title}"`);
         } catch (err) {
           console.error('Failed to restore event:', err);
@@ -341,6 +343,19 @@ export const CalendarPage: React.FC = () => {
         }
       },
     });
+
+    // Run remote deletion in background
+    (async () => {
+      try {
+        await api.deleteCalendarEvent(id);
+      } catch (err) {
+        console.error('Failed to delete event in background:', err);
+        if (!undoClicked) {
+          setEventsWithCache((prev) => (prev.some((ev) => ev.id === eventToDelete.id) ? prev : [...prev, eventToDelete]));
+          showToast('Failed to delete event');
+        }
+      }
+    })();
   };
 
   return (
@@ -897,9 +912,8 @@ export const CalendarPage: React.FC = () => {
             {editingEventId ? (
               <button
                 type="button"
-                onClick={async () => {
-                  await handleDeleteEvent(editingEventId);
-                  setIsModalOpen(false);
+                onClick={() => {
+                  handleDeleteEvent(editingEventId);
                 }}
                 className="min-h-[40px] px-3.5 py-2 rounded-xl text-xs font-semibold text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 transition-colors flex items-center gap-1.5 cursor-pointer"
               >
