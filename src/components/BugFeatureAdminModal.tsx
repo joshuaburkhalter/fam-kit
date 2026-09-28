@@ -413,13 +413,13 @@ export const BugFeatureAdminModal: React.FC<BugFeatureAdminModalProps> = ({
 
       {/* Slide-out Drawer Panel with fluid cubic-bezier spring slide */}
       <div
-        className={`relative z-10 w-full max-w-full sm:max-w-xl md:max-w-2xl h-full bg-[#0a0f1d] border-l border-white/10 shadow-2xl shadow-black flex flex-col overflow-hidden ${
+        className={`relative z-10 w-full max-w-full sm:max-w-xl md:max-w-2xl h-full h-[100dvh] bg-[#0a0f1d] border-l-0 sm:border-l border-white/10 shadow-2xl shadow-black flex flex-col overflow-hidden ${
           isClosing ? 'animate-drawer-out' : 'animate-drawer-in'
         }`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="p-4 sm:p-5 border-b border-white/10 flex items-center justify-between gap-3 bg-gradient-to-r from-slate-900 via-[#0a0f1d] to-slate-900 shrink-0">
+        <div className="px-4 pt-[calc(1rem+env(safe-area-inset-top,0px))] pb-4 sm:p-5 border-b border-white/10 flex items-center justify-between gap-3 bg-gradient-to-r from-slate-900 via-[#0a0f1d] to-slate-900 shrink-0">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-500 to-rose-500 flex items-center justify-center text-slate-950 font-black shadow-lg shadow-amber-500/20 shrink-0">
               <Sparkles className="w-5 h-5 stroke-[2.2]" />
@@ -1058,7 +1058,7 @@ export const BugFeatureAdminModal: React.FC<BugFeatureAdminModalProps> = ({
         )}
 
         {/* Drawer Footer */}
-        <div className="p-3.5 sm:p-4 border-t border-white/10 bg-slate-950/80 flex items-center justify-between text-xs shrink-0">
+        <div className="px-4 pt-3.5 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] sm:p-4 border-t border-white/10 bg-slate-950/80 flex items-center justify-between text-xs shrink-0">
           <span className="text-slate-500 text-[11px] truncate max-w-[240px] sm:max-w-none">
             Logged in as: <strong className="text-slate-300">{currentUser?.name}</strong> ({currentUser?.email || currentUser?.username})
           </span>

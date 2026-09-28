@@ -53,7 +53,7 @@ export const PaywallModal: React.FC<PaywallModalProps> = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-2xl overflow-y-auto overscroll-contain flex flex-col items-center p-4 sm:p-6 pt-10 pb-16 sm:pt-14 sm:pb-20 selection:bg-emerald-500/30 selection:text-emerald-300">
+    <div className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-2xl overflow-y-auto overscroll-contain flex flex-col items-center p-4 sm:p-6 pt-[calc(2.5rem+env(safe-area-inset-top,0px))] pb-[calc(4rem+env(safe-area-inset-bottom,0px))] sm:pt-14 sm:pb-20 selection:bg-emerald-500/30 selection:text-emerald-300">
       {/* Background ambient lighting */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[350px] bg-emerald-500/10 rounded-full blur-3xl" />
