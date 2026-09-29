@@ -1456,8 +1456,8 @@ export const api = {
     });
   },
 
-  getPantryCategories: async (): Promise<{ categories: string[]; customCategories: PantryCategory[]; usedCategories: string[] }> => {
-    return fetchJson<{ categories: string[]; customCategories: PantryCategory[]; usedCategories: string[] }>('/inventory/categories');
+  getPantryCategories: async (): Promise<{ customCategories: PantryCategory[] }> => {
+    return fetchJson<{ customCategories: PantryCategory[] }>('/inventory/categories');
   },
 
   addPantryCategory: async (category: { name: string; icon?: string }): Promise<PantryCategory> => {

@@ -2855,18 +2855,11 @@ app.get('/api/inventory/categories', (req, res) => {
   const householdId = getHouseholdId(req);
   try {
     const customCats = queryAll<{ id: string; householdId: string; name: string; icon: string; createdAt: string }>(
-      'SELECT * FROM pantry_categories WHERE householdId = ? ORDER BY name ASC',
+      'SELECT * FROM pantry_categories WHERE householdId = ? ORDER BY createdAt ASC',
       [householdId]
     );
-    const used = queryAll<{ category: string }>(
-      'SELECT DISTINCT category FROM inventory_items WHERE householdId = ? AND category IS NOT NULL AND TRIM(category) != ""',
-      [householdId]
-    );
-    const usedCategories = Array.from(new Set(used.map((u) => u.category.trim()))).filter(Boolean);
     res.json({
-      categories: customCats.map((c) => c.name),
       customCategories: customCats,
-      usedCategories,
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Failed to fetch pantry categories' });
@@ -2875,24 +2868,30 @@ app.get('/api/inventory/categories', (req, res) => {
 
 app.post('/api/inventory/categories', (req, res) => {
   const householdId = getHouseholdId(req);
-  const { name, icon = '🥫' } = req.body;
+  const { name, icon = '🏷️' } = req.body;
   if (!name || !name.trim()) {
     return res.status(400).json({ error: 'Category name is required' });
   }
   const cleanName = name.trim();
+  const cleanIcon = (icon && String(icon).trim()) || '🏷️';
   try {
     const existing = queryOne<any>(
       'SELECT * FROM pantry_categories WHERE householdId = ? AND LOWER(name) = LOWER(?)',
       [householdId, cleanName]
     );
     if (existing) {
+      if (existing.icon !== cleanIcon) {
+        execute('UPDATE pantry_categories SET icon = ? WHERE id = ?', [cleanIcon, existing.id]);
+        saveDb();
+        existing.icon = cleanIcon;
+      }
       return res.json(existing);
     }
     const id = `pcat_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const now = new Date().toISOString();
     execute(
       'INSERT INTO pantry_categories (id, householdId, name, icon, createdAt) VALUES (?, ?, ?, ?, ?)',
-      [id, householdId, cleanName, icon || '🥫', now]
+      [id, householdId, cleanName, cleanIcon, now]
     );
     saveDb();
     const created = queryOne<any>('SELECT * FROM pantry_categories WHERE id = ?', [id]);
