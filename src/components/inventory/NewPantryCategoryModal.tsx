@@ -8,6 +8,7 @@ interface NewPantryCategoryModalProps {
   isOpen: boolean;
   onClose: () => void;
   onCategoryCreated: (category: PantryCategory) => void;
+  onOpenManage?: () => void;
 }
 
 const CATEGORY_EMOJIS = [
@@ -18,6 +19,7 @@ export const NewPantryCategoryModal: React.FC<NewPantryCategoryModalProps> = ({
   isOpen,
   onClose,
   onCategoryCreated,
+  onOpenManage,
 }) => {
   const [name, setName] = useState('');
   const [icon, setIcon] = useState('🏷️');
@@ -71,23 +73,40 @@ export const NewPantryCategoryModal: React.FC<NewPantryCategoryModalProps> = ({
       icon={<FolderPlus className="w-5 h-5 text-slate-950" />}
       maxWidth="max-w-md"
       footer={
-        <div className="w-full flex items-center justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="min-h-[40px] px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white cursor-pointer"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            form="create-pantry-category-form"
-            disabled={!name.trim() || isSubmitting}
-            className="min-h-[40px] bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-bold px-5 py-2 rounded-xl text-xs shadow-md shadow-emerald-500/20 cursor-pointer flex items-center gap-1.5 transition-all"
-          >
-            {isSubmitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-            <span>{isSubmitting ? 'Creating...' : 'Create Category'}</span>
-          </button>
+        <div className="w-full flex items-center justify-between gap-2">
+          {onOpenManage ? (
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onOpenManage();
+              }}
+              className="text-xs text-emerald-400 hover:text-emerald-300 font-semibold cursor-pointer underline"
+            >
+              Manage categories
+            </button>
+          ) : (
+            <div />
+          )}
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="min-h-[40px] px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              form="create-pantry-category-form"
+              disabled={!name.trim() || isSubmitting}
+              className="min-h-[40px] bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-bold px-5 py-2 rounded-xl text-xs shadow-md shadow-emerald-500/20 cursor-pointer flex items-center gap-1.5 transition-all"
+            >
+              {isSubmitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              <span>{isSubmitting ? 'Creating...' : 'Create Category'}</span>
+            </button>
+          </div>
         </div>
       }
     >

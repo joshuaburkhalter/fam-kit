@@ -2909,6 +2909,16 @@ app.delete('/api/inventory/categories/:name', (req, res) => {
       'DELETE FROM pantry_categories WHERE householdId = ? AND LOWER(name) = LOWER(?)',
       [householdId, categoryName]
     );
+    execute(
+      `UPDATE inventory_items 
+       SET category = CASE 
+         WHEN location = 'fridge' THEN 'Fridge'
+         WHEN location = 'freezer' THEN 'Freezer'
+         ELSE 'Pantry'
+       END
+       WHERE householdId = ? AND LOWER(category) = LOWER(?)`,
+      [householdId, categoryName]
+    );
     saveDb();
     res.json({ success: true });
   } catch (err: any) {

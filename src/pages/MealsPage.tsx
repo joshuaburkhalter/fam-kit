@@ -57,6 +57,7 @@ import { BarcodeScannerModal } from '../components/inventory/BarcodeScannerModal
 import { VisionScanModal } from '../components/inventory/VisionScanModal';
 import { EditInventoryModal, DEFAULT_PANTRY_CATEGORIES } from '../components/inventory/EditInventoryModal';
 import { NewPantryCategoryModal } from '../components/inventory/NewPantryCategoryModal';
+import { ManagePantryCategoriesModal } from '../components/inventory/ManagePantryCategoriesModal';
 import { getFreshnessBadge, getLocationMeta } from '../lib/shelfLife';
 import { Toast } from '../components/ui/Toast';
 import { clearCalendarCache } from './CalendarPage';
@@ -229,6 +230,7 @@ export const MealsPage: React.FC = () => {
   const [isVisionModalOpen, setIsVisionModalOpen] = useState(false);
   const [isEditInventoryModalOpen, setIsEditInventoryModalOpen] = useState(false);
   const [isNewCategoryModalOpen, setIsNewCategoryModalOpen] = useState(false);
+  const [isManagePantryCategoriesModalOpen, setIsManagePantryCategoriesModalOpen] = useState(false);
   const [editingInventoryItem, setEditingInventoryItem] = useState<InventoryItem | null>(null);
   const [isPantryAddMenuOpen, setIsPantryAddMenuOpen] = useState(false);
   const pantryAddDropdownRef = useRef<HTMLDivElement>(null);
@@ -1578,6 +1580,61 @@ export const MealsPage: React.FC = () => {
     }, 380);
   };
 
+  // Delete custom pantry category, reassign items to core location, and sync
+  const handleDeletePantryCategory = async (catNameToDelete: string, skipConfirm = false, skipApi = false) => {
+    const itemsInCat = inventoryItems.filter(
+      (i) => (i.category || '').toLowerCase() === catNameToDelete.toLowerCase()
+    );
+    const count = itemsInCat.length;
+
+    if (!skipConfirm) {
+      const confirmMessage = count > 0
+        ? `Delete custom category "${catNameToDelete}"? The ${count} ${count === 1 ? 'item' : 'items'} in this category will remain in your pantry.`
+        : `Delete custom category "${catNameToDelete}"?`;
+
+      if (!confirm(confirmMessage)) return;
+    }
+
+    // Optimistically update custom categories in state & storage
+    const nextCustom = customPantryCategories.filter(
+      (c) => c.name.toLowerCase() !== catNameToDelete.toLowerCase()
+    );
+    setCustomPantryCategories(nextCustom);
+    try {
+      localStorage.setItem('famkit_custom_pantry_categories', JSON.stringify(nextCustom));
+    } catch {}
+
+    // If currently filtered by this category, reset filter to 'all'
+    if (pantryFilter.toLowerCase() === `cat:${catNameToDelete.toLowerCase()}`) {
+      setPantryFilter('all');
+    }
+
+    // Reassign items locally so their category reflects their location
+    setInventoryItems((prev) => {
+      const updated = prev.map((item) => {
+        if ((item.category || '').toLowerCase() === catNameToDelete.toLowerCase()) {
+          const fallbackLoc = item.location || 'pantry';
+          const fallbackCat = fallbackLoc.charAt(0).toUpperCase() + fallbackLoc.slice(1);
+          return { ...item, category: fallbackCat };
+        }
+        return item;
+      });
+      if (mealsDataCache && mealsDataCache.householdId === householdId) {
+        mealsDataCache.inventoryItems = updated;
+      }
+      return updated;
+    });
+
+    if (!skipApi) {
+      try {
+        await api.deletePantryCategory(catNameToDelete);
+      } catch (err) {
+        console.error('Failed to delete category:', err);
+      }
+    }
+    showToast(`Deleted category "${catNameToDelete}"`);
+  };
+
   // Submit Manual Log Form
   const handleSubmitManualLog = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -2534,6 +2591,20 @@ export const MealsPage: React.FC = () => {
                       type="button"
                       onClick={() => {
                         setIsPantryAddMenuOpen(false);
+                        setIsManagePantryCategoriesModalOpen(true);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/10 transition-colors text-left cursor-pointer"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-amber-500/15 text-amber-400 flex items-center justify-center shrink-0">
+                        <Tag className="w-4 h-4" />
+                      </div>
+                      <span className="font-bold text-white">Manage Categories</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsPantryAddMenuOpen(false);
                         setIsBarcodeModalOpen(true);
                       }}
                       className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/10 transition-colors text-left cursor-pointer"
@@ -3149,32 +3220,81 @@ export const MealsPage: React.FC = () => {
                       : []),
                   ];
 
-                  return chips.map((chip) => {
-                    const isSelected = pantryFilter === chip.id;
-                    return (
+                  return (
+                    <>
+                      {chips.map((chip) => {
+                        const isSelected = pantryFilter === chip.id;
+                        return (
+                          <button
+                            key={chip.id}
+                            onClick={() => setPantryFilter(chip.id)}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                              isSelected
+                                ? 'bg-emerald-500 text-slate-950 font-bold shadow-sm'
+                                : 'bg-slate-900/80 text-slate-400 hover:text-white hover:bg-slate-800 border border-white/5'
+                            }`}
+                          >
+                            {chip.icon && <span>{chip.icon}</span>}
+                            <span>{chip.label}</span>
+                            <span
+                              className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                                isSelected ? 'bg-slate-950/20 text-slate-950 font-black' : 'bg-white/5 text-slate-400'
+                              }`}
+                            >
+                              {chip.count}
+                            </span>
+                          </button>
+                        );
+                      })}
                       <button
-                        key={chip.id}
-                        onClick={() => setPantryFilter(chip.id)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
-                          isSelected
-                            ? 'bg-emerald-500 text-slate-950 font-bold shadow-sm'
-                            : 'bg-slate-900/80 text-slate-400 hover:text-white hover:bg-slate-800 border border-white/5'
-                        }`}
+                        type="button"
+                        onClick={() => setIsManagePantryCategoriesModalOpen(true)}
+                        className="px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-900/60 text-slate-400 hover:text-white hover:bg-slate-800 border border-white/5 transition-all cursor-pointer whitespace-nowrap flex items-center gap-1 shrink-0"
+                        title="Manage pantry categories"
                       >
-                        {chip.icon && <span>{chip.icon}</span>}
-                        <span>{chip.label}</span>
-                        <span
-                          className={`text-[10px] px-1.5 py-0.2 rounded-full ${
-                            isSelected ? 'bg-slate-950/20 text-slate-950 font-black' : 'bg-white/5 text-slate-400'
-                          }`}
-                        >
-                          {chip.count}
-                        </span>
+                        <Tag className="w-3 h-3 text-emerald-400" />
+                        <span>Manage</span>
                       </button>
-                    );
-                  });
+                    </>
+                  );
                 })()}
               </div>
+
+              {/* Category Management Bar if a custom category filter is active */}
+              {pantryFilter.startsWith('cat:') && (() => {
+                const activeCat = customPantryCategories.find(
+                  (c) => `cat:${c.name.toLowerCase()}` === pantryFilter.toLowerCase()
+                );
+                const activeCatName = activeCat ? activeCat.name : pantryFilter.replace('cat:', '');
+                return (
+                  <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-900/70 border border-white/10 text-xs shadow-sm">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-sm shrink-0">{activeCat?.icon || '🏷️'}</span>
+                      <span className="text-slate-300 font-semibold truncate">
+                        Category: <strong className="text-white">{activeCatName}</strong>
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setIsManagePantryCategoriesModalOpen(true)}
+                        className="px-2.5 py-1 rounded-lg text-[11px] text-slate-300 hover:text-white hover:bg-white/5 font-medium cursor-pointer transition-colors"
+                      >
+                        Manage All
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeletePantryCategory(activeCatName)}
+                        className="px-2.5 py-1 rounded-lg text-[11px] text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 font-semibold flex items-center gap-1 cursor-pointer transition-colors border border-rose-500/20"
+                        title={`Delete "${activeCatName}" category`}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        <span>Delete Category</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Inventory Items Grid */}
               {isLoading ? (
@@ -3985,6 +4105,7 @@ export const MealsPage: React.FC = () => {
       <NewPantryCategoryModal
         isOpen={isNewCategoryModalOpen}
         onClose={() => setIsNewCategoryModalOpen(false)}
+        onOpenManage={() => setIsManagePantryCategoriesModalOpen(true)}
         onCategoryCreated={(newCat) => {
           setCustomPantryCategories((prev) => {
             const next = [...prev.filter((c) => c.name.toLowerCase() !== newCat.name.toLowerCase()), newCat];
@@ -3995,6 +4116,16 @@ export const MealsPage: React.FC = () => {
           });
           showToast(`Created category "${newCat.name}"`);
         }}
+      />
+
+      {/* ================= MODAL: MANAGE PANTRY CATEGORIES ================= */}
+      <ManagePantryCategoriesModal
+        isOpen={isManagePantryCategoriesModalOpen}
+        onClose={() => setIsManagePantryCategoriesModalOpen(false)}
+        categories={customPantryCategories}
+        inventoryItems={inventoryItems}
+        onCategoryDeleted={(catName) => handleDeletePantryCategory(catName, true, true)}
+        onOpenNewCategory={() => setIsNewCategoryModalOpen(true)}
       />
     </div>
   );

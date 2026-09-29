@@ -5,6 +5,7 @@ import { api } from '../../lib/api';
 import { getFreshnessBadge, getDaysUntilExpiry } from '../../lib/shelfLife';
 import type { InventoryItem, PantryLocation, PantryCategory } from '../../types';
 import { NewPantryCategoryModal } from './NewPantryCategoryModal';
+import { ManagePantryCategoriesModal } from './ManagePantryCategoriesModal';
 
 interface EditInventoryModalProps {
   isOpen: boolean;
@@ -46,6 +47,7 @@ export const EditInventoryModal: React.FC<EditInventoryModalProps> = ({
   const [isRestocking, setIsRestocking] = useState(false);
   const [restockedSuccess, setRestockedSuccess] = useState(false);
   const [isNewCategoryModalOpen, setIsNewCategoryModalOpen] = useState(false);
+  const [isManageCategoriesModalOpen, setIsManageCategoriesModalOpen] = useState(false);
 
   // Custom categories state
   const [customCategories, setCustomCategories] = useState<PantryCategory[]>(() => {
@@ -286,21 +288,34 @@ export const EditInventoryModal: React.FC<EditInventoryModalProps> = ({
               <label className="block text-xs font-semibold text-slate-300">
                 Category
               </label>
-              <button
-                type="button"
-                onClick={() => setIsNewCategoryModalOpen(true)}
-                className="text-[10px] text-emerald-400 hover:text-emerald-300 font-semibold flex items-center gap-0.5 cursor-pointer"
-                title="Add custom category"
-              >
-                <Plus className="w-2.5 h-2.5 stroke-[2.5]" />
-                <span>New</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsManageCategoriesModalOpen(true)}
+                  className="text-[10px] text-slate-400 hover:text-slate-300 font-semibold cursor-pointer"
+                  title="Manage categories"
+                >
+                  Manage
+                </button>
+                <span className="text-slate-600 text-xs">•</span>
+                <button
+                  type="button"
+                  onClick={() => setIsNewCategoryModalOpen(true)}
+                  className="text-[10px] text-emerald-400 hover:text-emerald-300 font-semibold flex items-center gap-0.5 cursor-pointer"
+                  title="Add custom category"
+                >
+                  <Plus className="w-2.5 h-2.5 stroke-[2.5]" />
+                  <span>New</span>
+                </button>
+              </div>
             </div>
             <select
               value={category}
               onChange={(e) => {
                 if (e.target.value === '__ADD_NEW__') {
                   setIsNewCategoryModalOpen(true);
+                } else if (e.target.value === '__MANAGE__') {
+                  setIsManageCategoriesModalOpen(true);
                 } else {
                   const selected = e.target.value;
                   setCategory(selected);
@@ -334,6 +349,9 @@ export const EditInventoryModal: React.FC<EditInventoryModalProps> = ({
                   </optgroup>
                 )}
 
+              <option value="__MANAGE__" className="text-slate-400 font-medium">
+                ⚙️ Manage Categories...
+              </option>
               <option value="__ADD_NEW__" className="text-emerald-400 font-bold">
                 ✨ + Add Category...
               </option>
@@ -451,6 +469,29 @@ export const EditInventoryModal: React.FC<EditInventoryModalProps> = ({
         isOpen={isNewCategoryModalOpen}
         onClose={() => setIsNewCategoryModalOpen(false)}
         onCategoryCreated={handleCategoryCreated}
+        onOpenManage={() => setIsManageCategoriesModalOpen(true)}
+      />
+
+      {/* Manage Categories Modal */}
+      <ManagePantryCategoriesModal
+        isOpen={isManageCategoriesModalOpen}
+        onClose={() => setIsManageCategoriesModalOpen(false)}
+        categories={customCategories}
+        onCategoryDeleted={(deletedName) => {
+          const nextCustom = customCategories.filter(
+            (c) => c.name.toLowerCase() !== deletedName.toLowerCase()
+          );
+          setCustomCategories(nextCustom);
+          if (category.toLowerCase() === deletedName.toLowerCase()) {
+            setCategory('Pantry');
+            setLocation('pantry');
+          }
+          try {
+            localStorage.setItem('famkit_custom_pantry_categories', JSON.stringify(nextCustom));
+          } catch {}
+          if (onCustomCategoriesChange) onCustomCategoriesChange(nextCustom);
+        }}
+        onOpenNewCategory={() => setIsNewCategoryModalOpen(true)}
       />
     </>
   );
