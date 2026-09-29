@@ -1,21 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { Drawer } from '../ui/Drawer';
-import { Trash2, ShoppingCart, Loader2, Sparkles, Package, Check } from 'lucide-react';
+import { Trash2, ShoppingCart, Loader2, Sparkles, Package, Check, Plus, X } from 'lucide-react';
 import { api } from '../../lib/api';
 import { getFreshnessBadge, getDaysUntilExpiry } from '../../lib/shelfLife';
-import type { InventoryItem, PantryLocation } from '../../types';
+import type { InventoryItem, PantryLocation, PantryCategory } from '../../types';
 
 interface EditInventoryModalProps {
   isOpen: boolean;
   item: InventoryItem | null;
   isInGrocery?: boolean;
+  customCategories?: string[];
+  onCustomCategoriesChange?: (categories: string[]) => void;
   onClose: () => void;
   onSaved: (item: InventoryItem) => void;
   onDeleted?: (id: string) => void;
   onToggleRestock?: (item: InventoryItem) => void;
 }
 
-const CATEGORIES = [
+export const DEFAULT_PANTRY_CATEGORIES = [
   'Produce',
   'Dairy & Eggs',
   'Meat & Seafood',
@@ -32,6 +34,8 @@ export const EditInventoryModal: React.FC<EditInventoryModalProps> = ({
   isOpen,
   item,
   isInGrocery = false,
+  customCategories: propCustomCategories,
+  onCustomCategoriesChange,
   onClose,
   onSaved,
   onDeleted,
@@ -48,6 +52,47 @@ export const EditInventoryModal: React.FC<EditInventoryModalProps> = ({
   const [isRestocking, setIsRestocking] = useState(false);
   const [restockedSuccess, setRestockedSuccess] = useState(false);
 
+  // Custom categories state
+  const [customCategories, setCustomCategories] = useState<string[]>(() => {
+    if (propCustomCategories && propCustomCategories.length > 0) return propCustomCategories;
+    try {
+      const saved = localStorage.getItem('famkit_custom_pantry_categories');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [isAddingCustom, setIsAddingCustom] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [isSavingCategory, setIsSavingCategory] = useState(false);
+  const [categoryError, setCategoryError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (propCustomCategories && propCustomCategories.length > 0) {
+      setCustomCategories((prev) => Array.from(new Set([...prev, ...propCustomCategories])));
+    }
+  }, [propCustomCategories]);
+
+  useEffect(() => {
+    if (isOpen) {
+      api.getPantryCategories()
+        .then((res) => {
+          const names = (res.customCategories || []).map((c: PantryCategory) => c.name);
+          const used = (res.usedCategories || []).filter((u: string) => !DEFAULT_PANTRY_CATEGORIES.includes(u));
+          setCustomCategories((prev) => {
+            const merged = Array.from(new Set([...prev, ...names, ...used]));
+            try {
+              localStorage.setItem('famkit_custom_pantry_categories', JSON.stringify(merged));
+            } catch {}
+            if (onCustomCategoriesChange) onCustomCategoriesChange(merged);
+            return merged;
+          });
+        })
+        .catch(() => {});
+    }
+  }, [isOpen]);
+
   useEffect(() => {
     if (item) {
       setName(item.name);
@@ -58,6 +103,9 @@ export const EditInventoryModal: React.FC<EditInventoryModalProps> = ({
       setIsStock(Boolean(item.isStock));
       setRestockCadenceDays(item.restockCadenceDays || 14);
       setRestockedSuccess(false);
+      setIsAddingCustom(false);
+      setNewCategoryName('');
+      setCategoryError(null);
     } else {
       setName('');
       setCategory('Pantry');
@@ -68,8 +116,79 @@ export const EditInventoryModal: React.FC<EditInventoryModalProps> = ({
       setIsStock(false);
       setRestockCadenceDays(14);
       setRestockedSuccess(false);
+      setIsAddingCustom(false);
+      setNewCategoryName('');
+      setCategoryError(null);
     }
   }, [item, isOpen]);
+
+  const handleCreateCustomCategory = async () => {
+    const raw = newCategoryName.trim();
+    if (!raw) return;
+
+    const formatted = raw.length > 1
+      ? raw.charAt(0).toUpperCase() + raw.slice(1)
+      : raw.toUpperCase();
+
+    // Check if it already exists
+    const matchedDefault = DEFAULT_PANTRY_CATEGORIES.find((c) => c.toLowerCase() === formatted.toLowerCase());
+    if (matchedDefault) {
+      setCategory(matchedDefault);
+      setIsAddingCustom(false);
+      setNewCategoryName('');
+      setCategoryError(null);
+      return;
+    }
+
+    const matchedCustom = customCategories.find((c) => c.toLowerCase() === formatted.toLowerCase());
+    if (matchedCustom) {
+      setCategory(matchedCustom);
+      setIsAddingCustom(false);
+      setNewCategoryName('');
+      setCategoryError(null);
+      return;
+    }
+
+    setIsSavingCategory(true);
+    setCategoryError(null);
+    try {
+      const nextCustom = [...customCategories, formatted];
+      setCustomCategories(nextCustom);
+      setCategory(formatted);
+      try {
+        localStorage.setItem('famkit_custom_pantry_categories', JSON.stringify(nextCustom));
+      } catch {}
+      if (onCustomCategoriesChange) onCustomCategoriesChange(nextCustom);
+
+      await api.addPantryCategory({ name: formatted });
+      setIsAddingCustom(false);
+      setNewCategoryName('');
+    } catch (err: any) {
+      console.warn('Saved category locally:', err);
+      setIsAddingCustom(false);
+      setNewCategoryName('');
+    } finally {
+      setIsSavingCategory(false);
+    }
+  };
+
+  const handleDeleteCategory = async (catToDelete: string) => {
+    if (!confirm(`Delete custom category "${catToDelete}"? Existing pantry items will not be deleted.`)) return;
+    const nextCustom = customCategories.filter((c) => c !== catToDelete);
+    setCustomCategories(nextCustom);
+    if (category === catToDelete) {
+      setCategory('Pantry');
+    }
+    try {
+      localStorage.setItem('famkit_custom_pantry_categories', JSON.stringify(nextCustom));
+    } catch {}
+    if (onCustomCategoriesChange) onCustomCategoriesChange(nextCustom);
+    try {
+      await api.deletePantryCategory(catToDelete);
+    } catch (err) {
+      console.error('Failed to delete category from server', err);
+    }
+  };
 
   const handleSave = async () => {
     if (!name.trim()) return;
@@ -227,22 +346,127 @@ export const EditInventoryModal: React.FC<EditInventoryModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">
-              Category
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-semibold text-slate-300">
+                Category
+              </label>
+              {!isAddingCustom && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAddingCustom(true);
+                    setCategoryError(null);
+                  }}
+                  className="text-[10px] text-emerald-400 hover:text-emerald-300 font-semibold flex items-center gap-0.5 cursor-pointer"
+                  title="Add custom category"
+                >
+                  <Plus className="w-2.5 h-2.5 stroke-[2.5]" />
+                  <span>New</span>
+                </button>
+              )}
+            </div>
             <select
               value={category}
-              onChange={(e) => setCategory(e.target.value)}
+              onChange={(e) => {
+                if (e.target.value === '__ADD_NEW__') {
+                  setIsAddingCustom(true);
+                  setCategoryError(null);
+                } else {
+                  setCategory(e.target.value);
+                  setIsAddingCustom(false);
+                }
+              }}
               className="w-full px-3 py-2 bg-slate-900 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500 cursor-pointer"
             >
-              {CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
+              <optgroup label="Standard Categories">
+                {DEFAULT_PANTRY_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </optgroup>
+              {customCategories.length > 0 && (
+                <optgroup label="Custom Categories">
+                  {customCategories.map((c) => (
+                    <option key={c} value={c}>
+                      ⭐ {c}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              {item &&
+                item.category &&
+                !DEFAULT_PANTRY_CATEGORIES.includes(item.category) &&
+                !customCategories.includes(item.category) && (
+                  <optgroup label="Item Category">
+                    <option value={item.category}>{item.category}</option>
+                  </optgroup>
+                )}
+              <option value="__ADD_NEW__">✨ + Add Category...</option>
             </select>
           </div>
         </div>
+
+        {/* Custom Category Inline Creator */}
+        {isAddingCustom && (
+          <div className="p-2.5 bg-slate-900/95 border border-emerald-500/40 rounded-xl space-y-1.5 animate-in fade-in duration-150 shadow-lg">
+            <div className="flex items-center justify-between text-[11px] font-semibold text-emerald-300">
+              <span>Create New Pantry Category</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAddingCustom(false);
+                  setNewCategoryName('');
+                  setCategoryError(null);
+                }}
+                className="text-slate-400 hover:text-white cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <input
+                type="text"
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleCreateCustomCategory();
+                  } else if (e.key === 'Escape') {
+                    setIsAddingCustom(false);
+                  }
+                }}
+                placeholder="Enter any category name..."
+                autoFocus
+                className="flex-1 px-3 py-1.5 bg-slate-950 border border-white/15 rounded-lg text-xs text-white focus:outline-none focus:border-emerald-500 placeholder-slate-500"
+              />
+              <button
+                type="button"
+                onClick={handleCreateCustomCategory}
+                disabled={!newCategoryName.trim() || isSavingCategory}
+                className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1 shrink-0"
+              >
+                {isSavingCategory ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Add'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Delete current custom category option */}
+        {customCategories.includes(category) && !isAddingCustom && (
+          <div className="flex items-center justify-between text-[11px] text-slate-400 px-1 -mt-2">
+            <span className="text-emerald-400/90 font-medium">Custom category</span>
+            <button
+              type="button"
+              onClick={() => handleDeleteCategory(category)}
+              className="text-rose-400 hover:text-rose-300 hover:underline cursor-pointer flex items-center gap-1 text-[10px]"
+            >
+              <Trash2 className="w-2.5 h-2.5" />
+              <span>Delete "{category}"</span>
+            </button>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-3">
           <div>

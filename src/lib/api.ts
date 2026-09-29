@@ -22,6 +22,7 @@ import type {
   InventoryItem,
   PantryLocation,
   IngredientInventoryMatch,
+  PantryCategory,
 } from '../types';
 import { filterRecipeIngredientsForGrocery } from './groceryStaples';
 
@@ -1451,6 +1452,23 @@ export const api = {
 
   deleteInventoryItem: async (id: string): Promise<{ success: boolean }> => {
     return fetchJson<{ success: boolean }>(`/inventory/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+  },
+
+  getPantryCategories: async (): Promise<{ categories: string[]; customCategories: PantryCategory[]; usedCategories: string[] }> => {
+    return fetchJson<{ categories: string[]; customCategories: PantryCategory[]; usedCategories: string[] }>('/inventory/categories');
+  },
+
+  addPantryCategory: async (category: { name: string; icon?: string }): Promise<PantryCategory> => {
+    return fetchJson<PantryCategory>('/inventory/categories', {
+      method: 'POST',
+      body: JSON.stringify(category),
+    });
+  },
+
+  deletePantryCategory: async (name: string): Promise<{ success: boolean }> => {
+    return fetchJson<{ success: boolean }>(`/inventory/categories/${encodeURIComponent(name)}`, {
       method: 'DELETE',
     });
   },

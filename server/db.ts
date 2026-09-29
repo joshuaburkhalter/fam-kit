@@ -270,6 +270,15 @@ function initSchema(db: Database) {
       createdAt TEXT NOT NULL,
       updatedAt TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS pantry_categories (
+      id TEXT PRIMARY KEY,
+      householdId TEXT NOT NULL,
+      name TEXT NOT NULL,
+      icon TEXT DEFAULT '🥫',
+      createdAt TEXT NOT NULL,
+      UNIQUE(householdId, name)
+    );
   `);
 
   // Auto-migration for existing DBs: ensure tables and columns exist
@@ -293,6 +302,18 @@ function initSchema(db: Database) {
         updatedAt TEXT NOT NULL
       );
     `);
+  } catch {}
+  try {
+    db.run(`
+      CREATE TABLE IF NOT EXISTS pantry_categories (
+        id TEXT PRIMARY KEY,
+        householdId TEXT NOT NULL,
+        name TEXT NOT NULL,
+        icon TEXT DEFAULT '🥫',
+        createdAt TEXT NOT NULL
+      );
+    `);
+    db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_pantry_cat_uniq ON pantry_categories (householdId, name);`);
   } catch {}
   try {
     db.run(`

@@ -383,3 +383,12 @@ export interface IngredientInventoryMatch {
   }>;
 }
 
+export interface PantryCategory {
+  id: string;
+  householdId: string;
+  name: string;
+  icon?: string;
+  createdAt: string;
+}
+
+

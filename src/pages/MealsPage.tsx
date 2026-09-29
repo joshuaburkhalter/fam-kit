@@ -54,7 +54,7 @@ import { RecipeScraperModal, extractSharedUrl } from '../components/RecipeScrape
 import { EditRecipeModal } from '../components/EditRecipeModal';
 import { BarcodeScannerModal } from '../components/inventory/BarcodeScannerModal';
 import { VisionScanModal } from '../components/inventory/VisionScanModal';
-import { EditInventoryModal } from '../components/inventory/EditInventoryModal';
+import { EditInventoryModal, DEFAULT_PANTRY_CATEGORIES } from '../components/inventory/EditInventoryModal';
 import { getFreshnessBadge, getLocationMeta } from '../lib/shelfLife';
 import { Toast } from '../components/ui/Toast';
 import { clearCalendarCache } from './CalendarPage';
@@ -214,6 +214,15 @@ export const MealsPage: React.FC = () => {
 
   // Pantry state & modals
   const [pantryFilter, setPantryFilter] = useState<'all' | 'fridge' | 'freezer' | 'pantry' | 'expiring' | 'staples'>('all');
+  const [pantryCategoryFilter, setPantryCategoryFilter] = useState<string>('all');
+  const [customPantryCategories, setCustomPantryCategories] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('famkit_custom_pantry_categories');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const [pantrySearchQuery, setPantrySearchQuery] = useState('');
   const [isBarcodeModalOpen, setIsBarcodeModalOpen] = useState(false);
   const [isVisionModalOpen, setIsVisionModalOpen] = useState(false);
@@ -383,12 +392,13 @@ export const MealsPage: React.FC = () => {
     }
 
     try {
-      const [weeklyRes, logsRes, recRes, groceryRes, inventoryRes] = await Promise.all([
+      const [weeklyRes, logsRes, recRes, groceryRes, inventoryRes, categoriesRes] = await Promise.all([
         api.getWeeklyMeals(householdId),
         api.getMealLogs(householdId),
         api.getRecipes(householdId),
         api.getGroceryItems(householdId),
         api.getInventory(),
+        api.getPantryCategories().catch(() => ({ categories: [], customCategories: [], usedCategories: [] })),
       ]);
 
       if (!isMountedRef.current) return;
@@ -399,6 +409,18 @@ export const MealsPage: React.FC = () => {
       setRecipes(recRes);
       setGroceryItems(groceryRes);
       setInventoryItems(inventoryRes);
+
+      if (categoriesRes) {
+        const serverCustom = (categoriesRes.customCategories || []).map((c: any) => c.name);
+        const usedCats = (categoriesRes.usedCategories || []).filter((u: string) => !DEFAULT_PANTRY_CATEGORIES.includes(u));
+        setCustomPantryCategories((prev) => {
+          const merged = Array.from(new Set([...prev, ...serverCustom, ...usedCats]));
+          try {
+            localStorage.setItem('famkit_custom_pantry_categories', JSON.stringify(merged));
+          } catch {}
+          return merged;
+        });
+      }
 
       mealsDataCache = {
         householdId,
@@ -1998,6 +2020,12 @@ export const MealsPage: React.FC = () => {
       ) {
         return false;
       }
+      if (pantryCategoryFilter !== 'all') {
+        const itemCat = (item.category || 'Pantry').toLowerCase();
+        if (itemCat !== pantryCategoryFilter.toLowerCase()) {
+          return false;
+        }
+      }
       if (pantryFilter === 'all') return true;
       if (pantryFilter === 'fridge' || pantryFilter === 'freezer' || pantryFilter === 'pantry') {
         return item.location === pantryFilter;
@@ -2010,7 +2038,7 @@ export const MealsPage: React.FC = () => {
       }
       return true;
     });
-  }, [inventoryItems, pantrySearchQuery, pantryFilter]);
+  }, [inventoryItems, pantrySearchQuery, pantryFilter, pantryCategoryFilter]);
 
   const hasProgress =
     Object.values(checkedIngredients).some(Boolean) ||
@@ -2474,6 +2502,21 @@ export const MealsPage: React.FC = () => {
 
                 {isPantryAddMenuOpen && (
                   <div className="absolute right-0 top-full mt-2 w-48 bg-slate-900/95 backdrop-blur-xl border border-white/15 rounded-2xl p-1.5 shadow-2xl shadow-slate-950/80 z-50 animate-in fade-in zoom-in-95 duration-150 space-y-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsPantryAddMenuOpen(false);
+                        setEditingInventoryItem(null);
+                        setIsEditInventoryModalOpen(true);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/10 transition-colors text-left cursor-pointer"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-teal-500/15 text-teal-400 flex items-center justify-center shrink-0">
+                        <Plus className="w-4 h-4" />
+                      </div>
+                      <span className="font-bold text-white">Manual Add Item</span>
+                    </button>
+
                     <button
                       type="button"
                       onClick={() => {
@@ -3070,6 +3113,49 @@ export const MealsPage: React.FC = () => {
                 className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar"
                 style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
               >
+                {/* Category Dropdown Filter */}
+                <div className="relative shrink-0">
+                  <select
+                    value={pantryCategoryFilter}
+                    onChange={(e) => setPantryCategoryFilter(e.target.value)}
+                    className={`h-7 px-2.5 rounded-xl text-xs font-semibold border cursor-pointer transition-all ${
+                      pantryCategoryFilter !== 'all'
+                        ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300 font-bold'
+                        : 'bg-slate-900/80 border-white/10 text-slate-300 hover:text-white hover:bg-slate-800'
+                    }`}
+                  >
+                    <option value="all">🏷️ All Categories</option>
+                    <optgroup label="Standard Categories">
+                      {DEFAULT_PANTRY_CATEGORIES.map((cat) => (
+                        <option key={cat} value={cat}>
+                          {cat}
+                        </option>
+                      ))}
+                    </optgroup>
+                    {customPantryCategories.length > 0 && (
+                      <optgroup label="Custom Categories">
+                        {customPantryCategories.map((cat) => (
+                          <option key={cat} value={cat}>
+                            ⭐ {cat}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                  </select>
+                </div>
+
+                {pantryCategoryFilter !== 'all' && (
+                  <button
+                    type="button"
+                    onClick={() => setPantryCategoryFilter('all')}
+                    className="h-7 px-2 rounded-xl text-[11px] font-semibold bg-rose-500/10 border border-rose-500/20 text-rose-300 hover:bg-rose-500/20 transition-all cursor-pointer flex items-center gap-1 shrink-0"
+                    title="Clear category filter"
+                  >
+                    <span>Clear Category</span>
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+
                 {(() => {
                   const expiringCount = inventoryItems.filter(
                     (i) => i.freshness === 'expiring_soon' || i.freshness === 'expired'
@@ -3846,12 +3932,17 @@ export const MealsPage: React.FC = () => {
         isOpen={isEditInventoryModalOpen}
         item={editingInventoryItem}
         isInGrocery={editingInventoryItem ? isPantryItemInGrocery(editingInventoryItem) : false}
+        customCategories={customPantryCategories}
+        onCustomCategoriesChange={setCustomPantryCategories}
         onToggleRestock={handleToggleRestockPantryItem}
         onClose={() => {
           setIsEditInventoryModalOpen(false);
           setEditingInventoryItem(null);
         }}
         onSaved={(savedItem) => {
+          if (savedItem.category && !DEFAULT_PANTRY_CATEGORIES.includes(savedItem.category)) {
+            setCustomPantryCategories((prev) => Array.from(new Set([...prev, savedItem.category])));
+          }
           setInventoryItems((prev) => {
             const exists = prev.some((i) => i.id === savedItem.id);
             const next = exists ? prev.map((i) => (i.id === savedItem.id ? savedItem : i)) : [savedItem, ...prev];

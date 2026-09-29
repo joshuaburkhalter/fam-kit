@@ -2851,6 +2851,72 @@ app.get('/api/inventory', (req, res) => {
   res.json(items);
 });
 
+app.get('/api/inventory/categories', (req, res) => {
+  const householdId = getHouseholdId(req);
+  try {
+    const customCats = queryAll<{ id: string; householdId: string; name: string; icon: string; createdAt: string }>(
+      'SELECT * FROM pantry_categories WHERE householdId = ? ORDER BY name ASC',
+      [householdId]
+    );
+    const used = queryAll<{ category: string }>(
+      'SELECT DISTINCT category FROM inventory_items WHERE householdId = ? AND category IS NOT NULL AND TRIM(category) != ""',
+      [householdId]
+    );
+    const usedCategories = Array.from(new Set(used.map((u) => u.category.trim()))).filter(Boolean);
+    res.json({
+      categories: customCats.map((c) => c.name),
+      customCategories: customCats,
+      usedCategories,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to fetch pantry categories' });
+  }
+});
+
+app.post('/api/inventory/categories', (req, res) => {
+  const householdId = getHouseholdId(req);
+  const { name, icon = '🥫' } = req.body;
+  if (!name || !name.trim()) {
+    return res.status(400).json({ error: 'Category name is required' });
+  }
+  const cleanName = name.trim();
+  try {
+    const existing = queryOne<any>(
+      'SELECT * FROM pantry_categories WHERE householdId = ? AND LOWER(name) = LOWER(?)',
+      [householdId, cleanName]
+    );
+    if (existing) {
+      return res.json(existing);
+    }
+    const id = `pcat_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const now = new Date().toISOString();
+    execute(
+      'INSERT INTO pantry_categories (id, householdId, name, icon, createdAt) VALUES (?, ?, ?, ?, ?)',
+      [id, householdId, cleanName, icon || '🥫', now]
+    );
+    saveDb();
+    const created = queryOne<any>('SELECT * FROM pantry_categories WHERE id = ?', [id]);
+    res.status(201).json(created);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to create category' });
+  }
+});
+
+app.delete('/api/inventory/categories/:name', (req, res) => {
+  const householdId = getHouseholdId(req);
+  const categoryName = decodeURIComponent(req.params.name).trim();
+  try {
+    execute(
+      'DELETE FROM pantry_categories WHERE householdId = ? AND LOWER(name) = LOWER(?)',
+      [householdId, categoryName]
+    );
+    saveDb();
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to delete category' });
+  }
+});
+
 app.post('/api/inventory', (req, res) => {
   const householdId = getHouseholdId(req);
   const {
