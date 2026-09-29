@@ -1326,7 +1326,7 @@ export const GroceryPage: React.FC = () => {
           </button>
 
           {isAddMenuOpen && (
-            <div className="absolute right-0 top-full mt-2 w-48 bg-slate-900/95 backdrop-blur-xl rounded-2xl p-1.5 shadow-2xl z-50 border border-white/15 animate-in fade-in zoom-in-95 duration-100">
+            <div className="absolute right-0 top-full mt-2 w-48 bg-slate-900/95 backdrop-blur-xl rounded-2xl p-1.5 shadow-2xl z-50 border border-white/15 animate-in fade-in zoom-in-95 duration-100 space-y-1">
               <button
                 type="button"
                 onClick={() => {
@@ -1351,8 +1351,6 @@ export const GroceryPage: React.FC = () => {
                 <FolderPlus className="w-4 h-4 text-teal-400 shrink-0" />
                 <span>Add Category</span>
               </button>
-
-              <div className="my-1 border-t border-white/5" />
 
               <button
                 type="button"
