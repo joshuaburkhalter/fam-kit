@@ -134,12 +134,22 @@ export const EditInventoryModal: React.FC<EditInventoryModalProps> = ({
   const handleSave = async () => {
     if (!name.trim()) return;
     setIsSaving(true);
+    const lowerCat = category.toLowerCase();
+    const effectiveLocation: PantryLocation =
+      lowerCat === 'fridge'
+        ? 'fridge'
+        : lowerCat === 'freezer'
+        ? 'freezer'
+        : lowerCat === 'pantry'
+        ? 'pantry'
+        : location || 'pantry';
+
     try {
       if (item) {
         const updated = await api.updateInventoryItem(item.id, {
           name: name.trim(),
           category,
-          location,
+          location: effectiveLocation,
           quantity,
           expiresAt,
           isStock,
@@ -150,7 +160,7 @@ export const EditInventoryModal: React.FC<EditInventoryModalProps> = ({
         const created = await api.addInventoryItem({
           name: name.trim(),
           category,
-          location,
+          location: effectiveLocation,
           quantity,
           expiresAt,
           isStock,
@@ -271,80 +281,63 @@ export const EditInventoryModal: React.FC<EditInventoryModalProps> = ({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="block text-xs font-semibold text-slate-300">
-                  Category
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setIsNewCategoryModalOpen(true)}
-                  className="text-[10px] text-emerald-400 hover:text-emerald-300 font-semibold flex items-center gap-0.5 cursor-pointer"
-                  title="Add custom category"
-                >
-                  <Plus className="w-2.5 h-2.5 stroke-[2.5]" />
-                  <span>New</span>
-                </button>
-              </div>
-              <select
-                value={category}
-                onChange={(e) => {
-                  if (e.target.value === '__ADD_NEW__') {
-                    setIsNewCategoryModalOpen(true);
-                  } else {
-                    const selected = e.target.value;
-                    setCategory(selected);
-                    if (selected.toLowerCase() === 'fridge') setLocation('fridge');
-                    else if (selected.toLowerCase() === 'freezer') setLocation('freezer');
-                    else if (selected.toLowerCase() === 'pantry') setLocation('pantry');
-                  }
-                }}
-                className="w-full px-3 py-2 bg-slate-900 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500 cursor-pointer"
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-semibold text-slate-300">
+                Category
+              </label>
+              <button
+                type="button"
+                onClick={() => setIsNewCategoryModalOpen(true)}
+                className="text-[10px] text-emerald-400 hover:text-emerald-300 font-semibold flex items-center gap-0.5 cursor-pointer"
+                title="Add custom category"
               >
-                <option value="Pantry">🥫 Pantry</option>
-                <option value="Fridge">🧊 Fridge</option>
-                <option value="Freezer">❄️ Freezer</option>
+                <Plus className="w-2.5 h-2.5 stroke-[2.5]" />
+                <span>New</span>
+              </button>
+            </div>
+            <select
+              value={category}
+              onChange={(e) => {
+                if (e.target.value === '__ADD_NEW__') {
+                  setIsNewCategoryModalOpen(true);
+                } else {
+                  const selected = e.target.value;
+                  setCategory(selected);
+                  if (selected.toLowerCase() === 'fridge') setLocation('fridge');
+                  else if (selected.toLowerCase() === 'freezer') setLocation('freezer');
+                  else if (selected.toLowerCase() === 'pantry') setLocation('pantry');
+                }
+              }}
+              className="w-full px-3.5 py-2.5 bg-slate-900 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500 cursor-pointer"
+            >
+              <option value="Pantry">🥫 Pantry</option>
+              <option value="Fridge">🧊 Fridge</option>
+              <option value="Freezer">❄️ Freezer</option>
 
-                {customCategories.length > 0 && (
-                  <optgroup label="Custom Categories">
-                    {customCategories.map((c) => (
-                      <option key={c.id || c.name} value={c.name}>
-                        {c.icon || '🏷️'} {c.name}
-                      </option>
-                    ))}
+              {customCategories.length > 0 && (
+                <optgroup label="Custom Categories">
+                  {customCategories.map((c) => (
+                    <option key={c.id || c.name} value={c.name}>
+                      {c.icon || '🏷️'} {c.name}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+
+              {item &&
+                item.category &&
+                !['Pantry', 'Fridge', 'Freezer'].some((c) => c.toLowerCase() === item.category.toLowerCase()) &&
+                !customCategories.some((c) => c.name.toLowerCase() === item.category.toLowerCase()) && (
+                  <optgroup label="Other">
+                    <option value={item.category}>{item.category}</option>
                   </optgroup>
                 )}
 
-                {item &&
-                  item.category &&
-                  !['Pantry', 'Fridge', 'Freezer'].some((c) => c.toLowerCase() === item.category.toLowerCase()) &&
-                  !customCategories.some((c) => c.name.toLowerCase() === item.category.toLowerCase()) && (
-                    <optgroup label="Other">
-                      <option value={item.category}>{item.category}</option>
-                    </optgroup>
-                  )}
-
-                <option value="__ADD_NEW__" className="text-emerald-400 font-bold">
-                  ✨ + Add Category...
-                </option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">
-                Storage Location
-              </label>
-              <select
-                value={location}
-                onChange={(e) => setLocation(e.target.value as PantryLocation)}
-                className="w-full px-3 py-2 bg-slate-900 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500 cursor-pointer"
-              >
-                <option value="fridge">🧊 Fridge</option>
-                <option value="freezer">❄️ Freezer</option>
-                <option value="pantry">🥫 Pantry</option>
-              </select>
-            </div>
+              <option value="__ADD_NEW__" className="text-emerald-400 font-bold">
+                ✨ + Add Category...
+              </option>
+            </select>
           </div>
 
           {/* Delete custom category action if custom category is currently active */}
