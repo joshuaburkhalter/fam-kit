@@ -23,6 +23,7 @@ import type {
   PantryLocation,
   IngredientInventoryMatch,
   PantryCategory,
+  RecipeCategory,
 } from '../types';
 import { filterRecipeIngredientsForGrocery } from './groceryStaples';
 
@@ -127,6 +128,7 @@ function normalizeDbRecipe(r: any): Recipe {
     household_id: r.householdId || r.household_id,
     title: r.title,
     description: r.description,
+    category: r.category || undefined,
     prep_time_minutes: parsePositiveInt(r.prepTime ?? r.prepTimeMinutes ?? r.prep_time_minutes),
     cook_time_minutes: parsePositiveInt(r.cookTime ?? r.cookTimeMinutes ?? r.cook_time_minutes),
     servings: parsePositiveInt(r.servings),
@@ -567,6 +569,7 @@ export const api = {
     if (data.ingredients !== undefined) payload.ingredients = data.ingredients;
     if (data.instructions !== undefined) payload.instructions = data.instructions;
     if (data.tags !== undefined) payload.tags = data.tags;
+    if (data.category !== undefined) payload.category = data.category;
 
     return fetchJson<any>('/recipes', {
       method: 'PATCH',
@@ -1469,6 +1472,23 @@ export const api = {
 
   deletePantryCategory: async (name: string): Promise<{ success: boolean }> => {
     return fetchJson<{ success: boolean }>(`/inventory/categories/${encodeURIComponent(name)}`, {
+      method: 'DELETE',
+    });
+  },
+
+  getRecipeCategories: async (): Promise<{ customCategories: RecipeCategory[] }> => {
+    return fetchJson<{ customCategories: RecipeCategory[] }>('/recipes/categories');
+  },
+
+  addRecipeCategory: async (category: { name: string; icon?: string }): Promise<RecipeCategory> => {
+    return fetchJson<RecipeCategory>('/recipes/categories', {
+      method: 'POST',
+      body: JSON.stringify(category),
+    });
+  },
+
+  deleteRecipeCategory: async (name: string): Promise<{ success: boolean }> => {
+    return fetchJson<{ success: boolean }>(`/recipes/categories/${encodeURIComponent(name)}`, {
       method: 'DELETE',
     });
   },

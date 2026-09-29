@@ -46,13 +46,15 @@ import {
   isYesterday,
   parseISO,
 } from 'date-fns';
-import type { WeeklyMeal, MealLog, Recipe, GroceryItem, InventoryItem, PantryLocation, PantryCategory } from '../types';
+import type { WeeklyMeal, MealLog, Recipe, GroceryItem, InventoryItem, PantryLocation, PantryCategory, RecipeCategory } from '../types';
 import { usePWA } from '../context/PWAContext';
 import { api } from '../lib/api';
 import { CheckSparkle, CelebrationConfetti, triggerHapticCheck } from '../components/CheckSparkle';
 import { Drawer } from '../components/ui/Drawer';
 import { RecipeScraperModal, extractSharedUrl } from '../components/RecipeScraperModal';
 import { EditRecipeModal } from '../components/EditRecipeModal';
+import { NewRecipeCategoryModal } from '../components/recipes/NewRecipeCategoryModal';
+import { ManageRecipeCategoriesModal, CORE_RECIPE_CATEGORIES } from '../components/recipes/ManageRecipeCategoriesModal';
 import { BarcodeScannerModal } from '../components/inventory/BarcodeScannerModal';
 import { VisionScanModal } from '../components/inventory/VisionScanModal';
 import { EditInventoryModal, DEFAULT_PANTRY_CATEGORIES } from '../components/inventory/EditInventoryModal';
@@ -215,6 +217,21 @@ export const MealsPage: React.FC = () => {
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
   const [recipeSearch, setRecipeSearch] = useState('');
 
+  // Recipe categories & add menu state
+  const [recipeFilter, setRecipeFilter] = useState<string>('all');
+  const [customRecipeCategories, setCustomRecipeCategories] = useState<RecipeCategory[]>(() => {
+    try {
+      const saved = localStorage.getItem('famkit_custom_recipe_categories');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [isNewRecipeCategoryModalOpen, setIsNewRecipeCategoryModalOpen] = useState(false);
+  const [isManageRecipeCategoriesModalOpen, setIsManageRecipeCategoriesModalOpen] = useState(false);
+  const [isRecipeAddMenuOpen, setIsRecipeAddMenuOpen] = useState(false);
+  const recipeAddDropdownRef = useRef<HTMLDivElement>(null);
+
   // Pantry state & modals
   const [pantryFilter, setPantryFilter] = useState<string>('all');
   const [customPantryCategories, setCustomPantryCategories] = useState<PantryCategory[]>(() => {
@@ -244,6 +261,9 @@ export const MealsPage: React.FC = () => {
     const handleClickOutside = (e: MouseEvent) => {
       if (pantryAddDropdownRef.current && !pantryAddDropdownRef.current.contains(e.target as Node)) {
         setIsPantryAddMenuOpen(false);
+      }
+      if (recipeAddDropdownRef.current && !recipeAddDropdownRef.current.contains(e.target as Node)) {
+        setIsRecipeAddMenuOpen(false);
       }
       if (recipeSearchContainerRef.current && !recipeSearchContainerRef.current.contains(e.target as Node)) {
         setIsTagDropdownOpen(false);
@@ -396,13 +416,14 @@ export const MealsPage: React.FC = () => {
     }
 
     try {
-      const [weeklyRes, logsRes, recRes, groceryRes, inventoryRes, categoriesRes] = await Promise.all([
+      const [weeklyRes, logsRes, recRes, groceryRes, inventoryRes, categoriesRes, recipeCategoriesRes] = await Promise.all([
         api.getWeeklyMeals(householdId),
         api.getMealLogs(householdId),
         api.getRecipes(householdId),
         api.getGroceryItems(householdId),
         api.getInventory(),
         api.getPantryCategories().catch(() => ({ categories: [], customCategories: [], usedCategories: [] })),
+        api.getRecipeCategories().catch(() => ({ customCategories: [] })),
       ]);
 
       if (!isMountedRef.current) return;
@@ -418,6 +439,13 @@ export const MealsPage: React.FC = () => {
         setCustomPantryCategories(categoriesRes.customCategories);
         try {
           localStorage.setItem('famkit_custom_pantry_categories', JSON.stringify(categoriesRes.customCategories));
+        } catch {}
+      }
+
+      if (recipeCategoriesRes && recipeCategoriesRes.customCategories) {
+        setCustomRecipeCategories(recipeCategoriesRes.customCategories);
+        try {
+          localStorage.setItem('famkit_custom_recipe_categories', JSON.stringify(recipeCategoriesRes.customCategories));
         } catch {}
       }
 
@@ -1635,6 +1663,61 @@ export const MealsPage: React.FC = () => {
     showToast(`Deleted category "${catNameToDelete}"`);
   };
 
+  // Delete custom recipe category, clear assignment, and sync
+  const handleDeleteRecipeCategory = async (catNameToDelete: string, skipConfirm = false, skipApi = false) => {
+    const clean = catNameToDelete.toLowerCase().trim();
+    const count = recipes.filter(
+      (r) =>
+        (r.category || '').toLowerCase() === clean ||
+        (r.tags || []).some((t) => t.toLowerCase().trim().replace(/^#+/, '') === clean)
+    ).length;
+
+    if (!skipConfirm) {
+      const confirmMessage = count > 0
+        ? `Delete custom category "${catNameToDelete}"? The ${count} ${count === 1 ? 'recipe' : 'recipes'} in this category will remain in your recipe box.`
+        : `Delete custom category "${catNameToDelete}"?`;
+
+      if (!confirm(confirmMessage)) return;
+    }
+
+    // Optimistically update custom categories in state & storage
+    const nextCustom = customRecipeCategories.filter(
+      (c) => c.name.toLowerCase() !== clean
+    );
+    setCustomRecipeCategories(nextCustom);
+    try {
+      localStorage.setItem('famkit_custom_recipe_categories', JSON.stringify(nextCustom));
+    } catch {}
+
+    // If currently filtered by this category, reset filter to 'all'
+    if (recipeFilter.toLowerCase() === `cat:${clean}`) {
+      setRecipeFilter('all');
+    }
+
+    // Reassign recipes locally so their category is cleared
+    setRecipes((prev) => {
+      const updated = prev.map((recipe) => {
+        if ((recipe.category || '').toLowerCase() === clean) {
+          return { ...recipe, category: undefined };
+        }
+        return recipe;
+      });
+      if (mealsDataCache && mealsDataCache.householdId === householdId) {
+        mealsDataCache.recipes = updated;
+      }
+      return updated;
+    });
+
+    if (!skipApi) {
+      try {
+        await api.deleteRecipeCategory(catNameToDelete);
+      } catch (err) {
+        console.error('Failed to delete recipe category:', err);
+      }
+    }
+    showToast(`Deleted category "${catNameToDelete}"`);
+  };
+
   // Submit Manual Log Form
   const handleSubmitManualLog = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1982,21 +2065,38 @@ export const MealsPage: React.FC = () => {
 
   // Recipe filtering for Recipe Box (memoized)
   const filteredRecipes = useMemo(() => {
+    // 1. Filter by category
+    let list = recipes;
+    if (recipeFilter === 'ai') {
+      list = list.filter((r) => isAiRecipe(r));
+    } else if (recipeFilter.startsWith('cat:')) {
+      const catTarget = recipeFilter.replace('cat:', '').toLowerCase().trim();
+      list = list.filter(
+        (r) =>
+          (r.category || '').toLowerCase() === catTarget ||
+          (r.tags || []).some(
+            (t) => t.toLowerCase().trim().replace(/^#+/, '') === catTarget
+          )
+      );
+    }
+
+    // 2. Filter by search query
     const raw = searchQuery.trim().toLowerCase();
-    if (!raw) return recipes;
+    if (!raw) return list;
 
     const isTagOnly = raw.startsWith('#');
     const q = raw.replace(/^#+/, '').trim();
-    if (!q) return recipes;
+    if (!q) return list;
 
-    return recipes.filter((r) => {
+    return list.filter((r) => {
       const matchesAi = (q === 'ai' || q === 'ai recipes') && isAiRecipe(r);
       const matchesTag =
         matchesAi ||
         r.tags?.some((t) => {
           const clean = t.toLowerCase().trim().replace(/^#+/, '');
           return isTagOnly ? clean === q || clean.startsWith(q) : clean.includes(q);
-        });
+        }) ||
+        (!isTagOnly && (r.category || '').toLowerCase().includes(q));
 
       if (isTagOnly) {
         return matchesTag;
@@ -2008,7 +2108,7 @@ export const MealsPage: React.FC = () => {
 
       return matchesTitle || matchesTag || matchesDescription || matchesIngredient;
     });
-  }, [recipes, searchQuery]);
+  }, [recipes, searchQuery, recipeFilter]);
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (!isTagDropdownOpen || matchingTags.length === 0) {
@@ -2529,18 +2629,106 @@ export const MealsPage: React.FC = () => {
 
             {/* Top Right Action Button for active subtab */}
             {activeTab === 'recipes' && (
-              <button
-                type="button"
-                onClick={() => {
-                  setScraperInitialMode('url');
-                  setIsScraperOpen(true);
-                }}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer shrink-0"
-                title="Add recipe"
-              >
-                <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-                <span>Add Recipe</span>
-              </button>
+              <div className="relative" ref={recipeAddDropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => setIsRecipeAddMenuOpen(!isRecipeAddMenuOpen)}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer shrink-0"
+                  title="Add Recipe"
+                >
+                  <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                  <span>Add Recipe</span>
+                  <ChevronDown className={`w-3.5 h-3.5 stroke-[2.5] transition-transform duration-200 ${isRecipeAddMenuOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {isRecipeAddMenuOpen && (
+                  <div className="absolute right-0 top-full mt-2 w-52 bg-slate-900/95 backdrop-blur-xl border border-white/15 rounded-2xl p-1.5 shadow-2xl shadow-slate-950/80 z-50 animate-in fade-in zoom-in-95 duration-150 space-y-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsRecipeAddMenuOpen(false);
+                        setScraperInitialMode('url');
+                        setIsScraperOpen(true);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/10 transition-colors text-left cursor-pointer"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-teal-500/15 text-teal-400 flex items-center justify-center shrink-0">
+                        <Link2 className="w-4 h-4" />
+                      </div>
+                      <span className="font-bold text-white">Import from Web</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsRecipeAddMenuOpen(false);
+                        setScraperInitialMode('scan');
+                        setIsScraperOpen(true);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/10 transition-colors text-left cursor-pointer"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-purple-500/15 text-purple-400 flex items-center justify-center shrink-0">
+                        <Camera className="w-4 h-4" />
+                      </div>
+                      <span className="font-bold text-white">Scan from Photo</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsRecipeAddMenuOpen(false);
+                        setEditingRecipe({
+                          id: '',
+                          household_id: householdId || '',
+                          title: '',
+                          category: 'Dinner',
+                          tags: [],
+                          ingredients: [],
+                          instructions: [],
+                          created_at: new Date().toISOString(),
+                        });
+                        setIsEditRecipeModalOpen(true);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/10 transition-colors text-left cursor-pointer"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-emerald-500/15 text-emerald-400 flex items-center justify-center shrink-0">
+                        <Plus className="w-4 h-4" />
+                      </div>
+                      <span className="font-bold text-white">Create Manually</span>
+                    </button>
+
+                    <div className="border-t border-white/5 my-1" />
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsRecipeAddMenuOpen(false);
+                        setIsNewRecipeCategoryModalOpen(true);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/10 transition-colors text-left cursor-pointer"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-cyan-500/15 text-cyan-400 flex items-center justify-center shrink-0">
+                        <FolderPlus className="w-4 h-4" />
+                      </div>
+                      <span className="font-bold text-white">Add Category</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsRecipeAddMenuOpen(false);
+                        setIsManageRecipeCategoriesModalOpen(true);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/10 transition-colors text-left cursor-pointer"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-amber-500/15 text-amber-400 flex items-center justify-center shrink-0">
+                        <Tag className="w-4 h-4" />
+                      </div>
+                      <span className="font-bold text-white">Manage Categories</span>
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
 
             {activeTab === 'pantry' && (
@@ -2800,6 +2988,125 @@ export const MealsPage: React.FC = () => {
                   </div>
                 )}
               </div>
+
+              {/* Category Filter Chips */}
+              <div
+                className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar"
+                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+              >
+                {(() => {
+                  const getCatRecipeCount = (catName: string) => {
+                    const clean = catName.toLowerCase().trim();
+                    return recipes.filter(
+                      (r) =>
+                        (r.category || '').toLowerCase() === clean ||
+                        (r.tags || []).some((t) => t.toLowerCase().trim().replace(/^#+/, '') === clean)
+                    ).length;
+                  };
+
+                  const chips = [
+                    { id: 'all', label: 'All Recipes', icon: null, count: recipes.length },
+                    ...CORE_RECIPE_CATEGORIES.map((c) => ({
+                      id: `cat:${c.name.toLowerCase()}`,
+                      label: c.name,
+                      icon: c.icon,
+                      count: getCatRecipeCount(c.name),
+                    })),
+                    ...customRecipeCategories.map((c) => ({
+                      id: `cat:${c.name.toLowerCase()}`,
+                      label: c.name,
+                      icon: c.icon || '🍽️',
+                      count: getCatRecipeCount(c.name),
+                    })),
+                    ...(hasAiRecipes
+                      ? [{ id: 'ai', label: 'AI Recipes', icon: '✨', count: recipes.filter((r) => isAiRecipe(r)).length }]
+                      : []),
+                  ];
+
+                  return (
+                    <>
+                      {chips.map((chip) => {
+                        const isSelected = recipeFilter === chip.id;
+                        return (
+                          <button
+                            key={chip.id}
+                            onClick={() => setRecipeFilter(chip.id)}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                              isSelected
+                                ? 'bg-emerald-500 text-slate-950 font-bold shadow-sm'
+                                : 'bg-slate-900/80 text-slate-400 hover:text-white hover:bg-slate-800 border border-white/5'
+                            }`}
+                          >
+                            {chip.icon && <span>{chip.icon}</span>}
+                            <span>{chip.label}</span>
+                            <span
+                              className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                                isSelected ? 'bg-slate-950/20 text-slate-950 font-black' : 'bg-white/5 text-slate-400'
+                              }`}
+                            >
+                              {chip.count}
+                            </span>
+                          </button>
+                        );
+                      })}
+                      <button
+                        type="button"
+                        onClick={() => setIsManageRecipeCategoriesModalOpen(true)}
+                        className="px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-900/60 text-slate-400 hover:text-white hover:bg-slate-800 border border-white/5 transition-all cursor-pointer whitespace-nowrap flex items-center gap-1 shrink-0"
+                        title="Manage recipe categories"
+                      >
+                        <Tag className="w-3 h-3 text-emerald-400" />
+                        <span>Manage</span>
+                      </button>
+                    </>
+                  );
+                })()}
+              </div>
+
+              {/* Category Management Bar if a category filter is active */}
+              {recipeFilter.startsWith('cat:') && (() => {
+                const targetName = recipeFilter.replace('cat:', '').toLowerCase().trim();
+                const customCat = customRecipeCategories.find(
+                  (c) => c.name.toLowerCase() === targetName
+                );
+                const coreCat = CORE_RECIPE_CATEGORIES.find(
+                  (c) => c.name.toLowerCase() === targetName
+                );
+                const activeCatName = customCat?.name || coreCat?.name || targetName;
+                const activeIcon = customCat?.icon || coreCat?.icon || '🍽️';
+                const isCustom = Boolean(customCat);
+
+                return (
+                  <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-900/70 border border-white/10 text-xs shadow-sm">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-sm shrink-0">{activeIcon}</span>
+                      <span className="text-slate-300 font-semibold truncate">
+                        Category: <strong className="text-white">{activeCatName}</strong>
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setIsManageRecipeCategoriesModalOpen(true)}
+                        className="px-2.5 py-1 rounded-lg text-[11px] text-slate-300 hover:text-white hover:bg-white/5 font-medium cursor-pointer transition-colors"
+                      >
+                        Manage All
+                      </button>
+                      {isCustom && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteRecipeCategory(activeCatName)}
+                          className="px-2.5 py-1 rounded-lg text-[11px] text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 font-semibold flex items-center gap-1 cursor-pointer transition-colors border border-rose-500/20"
+                          title={`Delete "${activeCatName}" category`}
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          <span>Delete Category</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Recipe Cards Grid */}
               {isLoading ? (
@@ -3960,7 +4267,26 @@ export const MealsPage: React.FC = () => {
               created_at: new Date().toISOString(),
             }
           }
+          customCategories={customRecipeCategories}
+          onCustomCategoriesChange={setCustomRecipeCategories}
           onSave={(updated) => {
+            if (updated.category && !CORE_RECIPE_CATEGORIES.some((c) => c.name.toLowerCase() === updated.category!.toLowerCase())) {
+              const exists = customRecipeCategories.some((c) => c.name.toLowerCase() === updated.category!.toLowerCase());
+              if (!exists) {
+                const newCatObj: RecipeCategory = {
+                  id: `rcat_${Date.now()}`,
+                  name: updated.category,
+                  icon: '🍽️',
+                };
+                setCustomRecipeCategories((prev) => {
+                  const next = [...prev, newCatObj];
+                  try {
+                    localStorage.setItem('famkit_custom_recipe_categories', JSON.stringify(next));
+                  } catch {}
+                  return next;
+                });
+              }
+            }
             if (selectedRecipe && selectedRecipe.id === updated.id) {
               setSelectedRecipe(updated);
             }
@@ -4126,6 +4452,33 @@ export const MealsPage: React.FC = () => {
         inventoryItems={inventoryItems}
         onCategoryDeleted={(catName) => handleDeletePantryCategory(catName, true, true)}
         onOpenNewCategory={() => setIsNewCategoryModalOpen(true)}
+      />
+
+      {/* ================= MODAL: NEW RECIPE CATEGORY ================= */}
+      <NewRecipeCategoryModal
+        isOpen={isNewRecipeCategoryModalOpen}
+        onClose={() => setIsNewRecipeCategoryModalOpen(false)}
+        onOpenManage={() => setIsManageRecipeCategoriesModalOpen(true)}
+        onCategoryCreated={(newCat) => {
+          setCustomRecipeCategories((prev) => {
+            const next = [...prev.filter((c) => c.name.toLowerCase() !== newCat.name.toLowerCase()), newCat];
+            try {
+              localStorage.setItem('famkit_custom_recipe_categories', JSON.stringify(next));
+            } catch {}
+            return next;
+          });
+          showToast(`Created category "${newCat.name}"`);
+        }}
+      />
+
+      {/* ================= MODAL: MANAGE RECIPE CATEGORIES ================= */}
+      <ManageRecipeCategoriesModal
+        isOpen={isManageRecipeCategoriesModalOpen}
+        onClose={() => setIsManageRecipeCategoriesModalOpen(false)}
+        categories={customRecipeCategories}
+        recipes={recipes}
+        onCategoryDeleted={(catName) => handleDeleteRecipeCategory(catName, true, true)}
+        onOpenNewCategory={() => setIsNewRecipeCategoryModalOpen(true)}
       />
     </div>
   );

@@ -110,11 +110,20 @@ export interface CustomList {
   created_at: string;
 }
 
+export interface RecipeCategory {
+  id: string;
+  household_id?: string;
+  name: string;
+  icon?: string;
+  createdAt?: string;
+}
+
 export interface Recipe {
   id: string;
   household_id: string;
   title: string;
   description?: string;
+  category?: string;
   prep_time_minutes?: number;
   cook_time_minutes?: number;
   servings?: number;

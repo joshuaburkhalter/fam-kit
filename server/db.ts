@@ -139,6 +139,7 @@ function initSchema(db: Database) {
       ingredients TEXT NOT NULL,
       instructions TEXT NOT NULL,
       tags TEXT,
+      category TEXT,
       householdId TEXT NOT NULL,
       createdAt TEXT NOT NULL
     );
@@ -279,6 +280,15 @@ function initSchema(db: Database) {
       createdAt TEXT NOT NULL,
       UNIQUE(householdId, name)
     );
+
+    CREATE TABLE IF NOT EXISTS recipe_categories (
+      id TEXT PRIMARY KEY,
+      householdId TEXT NOT NULL,
+      name TEXT NOT NULL,
+      icon TEXT DEFAULT '🍽️',
+      createdAt TEXT NOT NULL,
+      UNIQUE(householdId, name)
+    );
   `);
 
   // Auto-migration for existing DBs: ensure tables and columns exist
@@ -314,6 +324,21 @@ function initSchema(db: Database) {
       );
     `);
     db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_pantry_cat_uniq ON pantry_categories (householdId, name);`);
+  } catch {}
+  try {
+    db.run(`
+      CREATE TABLE IF NOT EXISTS recipe_categories (
+        id TEXT PRIMARY KEY,
+        householdId TEXT NOT NULL,
+        name TEXT NOT NULL,
+        icon TEXT DEFAULT '🍽️',
+        createdAt TEXT NOT NULL
+      );
+    `);
+    db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_recipe_cat_uniq ON recipe_categories (householdId, name);`);
+  } catch {}
+  try {
+    db.run(`ALTER TABLE recipes ADD COLUMN category TEXT;`);
   } catch {}
   try {
     db.run(`

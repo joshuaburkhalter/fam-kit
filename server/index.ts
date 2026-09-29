@@ -2201,7 +2201,7 @@ app.get('/api/recipes', (req, res) => {
 app.post('/api/recipes', (req, res) => {
   try {
     const householdId = getHouseholdId(req);
-    const { title, description, imageUrl, prepTime, cookTime, servings, sourceUrl, ingredients, instructions, tags } = req.body;
+    const { title, description, imageUrl, prepTime, cookTime, servings, sourceUrl, ingredients, instructions, tags, category } = req.body;
     if (!title || !title.trim()) {
       return res.status(400).json({ error: 'Recipe title is required' });
     }
@@ -2209,8 +2209,8 @@ app.post('/api/recipes', (req, res) => {
     const now = new Date().toISOString();
     const tagStr = Array.isArray(tags) ? tags.join(', ') : (tags || '');
     execute(
-      `INSERT INTO recipes (id, title, description, imageUrl, prepTime, cookTime, servings, sourceUrl, ingredients, instructions, tags, householdId, createdAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO recipes (id, title, description, imageUrl, prepTime, cookTime, servings, sourceUrl, ingredients, instructions, tags, category, householdId, createdAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         title.trim(),
@@ -2223,6 +2223,7 @@ app.post('/api/recipes', (req, res) => {
         typeof ingredients === 'string' ? ingredients : JSON.stringify(ingredients || []),
         typeof instructions === 'string' ? instructions : JSON.stringify(instructions || []),
         tagStr,
+        category?.trim() || null,
         householdId,
         now,
       ]
@@ -2367,7 +2368,7 @@ app.delete('/api/recipes', (req, res) => {
 app.patch('/api/recipes', (req, res) => {
   try {
     const householdId = getHouseholdId(req);
-    const { id, title, description, prepTime, cookTime, servings, sourceUrl, ingredients, instructions, tags, imageUrl } = req.body;
+    const { id, title, description, prepTime, cookTime, servings, sourceUrl, ingredients, instructions, tags, imageUrl, category } = req.body;
     if (!id) return res.status(400).json({ error: 'Recipe ID is required' });
 
     const existing = queryOne('SELECT * FROM recipes WHERE id = ? AND householdId = ?', [id, householdId]);
@@ -2385,6 +2386,9 @@ app.patch('/api/recipes', (req, res) => {
     if (tags !== undefined) {
       const tagStr = Array.isArray(tags) ? tags.join(', ') : tags;
       execute('UPDATE recipes SET tags = ? WHERE id = ?', [tagStr, id]);
+    }
+    if (category !== undefined) {
+      execute('UPDATE recipes SET category = ? WHERE id = ?', [category ? String(category).trim() : null, id]);
     }
     saveDb();
 
@@ -2923,6 +2927,78 @@ app.delete('/api/inventory/categories/:name', (req, res) => {
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Failed to delete category' });
+  }
+});
+
+// Recipe Categories Endpoints
+app.get('/api/recipes/categories', (req, res) => {
+  const householdId = getHouseholdId(req);
+  try {
+    const customCats = queryAll<{ id: string; householdId: string; name: string; icon: string; createdAt: string }>(
+      'SELECT * FROM recipe_categories WHERE householdId = ? ORDER BY createdAt ASC',
+      [householdId]
+    );
+    res.json({
+      customCategories: customCats,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to fetch recipe categories' });
+  }
+});
+
+app.post('/api/recipes/categories', (req, res) => {
+  const householdId = getHouseholdId(req);
+  const { name, icon = '🍽️' } = req.body;
+  if (!name || !name.trim()) {
+    return res.status(400).json({ error: 'Category name is required' });
+  }
+  const cleanName = name.trim();
+  const cleanIcon = (icon && String(icon).trim()) || '🍽️';
+  try {
+    const existing = queryOne<any>(
+      'SELECT * FROM recipe_categories WHERE householdId = ? AND LOWER(name) = LOWER(?)',
+      [householdId, cleanName]
+    );
+    if (existing) {
+      if (existing.icon !== cleanIcon) {
+        execute('UPDATE recipe_categories SET icon = ? WHERE id = ?', [cleanIcon, existing.id]);
+        saveDb();
+        existing.icon = cleanIcon;
+      }
+      return res.json(existing);
+    }
+    const id = `rcat_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const now = new Date().toISOString();
+    execute(
+      'INSERT INTO recipe_categories (id, householdId, name, icon, createdAt) VALUES (?, ?, ?, ?, ?)',
+      [id, householdId, cleanName, cleanIcon, now]
+    );
+    saveDb();
+    const created = queryOne<any>('SELECT * FROM recipe_categories WHERE id = ?', [id]);
+    res.status(201).json(created);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to create recipe category' });
+  }
+});
+
+app.delete('/api/recipes/categories/:name', (req, res) => {
+  const householdId = getHouseholdId(req);
+  const categoryName = decodeURIComponent(req.params.name).trim();
+  try {
+    execute(
+      'DELETE FROM recipe_categories WHERE householdId = ? AND LOWER(name) = LOWER(?)',
+      [householdId, categoryName]
+    );
+    execute(
+      `UPDATE recipes 
+       SET category = NULL
+       WHERE householdId = ? AND LOWER(category) = LOWER(?)`,
+      [householdId, categoryName]
+    );
+    saveDb();
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to delete recipe category' });
   }
 });
 

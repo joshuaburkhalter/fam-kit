@@ -1,14 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Drawer } from './ui/Drawer';
 import { Plus, Trash2, Loader2, ChefHat, Check, Camera, ImageIcon, Link2 } from 'lucide-react';
-import type { Recipe } from '../types';
+import type { Recipe, RecipeCategory } from '../types';
 import { api } from '../lib/api';
 import { compressImageFile } from '../lib/imageCompression';
+import { NewRecipeCategoryModal } from './recipes/NewRecipeCategoryModal';
+import { ManageRecipeCategoriesModal, CORE_RECIPE_CATEGORIES } from './recipes/ManageRecipeCategoriesModal';
 
 interface EditRecipeModalProps {
   isOpen: boolean;
   onClose: () => void;
   recipe: Recipe;
+  customCategories?: RecipeCategory[];
+  onCustomCategoriesChange?: (categories: RecipeCategory[]) => void;
   onSave: (updated: Recipe) => void;
 }
 
@@ -16,6 +20,8 @@ export const EditRecipeModal: React.FC<EditRecipeModalProps> = ({
   isOpen,
   onClose,
   recipe,
+  customCategories: propCustomCategories,
+  onCustomCategoriesChange,
   onSave,
 }) => {
   const [title, setTitle] = useState(recipe.title);
@@ -27,7 +33,43 @@ export const EditRecipeModal: React.FC<EditRecipeModalProps> = ({
   const [prepTime, setPrepTime] = useState(recipe.prep_time_minutes?.toString() || '');
   const [cookTime, setCookTime] = useState(recipe.cook_time_minutes?.toString() || '');
   const [servings, setServings] = useState(recipe.servings?.toString() || '');
+  const [category, setCategory] = useState(recipe.category || 'Dinner');
   const [tagsStr, setTagsStr] = useState((recipe.tags || []).join(', '));
+  const [isNewCategoryModalOpen, setIsNewCategoryModalOpen] = useState(false);
+  const [isManageCategoriesModalOpen, setIsManageCategoriesModalOpen] = useState(false);
+
+  // Custom categories state
+  const [customCategories, setCustomCategories] = useState<RecipeCategory[]>(() => {
+    if (propCustomCategories && propCustomCategories.length > 0) return propCustomCategories;
+    try {
+      const saved = localStorage.getItem('famkit_custom_recipe_categories');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    if (propCustomCategories) {
+      setCustomCategories(propCustomCategories);
+    }
+  }, [propCustomCategories]);
+
+  useEffect(() => {
+    if (isOpen) {
+      api.getRecipeCategories()
+        .then((res) => {
+          const cats = res.customCategories || [];
+          setCustomCategories(cats);
+          try {
+            localStorage.setItem('famkit_custom_recipe_categories', JSON.stringify(cats));
+          } catch {}
+          if (onCustomCategoriesChange) onCustomCategoriesChange(cats);
+        })
+        .catch(() => {});
+    }
+  }, [isOpen]);
+
   const [ingredients, setIngredients] = useState<Array<{ item: string; amount?: string; unit?: string }>>(() => {
     return (recipe.ingredients || []).map((ing) => ({
       item: ing.item,
@@ -49,6 +91,7 @@ export const EditRecipeModal: React.FC<EditRecipeModalProps> = ({
     setPrepTime(recipe.prep_time_minutes?.toString() || '');
     setCookTime(recipe.cook_time_minutes?.toString() || '');
     setServings(recipe.servings?.toString() || '');
+    setCategory(recipe.category || 'Dinner');
     setTagsStr((recipe.tags || []).join(', '));
     setIngredients(
       (recipe.ingredients || []).map((ing) => ({
@@ -120,6 +163,7 @@ export const EditRecipeModal: React.FC<EditRecipeModalProps> = ({
         savedRecipe = await api.updateRecipe(recipe.id, {
           title: title.trim(),
           description: description.trim() || undefined,
+          category: category || undefined,
           image_url: imageUrl ? imageUrl.trim() : null,
           prep_time_minutes: prepTime ? parseInt(prepTime, 10) : undefined,
           cook_time_minutes: cookTime ? parseInt(cookTime, 10) : undefined,
@@ -132,6 +176,7 @@ export const EditRecipeModal: React.FC<EditRecipeModalProps> = ({
         savedRecipe = await api.createRecipe(recipe.household_id, {
           title: title.trim(),
           description: description.trim() || undefined,
+          category: category || undefined,
           image_url: imageUrl ? imageUrl.trim() : undefined,
           prep_time_minutes: prepTime ? parseInt(prepTime, 10) : undefined,
           cook_time_minutes: cookTime ? parseInt(cookTime, 10) : undefined,
@@ -153,7 +198,8 @@ export const EditRecipeModal: React.FC<EditRecipeModalProps> = ({
   };
 
   return (
-    <Drawer
+    <>
+      <Drawer
       isOpen={isOpen}
       onClose={onClose}
       title={recipe.id ? "Edit Recipe" : "New Recipe"}
@@ -396,6 +442,109 @@ export const EditRecipeModal: React.FC<EditRecipeModalProps> = ({
               </div>
             </div>
 
+            {/* Category Selector */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                  Category
+                </label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsManageCategoriesModalOpen(true)}
+                    className="text-[10px] text-slate-400 hover:text-slate-300 font-semibold cursor-pointer"
+                    title="Manage categories"
+                  >
+                    Manage
+                  </button>
+                  <span className="text-slate-600 text-xs">•</span>
+                  <button
+                    type="button"
+                    onClick={() => setIsNewCategoryModalOpen(true)}
+                    className="text-[10px] text-emerald-400 hover:text-emerald-300 font-semibold flex items-center gap-0.5 cursor-pointer"
+                    title="Add custom category"
+                  >
+                    <Plus className="w-2.5 h-2.5 stroke-[2.5]" />
+                    <span>New</span>
+                  </button>
+                </div>
+              </div>
+              <select
+                value={category}
+                onChange={(e) => {
+                  if (e.target.value === '__ADD_NEW__') {
+                    setIsNewCategoryModalOpen(true);
+                  } else if (e.target.value === '__MANAGE__') {
+                    setIsManageCategoriesModalOpen(true);
+                  } else {
+                    setCategory(e.target.value);
+                  }
+                }}
+                className="w-full px-3.5 py-2.5 bg-slate-900 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500 cursor-pointer"
+              >
+                {CORE_RECIPE_CATEGORIES.map((c) => (
+                  <option key={c.name} value={c.name}>
+                    {c.icon} {c.name}
+                  </option>
+                ))}
+
+                {customCategories.length > 0 && (
+                  <optgroup label="Custom Categories">
+                    {customCategories.map((c) => (
+                      <option key={c.id || c.name} value={c.name}>
+                        {c.icon || '🍽️'} {c.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+
+                {category &&
+                  !CORE_RECIPE_CATEGORIES.some((c) => c.name.toLowerCase() === category.toLowerCase()) &&
+                  !customCategories.some((c) => c.name.toLowerCase() === category.toLowerCase()) && (
+                    <optgroup label="Other">
+                      <option value={category}>{category}</option>
+                    </optgroup>
+                  )}
+
+                <option value="__MANAGE__" className="text-slate-400 font-medium">
+                  ⚙️ Manage Categories...
+                </option>
+                <option value="__ADD_NEW__" className="text-emerald-400 font-bold">
+                  ✨ + Add Category...
+                </option>
+              </select>
+            </div>
+
+            {/* Delete custom category action if custom category is currently active */}
+            {customCategories.some((c) => c.name.toLowerCase() === category.toLowerCase()) && (
+              <div className="flex items-center justify-between text-[11px] text-slate-400 px-1 -mt-2">
+                <span className="text-emerald-400/90 font-medium">Custom category</span>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!confirm(`Delete custom category "${category}"? Existing recipes will not be deleted.`)) return;
+                    const catToDelete = category;
+                    const nextCustom = customCategories.filter((c) => c.name.toLowerCase() !== catToDelete.toLowerCase());
+                    setCustomCategories(nextCustom);
+                    setCategory('Dinner');
+                    try {
+                      localStorage.setItem('famkit_custom_recipe_categories', JSON.stringify(nextCustom));
+                    } catch {}
+                    if (onCustomCategoriesChange) onCustomCategoriesChange(nextCustom);
+                    try {
+                      await api.deleteRecipeCategory(catToDelete);
+                    } catch (err) {
+                      console.error('Failed to delete category from server', err);
+                    }
+                  }}
+                  className="text-rose-400 hover:text-rose-300 hover:underline cursor-pointer flex items-center gap-1 text-[10px]"
+                >
+                  <Trash2 className="w-2.5 h-2.5" />
+                  <span>Delete "{category}"</span>
+                </button>
+              </div>
+            )}
+
             <div>
               <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
                 Tags (comma separated)
@@ -506,6 +655,44 @@ export const EditRecipeModal: React.FC<EditRecipeModalProps> = ({
           </div>
 
         </form>
-    </Drawer>
+      </Drawer>
+
+      {/* New Category Modal */}
+      <NewRecipeCategoryModal
+        isOpen={isNewCategoryModalOpen}
+        onClose={() => setIsNewCategoryModalOpen(false)}
+        onCategoryCreated={(newCat) => {
+          const updated = [...customCategories.filter((c) => c.name.toLowerCase() !== newCat.name.toLowerCase()), newCat];
+          setCustomCategories(updated);
+          setCategory(newCat.name);
+          try {
+            localStorage.setItem('famkit_custom_recipe_categories', JSON.stringify(updated));
+          } catch {}
+          if (onCustomCategoriesChange) onCustomCategoriesChange(updated);
+        }}
+        onOpenManage={() => setIsManageCategoriesModalOpen(true)}
+      />
+
+      {/* Manage Categories Modal */}
+      <ManageRecipeCategoriesModal
+        isOpen={isManageCategoriesModalOpen}
+        onClose={() => setIsManageCategoriesModalOpen(false)}
+        categories={customCategories}
+        onCategoryDeleted={(deletedName) => {
+          const nextCustom = customCategories.filter(
+            (c) => c.name.toLowerCase() !== deletedName.toLowerCase()
+          );
+          setCustomCategories(nextCustom);
+          if (category.toLowerCase() === deletedName.toLowerCase()) {
+            setCategory('Dinner');
+          }
+          try {
+            localStorage.setItem('famkit_custom_recipe_categories', JSON.stringify(nextCustom));
+          } catch {}
+          if (onCustomCategoriesChange) onCustomCategoriesChange(nextCustom);
+        }}
+        onOpenNewCategory={() => setIsNewCategoryModalOpen(true)}
+      />
+    </>
   );
 };
