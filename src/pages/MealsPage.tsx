@@ -301,6 +301,8 @@ export const MealsPage: React.FC = () => {
     cookedByUserId: currentUser?.id || '',
   });
   const pendingLogEditsRef = useRef<{ [tempId: string]: any }>({});
+  const tempToRealLogIdMapRef = useRef<Map<string, string>>(new Map());
+  const inFlightMealLogPromisesRef = useRef<Map<string, Promise<MealLog>>>(new Map());
   const [isLogRecipeSearchOpen, setIsLogRecipeSearchOpen] = useState(false);
   const [logRecipeSearchQuery, setLogRecipeSearchQuery] = useState('');
 
@@ -329,15 +331,18 @@ export const MealsPage: React.FC = () => {
   };
 
   const handleOpenEditLog = (log: MealLog) => {
-    setEditingLog(log);
+    const realId = tempToRealLogIdMapRef.current.get(log.id) || log.id;
+    const latestLog = mealLogs.find((l) => l.id === log.id || l.id === realId) || log;
+    setEditingLog({ ...latestLog, id: realId });
     setIsLogRecipeSearchOpen(false);
     setLogRecipeSearchQuery('');
+    const normDate = latestLog.date ? latestLog.date.split('T')[0] : format(new Date(), 'yyyy-MM-dd');
     setLogForm({
-      title: log.title,
-      recipeId: log.recipe_id || '',
-      date: log.date,
-      notes: log.notes || '',
-      cookedByUserId: log.cooked_by_user_id || '',
+      title: latestLog.title,
+      recipeId: latestLog.recipe_id || '',
+      date: normDate,
+      notes: latestLog.notes || '',
+      cookedByUserId: latestLog.cooked_by_user_id || '',
     });
     setIsLogModalOpen(true);
   };
@@ -879,7 +884,7 @@ export const MealsPage: React.FC = () => {
 
       // 3. Background server sync
       try {
-        const newLog = await api.logMealMade(householdId, {
+        const createPromise = api.logMealMade(householdId, {
           title: meal.title,
           recipe_id: meal.recipe_id,
           date: todayStr,
@@ -887,6 +892,12 @@ export const MealsPage: React.FC = () => {
           cooked_by_user_id: currentUser?.id,
           weekly_meal_id: meal.id,
         });
+
+        inFlightMealLogPromisesRef.current.set(tempLogId, createPromise);
+
+        const newLog = await createPromise;
+        inFlightMealLogPromisesRef.current.delete(tempLogId);
+        tempToRealLogIdMapRef.current.set(tempLogId, newLog.id);
 
         if (meal.calendar_event_id) {
           try {
@@ -909,12 +920,22 @@ export const MealsPage: React.FC = () => {
           }
         }
 
-        // Replace optimistic log with real newLog, retaining any local edits
+        // If user currently has the edit drawer open for this temp log, sync editingLog id to newLog.id
+        setEditingLog((curr) => {
+          if (curr && (curr.id === tempLogId || curr.id === newLog.id)) {
+            return { ...curr, id: newLog.id };
+          }
+          return curr;
+        });
+
+        // Replace optimistic log with real newLog, retaining any local edits made by the user
         setMealLogs((prev) =>
           prev.map((l) =>
             l.id === tempLogId
               ? {
-                  ...newLog,
+                  ...l,
+                  id: newLog.id,
+                  household_id: householdId,
                   ...(pendingEdits ? {
                     title: pendingEdits.title,
                     recipe_id: pendingEdits.recipe_id || undefined,
@@ -922,7 +943,6 @@ export const MealsPage: React.FC = () => {
                     notes: pendingEdits.notes || undefined,
                     cooked_by_user_id: pendingEdits.cooked_by_user_id || undefined,
                   } : {}),
-                  id: newLog.id,
                 }
               : l
           )
@@ -931,7 +951,9 @@ export const MealsPage: React.FC = () => {
           mealsDataCache.mealLogs = mealsDataCache.mealLogs.map((l) =>
             l.id === tempLogId
               ? {
-                  ...newLog,
+                  ...l,
+                  id: newLog.id,
+                  household_id: householdId,
                   ...(pendingEdits ? {
                     title: pendingEdits.title,
                     recipe_id: pendingEdits.recipe_id || undefined,
@@ -939,12 +961,12 @@ export const MealsPage: React.FC = () => {
                     notes: pendingEdits.notes || undefined,
                     cooked_by_user_id: pendingEdits.cooked_by_user_id || undefined,
                   } : {}),
-                  id: newLog.id,
                 }
               : l
           );
         }
       } catch (err) {
+        inFlightMealLogPromisesRef.current.delete(tempLogId);
         console.error('Failed to record cooked meal', err);
         // Rollback on failure
         setMeals((prev) => (prev.some((m) => m.id === meal.id) ? prev : [meal, ...prev]));
@@ -1210,12 +1232,15 @@ export const MealsPage: React.FC = () => {
       created_at: new Date().toISOString(),
     };
 
+    const origLogId = log.id;
+    const realLogId = tempToRealLogIdMapRef.current.get(origLogId) || origLogId;
+
     // Optimistically update UI state immediately
     setMeals((prev) => [optimisticMeal, ...prev]);
-    setMealLogs((prev) => prev.filter((l) => l.id !== log.id));
+    setMealLogs((prev) => prev.filter((l) => l.id !== origLogId && l.id !== realLogId));
     if (mealsDataCache && mealsDataCache.householdId === householdId) {
       mealsDataCache.meals = [optimisticMeal, ...mealsDataCache.meals];
-      mealsDataCache.mealLogs = mealsDataCache.mealLogs.filter((l) => l.id !== log.id);
+      mealsDataCache.mealLogs = mealsDataCache.mealLogs.filter((l) => l.id !== origLogId && l.id !== realLogId);
     }
     showToast(`↩ Returned "${log.title}" to Planner!`);
 
@@ -1226,11 +1251,19 @@ export const MealsPage: React.FC = () => {
         notes: log.notes,
       });
 
-      if (!log.id.startsWith('temp-')) {
+      if (!realLogId.startsWith('temp-')) {
         try {
-          await api.deleteMealLog(log.id);
+          await api.deleteMealLog(realLogId);
         } catch (delErr) {
           console.warn('Failed to delete meal log during move back:', delErr);
+        }
+      } else {
+        const inFlight = inFlightMealLogPromisesRef.current.get(realLogId);
+        if (inFlight) {
+          try {
+            const created = await inFlight;
+            await api.deleteMealLog(created.id);
+          } catch {}
         }
       }
 
@@ -1402,10 +1435,19 @@ export const MealsPage: React.FC = () => {
       },
     });
 
+    const origLogId = logToDelete.id;
+    const realLogId = tempToRealLogIdMapRef.current.get(origLogId) || origLogId;
+
     (async () => {
       try {
-        if (!logToDelete.id.startsWith('temp-')) {
-          await api.deleteMealLog(logToDelete.id);
+        if (!realLogId.startsWith('temp-')) {
+          await api.deleteMealLog(realLogId);
+        } else {
+          const inFlight = inFlightMealLogPromisesRef.current.get(realLogId);
+          if (inFlight) {
+            const created = await inFlight;
+            await api.deleteMealLog(created.id);
+          }
         }
       } catch (err) {
         console.error('Failed to delete log in background', err);
@@ -1830,7 +1872,9 @@ export const MealsPage: React.FC = () => {
     if (!householdId || !logForm.title.trim()) return;
 
     if (editingLog) {
-      const logId = editingLog.id;
+      const origLogId = editingLog.id;
+      const resolvedLogId = tempToRealLogIdMapRef.current.get(origLogId) || origLogId;
+
       const updatedData = {
         title: logForm.title.trim(),
         recipe_id: logForm.recipeId || null,
@@ -1839,10 +1883,10 @@ export const MealsPage: React.FC = () => {
         cooked_by_user_id: logForm.cookedByUserId || null,
       };
 
-      // Optimistic update in UI
+      // Optimistic update in UI matching either original or resolved ID
       setMealLogs((prev) =>
         prev.map((l) =>
-          l.id === logId
+          l.id === origLogId || l.id === resolvedLogId
             ? {
                 ...l,
                 title: updatedData.title,
@@ -1856,7 +1900,7 @@ export const MealsPage: React.FC = () => {
       );
       if (mealsDataCache && mealsDataCache.householdId === householdId) {
         mealsDataCache.mealLogs = mealsDataCache.mealLogs.map((l) =>
-          l.id === logId
+          l.id === origLogId || l.id === resolvedLogId
             ? {
                 ...l,
                 title: updatedData.title,
@@ -1880,14 +1924,29 @@ export const MealsPage: React.FC = () => {
       });
       showToast(`Updated "${updatedData.title}" in History!`);
 
-      if (logId.startsWith('temp-')) {
-        pendingLogEditsRef.current[logId] = updatedData;
-      } else {
+      if (!resolvedLogId.startsWith('temp-')) {
         try {
-          await api.updateMealLog(householdId, logId, updatedData);
+          await api.updateMealLog(householdId, resolvedLogId, updatedData);
         } catch (err) {
           console.error('Failed to update meal log', err);
           showToast('Failed to update meal log');
+        }
+      } else {
+        // Still in flight: record in pending edits and attach to in-flight promise
+        pendingLogEditsRef.current[resolvedLogId] = updatedData;
+        const inFlight = inFlightMealLogPromisesRef.current.get(resolvedLogId);
+        if (inFlight) {
+          inFlight
+            .then(async (createdLog) => {
+              try {
+                await api.updateMealLog(householdId, createdLog.id, updatedData);
+              } catch (err) {
+                console.error('Failed to update meal log after in-flight creation', err);
+              }
+            })
+            .catch((e) => {
+              console.warn('In flight meal log creation failed:', e);
+            });
         }
       }
       return;

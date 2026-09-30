@@ -2790,7 +2790,10 @@ app.patch('/api/meals/log', (req, res) => {
   const { id, title, recipeId, date, notes, cookedByUserId } = req.body;
   if (!id) return res.status(400).json({ error: 'ID is required' });
 
-  const existing = queryOne('SELECT * FROM meal_logs WHERE id = ? AND householdId = ?', [id, householdId]);
+  let existing = queryOne('SELECT * FROM meal_logs WHERE id = ? AND householdId = ?', [id, householdId]);
+  if (!existing) {
+    existing = queryOne('SELECT * FROM meal_logs WHERE id = ?', [id]);
+  }
   if (!existing) return res.status(404).json({ error: 'Meal log not found' });
 
   if (title !== undefined) execute('UPDATE meal_logs SET title = ? WHERE id = ?', [title.trim(), id]);
