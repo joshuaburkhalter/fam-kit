@@ -2785,6 +2785,25 @@ app.post('/api/meals/log', (req, res) => {
   res.json(saved);
 });
 
+app.patch('/api/meals/log', (req, res) => {
+  const householdId = getHouseholdId(req);
+  const { id, title, recipeId, date, notes, cookedByUserId } = req.body;
+  if (!id) return res.status(400).json({ error: 'ID is required' });
+
+  const existing = queryOne('SELECT * FROM meal_logs WHERE id = ? AND householdId = ?', [id, householdId]);
+  if (!existing) return res.status(404).json({ error: 'Meal log not found' });
+
+  if (title !== undefined) execute('UPDATE meal_logs SET title = ? WHERE id = ?', [title.trim(), id]);
+  if (recipeId !== undefined) execute('UPDATE meal_logs SET recipeId = ? WHERE id = ?', [recipeId || null, id]);
+  if (date !== undefined) execute('UPDATE meal_logs SET date = ? WHERE id = ?', [date, id]);
+  if (notes !== undefined) execute('UPDATE meal_logs SET notes = ? WHERE id = ?', [notes ? notes.trim() : null, id]);
+  if (cookedByUserId !== undefined) execute('UPDATE meal_logs SET cookedByUserId = ? WHERE id = ?', [cookedByUserId || null, id]);
+
+  saveDb();
+  const updated = queryOne('SELECT * FROM meal_logs WHERE id = ?', [id]);
+  res.json(updated);
+});
+
 app.delete('/api/meals/log', (req, res) => {
   const id = req.query.id as string;
   if (id) execute('DELETE FROM meal_logs WHERE id = ?', [id]);

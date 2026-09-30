@@ -61,7 +61,7 @@ import { EditInventoryModal, DEFAULT_PANTRY_CATEGORIES } from '../components/inv
 import { NewPantryCategoryModal } from '../components/inventory/NewPantryCategoryModal';
 import { ManagePantryCategoriesModal } from '../components/inventory/ManagePantryCategoriesModal';
 import { getFreshnessBadge, getLocationMeta } from '../lib/shelfLife';
-import { Toast } from '../components/ui/Toast';
+import { Toast, ToastAction } from '../components/ui/Toast';
 import { clearCalendarCache } from './CalendarPage';
 
 interface MealsDataCache {
@@ -292,6 +292,7 @@ export const MealsPage: React.FC = () => {
   const [logDayPickerDate, setLogDayPickerDate] = useState<string | null>(null);
 
   // Manual Log Meal Modal Form
+  const [editingLog, setEditingLog] = useState<MealLog | null>(null);
   const [logForm, setLogForm] = useState({
     title: '',
     recipeId: '',
@@ -299,6 +300,31 @@ export const MealsPage: React.FC = () => {
     notes: '',
     cookedByUserId: currentUser?.id || '',
   });
+  const pendingLogEditsRef = useRef<{ [tempId: string]: any }>({});
+
+  const handleOpenNewLog = () => {
+    setEditingLog(null);
+    setLogForm({
+      title: '',
+      recipeId: '',
+      date: format(new Date(), 'yyyy-MM-dd'),
+      notes: '',
+      cookedByUserId: currentUser?.id || '',
+    });
+    setIsLogModalOpen(true);
+  };
+
+  const handleOpenEditLog = (log: MealLog) => {
+    setEditingLog(log);
+    setLogForm({
+      title: log.title,
+      recipeId: log.recipe_id || '',
+      date: log.date,
+      notes: log.notes || '',
+      cookedByUserId: log.cooked_by_user_id || '',
+    });
+    setIsLogModalOpen(true);
+  };
 
   // Quick custom dish input
   const [quickDishInput, setQuickDishInput] = useState('');
@@ -307,7 +333,8 @@ export const MealsPage: React.FC = () => {
 
   // Notification Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [toastAction, setToastAction] = useState<{ label: string; onClick: () => void } | undefined>(undefined);
+  const [toastAction, setToastAction] = useState<ToastAction | undefined>(undefined);
+  const [toastActions, setToastActions] = useState<ToastAction[] | undefined>(undefined);
   const toastTimeoutRef = useRef<any>(null);
 
   // Pantry check-off animation state
@@ -324,14 +351,24 @@ export const MealsPage: React.FC = () => {
   const cookModeHistoryPushedRef = useRef(false);
   const isNavigatingBackRef = useRef(false);
 
-  const showToast = (msg: string, action?: { label: string; onClick: () => void }) => {
+  const showToast = (
+    msg: string,
+    actionOrOptions?: ToastAction | { actions: ToastAction[] }
+  ) => {
     if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
     setToastMessage(msg);
-    setToastAction(action);
+    if (actionOrOptions && 'actions' in actionOrOptions) {
+      setToastAction(undefined);
+      setToastActions(actionOrOptions.actions);
+    } else {
+      setToastAction(actionOrOptions as ToastAction | undefined);
+      setToastActions(undefined);
+    }
     toastTimeoutRef.current = setTimeout(() => {
       setToastMessage(null);
       setToastAction(undefined);
-    }, action ? 5000 : 3500);
+      setToastActions(undefined);
+    }, actionOrOptions ? 5000 : 3500);
   };
 
   useEffect(() => {
@@ -804,12 +841,24 @@ export const MealsPage: React.FC = () => {
       }
       clearCalendarCache();
 
-      // 2. Immediately show Undo toast
+      // 2. Immediately show Edit & Undo toast
       showToast(`Cooked "${meal.title}"! Moved to History`, {
-        label: 'Undo',
-        onClick: async () => {
-          await handleMoveBackToPlanner(optimisticLog);
-        },
+        actions: [
+          {
+            label: 'Edit',
+            onClick: () => {
+              handleOpenEditLog(optimisticLog);
+            },
+            variant: 'primary',
+          },
+          {
+            label: 'Undo',
+            onClick: async () => {
+              await handleMoveBackToPlanner(optimisticLog);
+            },
+            variant: 'secondary',
+          },
+        ],
       });
 
       // 3. Background server sync
@@ -833,10 +882,51 @@ export const MealsPage: React.FC = () => {
 
         await api.deleteWeeklyMeal(meal.id);
 
-        // Replace optimistic log with real newLog
-        setMealLogs((prev) => prev.map((l) => (l.id === tempLogId ? newLog : l)));
+        // Check if user edited this optimistic log while request was in-flight
+        const pendingEdits = pendingLogEditsRef.current[tempLogId];
+        delete pendingLogEditsRef.current[tempLogId];
+        if (pendingEdits) {
+          try {
+            await api.updateMealLog(householdId, newLog.id, pendingEdits);
+          } catch (e) {
+            console.warn('Failed to apply pending edits to meal log:', e);
+          }
+        }
+
+        // Replace optimistic log with real newLog, retaining any local edits
+        setMealLogs((prev) =>
+          prev.map((l) =>
+            l.id === tempLogId
+              ? {
+                  ...newLog,
+                  ...(pendingEdits ? {
+                    title: pendingEdits.title,
+                    recipe_id: pendingEdits.recipe_id || undefined,
+                    date: pendingEdits.date,
+                    notes: pendingEdits.notes || undefined,
+                    cooked_by_user_id: pendingEdits.cooked_by_user_id || undefined,
+                  } : {}),
+                  id: newLog.id,
+                }
+              : l
+          )
+        );
         if (mealsDataCache && mealsDataCache.householdId === householdId) {
-          mealsDataCache.mealLogs = mealsDataCache.mealLogs.map((l) => (l.id === tempLogId ? newLog : l));
+          mealsDataCache.mealLogs = mealsDataCache.mealLogs.map((l) =>
+            l.id === tempLogId
+              ? {
+                  ...newLog,
+                  ...(pendingEdits ? {
+                    title: pendingEdits.title,
+                    recipe_id: pendingEdits.recipe_id || undefined,
+                    date: pendingEdits.date,
+                    notes: pendingEdits.notes || undefined,
+                    cooked_by_user_id: pendingEdits.cooked_by_user_id || undefined,
+                  } : {}),
+                  id: newLog.id,
+                }
+              : l
+          );
         }
       } catch (err) {
         console.error('Failed to record cooked meal', err);
@@ -1718,10 +1808,75 @@ export const MealsPage: React.FC = () => {
     showToast(`Deleted category "${catNameToDelete}"`);
   };
 
-  // Submit Manual Log Form
+  // Submit Manual Log Form (handles both Create and Edit)
   const handleSubmitManualLog = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!householdId || !logForm.title.trim()) return;
+
+    if (editingLog) {
+      const logId = editingLog.id;
+      const updatedData = {
+        title: logForm.title.trim(),
+        recipe_id: logForm.recipeId || null,
+        date: logForm.date,
+        notes: logForm.notes.trim() || null,
+        cooked_by_user_id: logForm.cookedByUserId || null,
+      };
+
+      // Optimistic update in UI
+      setMealLogs((prev) =>
+        prev.map((l) =>
+          l.id === logId
+            ? {
+                ...l,
+                title: updatedData.title,
+                recipe_id: updatedData.recipe_id || undefined,
+                date: updatedData.date,
+                notes: updatedData.notes || undefined,
+                cooked_by_user_id: updatedData.cooked_by_user_id || undefined,
+              }
+            : l
+        )
+      );
+      if (mealsDataCache && mealsDataCache.householdId === householdId) {
+        mealsDataCache.mealLogs = mealsDataCache.mealLogs.map((l) =>
+          l.id === logId
+            ? {
+                ...l,
+                title: updatedData.title,
+                recipe_id: updatedData.recipe_id || undefined,
+                date: updatedData.date,
+                notes: updatedData.notes || undefined,
+                cooked_by_user_id: updatedData.cooked_by_user_id || undefined,
+              }
+            : l
+        );
+      }
+
+      setIsLogModalOpen(false);
+      setEditingLog(null);
+      setLogForm({
+        title: '',
+        recipeId: '',
+        date: format(new Date(), 'yyyy-MM-dd'),
+        notes: '',
+        cookedByUserId: currentUser?.id || '',
+      });
+      showToast(`Updated "${updatedData.title}" in History!`);
+
+      if (logId.startsWith('temp-')) {
+        pendingLogEditsRef.current[logId] = updatedData;
+      } else {
+        try {
+          await api.updateMealLog(householdId, logId, updatedData);
+        } catch (err) {
+          console.error('Failed to update meal log', err);
+          showToast('Failed to update meal log');
+        }
+      }
+      return;
+    }
+
     try {
       const newLog = await api.logMealMade(householdId, {
         title: logForm.title.trim(),
@@ -2213,8 +2368,10 @@ export const MealsPage: React.FC = () => {
         onClose={() => {
           setToastMessage(null);
           setToastAction(undefined);
+          setToastActions(undefined);
         }}
         action={toastAction}
+        actions={toastActions}
       />
 
       {/* ================= IF RECIPE DETAIL IS OPEN ================= */}
@@ -2836,7 +2993,7 @@ export const MealsPage: React.FC = () => {
             {activeTab === 'history' && (
               <button
                 type="button"
-                onClick={() => setIsLogModalOpen(true)}
+                onClick={handleOpenNewLog}
                 className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer shrink-0"
                 title="Log a cooked meal"
               >
@@ -3768,7 +3925,7 @@ export const MealsPage: React.FC = () => {
                   </p>
                   <div className="pt-2">
                     <button
-                      onClick={() => setIsLogModalOpen(true)}
+                      onClick={handleOpenNewLog}
                       className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-4 py-2 rounded-2xl text-xs font-bold inline-flex items-center gap-2 transition-all shadow-md shadow-emerald-500/20 cursor-pointer"
                     >
                       <Plus className="w-4 h-4 stroke-[2.5]" />
@@ -3857,6 +4014,14 @@ export const MealsPage: React.FC = () => {
 
                                 <div className="flex items-center gap-1.5 shrink-0">
                                   <button
+                                    type="button"
+                                    onClick={() => handleOpenEditLog(log)}
+                                    className="p-1.5 text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-xl transition-colors cursor-pointer"
+                                    title="Edit cooking history"
+                                  >
+                                    <Pencil className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
                                     onClick={() => handleMoveBackToPlanner(log)}
                                     className="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-emerald-400 text-xs font-semibold border border-white/10 flex items-center gap-1 transition-all cursor-pointer"
                                     title="Move back to Planner on deck list"
@@ -3866,7 +4031,7 @@ export const MealsPage: React.FC = () => {
                                   </button>
                                   <button
                                     onClick={() => handleDeleteLog(log)}
-                                    className="p-1.5 text-slate-500 hover:text-rose-400 transition-colors cursor-pointer"
+                                    className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-xl transition-colors cursor-pointer"
                                     title="Delete log entry"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
@@ -4141,13 +4306,23 @@ export const MealsPage: React.FC = () => {
         </div>
       </Drawer>
 
-      {/* ================= DRAWER: MANUAL LOG MEAL MODAL ================= */}
+      {/* ================= DRAWER: MANUAL LOG MEAL / EDIT HISTORY ================= */}
       <Drawer
         isOpen={isLogModalOpen}
-        onClose={() => setIsLogModalOpen(false)}
+        onClose={() => {
+          setIsLogModalOpen(false);
+          setEditingLog(null);
+          setLogForm({
+            title: '',
+            recipeId: '',
+            date: format(new Date(), 'yyyy-MM-dd'),
+            notes: '',
+            cookedByUserId: currentUser?.id || '',
+          });
+        }}
         width="max-w-md"
-        title="Log a Cooked Meal"
-        subtitle="Record what you cooked into your history"
+        title={editingLog ? 'Edit Cooked Meal' : 'Log a Cooked Meal'}
+        subtitle={editingLog ? 'Update history details, recipe info, or notes' : 'Record what you cooked into your history'}
       >
         <form onSubmit={handleSubmitManualLog} className="p-4 space-y-4">
           <div>
@@ -4160,6 +4335,35 @@ export const MealsPage: React.FC = () => {
               onChange={(e) => setLogForm((prev) => ({ ...prev, title: e.target.value }))}
               className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
             />
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-slate-400 block mb-1">Recipe Info / Link</label>
+            <select
+              value={logForm.recipeId}
+              onChange={(e) => {
+                const recId = e.target.value;
+                const rec = recipes.find((r) => r.id === recId);
+                setLogForm((prev) => ({
+                  ...prev,
+                  recipeId: recId,
+                  title: !prev.title.trim() && rec ? rec.title : prev.title,
+                }));
+              }}
+              className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+            >
+              <option value="">None / Custom Dish (Raw)</option>
+              {recipes.map((r) => (
+                <option key={r.id} value={r.id}>
+                  📖 {r.title}
+                </option>
+              ))}
+            </select>
+            <p className="text-[10px] text-slate-500 mt-1">
+              {logForm.recipeId
+                ? 'Linked to recipe box for photo and ingredient info.'
+                : 'Custom dish without recipe box link.'}
+            </p>
           </div>
 
           <div>
@@ -4193,7 +4397,7 @@ export const MealsPage: React.FC = () => {
             <label className="text-xs font-semibold text-slate-400 block mb-1">Notes / Highlights</label>
             <textarea
               rows={2}
-              placeholder="Any modifications or ratings..."
+              placeholder="Any modifications, adjustments, or ratings..."
               value={logForm.notes}
               onChange={(e) => setLogForm((prev) => ({ ...prev, notes: e.target.value }))}
               className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 resize-none"
@@ -4203,7 +4407,17 @@ export const MealsPage: React.FC = () => {
           <div className="pt-2 flex items-center justify-end gap-2">
             <button
               type="button"
-              onClick={() => setIsLogModalOpen(false)}
+              onClick={() => {
+                setIsLogModalOpen(false);
+                setEditingLog(null);
+                setLogForm({
+                  title: '',
+                  recipeId: '',
+                  date: format(new Date(), 'yyyy-MM-dd'),
+                  notes: '',
+                  cookedByUserId: currentUser?.id || '',
+                });
+              }}
               className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 text-xs font-semibold transition-all cursor-pointer"
             >
               Cancel
@@ -4212,7 +4426,7 @@ export const MealsPage: React.FC = () => {
               type="submit"
               className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold shadow-md shadow-emerald-500/20 transition-all cursor-pointer"
             >
-              Save to History
+              {editingLog ? 'Update History' : 'Save to History'}
             </button>
           </div>
         </form>

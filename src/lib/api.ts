@@ -899,6 +899,40 @@ export const api = {
     };
   },
 
+  updateMealLog: async (
+    householdId: string,
+    id: string,
+    data: {
+      title?: string;
+      recipe_id?: string | null;
+      date?: string;
+      notes?: string | null;
+      cooked_by_user_id?: string | null;
+    }
+  ): Promise<MealLog> => {
+    const res = await fetchJson<any>('/meals/log', {
+      method: 'PATCH',
+      body: JSON.stringify({
+        id,
+        title: data.title,
+        recipeId: data.recipe_id,
+        date: data.date,
+        notes: data.notes,
+        cookedByUserId: data.cooked_by_user_id,
+      }),
+    });
+    return {
+      id: res.id,
+      household_id: householdId,
+      title: res.title,
+      recipe_id: res.recipeId,
+      date: res.date,
+      notes: res.notes,
+      cooked_by_user_id: res.cookedByUserId,
+      created_at: res.createdAt || '',
+    };
+  },
+
   deleteMealLog: (id: string) =>
     fetchJson<{ success: boolean }>(`/meals/log?id=${id}`, { method: 'DELETE' }),
 

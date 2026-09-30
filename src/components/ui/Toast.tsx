@@ -2,16 +2,20 @@ import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Sparkles, AlertCircle, X } from 'lucide-react';
 
+export interface ToastAction {
+  label: string;
+  onClick: () => void;
+  variant?: 'primary' | 'secondary';
+}
+
 export interface ToastProps {
   message: string | null;
   onClose?: () => void;
   duration?: number;
   icon?: React.ReactNode;
   type?: 'success' | 'error';
-  action?: {
-    label: string;
-    onClick: () => void;
-  };
+  action?: ToastAction;
+  actions?: ToastAction[];
 }
 
 export const Toast: React.FC<ToastProps> = ({
@@ -21,6 +25,7 @@ export const Toast: React.FC<ToastProps> = ({
   icon,
   type = 'success',
   action,
+  actions,
 }) => {
   const [renderedMessage, setRenderedMessage] = useState<string | null>(message);
   const [isShowing, setIsShowing] = useState<boolean>(false);
@@ -90,19 +95,32 @@ export const Toast: React.FC<ToastProps> = ({
           </div>
           <span className="truncate sm:text-wrap leading-tight">{renderedMessage}</span>
         </div>
-        {action && (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              action.onClick();
-              handleDismiss();
-            }}
-            className="px-2.5 py-1 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 font-bold text-xs shrink-0 cursor-pointer border border-emerald-500/40 transition-colors"
-          >
-            {action.label}
-          </button>
-        )}
+        {(() => {
+          const actionList = actions && actions.length > 0 ? actions : action ? [action] : [];
+          if (actionList.length === 0) return null;
+          return (
+            <div className="flex items-center gap-1.5 shrink-0">
+              {actionList.map((act, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    act.onClick();
+                    handleDismiss();
+                  }}
+                  className={`px-2.5 py-1 rounded-xl font-bold text-xs shrink-0 cursor-pointer transition-colors ${
+                    act.variant === 'secondary'
+                      ? 'bg-white/10 hover:bg-white/15 text-slate-200 border border-white/15'
+                      : 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40'
+                  }`}
+                >
+                  {act.label}
+                </button>
+              ))}
+            </div>
+          );
+        })()}
         <button
           type="button"
           onClick={(e) => {
