@@ -394,10 +394,12 @@ export interface IngredientInventoryMatch {
 
 export interface PantryCategory {
   id: string;
-  householdId: string;
+  householdId?: string;
+  household_id?: string;
   name: string;
   icon?: string;
-  createdAt: string;
+  createdAt?: string;
+  created_at?: string;
 }
 
 
