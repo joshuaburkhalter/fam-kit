@@ -157,6 +157,13 @@ export const GroceryPage: React.FC = () => {
     }
   }, [aisles, activeListType]);
 
+  // If there is only one store (or none), ensure store filtering is cleared
+  useEffect(() => {
+    if (stores.length <= 1 && selectedStoreId !== 'all') {
+      setSelectedStoreId('all');
+    }
+  }, [stores.length, selectedStoreId]);
+
   // Close dropdown on click outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -882,7 +889,7 @@ export const GroceryPage: React.FC = () => {
   }, [allActiveItems, stores]);
 
   const activeItems = useMemo(() => {
-    if (activeListType !== 'grocery' || selectedStoreId === 'all' || stores.length === 0) {
+    if (activeListType !== 'grocery' || selectedStoreId === 'all' || stores.length <= 1) {
       return allActiveItems;
     }
     const currentStore = stores.find((s) => s.id === selectedStoreId);
@@ -898,7 +905,7 @@ export const GroceryPage: React.FC = () => {
   }, [allActiveItems, activeListType, selectedStoreId, stores]);
 
   const completedItems = useMemo(() => {
-    if (activeListType !== 'grocery' || selectedStoreId === 'all' || stores.length === 0) {
+    if (activeListType !== 'grocery' || selectedStoreId === 'all' || stores.length <= 1) {
       return allCompletedItems;
     }
     const currentStore = stores.find((s) => s.id === selectedStoreId);
@@ -1746,8 +1753,8 @@ export const GroceryPage: React.FC = () => {
         )}
       </div>
 
-      {/* Store Filter Chips Bar (Grocery list only, when stores exist) */}
-      {isGroceryList && stores.length > 0 && (
+      {/* Store Filter Chips Bar (Grocery list only, when multiple stores exist) */}
+      {isGroceryList && stores.length > 1 && (
         <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
           {/* All Stores Chip */}
           <button
@@ -1816,7 +1823,7 @@ export const GroceryPage: React.FC = () => {
       )}
 
       {/* Active Store Filter Indicator */}
-      {isGroceryList && selectedStoreId !== 'all' && (() => {
+      {isGroceryList && stores.length > 1 && selectedStoreId !== 'all' && (() => {
         const currentStore = stores.find((s) => s.id === selectedStoreId);
         if (!currentStore) return null;
         return (
@@ -2079,7 +2086,7 @@ export const GroceryPage: React.FC = () => {
                                       <span>✓ In Pantry</span>
                                     </span>
                                   )}
-                                  {activeListType === 'grocery' && selectedStoreId === 'all' && (() => {
+                                  {activeListType === 'grocery' && stores.length > 1 && selectedStoreId === 'all' && (() => {
                                     const s = getItemStore(item);
                                     if (!s) return null;
                                     return (
@@ -2247,7 +2254,7 @@ export const GroceryPage: React.FC = () => {
                               <span>✓ In Pantry</span>
                             </span>
                           )}
-                          {activeListType === 'grocery' && selectedStoreId === 'all' && (() => {
+                          {activeListType === 'grocery' && stores.length > 1 && selectedStoreId === 'all' && (() => {
                             const s = getItemStore(item);
                             if (!s) return null;
                             return (
@@ -2395,7 +2402,7 @@ export const GroceryPage: React.FC = () => {
                             <span>✓ In Pantry</span>
                           </span>
                         )}
-                        {activeListType === 'grocery' && selectedStoreId === 'all' && (() => {
+                        {activeListType === 'grocery' && stores.length > 1 && selectedStoreId === 'all' && (() => {
                           const s = getItemStore(item);
                           if (!s) return null;
                           return (
@@ -2498,7 +2505,7 @@ export const GroceryPage: React.FC = () => {
                               <span>✓ In Pantry</span>
                             </span>
                           )}
-                          {activeListType === 'grocery' && selectedStoreId === 'all' && (() => {
+                          {activeListType === 'grocery' && stores.length > 1 && selectedStoreId === 'all' && (() => {
                             const s = getItemStore(item);
                             if (!s) return null;
                             return (
