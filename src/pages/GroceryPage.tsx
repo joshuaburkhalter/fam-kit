@@ -16,13 +16,16 @@ import {
   GripVertical,
   ArrowRightLeft,
   Sparkles,
+  Store,
 } from 'lucide-react';
-import type { GroceryItem, Aisle, CustomList, GrocerySuggestion, InventoryItem } from '../types';
+import type { GroceryItem, Aisle, CustomList, GrocerySuggestion, InventoryItem, GroceryStore } from '../types';
 import { usePWA } from '../context/PWAContext';
 import { api } from '../lib/api';
 import { CheckSparkle, triggerHapticCheck } from '../components/CheckSparkle';
 import { Drawer } from '../components/ui/Drawer';
 import { Toast } from '../components/ui/Toast';
+import { NewGroceryStoreModal } from '../components/grocery/NewGroceryStoreModal';
+import { ManageGroceryStoresModal } from '../components/grocery/ManageGroceryStoresModal';
 
 interface GroceryDataCache {
   householdId: string;
@@ -30,6 +33,7 @@ interface GroceryDataCache {
   aislesByList?: Record<string, Aisle[]>;
   lists: CustomList[];
   aisles: Aisle[];
+  stores?: GroceryStore[];
   suggestions?: GrocerySuggestion[];
   inventoryItems?: InventoryItem[];
 }
@@ -83,12 +87,19 @@ export const GroceryPage: React.FC = () => {
   const [collapsedAisles, setCollapsedAisles] = useState<Record<string, boolean>>({});
   const [crossingOffIds, setCrossingOffIds] = useState<Record<string, boolean>>({});
   const crossingTimersRef = useRef<Record<string, any>>({});
+  const [stores, setStores] = useState<GroceryStore[]>(() => {
+    return groceryDataCache?.stores || [];
+  });
+  const [selectedStoreId, setSelectedStoreId] = useState<string>('all');
+  const [isNewStoreModalOpen, setIsNewStoreModalOpen] = useState(false);
+  const [isManageStoresModalOpen, setIsManageStoresModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<GroceryItem | null>(null);
   const [editName, setEditName] = useState('');
   const [editQuantity, setEditQuantity] = useState('');
   const [editUnit, setEditUnit] = useState('');
   const [editNotes, setEditNotes] = useState('');
   const [editAisleId, setEditAisleId] = useState('');
+  const [editStoreId, setEditStoreId] = useState('');
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   const [suggestions, setSuggestions] = useState<GrocerySuggestion[]>(() => {
@@ -162,6 +173,7 @@ export const GroceryPage: React.FC = () => {
 
   const handleSelectList = (targetListId: string) => {
     setIsListDropdownOpen(false);
+    setSelectedStoreId('all');
     if (targetListId === activeListType) return;
 
     setActiveListType(targetListId);
@@ -227,6 +239,7 @@ export const GroceryPage: React.FC = () => {
           aislesByList: {},
           lists: data.lists,
           aisles: targetAisles,
+          stores: data.stores,
           inventoryItems: invItems,
         };
       }
@@ -236,6 +249,10 @@ export const GroceryPage: React.FC = () => {
       }
       groceryDataCache.aislesByList[targetListId] = targetAisles;
       groceryDataCache.lists = data.lists;
+      if (data.stores) {
+        groceryDataCache.stores = data.stores;
+        setStores(data.stores);
+      }
       if (invItems) {
         groceryDataCache.inventoryItems = invItems;
         setInventoryItems(invItems);
@@ -358,9 +375,15 @@ export const GroceryPage: React.FC = () => {
 
     try {
       setIsAddingItem(true);
+      const activeStore =
+        activeListType === 'grocery' && selectedStoreId !== 'all'
+          ? stores.find((s) => s.id === selectedStoreId)
+          : undefined;
       const item = await api.addGroceryItem(effectiveHouseholdId, {
         name: nameToAdd,
         list_type: activeListType,
+        store_id: activeStore ? activeStore.id : undefined,
+        store: activeStore ? activeStore.name : undefined,
         added_by_user_id: currentUser?.id,
         added_by_user_name: currentUser?.name,
       });
@@ -417,10 +440,16 @@ export const GroceryPage: React.FC = () => {
 
     try {
       setIsAddingItem(true);
+      const activeStore =
+        activeListType === 'grocery' && selectedStoreId !== 'all'
+          ? stores.find((s) => s.id === selectedStoreId)
+          : undefined;
       const item = await api.addGroceryItem(effectiveHouseholdId, {
         name: nameToAdd,
         list_type: activeListType,
         aisle_id: sug.aisleId,
+        store_id: activeStore ? activeStore.id : undefined,
+        store: activeStore ? activeStore.name : undefined,
         added_by_user_id: currentUser?.id,
         added_by_user_name: currentUser?.name,
       });
@@ -595,6 +624,7 @@ export const GroceryPage: React.FC = () => {
     setEditUnit(item.unit || '');
     setEditNotes(item.notes || '');
     setEditAisleId(item.aisle_id || '');
+    setEditStoreId(item.store_id || '');
   };
 
   const handleSaveEdit = async (e: React.FormEvent) => {
@@ -603,6 +633,7 @@ export const GroceryPage: React.FC = () => {
     setIsSavingEdit(true);
     try {
       const selectedAisle = effectiveAisles.find((a) => a.id === editAisleId);
+      const selectedStore = stores.find((s) => s.id === editStoreId);
       await api.updateGroceryItem(editingItem.id, {
         name: editName.trim(),
         quantity: editQuantity.trim() || null,
@@ -610,6 +641,8 @@ export const GroceryPage: React.FC = () => {
         note: editNotes.trim() || null,
         aisleId: editAisleId || null,
         category: selectedAisle ? selectedAisle.name : undefined,
+        store_id: editStoreId || null,
+        store: selectedStore ? selectedStore.name : null,
       });
 
       const updatedFields = {
@@ -618,6 +651,8 @@ export const GroceryPage: React.FC = () => {
         unit: editUnit.trim() || undefined,
         notes: editNotes.trim() || undefined,
         aisle_id: editAisleId || '',
+        store_id: editStoreId || null,
+        store: selectedStore ? selectedStore.name : null,
       };
 
       setItems((prev) =>
@@ -633,14 +668,28 @@ export const GroceryPage: React.FC = () => {
       }
 
       const wasAisleChanged = editingItem.aisle_id !== editAisleId;
+      const wasStoreChanged = (editingItem.store_id || '') !== (editStoreId || '');
+
       if (activeListTypeRef.current === 'grocery' && wasAisleChanged && selectedAisle) {
         setSuggestions((prev) => {
           const next = [...prev];
           const matchIdx = next.findIndex((s) => s.name.toLowerCase() === editName.trim().toLowerCase());
           if (matchIdx >= 0) {
-            next[matchIdx] = { ...next[matchIdx], aisleId: selectedAisle.id, category: selectedAisle.name };
+            next[matchIdx] = {
+              ...next[matchIdx],
+              aisleId: selectedAisle.id,
+              category: selectedAisle.name,
+              storeId: editStoreId || null,
+              store: selectedStore ? selectedStore.name : null,
+            };
           } else {
-            next.unshift({ name: editName.trim(), aisleId: selectedAisle.id, category: selectedAisle.name });
+            next.unshift({
+              name: editName.trim(),
+              aisleId: selectedAisle.id,
+              category: selectedAisle.name,
+              storeId: editStoreId || null,
+              store: selectedStore ? selectedStore.name : null,
+            });
           }
           if (groceryDataCache) groceryDataCache.suggestions = next;
           return next;
@@ -648,7 +697,9 @@ export const GroceryPage: React.FC = () => {
       }
 
       setEditingItem(null);
-      if (wasAisleChanged && selectedAisle) {
+      if (wasStoreChanged && selectedStore) {
+        showToast(`Assigned to ${selectedStore.name} • Remembered for next time`);
+      } else if (wasAisleChanged && selectedAisle) {
         showToast(`Moved to ${selectedAisle.name} • Remembered for next time`);
       } else {
         showToast('Item updated');
@@ -783,9 +834,84 @@ export const GroceryPage: React.FC = () => {
     }));
   };
 
-  // Group items by aisle
-  const activeItems = items.filter((it) => !it.is_completed);
-  const completedItems = items.filter((it) => it.is_completed);
+  // Store helpers
+  const defaultStore = useMemo(() => {
+    return stores.find((s) => s.is_default) || stores[0] || null;
+  }, [stores]);
+
+  const getItemStore = (item: GroceryItem): GroceryStore | null => {
+    if (!item.store_id && !item.store) return null;
+    if (item.store_id) {
+      const s = stores.find((st) => st.id === item.store_id);
+      if (s && !s.is_default) return s;
+      if (s && s.is_default) return null;
+    }
+    if (item.store) {
+      const s = stores.find((st) => st.name.toLowerCase() === item.store!.toLowerCase());
+      if (s && !s.is_default) return s;
+      if (s && s.is_default) return null;
+      return {
+        id: '',
+        household_id: effectiveHouseholdId,
+        name: item.store,
+        icon: '🏪',
+        color: '#10b981',
+        is_default: false,
+        order_index: 0,
+        created_at: '',
+      };
+    }
+    return null;
+  };
+
+  // Group items by aisle with store filtering
+  const allActiveItems = useMemo(() => items.filter((it) => !it.is_completed), [items]);
+  const allCompletedItems = useMemo(() => items.filter((it) => it.is_completed), [items]);
+
+  const storeCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: allActiveItems.length };
+    stores.forEach((st) => {
+      counts[st.id] = allActiveItems.filter((it) => {
+        if (st.is_default) {
+          return it.store_id === st.id || !it.store_id || (it.store && it.store.toLowerCase() === st.name.toLowerCase());
+        }
+        return it.store_id === st.id || (it.store && it.store.toLowerCase() === st.name.toLowerCase());
+      }).length;
+    });
+    return counts;
+  }, [allActiveItems, stores]);
+
+  const activeItems = useMemo(() => {
+    if (activeListType !== 'grocery' || selectedStoreId === 'all' || stores.length === 0) {
+      return allActiveItems;
+    }
+    const currentStore = stores.find((s) => s.id === selectedStoreId);
+    if (!currentStore) return allActiveItems;
+    if (currentStore.is_default) {
+      return allActiveItems.filter(
+        (it) => it.store_id === currentStore.id || !it.store_id || (it.store && it.store.toLowerCase() === currentStore.name.toLowerCase())
+      );
+    }
+    return allActiveItems.filter(
+      (it) => it.store_id === currentStore.id || (it.store && it.store.toLowerCase() === currentStore.name.toLowerCase())
+    );
+  }, [allActiveItems, activeListType, selectedStoreId, stores]);
+
+  const completedItems = useMemo(() => {
+    if (activeListType !== 'grocery' || selectedStoreId === 'all' || stores.length === 0) {
+      return allCompletedItems;
+    }
+    const currentStore = stores.find((s) => s.id === selectedStoreId);
+    if (!currentStore) return allCompletedItems;
+    if (currentStore.is_default) {
+      return allCompletedItems.filter(
+        (it) => it.store_id === currentStore.id || !it.store_id || (it.store && it.store.toLowerCase() === currentStore.name.toLowerCase())
+      );
+    }
+    return allCompletedItems.filter(
+      (it) => it.store_id === currentStore.id || (it.store && it.store.toLowerCase() === currentStore.name.toLowerCase())
+    );
+  }, [allCompletedItems, activeListType, selectedStoreId, stores]);
 
   // Filter and sort aisles strictly by active list
   const effectiveAisles = useMemo(() => {
@@ -1352,6 +1478,34 @@ export const GroceryPage: React.FC = () => {
                 <span>Add Category</span>
               </button>
 
+              {isGroceryList && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAddMenuOpen(false);
+                      setIsNewStoreModalOpen(true);
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:bg-white/10 hover:text-emerald-400 transition-colors cursor-pointer text-left"
+                  >
+                    <Store className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>Add Store</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAddMenuOpen(false);
+                      setIsManageStoresModalOpen(true);
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:bg-white/10 hover:text-emerald-400 transition-colors cursor-pointer text-left"
+                  >
+                    <Store className="w-4 h-4 text-slate-400 shrink-0" />
+                    <span>Manage Stores</span>
+                  </button>
+                </>
+              )}
+
               <button
                 type="button"
                 onClick={() => {
@@ -1592,6 +1746,103 @@ export const GroceryPage: React.FC = () => {
         )}
       </div>
 
+      {/* Store Filter Chips Bar (Grocery list only, when stores exist) */}
+      {isGroceryList && stores.length > 0 && (
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+          {/* All Stores Chip */}
+          <button
+            type="button"
+            onClick={() => setSelectedStoreId('all')}
+            className={`min-h-[32px] px-3 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all shrink-0 cursor-pointer ${
+              selectedStoreId === 'all'
+                ? 'bg-emerald-500 text-slate-950 shadow-sm shadow-emerald-500/20 font-bold'
+                : 'bg-slate-900/80 hover:bg-slate-800 text-slate-300 border border-white/10'
+            }`}
+          >
+            <span>All Stores</span>
+            <span
+              className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
+                selectedStoreId === 'all' ? 'bg-slate-950/20 text-slate-950' : 'bg-white/10 text-slate-400'
+              }`}
+            >
+              {storeCounts['all'] || 0}
+            </span>
+          </button>
+
+          {/* Store Chips */}
+          {stores.map((store) => {
+            const isSelected = selectedStoreId === store.id;
+            const count = storeCounts[store.id] || 0;
+            return (
+              <button
+                key={store.id}
+                type="button"
+                onClick={() => setSelectedStoreId(store.id)}
+                className={`min-h-[32px] px-3 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all shrink-0 cursor-pointer ${
+                  isSelected
+                    ? 'bg-emerald-500 text-slate-950 shadow-sm shadow-emerald-500/20 font-bold'
+                    : 'bg-slate-900/80 hover:bg-slate-800 text-slate-300 border border-white/10'
+                }`}
+              >
+                <span>{store.icon || '🏪'}</span>
+                <span>{store.name}</span>
+                {store.is_default && (
+                  <span className={`text-[9px] font-medium opacity-80 ${isSelected ? 'text-slate-900' : 'text-emerald-400'}`}>
+                    (Primary)
+                  </span>
+                )}
+                <span
+                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
+                    isSelected ? 'bg-slate-950/20 text-slate-950' : 'bg-white/10 text-slate-400'
+                  }`}
+                >
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+
+          {/* Quick Manage Stores / Add Store Button */}
+          <button
+            type="button"
+            onClick={() => setIsManageStoresModalOpen(true)}
+            className="min-h-[32px] px-2.5 rounded-xl text-xs font-medium text-slate-400 hover:text-white bg-slate-900/50 hover:bg-slate-800 border border-white/5 hover:border-white/15 transition-all flex items-center gap-1 shrink-0 cursor-pointer"
+            title="Manage Stores"
+          >
+            <Plus className="w-3 h-3" />
+            <span>Store</span>
+          </button>
+        </div>
+      )}
+
+      {/* Active Store Filter Indicator */}
+      {isGroceryList && selectedStoreId !== 'all' && (() => {
+        const currentStore = stores.find((s) => s.id === selectedStoreId);
+        if (!currentStore) return null;
+        return (
+          <div className="flex items-center justify-between p-2.5 px-3 rounded-xl bg-slate-900/70 border border-emerald-500/30">
+            <div className="flex items-center gap-2">
+              <span className="text-base">{currentStore.icon || '🏪'}</span>
+              <div>
+                <span className="text-xs font-bold text-white block">
+                  Shopping at {currentStore.name}
+                </span>
+                <span className="text-[10px] text-slate-400 block">
+                  {activeItems.length} {activeItems.length === 1 ? 'item' : 'items'} to buy here
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSelectedStoreId('all')}
+              className="text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 underline cursor-pointer"
+            >
+              Show all stores
+            </button>
+          </div>
+        );
+      })()}
+
       {/* Items Section */}
       <div className="space-y-4">
         {isLoading && items.length === 0 ? (
@@ -1828,6 +2079,21 @@ export const GroceryPage: React.FC = () => {
                                       <span>✓ In Pantry</span>
                                     </span>
                                   )}
+                                  {activeListType === 'grocery' && selectedStoreId === 'all' && (() => {
+                                    const s = getItemStore(item);
+                                    if (!s) return null;
+                                    return (
+                                      <span
+                                        className={`text-[10px] px-1.5 py-0.5 rounded-md bg-white/5 border border-white/10 text-slate-300 font-medium flex items-center gap-1 shrink-0 ${
+                                          isChecked ? 'opacity-50' : ''
+                                        }`}
+                                        title={`Store: ${s.name}`}
+                                      >
+                                        <span>{s.icon || '🏪'}</span>
+                                        <span>{s.name}</span>
+                                      </span>
+                                    );
+                                  })()}
                                 </div>
                                 {item.notes && (
                                   <p className="text-[11px] text-emerald-400/80 truncate leading-tight mt-0.5">
@@ -1981,6 +2247,21 @@ export const GroceryPage: React.FC = () => {
                               <span>✓ In Pantry</span>
                             </span>
                           )}
+                          {activeListType === 'grocery' && selectedStoreId === 'all' && (() => {
+                            const s = getItemStore(item);
+                            if (!s) return null;
+                            return (
+                              <span
+                                className={`text-[10px] px-1.5 py-0.5 rounded-md bg-white/5 border border-white/10 text-slate-300 font-medium flex items-center gap-1 shrink-0 ${
+                                  isChecked ? 'opacity-50' : ''
+                                }`}
+                                title={`Store: ${s.name}`}
+                              >
+                                <span>{s.icon || '🏪'}</span>
+                                <span>{s.name}</span>
+                              </span>
+                            );
+                          })()}
                         </div>
                         {item.notes && (
                           <p className="text-[11px] text-emerald-400/80 truncate leading-tight mt-0.5">
@@ -2114,6 +2395,21 @@ export const GroceryPage: React.FC = () => {
                             <span>✓ In Pantry</span>
                           </span>
                         )}
+                        {activeListType === 'grocery' && selectedStoreId === 'all' && (() => {
+                          const s = getItemStore(item);
+                          if (!s) return null;
+                          return (
+                            <span
+                              className={`text-[10px] px-1.5 py-0.5 rounded-md bg-white/5 border border-white/10 text-slate-300 font-medium flex items-center gap-1 shrink-0 ${
+                                isChecked ? 'opacity-50' : ''
+                              }`}
+                              title={`Store: ${s.name}`}
+                            >
+                              <span>{s.icon || '🏪'}</span>
+                              <span>{s.name}</span>
+                            </span>
+                          );
+                        })()}
                       </div>
                       {item.notes && (
                         <p className="text-[11px] text-emerald-400/80 truncate leading-tight mt-0.5">
@@ -2202,6 +2498,19 @@ export const GroceryPage: React.FC = () => {
                               <span>✓ In Pantry</span>
                             </span>
                           )}
+                          {activeListType === 'grocery' && selectedStoreId === 'all' && (() => {
+                            const s = getItemStore(item);
+                            if (!s) return null;
+                            return (
+                              <span
+                                className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/5 border border-white/10 text-slate-400 font-medium flex items-center gap-1 shrink-0 line-through opacity-70"
+                                title={`Store: ${s.name}`}
+                              >
+                                <span>{s.icon || '🏪'}</span>
+                                <span>{s.name}</span>
+                              </span>
+                            );
+                          })()}
                         </div>
                       {item.notes && (
                         <p className="text-[11px] text-slate-500 line-through truncate leading-tight mt-0.5">
@@ -2344,6 +2653,51 @@ export const GroceryPage: React.FC = () => {
               <p className="text-[10px] text-emerald-400/80 mt-1.5 flex items-center gap-1 font-medium">
                 <Sparkles className="w-3 h-3 text-emerald-400 shrink-0" />
                 <span>FamKit will remember this category for next time you add this item.</span>
+              </p>
+            </div>
+          )}
+
+          {isGroceryList && (
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                  Store
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setIsNewStoreModalOpen(true)}
+                  className="text-[10px] text-emerald-400 hover:text-emerald-300 font-semibold cursor-pointer underline flex items-center gap-1"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>Add Store</span>
+                </button>
+              </div>
+              <select
+                value={editStoreId}
+                onChange={(e) => {
+                  if (e.target.value === '__add_new__') {
+                    setIsNewStoreModalOpen(true);
+                  } else {
+                    setEditStoreId(e.target.value);
+                  }
+                }}
+                className="w-full bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500"
+              >
+                <option value="">
+                  {defaultStore ? `🛒 ${defaultStore.name} (Primary / Default)` : '🛒 Primary Store'}
+                </option>
+                {stores
+                  .filter((s) => !s.is_default)
+                  .map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.icon || '🏪'} {s.name}
+                    </option>
+                  ))}
+                <option value="__add_new__">+ Add New Store...</option>
+              </select>
+              <p className="text-[10px] text-emerald-400/80 mt-1.5 flex items-center gap-1 font-medium">
+                <Sparkles className="w-3 h-3 text-emerald-400 shrink-0" />
+                <span>FamKit will remember this store for next time you add this item.</span>
               </p>
             </div>
           )}
@@ -2503,6 +2857,62 @@ export const GroceryPage: React.FC = () => {
           />
         </form>
       </Drawer>
+
+      {/* New Grocery Store Modal */}
+      <NewGroceryStoreModal
+        isOpen={isNewStoreModalOpen}
+        onClose={() => setIsNewStoreModalOpen(false)}
+        householdId={effectiveHouseholdId}
+        existingStores={stores}
+        onStoreCreated={(newStore) => {
+          setStores((prev) => {
+            const next = [...prev.filter((s) => s.id !== newStore.id), newStore];
+            if (groceryDataCache) groceryDataCache.stores = next;
+            return next;
+          });
+          setSelectedStoreId(newStore.id);
+          if (editingItem) {
+            setEditStoreId(newStore.id);
+          }
+          showToast(`Added ${newStore.name}`);
+        }}
+        onOpenManage={() => setIsManageStoresModalOpen(true)}
+      />
+
+      {/* Manage Grocery Stores Modal */}
+      <ManageGroceryStoresModal
+        isOpen={isManageStoresModalOpen}
+        onClose={() => setIsManageStoresModalOpen(false)}
+        stores={stores}
+        items={items}
+        onStoreUpdated={(updatedStore) => {
+          setStores((prev) => {
+            const next = prev.map((s) =>
+              s.id === updatedStore.id
+                ? updatedStore
+                : updatedStore.is_default
+                ? { ...s, is_default: false }
+                : s
+            );
+            if (groceryDataCache) groceryDataCache.stores = next;
+            return next;
+          });
+          showToast(`Updated ${updatedStore.name}`);
+        }}
+        onStoreDeleted={(deletedId) => {
+          setStores((prev) => {
+            const next = prev.filter((s) => s.id !== deletedId);
+            if (groceryDataCache) groceryDataCache.stores = next;
+            return next;
+          });
+          if (selectedStoreId === deletedId) {
+            setSelectedStoreId('all');
+          }
+          loadData(activeListType, false);
+          showToast('Store removed');
+        }}
+        onOpenNewStore={() => setIsNewStoreModalOpen(true)}
+      />
 
       {/* Floating Drag Preview for List Item (Y-axis locked to list width) */}
       {draggingItem && dragRowLayout && (

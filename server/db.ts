@@ -78,11 +78,25 @@ function initSchema(db: Database) {
       listId TEXT DEFAULT 'grocery'
     );
 
+    CREATE TABLE IF NOT EXISTS grocery_stores (
+      id TEXT PRIMARY KEY,
+      householdId TEXT NOT NULL,
+      name TEXT NOT NULL,
+      icon TEXT DEFAULT '🏪',
+      color TEXT DEFAULT '#10b981',
+      isDefault INTEGER NOT NULL DEFAULT 0,
+      orderIndex INTEGER NOT NULL DEFAULT 0,
+      createdAt TEXT NOT NULL,
+      UNIQUE(householdId, name)
+    );
+
     CREATE TABLE IF NOT EXISTS grocery_items (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       category TEXT NOT NULL DEFAULT 'Other',
       aisleId TEXT,
+      storeId TEXT,
+      store TEXT,
       quantity TEXT DEFAULT '1',
       unit TEXT,
       note TEXT,
@@ -100,6 +114,8 @@ function initSchema(db: Database) {
       rawName TEXT NOT NULL,
       aisleId TEXT NOT NULL,
       category TEXT NOT NULL,
+      storeId TEXT,
+      store TEXT,
       updatedAt TEXT NOT NULL,
       UNIQUE(householdId, normalizedName)
     );
@@ -111,6 +127,8 @@ function initSchema(db: Database) {
       name TEXT NOT NULL,
       aisleId TEXT,
       category TEXT,
+      storeId TEXT,
+      store TEXT,
       source TEXT DEFAULT 'grocery',
       lastAddedAt TEXT NOT NULL,
       PRIMARY KEY (householdId, normalizedName)
@@ -339,6 +357,39 @@ function initSchema(db: Database) {
   } catch {}
   try {
     db.run(`ALTER TABLE recipes ADD COLUMN category TEXT;`);
+  } catch {}
+  try {
+    db.run(`
+      CREATE TABLE IF NOT EXISTS grocery_stores (
+        id TEXT PRIMARY KEY,
+        householdId TEXT NOT NULL,
+        name TEXT NOT NULL,
+        icon TEXT DEFAULT '🏪',
+        color TEXT DEFAULT '#10b981',
+        isDefault INTEGER NOT NULL DEFAULT 0,
+        orderIndex INTEGER NOT NULL DEFAULT 0,
+        createdAt TEXT NOT NULL
+      );
+    `);
+    db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_grocery_stores_uniq ON grocery_stores (householdId, name);`);
+  } catch {}
+  try {
+    db.run(`ALTER TABLE grocery_items ADD COLUMN storeId TEXT;`);
+  } catch {}
+  try {
+    db.run(`ALTER TABLE grocery_items ADD COLUMN store TEXT;`);
+  } catch {}
+  try {
+    db.run(`ALTER TABLE grocery_category_preferences ADD COLUMN storeId TEXT;`);
+  } catch {}
+  try {
+    db.run(`ALTER TABLE grocery_category_preferences ADD COLUMN store TEXT;`);
+  } catch {}
+  try {
+    db.run(`ALTER TABLE grocery_history ADD COLUMN storeId TEXT;`);
+  } catch {}
+  try {
+    db.run(`ALTER TABLE grocery_history ADD COLUMN store TEXT;`);
   } catch {}
   try {
     db.run(`

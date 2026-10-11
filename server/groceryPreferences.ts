@@ -11,6 +11,8 @@ export interface GrocerySuggestion {
   name: string;
   aisleId: string;
   category: string;
+  storeId?: string | null;
+  store?: string | null;
   quantity?: string;
   unit?: string;
 }
@@ -136,13 +138,15 @@ export function guessAisleForGroceryItem(
 }
 
 /**
- * Saves or updates a household's learned aisle/category preference for an item.
+ * Saves or updates a household's learned aisle/category & store preference for an item.
  */
 export function saveCategoryPreference(
   householdId: string,
   rawName: string,
   aisleId: string,
-  categoryName: string
+  categoryName: string,
+  storeId?: string | null,
+  storeName?: string | null
 ): void {
   if (!householdId || !rawName || !aisleId) return;
 
@@ -153,15 +157,55 @@ export function saveCategoryPreference(
   const id = `pref_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
 
   execute(
-    `INSERT INTO grocery_category_preferences (id, householdId, normalizedName, rawName, aisleId, category, updatedAt)
-     VALUES (?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO grocery_category_preferences (id, householdId, normalizedName, rawName, aisleId, category, storeId, store, updatedAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(householdId, normalizedName) DO UPDATE SET
        aisleId = excluded.aisleId,
        category = excluded.category,
        rawName = excluded.rawName,
+       storeId = CASE WHEN excluded.storeId IS NOT NULL THEN excluded.storeId ELSE grocery_category_preferences.storeId END,
+       store = CASE WHEN excluded.store IS NOT NULL THEN excluded.store ELSE grocery_category_preferences.store END,
        updatedAt = excluded.updatedAt`,
-    [id, householdId, normalized, rawName.trim(), aisleId, categoryName, now]
+    [id, householdId, normalized, rawName.trim(), aisleId, categoryName, storeId !== undefined ? storeId : null, storeName !== undefined ? storeName : null, now]
   );
+  saveDb();
+}
+
+/**
+ * Saves or updates a household's learned store preference for an item.
+ */
+export function saveStorePreference(
+  householdId: string,
+  rawName: string,
+  storeId: string | null,
+  storeName: string | null
+): void {
+  if (!householdId || !rawName) return;
+  const normalized = normalizeItemKey(rawName);
+  if (!normalized) return;
+
+  const now = new Date().toISOString();
+  const existing = queryOne<{ id: string }>(
+    `SELECT id FROM grocery_category_preferences 
+     WHERE householdId = ? AND (normalizedName = ? OR normalizedName = ?)`,
+    [householdId, normalized, stemItemKey(normalized)]
+  );
+
+  if (existing) {
+    execute(
+      `UPDATE grocery_category_preferences 
+       SET storeId = ?, store = ?, updatedAt = ? 
+       WHERE id = ?`,
+      [storeId || null, storeName || null, now, existing.id]
+    );
+  } else {
+    const id = `pref_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    execute(
+      `INSERT INTO grocery_category_preferences (id, householdId, normalizedName, rawName, aisleId, category, storeId, store, updatedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, householdId, normalized, rawName.trim(), '', 'Other', storeId || null, storeName || null, now]
+    );
+  }
   saveDb();
 }
 
@@ -194,7 +238,7 @@ export function resolveAisleForGroceryItem(
   aisles: Array<{ id: string; name: string }>,
   preferredCategory?: string,
   preferredAisleId?: string
-): { aisleId: string; category: string; source: 'explicit' | 'learned' | 'rule' | 'fallback' } {
+): { aisleId: string; category: string; storeId?: string | null; store?: string | null; source: 'explicit' | 'learned' | 'rule' | 'fallback' } {
   // 1. Explicit aisleId check
   if (preferredAisleId) {
     const matched = aisles.find((a) => a.id === preferredAisleId);
@@ -209,25 +253,31 @@ export function resolveAisleForGroceryItem(
   // 2. Check household learned preferences
   if (householdId && normalized) {
     // Exact normalized match
-    const exact = queryOne<{ aisleId: string; category: string }>(
-      `SELECT aisleId, category FROM grocery_category_preferences 
+    const exact = queryOne<{ aisleId: string; category: string; storeId?: string | null; store?: string | null }>(
+      `SELECT aisleId, category, storeId, store FROM grocery_category_preferences 
        WHERE householdId = ? AND (normalizedName = ? OR normalizedName = ?)`,
       [householdId, normalized, stemmed]
     );
 
     if (exact && aisles.some((a) => a.id === exact.aisleId)) {
-      return { aisleId: exact.aisleId, category: exact.category, source: 'learned' };
+      return {
+        aisleId: exact.aisleId,
+        category: exact.category,
+        storeId: exact.storeId || null,
+        store: exact.store || null,
+        source: 'learned',
+      };
     }
 
     // Substring / token matching against household preferences
-    const allPrefs = queryAll<{ normalizedName: string; aisleId: string; category: string }>(
-      `SELECT normalizedName, aisleId, category FROM grocery_category_preferences 
+    const allPrefs = queryAll<{ normalizedName: string; aisleId: string; category: string; storeId?: string | null; store?: string | null }>(
+      `SELECT normalizedName, aisleId, category, storeId, store FROM grocery_category_preferences 
        WHERE householdId = ?`,
       [householdId]
     );
 
     // Find the longest matching preference (e.g. "almond milk" in "vanilla almond milk")
-    let bestMatch: { aisleId: string; category: string; length: number } | null = null;
+    let bestMatch: { aisleId: string; category: string; storeId?: string | null; store?: string | null; length: number } | null = null;
     for (const pref of allPrefs) {
       const prefStem = stemItemKey(pref.normalizedName);
       if (
@@ -241,6 +291,8 @@ export function resolveAisleForGroceryItem(
           bestMatch = {
             aisleId: pref.aisleId,
             category: pref.category,
+            storeId: pref.storeId || null,
+            store: pref.store || null,
             length: pref.normalizedName.length,
           };
         }
@@ -248,7 +300,13 @@ export function resolveAisleForGroceryItem(
     }
 
     if (bestMatch) {
-      return { aisleId: bestMatch.aisleId, category: bestMatch.category, source: 'learned' };
+      return {
+        aisleId: bestMatch.aisleId,
+        category: bestMatch.category,
+        storeId: bestMatch.storeId || null,
+        store: bestMatch.store || null,
+        source: 'learned',
+      };
     }
   }
 
@@ -279,7 +337,9 @@ export function recordGroceryHistoryItem(
   name: string,
   aisleId?: string | null,
   category?: string | null,
-  source: string = 'grocery'
+  source: string = 'grocery',
+  storeId?: string | null,
+  store?: string | null
 ) {
   if (!householdId || !name || !name.trim()) return;
   const raw = name.trim();
@@ -287,9 +347,9 @@ export function recordGroceryHistoryItem(
   const now = new Date().toISOString();
   try {
     execute(
-      `INSERT OR REPLACE INTO grocery_history (householdId, normalizedName, name, aisleId, category, source, lastAddedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [householdId, normalized, raw, aisleId || null, category || null, source, now]
+      `INSERT OR REPLACE INTO grocery_history (householdId, normalizedName, name, aisleId, category, storeId, store, source, lastAddedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [householdId, normalized, raw, aisleId || null, category || null, storeId || null, store || null, source, now]
     );
   } catch (err) {
     console.error('Failed to record grocery history:', err);
@@ -372,6 +432,8 @@ export function getHouseholdGrocerySuggestions(
       name: trimmed,
       aisleId: resolved.aisleId,
       category: resolved.category,
+      storeId: resolved.storeId || null,
+      store: resolved.store || null,
     });
   };
 

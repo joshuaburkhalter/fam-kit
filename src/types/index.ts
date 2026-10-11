@@ -76,11 +76,24 @@ export interface Aisle {
   list_id?: string;
 }
 
+export interface GroceryStore {
+  id: string;
+  household_id?: string;
+  name: string;
+  icon?: string;
+  color?: string;
+  is_default?: boolean;
+  order_index?: number;
+  created_at?: string;
+}
+
 export interface GroceryItem {
   id: string;
   household_id: string;
   aisle_id: string;
   category?: string;
+  store_id?: string | null;
+  store?: string | null;
   name: string;
   quantity?: string;
   unit?: string;
@@ -97,6 +110,8 @@ export interface GrocerySuggestion {
   name: string;
   aisleId: string;
   category: string;
+  storeId?: string | null;
+  store?: string | null;
   quantity?: string;
   unit?: string;
 }

@@ -46,6 +46,7 @@ import {
 } from './shelfLife.js';
 import {
   saveCategoryPreference,
+  saveStorePreference,
   deleteCategoryPreference,
   resolveAisleForGroceryItem,
   getHouseholdGrocerySuggestions,
@@ -1930,10 +1931,16 @@ app.get('/api/grocery', (req, res) => {
     ? getHouseholdGrocerySuggestions(householdId, aisles)
     : [];
 
+  const stores = queryAll(
+    'SELECT * FROM grocery_stores WHERE householdId = ? ORDER BY orderIndex ASC, createdAt ASC',
+    [householdId]
+  );
+
   res.json({
     items: items.map((i: any) => ({ ...i, checked: Boolean(i.checked) })),
     lists,
     aisles,
+    stores: stores.map((s: any) => ({ ...s, is_default: Boolean(s.isDefault) })),
     suggestions,
   });
 });
@@ -1941,7 +1948,7 @@ app.get('/api/grocery', (req, res) => {
 app.post('/api/grocery', (req, res) => {
   try {
     const householdId = getHouseholdId(req);
-    const { name, category, aisleId, quantity, unit, note, listId, addedById, createList, icon, type } = req.body;
+    const { name, category, aisleId, storeId, store, quantity, unit, note, listId, addedById, createList, icon, type } = req.body;
 
     // Create custom list
     if (createList && name) {
@@ -1962,6 +1969,8 @@ app.post('/api/grocery', (req, res) => {
 
     let finalAisleId = aisleId || null;
     let finalCategory = category || 'Other';
+    let finalStoreId = storeId !== undefined ? storeId : null;
+    let finalStore = store !== undefined ? store : null;
 
     // Auto-categorize using learned preferences + smart heuristics
     if (!listId || listId === 'grocery') {
@@ -1972,7 +1981,11 @@ app.post('/api/grocery', (req, res) => {
       const resolved = resolveAisleForGroceryItem(householdId, name, aisles, category || undefined, aisleId || undefined);
       finalAisleId = resolved.aisleId;
       finalCategory = resolved.category;
-      recordGroceryHistoryItem(householdId, name, finalAisleId, finalCategory);
+      if (!finalStoreId && resolved.storeId) {
+        finalStoreId = resolved.storeId;
+        finalStore = resolved.store || null;
+      }
+      recordGroceryHistoryItem(householdId, name, finalAisleId, finalCategory, 'grocery', finalStoreId, finalStore);
     } else {
       const listAisles = queryAll<{ id: string; name: string }>(
         'SELECT id, name FROM aisles WHERE householdId = ? AND listId = ? ORDER BY orderIndex ASC',
@@ -1996,9 +2009,9 @@ app.post('/api/grocery', (req, res) => {
     }
 
     execute(
-      `INSERT INTO grocery_items (id, name, category, aisleId, quantity, unit, note, checked, listId, addedById, householdId, createdAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, name, finalCategory, finalAisleId, quantity || '1', unit || null, note || null, 0, listId || null, addedById || 'u1', householdId, now]
+      `INSERT INTO grocery_items (id, name, category, aisleId, storeId, store, quantity, unit, note, checked, listId, addedById, householdId, createdAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, name, finalCategory, finalAisleId, finalStoreId, finalStore, quantity || '1', unit || null, note || null, 0, listId || null, addedById || 'u1', householdId, now]
     );
 
     const actor = getAuthUser(req);
@@ -2020,6 +2033,8 @@ app.post('/api/grocery', (req, res) => {
       name,
       category: finalCategory,
       aisleId: finalAisleId,
+      storeId: finalStoreId,
+      store: finalStore,
       quantity: quantity || '1',
       unit,
       note,
@@ -2035,7 +2050,7 @@ app.post('/api/grocery', (req, res) => {
 });
 
 app.patch('/api/grocery', (req, res) => {
-  const { id, checked, name, quantity, unit, note, aisleId, category } = req.body;
+  const { id, checked, name, quantity, unit, note, aisleId, category, storeId, store } = req.body;
   if (!id) return res.status(400).json({ error: 'ID is required' });
 
   if (checked !== undefined) {
@@ -2047,19 +2062,24 @@ app.patch('/api/grocery', (req, res) => {
   if (note !== undefined) execute('UPDATE grocery_items SET note = ? WHERE id = ?', [note, id]);
   if (category !== undefined) execute('UPDATE grocery_items SET category = ? WHERE id = ?', [category, id]);
   if (aisleId !== undefined) execute('UPDATE grocery_items SET aisleId = ? WHERE id = ?', [aisleId, id]);
+  if (storeId !== undefined) execute('UPDATE grocery_items SET storeId = ? WHERE id = ?', [storeId || null, id]);
+  if (store !== undefined) execute('UPDATE grocery_items SET store = ? WHERE id = ?', [store || null, id]);
   saveDb();
 
   const updated = queryOne<any>('SELECT * FROM grocery_items WHERE id = ?', [id]);
 
-  // If item was moved to a different aisle/category, update household preference (ONLY for grocery list items)
-  if ((aisleId !== undefined || category !== undefined) && updated && (!updated.listId || updated.listId === 'grocery')) {
+  // If item's store or aisle/category was updated, update household preference (ONLY for grocery list items)
+  if ((aisleId !== undefined || category !== undefined || storeId !== undefined || store !== undefined) && updated && (!updated.listId || updated.listId === 'grocery')) {
     const householdId = getHouseholdId(req);
     if (aisleId === null || aisleId === '' || category === 'Other' || category === 'Uncategorized') {
       deleteCategoryPreference(householdId, updated.name);
     } else if (updated.aisleId) {
-      saveCategoryPreference(householdId, updated.name, updated.aisleId, updated.category || 'Other');
-      recordGroceryHistoryItem(householdId, updated.name, updated.aisleId, updated.category || 'Other');
+      saveCategoryPreference(householdId, updated.name, updated.aisleId, updated.category || 'Other', updated.storeId || null, updated.store || null);
     }
+    if (storeId !== undefined || store !== undefined) {
+      saveStorePreference(householdId, updated.name, updated.storeId || null, updated.store || null);
+    }
+    recordGroceryHistoryItem(householdId, updated.name, updated.aisleId, updated.category || 'Other', 'grocery', updated.storeId || null, updated.store || null);
   }
 
   if (checked === true && updated) {
@@ -2124,6 +2144,110 @@ app.delete('/api/grocery', (req, res) => {
   }
 
   res.status(400).json({ error: 'Invalid delete parameters' });
+});
+
+// 2b. Grocery Stores API
+app.get('/api/grocery/stores', (req, res) => {
+  const householdId = getHouseholdId(req);
+  const stores = queryAll(
+    'SELECT * FROM grocery_stores WHERE householdId = ? ORDER BY orderIndex ASC, createdAt ASC',
+    [householdId]
+  );
+  res.json(stores.map((s: any) => ({ ...s, is_default: Boolean(s.isDefault) })));
+});
+
+app.post('/api/grocery/stores', (req, res) => {
+  try {
+    const householdId = getHouseholdId(req);
+    const { name, icon = '🏪', color = '#10b981', isDefault = false, orderIndex = 0 } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'Store name is required' });
+    }
+    const cleanName = name.trim();
+    const id = `store_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const now = new Date().toISOString();
+
+    const existingStores = queryAll<any>('SELECT * FROM grocery_stores WHERE householdId = ?', [householdId]);
+    if (existingStores.length === 0 && !isDefault) {
+      const defaultId = `store_default_${Date.now()}`;
+      execute(
+        `INSERT INTO grocery_stores (id, householdId, name, icon, color, isDefault, orderIndex, createdAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [defaultId, householdId, 'Main Store', '🛒', '#10b981', 1, 0, now]
+      );
+    }
+
+    if (isDefault) {
+      execute('UPDATE grocery_stores SET isDefault = 0 WHERE householdId = ?', [householdId]);
+    }
+
+    execute(
+      `INSERT INTO grocery_stores (id, householdId, name, icon, color, isDefault, orderIndex, createdAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(householdId, name) DO UPDATE SET
+         icon = excluded.icon,
+         color = excluded.color,
+         isDefault = excluded.isDefault,
+         orderIndex = excluded.orderIndex`,
+      [id, householdId, cleanName, icon, color, isDefault ? 1 : 0, orderIndex, now]
+    );
+    saveDb();
+
+    const saved = queryOne<any>(
+      'SELECT * FROM grocery_stores WHERE householdId = ? AND LOWER(name) = LOWER(?)',
+      [householdId, cleanName]
+    );
+    res.json(saved ? { ...saved, is_default: Boolean(saved.isDefault) } : { id, name: cleanName, icon, color });
+  } catch (err: any) {
+    console.error('Failed to create store:', err);
+    res.status(500).json({ error: err.message || 'Failed to create store' });
+  }
+});
+
+app.patch('/api/grocery/stores/:id', (req, res) => {
+  try {
+    const householdId = getHouseholdId(req);
+    const { id } = req.params;
+    const { name, icon, color, isDefault, orderIndex } = req.body;
+
+    if (isDefault) {
+      execute('UPDATE grocery_stores SET isDefault = 0 WHERE householdId = ?', [householdId]);
+    }
+
+    if (name !== undefined) {
+      execute('UPDATE grocery_stores SET name = ? WHERE id = ? AND householdId = ?', [name.trim(), id, householdId]);
+      execute('UPDATE grocery_items SET store = ? WHERE storeId = ? AND householdId = ?', [name.trim(), id, householdId]);
+    }
+    if (icon !== undefined) execute('UPDATE grocery_stores SET icon = ? WHERE id = ? AND householdId = ?', [icon, id, householdId]);
+    if (color !== undefined) execute('UPDATE grocery_stores SET color = ? WHERE id = ? AND householdId = ?', [color, id, householdId]);
+    if (isDefault !== undefined) execute('UPDATE grocery_stores SET isDefault = ? WHERE id = ? AND householdId = ?', [isDefault ? 1 : 0, id, householdId]);
+    if (orderIndex !== undefined) execute('UPDATE grocery_stores SET orderIndex = ? WHERE id = ? AND householdId = ?', [orderIndex, id, householdId]);
+    saveDb();
+
+    const updated = queryOne<any>('SELECT * FROM grocery_stores WHERE id = ? AND householdId = ?', [id, householdId]);
+    res.json(updated ? { ...updated, is_default: Boolean(updated.isDefault) } : {});
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to update store' });
+  }
+});
+
+app.delete('/api/grocery/stores/:id', (req, res) => {
+  try {
+    const householdId = getHouseholdId(req);
+    const { id } = req.params;
+
+    // Reset any grocery items assigned to this store
+    execute('UPDATE grocery_items SET storeId = NULL, store = NULL WHERE storeId = ? AND householdId = ?', [id, householdId]);
+    // Reset preferences assigned to this store
+    execute('UPDATE grocery_category_preferences SET storeId = NULL, store = NULL WHERE storeId = ? AND householdId = ?', [id, householdId]);
+    // Delete store
+    execute('DELETE FROM grocery_stores WHERE id = ? AND householdId = ?', [id, householdId]);
+    saveDb();
+
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to delete store' });
+  }
 });
 
 // 3. Aisle Order & Custom Aisles API

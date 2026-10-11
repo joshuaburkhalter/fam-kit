@@ -24,6 +24,7 @@ import type {
   IngredientInventoryMatch,
   PantryCategory,
   RecipeCategory,
+  GroceryStore,
 } from '../types';
 import { filterRecipeIngredientsForGrocery } from './groceryStaples';
 
@@ -383,15 +384,17 @@ export const api = {
   getGroceryData: async (
     householdId: string,
     listType: string = 'grocery'
-  ): Promise<{ items: GroceryItem[]; lists: CustomList[]; aisles: Aisle[]; suggestions?: GrocerySuggestion[] }> => {
+  ): Promise<{ items: GroceryItem[]; lists: CustomList[]; aisles: Aisle[]; stores?: GroceryStore[]; suggestions?: GrocerySuggestion[] }> => {
     const url = listType === 'grocery' ? '/grocery' : `/grocery?listId=${listType}`;
-    const data = await fetchJson<{ items: any[]; lists?: any[]; aisles?: any[]; suggestions?: any[] }>(url);
+    const data = await fetchJson<{ items: any[]; lists?: any[]; aisles?: any[]; stores?: any[]; suggestions?: any[] }>(url);
     return {
       items: (data.items || []).map((i) => ({
         id: i.id,
         household_id: i.householdId,
         aisle_id: i.aisleId || '',
         category: i.category || '',
+        store_id: i.storeId || null,
+        store: i.store || null,
         name: i.name,
         quantity: i.quantity,
         unit: i.unit,
@@ -419,6 +422,16 @@ export const api = {
         icon: a.icon,
         list_id: a.listId || 'grocery',
       })),
+      stores: (data.stores || []).map((s) => ({
+        id: s.id,
+        household_id: s.householdId,
+        name: s.name,
+        icon: s.icon || '🏪',
+        color: s.color || '#10b981',
+        is_default: Boolean(s.is_default ?? s.isDefault),
+        order_index: s.orderIndex || 0,
+        created_at: s.createdAt,
+      })),
       suggestions: data.suggestions || [],
     };
   },
@@ -430,6 +443,9 @@ export const api = {
       id: i.id,
       household_id: i.householdId,
       aisle_id: i.aisleId || '',
+      category: i.category || '',
+      store_id: i.storeId || null,
+      store: i.store || null,
       name: i.name,
       quantity: i.quantity,
       unit: i.unit,
@@ -448,6 +464,8 @@ export const api = {
       name: string;
       aisle_id?: string;
       category?: string;
+      store_id?: string | null;
+      store?: string | null;
       quantity?: string;
       unit?: string;
       notes?: string;
@@ -462,6 +480,8 @@ export const api = {
         name: data.name,
         aisleId: data.aisle_id,
         category: data.category,
+        storeId: data.store_id,
+        store: data.store,
         quantity: data.quantity,
         unit: data.unit,
         note: data.notes,
@@ -474,6 +494,8 @@ export const api = {
       household_id: householdId,
       aisle_id: res.aisleId || '',
       category: res.category || '',
+      store_id: res.storeId || null,
+      store: res.store || null,
       name: res.name,
       quantity: res.quantity,
       unit: res.unit,
@@ -493,11 +515,15 @@ export const api = {
     });
   },
 
-  updateGroceryItem: (id: string, data: any) =>
-    fetchJson('/grocery', {
+  updateGroceryItem: (id: string, data: any) => {
+    const payload: any = { id, ...data };
+    if (data.store_id !== undefined) payload.storeId = data.store_id;
+    if (data.aisle_id !== undefined) payload.aisleId = data.aisle_id;
+    return fetchJson('/grocery', {
       method: 'PATCH',
-      body: JSON.stringify({ id, ...data }),
-    }),
+      body: JSON.stringify(payload),
+    });
+  },
 
   deleteGroceryItem: (id: string) =>
     fetchJson<{ success: boolean }>(`/grocery?id=${id}`, { method: 'DELETE' }),
@@ -506,6 +532,70 @@ export const api = {
     const url = listType === 'grocery' ? '/grocery?clearChecked=true' : `/grocery?clearChecked=true&listId=${listType}`;
     return fetchJson<{ success: boolean }>(url, { method: 'DELETE' });
   },
+
+  // Grocery Stores API
+  getGroceryStores: async (householdId: string): Promise<GroceryStore[]> => {
+    const data = await fetchJson<any[]>('/grocery/stores');
+    return (data || []).map((s) => ({
+      id: s.id,
+      household_id: s.householdId,
+      name: s.name,
+      icon: s.icon || '🏪',
+      color: s.color || '#10b981',
+      is_default: Boolean(s.is_default ?? s.isDefault),
+      order_index: s.orderIndex || 0,
+      created_at: s.createdAt,
+    }));
+  },
+
+  addGroceryStore: async (householdId: string, store: Partial<GroceryStore>): Promise<GroceryStore> => {
+    const res = await fetchJson<any>('/grocery/stores', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: store.name,
+        icon: store.icon || '🏪',
+        color: store.color || '#10b981',
+        isDefault: store.is_default,
+        orderIndex: store.order_index,
+      }),
+    });
+    return {
+      id: res.id,
+      household_id: res.householdId,
+      name: res.name,
+      icon: res.icon || '🏪',
+      color: res.color || '#10b981',
+      is_default: Boolean(res.is_default ?? res.isDefault),
+      order_index: res.orderIndex || 0,
+      created_at: res.createdAt,
+    };
+  },
+
+  updateGroceryStore: async (id: string, store: Partial<GroceryStore>): Promise<GroceryStore> => {
+    const res = await fetchJson<any>(`/grocery/stores/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        name: store.name,
+        icon: store.icon,
+        color: store.color,
+        isDefault: store.is_default,
+        orderIndex: store.order_index,
+      }),
+    });
+    return {
+      id: res.id,
+      household_id: res.householdId,
+      name: res.name,
+      icon: res.icon || '🏪',
+      color: res.color || '#10b981',
+      is_default: Boolean(res.is_default ?? res.isDefault),
+      order_index: res.orderIndex || 0,
+      created_at: res.createdAt,
+    };
+  },
+
+  deleteGroceryStore: (id: string) =>
+    fetchJson<{ success: boolean }>(`/grocery/stores/${id}`, { method: 'DELETE' }),
 
   // Custom Lists
   getCustomLists: async (householdId: string): Promise<CustomList[]> => {
