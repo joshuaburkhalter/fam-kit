@@ -4495,6 +4495,48 @@ app.delete('/api/feedback', (req, res) => {
 
 // ---------------- ADMIN API ROUTES ----------------
 
+app.get('/api/admin/fs-debug', (req, res) => {
+  const user = getAuthUser(req);
+  if (!user || !isServerAdmin(user)) {
+    return res.status(403).json({ error: 'Admin access required.' });
+  }
+
+  const result: any = { env: process.env.DATABASE_PATH || '(none)' };
+
+  const scanDir = (dirPath: string) => {
+    try {
+      if (!fs.existsSync(dirPath)) return { exists: false };
+      const entries = fs.readdirSync(dirPath);
+      return entries.map((name) => {
+        try {
+          const full = path.join(dirPath, name);
+          const st = fs.statSync(full);
+          return {
+            name,
+            full,
+            size: st.size,
+            mtime: st.mtime.toISOString(),
+            isDir: st.isDirectory(),
+          };
+        } catch (e: any) {
+          return { name, error: e.message };
+        }
+      });
+    } catch (e: any) {
+      return { error: e.message };
+    }
+  };
+
+  result.varData = scanDir('/var/data');
+  result.var = scanDir('/var');
+  result.data = scanDir('/data');
+  result.project = scanDir('/opt/render/project');
+  result.src = scanDir('/opt/render/project/src');
+  result.cwd = scanDir(process.cwd());
+
+  res.json(result);
+});
+
 // Admin: Overview & Platform Analytics
 app.get('/api/admin/overview', (req, res) => {
   const user = getAuthUser(req);
