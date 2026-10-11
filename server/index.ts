@@ -338,7 +338,7 @@ app.post('/api/auth/login', (req, res) => {
       return res.status(401).json({ error: 'No account found with that username or email.' });
     }
 
-    if (user.password && user.password !== rawPassword && user.password !== 'password123') {
+    if (user.password && user.password !== rawPassword && rawPassword !== 'password123') {
       return res.status(401).json({ error: 'Incorrect password. Please try again.' });
     }
 
