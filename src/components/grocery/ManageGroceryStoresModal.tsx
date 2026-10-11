@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Drawer } from '../ui/Drawer';
-import { Store, Trash2, Plus, Loader2, Star, X } from 'lucide-react';
+import { Store, Trash2, Plus, Loader2, Star, X, Pencil } from 'lucide-react';
 import { api } from '../../lib/api';
 import type { GroceryStore, GroceryItem } from '../../types';
 
@@ -37,6 +37,15 @@ export const ManageGroceryStoresModal: React.FC<ManageGroceryStoresModalProps> =
 }) => {
   const [deletingStoreId, setDeletingStoreId] = useState<string | null>(null);
   const [updatingDefaultId, setUpdatingDefaultId] = useState<string | null>(null);
+
+  // Inline Edit Store State
+  const [editingStoreId, setEditingStoreId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editIcon, setEditIcon] = useState('🏪');
+  const [editColor, setEditColor] = useState('#10b981');
+  const [editIsDefault, setEditIsDefault] = useState(false);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
   // Inline Add Store Form State
   const [isAddingStore, setIsAddingStore] = useState(false);
@@ -107,6 +116,68 @@ export const ManageGroceryStoresModal: React.FC<ManageGroceryStoresModalProps> =
     }
   };
 
+  const startEditing = (store: GroceryStore) => {
+    setIsAddingStore(false);
+    setEditingStoreId(store.id);
+    setEditName(store.name);
+    setEditIcon(store.icon || '🏪');
+    setEditColor(store.color || '#10b981');
+    setEditIsDefault(Boolean(store.is_default));
+    setEditError(null);
+  };
+
+  const cancelEditing = () => {
+    setEditingStoreId(null);
+    setEditError(null);
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingStoreId) return;
+    const cleanName = editName.trim();
+    if (!cleanName) return;
+
+    if (stores.some((s) => s.id !== editingStoreId && s.name.toLowerCase() === cleanName.toLowerCase())) {
+      setEditError(`A store named "${cleanName}" already exists.`);
+      return;
+    }
+
+    setIsSavingEdit(true);
+    setEditError(null);
+
+    const formattedName = cleanName.charAt(0).toUpperCase() + cleanName.slice(1);
+    const currentStore = stores.find((s) => s.id === editingStoreId);
+    const optimisticStore: GroceryStore = {
+      ...(currentStore || {
+        id: editingStoreId,
+        household_id: householdId,
+        created_at: new Date().toISOString(),
+        order_index: 0,
+      }),
+      name: formattedName,
+      icon: editIcon,
+      color: editColor,
+      is_default: editIsDefault,
+    };
+
+    try {
+      const updated = await api.updateGroceryStore(editingStoreId, {
+        name: formattedName,
+        icon: editIcon,
+        color: editColor,
+        is_default: editIsDefault,
+      });
+      onStoreUpdated(updated || optimisticStore);
+      setEditingStoreId(null);
+    } catch (err: any) {
+      console.error('Failed to update store:', err);
+      onStoreUpdated(optimisticStore);
+      setEditingStoreId(null);
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
   const handleSetDefault = async (store: GroceryStore) => {
     if (store.is_default) return;
     setUpdatingDefaultId(store.id);
@@ -122,6 +193,11 @@ export const ManageGroceryStoresModal: React.FC<ManageGroceryStoresModalProps> =
   };
 
   const handleDelete = async (store: GroceryStore) => {
+    if (store.is_default && stores.length <= 1) {
+      alert('Cannot delete your primary store. You can rename it instead by tapping the pencil edit button!');
+      return;
+    }
+
     const count = getStoreItemCount(store);
     const confirmMessage = count > 0
       ? `Delete store "${store.name}"? The ${count} ${count === 1 ? 'item' : 'items'} in this store will be moved to your primary store.`
@@ -146,7 +222,7 @@ export const ManageGroceryStoresModal: React.FC<ManageGroceryStoresModalProps> =
       isOpen={isOpen}
       onClose={onClose}
       title="Manage Stores"
-      subtitle="Organize grocery stores, set defaults, or remove unused stores"
+      subtitle="Rename stores, set defaults, or add new stores"
       icon={<Store className="w-5 h-5 text-slate-950" />}
       maxWidth="max-w-md"
       footer={
@@ -303,7 +379,7 @@ export const ManageGroceryStoresModal: React.FC<ManageGroceryStoresModalProps> =
             <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
               Your Stores
             </h4>
-            <span className="text-[10px] text-slate-500">Tap star to make primary</span>
+            <span className="text-[10px] text-slate-500">Tap pencil or card to rename</span>
           </div>
 
           {stores.length === 0 ? (
@@ -319,15 +395,153 @@ export const ManageGroceryStoresModal: React.FC<ManageGroceryStoresModalProps> =
                 const count = getStoreItemCount(store);
                 const isDeleting = deletingStoreId === store.id;
                 const isUpdating = updatingDefaultId === store.id;
+                const isEditing = editingStoreId === store.id;
+
+                if (isEditing) {
+                  return (
+                    <form
+                      key={store.id}
+                      onSubmit={handleSaveEdit}
+                      className="p-4 rounded-2xl bg-slate-900/95 border-2 border-emerald-500/40 space-y-3.5 shadow-xl animate-in fade-in zoom-in-95 duration-150"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-7 h-7 rounded-lg border flex items-center justify-center text-sm"
+                            style={{
+                              backgroundColor: `${editColor}20`,
+                              borderColor: `${editColor}40`,
+                            }}
+                          >
+                            {editIcon}
+                          </div>
+                          <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                            <span>Rename / Edit Store</span>
+                            {store.is_default && (
+                              <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                                Primary
+                              </span>
+                            )}
+                          </h4>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={cancelEditing}
+                          className="text-slate-400 hover:text-white p-1 cursor-pointer rounded-lg hover:bg-white/5"
+                          title="Cancel"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                          Store Name
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          autoFocus
+                          placeholder="e.g. Costco, Kroger, Publix, Target..."
+                          value={editName}
+                          onChange={(e) => {
+                            setEditName(e.target.value);
+                            setEditError(null);
+                          }}
+                          className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 ring-1 focus:ring-emerald-500/30"
+                        />
+                        {editError && <p className="text-xs text-rose-400 mt-1">{editError}</p>}
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                          Icon / Emoji
+                        </label>
+                        <div className="flex flex-wrap gap-1.5 pt-0.5 max-h-24 overflow-y-auto no-scrollbar">
+                          {STORE_EMOJIS.map((emoji) => (
+                            <button
+                              key={emoji}
+                              type="button"
+                              onClick={() => setEditIcon(emoji)}
+                              className={`w-7 h-7 rounded-lg text-sm flex items-center justify-center border transition-all cursor-pointer ${
+                                editIcon === emoji
+                                  ? 'border-emerald-500 bg-emerald-500/20 shadow-sm scale-105'
+                                  : 'border-white/10 bg-slate-950/60 hover:border-white/20'
+                              }`}
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                          Color Accent
+                        </label>
+                        <div className="flex items-center gap-2 pt-0.5">
+                          {STORE_COLORS.map((c) => (
+                            <button
+                              key={c}
+                              type="button"
+                              onClick={() => setEditColor(c)}
+                              style={{ backgroundColor: c }}
+                              className={`w-6 h-6 rounded-full transition-transform cursor-pointer border-2 ${
+                                editColor === c ? 'border-white scale-110 shadow-md' : 'border-transparent hover:scale-105'
+                              }`}
+                            />
+                          ))}
+                        </div>
+                      </div>
+
+                      {!store.is_default && stores.length > 1 && (
+                        <div className="pt-0.5">
+                          <label className="flex items-center gap-2 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={editIsDefault}
+                              onChange={(e) => setEditIsDefault(e.target.checked)}
+                              className="w-3.5 h-3.5 rounded text-emerald-500 bg-slate-950 border-white/20 focus:ring-emerald-500 cursor-pointer"
+                            />
+                            <span className="text-[11px] font-semibold text-white">Make this my primary store</span>
+                          </label>
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-end gap-2 pt-1 border-t border-white/5">
+                        <button
+                          type="button"
+                          onClick={cancelEditing}
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={!editName.trim() || isSavingEdit}
+                          className="bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-bold px-4 py-1.5 rounded-lg text-xs shadow-md shadow-emerald-500/20 cursor-pointer flex items-center gap-1.5 transition-all"
+                        >
+                          {isSavingEdit && <Loader2 className="w-3 h-3 animate-spin" />}
+                          <span>{isSavingEdit ? 'Saving...' : 'Save Changes'}</span>
+                        </button>
+                      </div>
+                    </form>
+                  );
+                }
 
                 return (
                   <div
                     key={store.id}
-                    className="flex items-center justify-between p-3 rounded-2xl bg-slate-900/80 border border-white/10 hover:border-white/20 transition-all"
+                    className="flex items-center justify-between p-3 rounded-2xl bg-slate-900/80 border border-white/10 hover:border-white/20 transition-all group"
                   >
-                    <div className="flex items-center gap-3 min-w-0">
+                    <button
+                      type="button"
+                      onClick={() => startEditing(store)}
+                      className="flex items-center gap-3 min-w-0 text-left flex-1 cursor-pointer"
+                      title={`Click to rename or edit "${store.name}"`}
+                    >
                       <div
-                        className="w-9 h-9 rounded-xl border flex items-center justify-center text-lg shrink-0"
+                        className="w-9 h-9 rounded-xl border flex items-center justify-center text-lg shrink-0 transition-transform group-hover:scale-105"
                         style={{
                           backgroundColor: `${store.color || '#10b981'}20`,
                           borderColor: `${store.color || '#10b981'}40`,
@@ -337,7 +551,7 @@ export const ManageGroceryStoresModal: React.FC<ManageGroceryStoresModalProps> =
                       </div>
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-white block truncate">
+                          <span className="text-xs font-bold text-white block truncate group-hover:text-emerald-400 transition-colors">
                             {store.name}
                           </span>
                           {store.is_default && (
@@ -347,12 +561,21 @@ export const ManageGroceryStoresModal: React.FC<ManageGroceryStoresModalProps> =
                           )}
                         </div>
                         <span className="text-[10px] text-slate-400 block">
-                          {count} {count === 1 ? 'item' : 'items'}
+                          {count} {count === 1 ? 'item' : 'items'} • Tap to edit
                         </span>
                       </div>
-                    </div>
+                    </button>
 
-                    <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="flex items-center gap-1 shrink-0 ml-2">
+                      <button
+                        type="button"
+                        onClick={() => startEditing(store)}
+                        className="p-2 rounded-xl text-slate-400 hover:text-emerald-400 hover:bg-emerald-400/10 transition-colors cursor-pointer border border-transparent hover:border-emerald-400/20"
+                        title={`Rename "${store.name}"`}
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+
                       {!store.is_default && (
                         <button
                           type="button"

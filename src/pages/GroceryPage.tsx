@@ -2906,6 +2906,7 @@ export const GroceryPage: React.FC = () => {
             if (groceryDataCache) groceryDataCache.stores = next;
             return next;
           });
+          loadData(activeListType, false);
           showToast(`Updated ${updatedStore.name}`);
         }}
         onStoreDeleted={(deletedId) => {

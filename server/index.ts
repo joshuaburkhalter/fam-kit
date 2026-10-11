@@ -2234,14 +2234,37 @@ app.patch('/api/grocery/stores/:id', (req, res) => {
     const { id } = req.params;
     const { name, icon, color, isDefault, orderIndex } = req.body;
 
+    const currentStore = queryOne<any>('SELECT * FROM grocery_stores WHERE id = ? AND householdId = ?', [id, householdId]);
+    if (!currentStore) {
+      return res.status(404).json({ error: 'Store not found' });
+    }
+
+    if (name !== undefined) {
+      const cleanName = name.trim();
+      if (!cleanName) {
+        return res.status(400).json({ error: 'Store name cannot be empty' });
+      }
+      const duplicate = queryOne<any>(
+        'SELECT id FROM grocery_stores WHERE householdId = ? AND LOWER(name) = LOWER(?) AND id != ?',
+        [householdId, cleanName, id]
+      );
+      if (duplicate) {
+        return res.status(400).json({ error: `A store named "${cleanName}" already exists.` });
+      }
+
+      execute('UPDATE grocery_stores SET name = ? WHERE id = ? AND householdId = ?', [cleanName, id, householdId]);
+      execute('UPDATE grocery_items SET store = ? WHERE storeId = ? AND householdId = ?', [cleanName, id, householdId]);
+      if (currentStore.name && currentStore.name !== cleanName) {
+        execute('UPDATE grocery_items SET store = ? WHERE store = ? AND householdId = ?', [cleanName, currentStore.name, householdId]);
+        execute('UPDATE grocery_category_preferences SET store = ? WHERE (storeId = ? OR store = ?) AND householdId = ?', [cleanName, id, currentStore.name, householdId]);
+        execute('UPDATE grocery_history SET store = ? WHERE (storeId = ? OR store = ?) AND householdId = ?', [cleanName, id, currentStore.name, householdId]);
+      }
+    }
+
     if (isDefault) {
       execute('UPDATE grocery_stores SET isDefault = 0 WHERE householdId = ?', [householdId]);
     }
 
-    if (name !== undefined) {
-      execute('UPDATE grocery_stores SET name = ? WHERE id = ? AND householdId = ?', [name.trim(), id, householdId]);
-      execute('UPDATE grocery_items SET store = ? WHERE storeId = ? AND householdId = ?', [name.trim(), id, householdId]);
-    }
     if (icon !== undefined) execute('UPDATE grocery_stores SET icon = ? WHERE id = ? AND householdId = ?', [icon, id, householdId]);
     if (color !== undefined) execute('UPDATE grocery_stores SET color = ? WHERE id = ? AND householdId = ?', [color, id, householdId]);
     if (isDefault !== undefined) execute('UPDATE grocery_stores SET isDefault = ? WHERE id = ? AND householdId = ?', [isDefault ? 1 : 0, id, householdId]);
