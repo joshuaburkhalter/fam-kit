@@ -2883,8 +2883,17 @@ export const GroceryPage: React.FC = () => {
       <ManageGroceryStoresModal
         isOpen={isManageStoresModalOpen}
         onClose={() => setIsManageStoresModalOpen(false)}
+        householdId={effectiveHouseholdId}
         stores={stores}
         items={items}
+        onStoreCreated={(newStore) => {
+          setStores((prev) => {
+            const next = [...prev.filter((s) => s.id !== newStore.id), newStore];
+            if (groceryDataCache) groceryDataCache.stores = next;
+            return next;
+          });
+          showToast(`Added ${newStore.name}`);
+        }}
         onStoreUpdated={(updatedStore) => {
           setStores((prev) => {
             const next = prev.map((s) =>

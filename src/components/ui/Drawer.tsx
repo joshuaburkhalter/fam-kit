@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
@@ -16,6 +16,72 @@ export interface DrawerProps {
   width?: string; // e.g. "max-w-md", "max-w-xl"
   maxWidth?: string; // e.g. "max-w-md", "max-w-lg", "max-w-xl", "max-w-2xl" (default: "max-w-full sm:max-w-xl md:max-w-2xl")
   contentClassName?: string;
+}
+
+// Module-level manager for drawer history states to support stacked / transitioning drawers
+interface DrawerStackEntry {
+  id: string;
+  close: () => void;
+}
+
+const activeDrawerStack: DrawerStackEntry[] = [];
+let hasPushedGlobalDrawerHistory = false;
+let backDebounceTimer: any = null;
+
+function registerDrawerToStack(id: string, close: () => void) {
+  if (backDebounceTimer) {
+    clearTimeout(backDebounceTimer);
+    backDebounceTimer = null;
+  }
+  const existingIdx = activeDrawerStack.findIndex((e) => e.id === id);
+  if (existingIdx !== -1) {
+    activeDrawerStack[existingIdx].close = close;
+  } else {
+    activeDrawerStack.push({ id, close });
+  }
+
+  if (!hasPushedGlobalDrawerHistory && typeof window !== 'undefined') {
+    hasPushedGlobalDrawerHistory = true;
+    window.history.pushState({ type: 'drawer', timestamp: Date.now() }, '', window.location.href);
+  }
+}
+
+function unregisterDrawerFromStack(id: string, fromPopState = false) {
+  const existingIdx = activeDrawerStack.findIndex((e) => e.id === id);
+  if (existingIdx !== -1) {
+    activeDrawerStack.splice(existingIdx, 1);
+  }
+
+  if (activeDrawerStack.length === 0) {
+    if (backDebounceTimer) {
+      clearTimeout(backDebounceTimer);
+      backDebounceTimer = null;
+    }
+
+    if (!fromPopState) {
+      backDebounceTimer = setTimeout(() => {
+        if (activeDrawerStack.length === 0 && hasPushedGlobalDrawerHistory && typeof window !== 'undefined') {
+          hasPushedGlobalDrawerHistory = false;
+          window.history.back();
+        }
+      }, 100);
+    } else {
+      hasPushedGlobalDrawerHistory = false;
+    }
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('popstate', () => {
+    if (activeDrawerStack.length > 0) {
+      const topEntry = activeDrawerStack[activeDrawerStack.length - 1];
+      if (topEntry) {
+        topEntry.close();
+      }
+    } else {
+      hasPushedGlobalDrawerHistory = false;
+    }
+  });
 }
 
 export const Drawer: React.FC<DrawerProps> = ({
@@ -41,10 +107,11 @@ export const Drawer: React.FC<DrawerProps> = ({
     return `w-full max-w-full ${smParts.join(' ')}`;
   };
   const panelWidth = getResponsiveWidth();
+  const drawerIdRef = useRef(`drawer_${Math.random().toString(36).substring(2, 9)}`);
   const [isRendered, setIsRendered] = useState(isOpen);
   const [isClosing, setIsClosing] = useState(false);
-  const historyPushedRef = React.useRef(false);
-  const closedByPopstateRef = React.useRef(false);
+  const isClosingRef = useRef(false);
+  isClosingRef.current = isClosing;
 
   // Sync render state immediately when isOpen becomes true
   if (isOpen && !isRendered) {
@@ -53,68 +120,44 @@ export const Drawer: React.FC<DrawerProps> = ({
   }
 
   const handleClose = (fromPopState: boolean = false) => {
-    if (isClosing) return;
+    if (isClosingRef.current) return;
     setIsClosing(true);
-
-    if (!fromPopState && historyPushedRef.current) {
-      historyPushedRef.current = false;
-      closedByPopstateRef.current = true;
-      window.history.back();
-    }
+    unregisterDrawerFromStack(drawerIdRef.current, fromPopState);
 
     setTimeout(() => {
       onClose();
       setIsRendered(false);
       setIsClosing(false);
-      closedByPopstateRef.current = false;
     }, 260);
   };
 
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
-
-      // Push history state so the phone back button closes the drawer instead of closing the app
-      if (!historyPushedRef.current) {
-        historyPushedRef.current = true;
-        closedByPopstateRef.current = false;
-        window.history.pushState({ type: 'drawer', timestamp: Date.now() }, '', window.location.href);
-      }
-
-      const handlePopState = () => {
-        if (historyPushedRef.current) {
-          historyPushedRef.current = false;
-          closedByPopstateRef.current = true;
-          handleClose(true);
-        }
-      };
+      registerDrawerToStack(drawerIdRef.current, () => handleClose(true));
 
       const handleKeyDown = (e: KeyboardEvent) => {
         if (e.key === 'Escape') handleClose(false);
       };
 
-      window.addEventListener('popstate', handlePopState);
       window.addEventListener('keydown', handleKeyDown);
 
       return () => {
-        window.removeEventListener('popstate', handlePopState);
         window.removeEventListener('keydown', handleKeyDown);
-        document.body.style.overflow = '';
-        if (historyPushedRef.current && !closedByPopstateRef.current) {
-          historyPushedRef.current = false;
-          window.history.back();
+        if (activeDrawerStack.length <= 1) {
+          document.body.style.overflow = '';
         }
+        unregisterDrawerFromStack(drawerIdRef.current, false);
       };
     } else if (isRendered && !isClosing) {
-      if (historyPushedRef.current && !closedByPopstateRef.current) {
-        historyPushedRef.current = false;
-        window.history.back();
-      }
       setIsClosing(true);
+      unregisterDrawerFromStack(drawerIdRef.current, false);
       const timer = setTimeout(() => {
         setIsRendered(false);
         setIsClosing(false);
-        document.body.style.overflow = '';
+        if (activeDrawerStack.length === 0) {
+          document.body.style.overflow = '';
+        }
       }, 260);
       return () => clearTimeout(timer);
     }
