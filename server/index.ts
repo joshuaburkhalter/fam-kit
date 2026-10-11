@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { getDb, queryAll, queryOne, execute, saveDb, createDefaultAisles, generateSecureVoucherCode, healHouseholdSubscriptions } from './db.js';
@@ -311,13 +312,13 @@ app.post('/api/auth/login', (req, res) => {
     );
 
     // Fallback support for Joshua's variations (joshua, joshuaburkhalter, email)
-    if (!user && (strippedLogin === 'joshua' || strippedLogin === 'joshuaburkhalter' || strippedLogin.startsWith('joshua@') || strippedLogin.startsWith('joshuaburkhalter@'))) {
+    if (!user && (strippedLogin === 'joshuaburkhalter' || strippedLogin === 'joshua' || strippedLogin.startsWith('joshua@') || strippedLogin.startsWith('joshuaburkhalter@'))) {
       user = queryOne<{ id: string; name: string; username: string; email: string; password: string; avatar: string; color: string; role: string; householdId: string }>(
         `SELECT * FROM users 
-         WHERE LOWER(username) IN ('joshua', 'joshuaburkhalter')
+         WHERE LOWER(username) = 'joshuaburkhalter'
+            OR LOWER(username) = 'joshua'
             OR LOWER(email) IN ('joshua@redpointaudio.com', 'joshuaburkhalter@gmail.com')
-            OR LOWER(name) LIKE 'joshua%'
-            OR id = 'u1'
+         ORDER BY CASE WHEN LOWER(username) = 'joshuaburkhalter' THEN 1 ELSE 2 END
          LIMIT 1`
       );
     }
