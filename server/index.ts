@@ -298,7 +298,7 @@ app.post('/api/auth/login', (req, res) => {
     const strippedLogin = cleanLogin.replace(/^@+/, '');
 
     // Strictly match username OR email, also support leading @ or exact name match
-    const user = queryOne<{ id: string; name: string; username: string; email: string; password: string; avatar: string; color: string; role: string; householdId: string }>(
+    let user = queryOne<{ id: string; name: string; username: string; email: string; password: string; avatar: string; color: string; role: string; householdId: string }>(
       `SELECT * FROM users 
        WHERE LOWER(username) = ? 
           OR LOWER(username) = ?
@@ -306,9 +306,32 @@ app.post('/api/auth/login', (req, res) => {
           OR LOWER(email) = ?
           OR LOWER(name) = ?
           OR LOWER(REPLACE(name, ' ', '')) = ?
-       ORDER BY CASE WHEN id LIKE 'u_%' THEN 1 ELSE 2 END, id DESC`,
+       ORDER BY CASE WHEN id LIKE 'u_%' OR id = 'u1' THEN 1 ELSE 2 END, id DESC`,
       [cleanLogin, strippedLogin, cleanLogin, strippedLogin, cleanLogin, strippedLogin]
     );
+
+    // Fallback support for Joshua's variations (joshua, joshuaburkhalter, email)
+    if (!user && (strippedLogin === 'joshua' || strippedLogin === 'joshuaburkhalter' || strippedLogin.startsWith('joshua@') || strippedLogin.startsWith('joshuaburkhalter@'))) {
+      user = queryOne<{ id: string; name: string; username: string; email: string; password: string; avatar: string; color: string; role: string; householdId: string }>(
+        `SELECT * FROM users 
+         WHERE LOWER(username) IN ('joshua', 'joshuaburkhalter')
+            OR LOWER(email) IN ('joshua@redpointaudio.com', 'joshuaburkhalter@gmail.com')
+            OR LOWER(name) LIKE 'joshua%'
+            OR id = 'u1'
+         LIMIT 1`
+      );
+    }
+
+    // Fallback support for demo user alex
+    if (!user && (strippedLogin === 'alex' || strippedLogin.startsWith('alex@'))) {
+      user = queryOne<{ id: string; name: string; username: string; email: string; password: string; avatar: string; color: string; role: string; householdId: string }>(
+        `SELECT * FROM users 
+         WHERE LOWER(username) = 'alex' 
+            OR LOWER(email) LIKE 'alex@%'
+            OR id = 'u1'
+         LIMIT 1`
+      );
+    }
 
     if (!user) {
       return res.status(401).json({ error: 'No account found with that username or email.' });

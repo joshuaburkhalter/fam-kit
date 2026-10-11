@@ -714,15 +714,50 @@ function initSchema(db: Database) {
     `);
   } catch {}
   try {
-    // Ensure Joshua is set as Admin role
-    db.run(`
-      UPDATE users 
-      SET role = 'Admin' 
-      WHERE LOWER(username) = 'joshua' 
-         OR LOWER(email) = 'joshua@redpointaudio.com'
-         OR LOWER(email) = 'joshuaburkhalter@gmail.com'
+    // Ensure Joshua's account exists and is properly set as primary admin
+    const joshuaRows = db.exec(`
+      SELECT id FROM users 
+      WHERE LOWER(username) IN ('joshua', 'joshuaburkhalter') 
+         OR LOWER(email) IN ('joshua@redpointaudio.com', 'joshuaburkhalter@gmail.com')
+         OR LOWER(name) = 'joshua'
     `);
-  } catch {}
+    const hasJoshua = (joshuaRows[0]?.values?.length || 0) > 0;
+
+    if (!hasJoshua) {
+      // If u1 is currently Alex (from legacy demo seed), restore u1 to Joshua
+      const u1Rows = db.exec("SELECT id, name, username, email FROM users WHERE id = 'u1'");
+      if ((u1Rows[0]?.values?.length || 0) > 0) {
+        db.run(`
+          UPDATE users 
+          SET name = 'Joshua', 
+              username = 'joshua', 
+              email = 'joshua@redpointaudio.com', 
+              role = 'Admin',
+              avatar = '👨‍💻',
+              color = '#10b981'
+          WHERE id = 'u1'
+        `);
+      } else {
+        const defaultHousehold = db.exec("SELECT id FROM households LIMIT 1");
+        const hid = (defaultHousehold[0]?.values[0]?.[0] as string) || 'fam_default_1';
+        db.run(`
+          INSERT INTO users (id, name, username, email, avatar, color, role, householdId, password, createdAt)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, ['u1', 'Joshua', 'joshua', 'joshua@redpointaudio.com', '👨‍💻', '#10b981', 'Admin', hid, 'password123', new Date().toISOString()]);
+      }
+    } else {
+      // Ensure Joshua has Admin role
+      db.run(`
+        UPDATE users 
+        SET role = 'Admin' 
+        WHERE LOWER(username) IN ('joshua', 'joshuaburkhalter') 
+           OR LOWER(email) IN ('joshua@redpointaudio.com', 'joshuaburkhalter@gmail.com')
+           OR LOWER(name) = 'joshua'
+      `);
+    }
+  } catch (err) {
+    console.error('Error ensuring Joshua account:', err);
+  }
 
   // Backfill demo households with active lifetime access so demo users remain functional
   try {
@@ -971,7 +1006,7 @@ function seedDemoData(db: Database) {
 
   db.run(`INSERT INTO households (id, name, inviteCode, createdAt, subscriptionStatus, subscriptionPlan) VALUES (?, ?, ?, ?, ?, ?)`, [householdId, 'My Family', demoInviteCode, now, 'active', 'lifetime_founder']);
 
-  db.run(`INSERT INTO users (id, name, username, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, ['u1', 'Alex', 'alex', 'alex@famkit.app', '👨‍💻', '#10b981', 'Parent', householdId, 'password123']);
+  db.run(`INSERT INTO users (id, name, username, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, ['u1', 'Joshua', 'joshua', 'joshua@redpointaudio.com', '👨‍💻', '#10b981', 'Admin', householdId, 'password123']);
   db.run(`INSERT INTO users (id, name, username, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, ['u2', 'Sarah', 'sarah', 'sarah@famkit.app', '👩‍🏫', '#ec4899', 'Parent', householdId, 'password123']);
   db.run(`INSERT INTO users (id, name, username, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, ['u3', 'Leo', 'leo', 'leo@famkit.app', '👦', '#f59e0b', 'Kid', householdId, 'password123']);
   db.run(`INSERT INTO users (id, name, username, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, ['u4', 'Emma', 'emma', 'emma@famkit.app', '👧', '#06b6d4', 'Kid', householdId, 'password123']);
