@@ -994,9 +994,11 @@ function seedDemoData(db: Database) {
   ];
 
   for (const g of sampleItems) {
-    db.run(`INSERT INTO grocery_items VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
-      g.id, g.name, g.category, g.aisleId, g.quantity, g.unit, '', g.checked, null, 'u1', householdId, now
-    ]);
+    db.run(
+      `INSERT INTO grocery_items (id, name, category, aisleId, quantity, unit, note, checked, listId, addedById, householdId, createdAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [g.id, g.name, g.category, g.aisleId, g.quantity, g.unit, '', g.checked, null, 'u1', householdId, now]
+    );
   }
 
   // Camping List
@@ -1011,9 +1013,11 @@ function seedDemoData(db: Database) {
   ];
 
   for (const p of packingItems) {
-    db.run(`INSERT INTO grocery_items VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
-      p.id, p.name, 'Packing', null, p.quantity, null, '', p.checked, 'list_camp', 'u1', householdId, now
-    ]);
+    db.run(
+      `INSERT INTO grocery_items (id, name, category, aisleId, quantity, unit, note, checked, listId, addedById, householdId, createdAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [p.id, p.name, 'Packing', null, p.quantity, null, '', p.checked, 'list_camp', 'u1', householdId, now]
+    );
   }
 
   // Recipes
