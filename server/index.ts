@@ -4180,6 +4180,7 @@ function isServerAdmin(user: any): boolean {
   return (
     role === 'admin' ||
     username === 'joshua' ||
+    username === 'joshuaburkhalter' ||
     email === 'joshua@redpointaudio.com' ||
     email === 'joshuaburkhalter@gmail.com'
   );
@@ -4536,6 +4537,86 @@ app.get('/api/admin/fs-debug', (req, res) => {
   result.cwd = scanDir(process.cwd());
 
   res.json(result);
+});
+
+app.get('/api/admin/db-download', (req, res) => {
+  const user = getAuthUser(req);
+  if (!user || !isServerAdmin(user)) {
+    return res.status(403).json({ error: 'Admin access required.' });
+  }
+
+  const dbPath =
+    process.env.DATABASE_PATH ||
+    (fs.existsSync('/var/data/famkit.db') ? '/var/data/famkit.db' : path.join(__dirname, '../famkit.db'));
+
+  if (!fs.existsSync(dbPath)) {
+    return res.status(404).json({ error: 'Database file not found', path: dbPath });
+  }
+
+  res.download(dbPath, 'famkit.db');
+});
+
+app.get('/api/admin/db-dump', (req, res) => {
+  const user = getAuthUser(req);
+  if (!user || !isServerAdmin(user)) {
+    return res.status(403).json({ error: 'Admin access required.' });
+  }
+
+  try {
+    const households = queryAll('SELECT * FROM households');
+    const users = queryAll('SELECT id, name, username, email, role, householdId FROM users');
+    const groceryItems = queryAll('SELECT id, name, category, quantity, checked, householdId FROM grocery_items');
+    const aisles = queryAll('SELECT * FROM aisles');
+    const stores = queryAll('SELECT * FROM grocery_stores');
+    const recipes = queryAll('SELECT id, title, category, householdId FROM recipes');
+    const mealPlans = queryAll('SELECT * FROM meal_plans');
+    const inventory = queryAll('SELECT id, name, category, quantity, householdId FROM inventory_items');
+
+    res.json({
+      households,
+      users,
+      groceryCount: groceryItems.length,
+      groceryItems,
+      aisles,
+      stores,
+      recipes,
+      mealPlans,
+      inventory,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/admin/db-raw-search', (req, res) => {
+  const user = getAuthUser(req);
+  if (!user || !isServerAdmin(user)) {
+    return res.status(403).json({ error: 'Admin access required.' });
+  }
+
+  const target = (req.query.q as string) || 'coconut';
+  const dbPath =
+    process.env.DATABASE_PATH ||
+    (fs.existsSync('/var/data/famkit.db') ? '/var/data/famkit.db' : path.join(__dirname, '../famkit.db'));
+
+  if (!fs.existsSync(dbPath)) {
+    return res.status(404).json({ error: 'File not found' });
+  }
+  const buf = fs.readFileSync(dbPath);
+  const str = buf.toString('latin1');
+  const matches: any[] = [];
+  let pos = 0;
+  while ((pos = str.indexOf(target, pos)) !== -1) {
+    const start = Math.max(0, pos - 100);
+    const end = Math.min(str.length, pos + 100);
+    matches.push({
+      offset: pos,
+      snippet: str.substring(start, end).replace(/[^\x20-\x7E]/g, '.'),
+    });
+    pos += target.length;
+    if (matches.length >= 20) break;
+  }
+  res.json({ target, matchesCount: matches.length, matches });
 });
 
 // Admin: Overview & Platform Analytics

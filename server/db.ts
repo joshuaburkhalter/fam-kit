@@ -714,45 +714,44 @@ function initSchema(db: Database) {
     `);
   } catch {}
   try {
-    // 1. Remove preseeded demo users (Sarah, Leo, Emma) from the primary family household
+    // 1. Remove preseeded demo users (Sarah, Leo, Emma) ONLY if they have demo emails
     db.run(`
       DELETE FROM users 
-      WHERE id IN ('u2', 'u3', 'u4') 
-         OR LOWER(username) IN ('sarah', 'leo', 'emma') 
-         OR email LIKE '%@famkit.app'
+      WHERE (LOWER(username) IN ('sarah', 'leo', 'emma') AND email LIKE '%@famkit.app')
+         OR (email IN ('alex@famkit.app', 'sarah@famkit.app', 'leo@famkit.app', 'emma@famkit.app'))
     `);
     db.run(`
       DELETE FROM calendar_events 
-      WHERE assignedMemberId IN ('u2', 'u3', 'u4') 
-         OR title LIKE 'Leo %' 
-         OR title LIKE 'Emma %'
+      WHERE title IN ('Emma Ballet Class')
+         AND (assignedMemberId IN ('u2', 'u3', 'u4') OR householdId IN ('fam_default_1', 'fam_default_2'))
     `);
 
     // 2. Ensure Joshua's account username is strictly 'joshuaburkhalter' and role is Admin
-    const u1Rows = db.exec("SELECT id, name, username, email FROM users WHERE id = 'u1' OR LOWER(username) IN ('joshua', 'joshuaburkhalter')");
-    if ((u1Rows[0]?.values?.length || 0) > 0) {
+    const joshuaRows = db.exec(`
+      SELECT id FROM users 
+      WHERE LOWER(username) IN ('joshua', 'joshuaburkhalter') 
+         OR LOWER(email) IN ('joshua@redpointaudio.com', 'joshuaburkhalter@gmail.com')
+         OR LOWER(name) = 'joshua'
+    `);
+    if ((joshuaRows[0]?.values?.length || 0) > 0) {
+      const joshId = String(joshuaRows[0].values[0][0]);
       db.run(`
         UPDATE users 
-        SET name = 'Joshua', 
-            username = 'joshuaburkhalter', 
-            email = 'joshua@redpointaudio.com', 
+        SET username = 'joshuaburkhalter',
             role = 'Admin',
-            avatar = '👨‍💻',
-            color = '#10b981'
-        WHERE id = 'u1' 
-           OR LOWER(username) IN ('joshua', 'joshuaburkhalter')
-           OR LOWER(email) IN ('joshua@redpointaudio.com', 'joshuaburkhalter@gmail.com')
-      `);
+            email = COALESCE(NULLIF(email, ''), 'joshua@redpointaudio.com')
+        WHERE id = ?
+      `, [joshId]);
     } else {
-      const defaultHousehold = db.exec("SELECT id FROM households LIMIT 1");
+      const defaultHousehold = db.exec("SELECT id FROM households ORDER BY id ASC LIMIT 1");
       const hid = (defaultHousehold[0]?.values[0]?.[0] as string) || 'fam_default_1';
       db.run(`
         INSERT INTO users (id, name, username, email, avatar, color, role, householdId, password, createdAt)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, ['u1', 'Joshua', 'joshuaburkhalter', 'joshua@redpointaudio.com', '👨‍💻', '#10b981', 'Admin', hid, 'password123', new Date().toISOString()]);
+      `, ['u_joshua', 'Joshua', 'joshuaburkhalter', 'joshua@redpointaudio.com', '👨‍💻', '#10b981', 'Admin', hid, 'password123', new Date().toISOString()]);
     }
   } catch (err) {
-    console.error('Error ensuring joshuaburkhalter account and removing demo family:', err);
+    console.error('Error ensuring joshuaburkhalter account:', err);
   }
 
   // Backfill demo households with active lifetime access so demo users remain functional
@@ -848,19 +847,6 @@ function initSchema(db: Database) {
     healHouseholdSubscriptions(db);
   } catch (err) {
     console.error('Error seeding promo codes:', err);
-  }
-
-  // Cleanup any legacy seeded Miller family demo households and users
-  try {
-    db.run(`DELETE FROM grocery_items WHERE householdId = 'fam_default_2' OR id LIKE 'gm%'`);
-    db.run(`DELETE FROM calendar_events WHERE householdId = 'fam_default_2' OR id LIKE 'ev_m%'`);
-    db.run(`DELETE FROM meal_plans WHERE householdId = 'fam_default_2' OR id = 'm_miller_today'`);
-    db.run(`DELETE FROM aisles WHERE householdId = 'fam_default_2'`);
-    db.run(`DELETE FROM users WHERE householdId = 'fam_default_2' OR (householdId = 'fam_default_1' AND email IN ('alex@miller.com', 'jamie@miller.com')) OR id IN ('u5', 'u6')`);
-    db.run(`DELETE FROM households WHERE id = 'fam_default_2' OR (id = 'fam_default_1' AND name = 'The Miller Family')`);
-    db.run(`DELETE FROM promo_codes WHERE code LIKE 'TEST-%'`);
-  } catch (err) {
-    console.error('Error cleaning up legacy demo seed data:', err);
   }
 
   // Check if seeded
