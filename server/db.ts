@@ -1002,7 +1002,7 @@ function seedDemoData(db: Database) {
   }
 
   // Camping List
-  db.run(`INSERT INTO custom_lists VALUES (?, ?, ?, ?, ?, ?, ?)`, ['list_camp', 'Camping Trip Packing List', 'packing', '⛺', '#f59e0b', householdId, now]);
+  db.run(`INSERT INTO custom_lists (id, name, type, icon, color, householdId, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)`, ['list_camp', 'Camping Trip Packing List', 'packing', '⛺', '#f59e0b', householdId, now]);
 
   const packingItems = [
     { id: 'p1', name: '4-Person Tent & Stakes', quantity: '1', checked: 0 },
@@ -1075,9 +1075,13 @@ function seedDemoData(db: Database) {
   ];
 
   for (const r of sampleRecipes) {
-    db.run(`INSERT INTO recipes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
-      r.id, r.title, r.description, r.imageUrl, r.prepTime, r.cookTime, r.servings, '', r.ingredients, r.instructions, r.tags, householdId, now
-    ]);
+    db.run(
+      `INSERT INTO recipes (id, title, description, imageUrl, prepTime, cookTime, servings, sourceUrl, ingredients, instructions, tags, category, householdId, createdAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        r.id, r.title, r.description, r.imageUrl, r.prepTime, r.cookTime, r.servings, '', r.ingredients, r.instructions, r.tags, 'Dinner', householdId, now
+      ]
+    );
   }
 
   // 7-Day Meal Plan
@@ -1087,9 +1091,9 @@ function seedDemoData(db: Database) {
     d.setDate(today.getDate() + i);
     const dateStr = d.toISOString().split('T')[0];
 
-    db.run(`INSERT INTO meal_plans VALUES (?, ?, ?, ?, ?, ?, ?)`, [`m_bk_${i}`, dateStr, 'breakfast', i === 0 || i === 6 ? 'Fluffy Blueberry Pancakes' : 'Greek Yogurt & Granola', '', null, householdId]);
-    db.run(`INSERT INTO meal_plans VALUES (?, ?, ?, ?, ?, ?, ?)`, [`m_lu_${i}`, dateStr, 'lunch', 'Turkey Club Wrap & Fresh Fruit', '', null, householdId]);
-    db.run(`INSERT INTO meal_plans VALUES (?, ?, ?, ?, ?, ?, ?)`, [`m_dn_${i}`, dateStr, 'dinner', i % 2 === 0 ? 'Creamy Garlic Tuscan Chicken' : 'Sheet Pan Lemon Herb Salmon', '', i % 2 === 0 ? 'r1' : 'r2', householdId]);
+    db.run(`INSERT INTO meal_plans (id, date, mealType, title, notes, recipeId, householdId) VALUES (?, ?, ?, ?, ?, ?, ?)`, [`m_bk_${i}`, dateStr, 'breakfast', i === 0 || i === 6 ? 'Fluffy Blueberry Pancakes' : 'Greek Yogurt & Granola', '', null, householdId]);
+    db.run(`INSERT INTO meal_plans (id, date, mealType, title, notes, recipeId, householdId) VALUES (?, ?, ?, ?, ?, ?, ?)`, [`m_lu_${i}`, dateStr, 'lunch', 'Turkey Club Wrap & Fresh Fruit', '', null, householdId]);
+    db.run(`INSERT INTO meal_plans (id, date, mealType, title, notes, recipeId, householdId) VALUES (?, ?, ?, ?, ?, ?, ?)`, [`m_dn_${i}`, dateStr, 'dinner', i % 2 === 0 ? 'Creamy Garlic Tuscan Chicken' : 'Sheet Pan Lemon Herb Salmon', '', i % 2 === 0 ? 'r1' : 'r2', householdId]);
   }
 
   // Calendar Events
