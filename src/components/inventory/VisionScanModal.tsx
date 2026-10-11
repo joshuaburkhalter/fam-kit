@@ -13,6 +13,7 @@ interface RecognizedItem {
   category: string;
   location: PantryLocation;
   quantity: string;
+  unit?: string;
   expiresAt: string;
   isStock?: boolean;
 }
@@ -197,6 +198,7 @@ export const VisionScanModal: React.FC<VisionScanModalProps> = ({
           category: i.category,
           location: i.location,
           quantity: i.quantity,
+          unit: i.unit ? i.unit.trim() : null,
           expiresAt: i.expiresAt,
           isStock: Boolean(i.isStock),
           restockCadenceDays: i.isStock ? 14 : null,
@@ -489,7 +491,19 @@ export const VisionScanModal: React.FC<VisionScanModalProps> = ({
                                 setRecognizedItems(updated);
                               }}
                               placeholder="Qty"
-                              className="w-20 text-xs px-2 py-1 bg-slate-900 border border-white/10 rounded-lg text-slate-200"
+                              className="w-14 text-xs px-2 py-1 bg-slate-900 border border-white/10 rounded-lg text-slate-200 font-mono"
+                            />
+
+                            <input
+                              type="text"
+                              value={item.unit || ''}
+                              onChange={(e) => {
+                                const updated = [...recognizedItems];
+                                updated[index].unit = e.target.value;
+                                setRecognizedItems(updated);
+                              }}
+                              placeholder="Unit (e.g. 16oz can)"
+                              className="w-24 text-xs px-2 py-1 bg-slate-900 border border-white/10 rounded-lg text-slate-200"
                             />
 
                             <label className="flex items-center gap-1 cursor-pointer text-[11px] text-slate-300 ml-auto">

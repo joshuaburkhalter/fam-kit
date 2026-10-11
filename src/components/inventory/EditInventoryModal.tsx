@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Drawer } from '../ui/Drawer';
 import { Trash2, ShoppingCart, Loader2, Sparkles, Package, Check, Plus } from 'lucide-react';
 import { api } from '../../lib/api';
-import { getFreshnessBadge, getDaysUntilExpiry } from '../../lib/shelfLife';
+import { getFreshnessBadge, getDaysUntilExpiry, parsePantryInput } from '../../lib/shelfLife';
 import type { InventoryItem, PantryLocation, PantryCategory } from '../../types';
 import { NewPantryCategoryModal } from './NewPantryCategoryModal';
 import { ManagePantryCategoriesModal } from './ManagePantryCategoriesModal';
@@ -40,6 +40,7 @@ export const EditInventoryModal: React.FC<EditInventoryModalProps> = ({
   const [category, setCategory] = useState('Pantry');
   const [location, setLocation] = useState<PantryLocation>('pantry');
   const [quantity, setQuantity] = useState('1');
+  const [unit, setUnit] = useState('');
   const [expiresAt, setExpiresAt] = useState('');
   const [isStock, setIsStock] = useState(false);
   const [restockCadenceDays, setRestockCadenceDays] = useState(14);
@@ -87,6 +88,7 @@ export const EditInventoryModal: React.FC<EditInventoryModalProps> = ({
       setCategory(item.category || (item.location ? item.location.charAt(0).toUpperCase() + item.location.slice(1) : 'Pantry'));
       setLocation(item.location || 'pantry');
       setQuantity(item.quantity || '1');
+      setUnit(item.unit || '');
       setExpiresAt(item.expiresAt ? item.expiresAt.split('T')[0] : '');
       setIsStock(Boolean(item.isStock));
       setRestockCadenceDays(item.restockCadenceDays || 14);
@@ -96,6 +98,7 @@ export const EditInventoryModal: React.FC<EditInventoryModalProps> = ({
       setCategory('Pantry');
       setLocation('pantry');
       setQuantity('1');
+      setUnit('');
       const defaultExp = new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0];
       setExpiresAt(defaultExp);
       setIsStock(false);
@@ -103,6 +106,14 @@ export const EditInventoryModal: React.FC<EditInventoryModalProps> = ({
       setRestockedSuccess(false);
     }
   }, [item, isOpen]);
+
+  const suggestedParsed = React.useMemo(() => {
+    if (item || !name.trim()) return null;
+    const parsed = parsePantryInput(name);
+    if (!parsed) return null;
+    if (parsed.name.toLowerCase() === name.trim().toLowerCase() && !parsed.unit && !parsed.quantity) return null;
+    return parsed;
+  }, [item, name]);
 
   const handleCategoryCreated = (newCat: PantryCategory) => {
     const updated = [...customCategories.filter((c) => c.name.toLowerCase() !== newCat.name.toLowerCase()), newCat];
@@ -152,7 +163,8 @@ export const EditInventoryModal: React.FC<EditInventoryModalProps> = ({
           name: name.trim(),
           category,
           location: effectiveLocation,
-          quantity,
+          quantity: quantity.trim(),
+          unit: unit.trim() || null,
           expiresAt,
           isStock,
           restockCadenceDays: isStock ? restockCadenceDays : null,
@@ -163,7 +175,8 @@ export const EditInventoryModal: React.FC<EditInventoryModalProps> = ({
           name: name.trim(),
           category,
           location: effectiveLocation,
-          quantity,
+          quantity: quantity.trim(),
+          unit: unit.trim() || null,
           expiresAt,
           isStock,
           restockCadenceDays: isStock ? restockCadenceDays : null,
@@ -278,9 +291,27 @@ export const EditInventoryModal: React.FC<EditInventoryModalProps> = ({
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Greek Yogurt, Eggs, Sourdough"
+              placeholder="e.g. Greek Yogurt, Tomato Sauce, Eggs"
               className="w-full px-3.5 py-2.5 bg-slate-900 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500"
             />
+            {suggestedParsed && (
+              <button
+                type="button"
+                onClick={() => {
+                  setName(suggestedParsed.name);
+                  if (suggestedParsed.quantity) setQuantity(suggestedParsed.quantity);
+                  if (suggestedParsed.unit) setUnit(suggestedParsed.unit);
+                }}
+                className="w-full flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs text-left hover:bg-emerald-500/25 transition-all cursor-pointer mt-1.5"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span className="truncate">
+                  Auto-fill: <strong>{suggestedParsed.name}</strong>
+                  {suggestedParsed.quantity && ` · Qty: ${suggestedParsed.quantity}`}
+                  {suggestedParsed.unit && ` · Unit: ${suggestedParsed.unit}`}
+                </span>
+              </button>
+            )}
           </div>
 
           <div>
@@ -375,29 +406,89 @@ export const EditInventoryModal: React.FC<EditInventoryModalProps> = ({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">
-                Quantity
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-slate-300">
+                  Quantity
+                </label>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const num = parseFloat(quantity) || 1;
+                      setQuantity(String(Math.max(1, num - 1)));
+                    }}
+                    className="w-5 h-5 rounded bg-white/5 hover:bg-white/10 text-slate-300 flex items-center justify-center text-xs font-bold transition-colors cursor-pointer"
+                    title="Decrease quantity"
+                  >
+                    -
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const num = parseFloat(quantity) || 0;
+                      setQuantity(String(num + 1));
+                    }}
+                    className="w-5 h-5 rounded bg-white/5 hover:bg-white/10 text-slate-300 flex items-center justify-center text-xs font-bold transition-colors cursor-pointer"
+                    title="Increase quantity"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
               <input
                 type="text"
                 value={quantity}
                 onChange={(e) => setQuantity(e.target.value)}
-                placeholder="e.g. 1 carton, 12 count"
-                className="w-full px-3 py-2 bg-slate-900 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500"
+                placeholder="e.g. 1, 12, 0.5"
+                className="w-full px-3 py-2 bg-slate-900 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
               />
             </div>
 
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1">
-                Expiration Date
+                Unit / Size
               </label>
               <input
-                type="date"
-                value={expiresAt}
-                onChange={(e) => setExpiresAt(e.target.value)}
+                type="text"
+                value={unit}
+                onChange={(e) => setUnit(e.target.value)}
+                placeholder="e.g. 16oz can, box, lbs"
                 className="w-full px-3 py-2 bg-slate-900 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500"
               />
             </div>
+          </div>
+
+          {/* Quick Unit Presets */}
+          <div className="space-y-1 -mt-1">
+            <span className="text-[10px] text-slate-400 font-semibold block">Common Units:</span>
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+              {['16oz can', 'can', 'box', 'bag', 'bottle', 'jar', 'oz', 'lbs', 'carton', 'pack'].map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => setUnit(preset)}
+                  className={`text-[10px] px-2 py-0.5 rounded-lg border shrink-0 transition-colors cursor-pointer ${
+                    unit.toLowerCase() === preset.toLowerCase()
+                      ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300 font-bold'
+                      : 'bg-white/5 border-white/10 text-slate-400 hover:text-white hover:border-white/20'
+                  }`}
+                >
+                  {preset}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 mb-1">
+              Expiration Date
+            </label>
+            <input
+              type="date"
+              value={expiresAt}
+              onChange={(e) => setExpiresAt(e.target.value)}
+              className="w-full px-3 py-2 bg-slate-900 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500"
+            />
           </div>
 
           {/* Keep In Stock Staple Settings */}

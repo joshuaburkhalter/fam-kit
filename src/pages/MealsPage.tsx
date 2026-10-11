@@ -60,7 +60,7 @@ import { VisionScanModal } from '../components/inventory/VisionScanModal';
 import { EditInventoryModal, DEFAULT_PANTRY_CATEGORIES } from '../components/inventory/EditInventoryModal';
 import { NewPantryCategoryModal } from '../components/inventory/NewPantryCategoryModal';
 import { ManagePantryCategoriesModal } from '../components/inventory/ManagePantryCategoriesModal';
-import { getFreshnessBadge, getLocationMeta } from '../lib/shelfLife';
+import { getFreshnessBadge, getLocationMeta, formatPantryQuantity } from '../lib/shelfLife';
 import { Toast, ToastAction } from '../components/ui/Toast';
 import { clearCalendarCache } from './CalendarPage';
 
@@ -2400,7 +2400,8 @@ export const MealsPage: React.FC = () => {
       if (
         query &&
         !item.name.toLowerCase().includes(query) &&
-        !(item.category && item.category.toLowerCase().includes(query))
+        !(item.category && item.category.toLowerCase().includes(query)) &&
+        !(item.unit && item.unit.toLowerCase().includes(query))
       ) {
         return false;
       }
@@ -3938,10 +3939,12 @@ export const MealsPage: React.FC = () => {
                             <div className="flex items-center justify-between gap-2 text-[11px] text-slate-400">
                               <div className="flex items-center gap-1.5 min-w-0 truncate">
                                 <span className="text-slate-300 truncate">{item.category || 'Pantry'}</span>
-                                {item.quantity && (
+                                {(item.quantity || item.unit) && (
                                   <>
                                     <span className="text-slate-600">·</span>
-                                    <span className="text-emerald-400 font-semibold truncate">{item.quantity}</span>
+                                    <span className="text-emerald-400 font-semibold truncate">
+                                      {formatPantryQuantity(item.quantity, item.unit)}
+                                    </span>
                                   </>
                                 )}
                                 {item.isStock && item.restockCadenceDays && (

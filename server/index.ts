@@ -43,6 +43,8 @@ import {
   getDaysUntilExpiry,
   getFreshnessStatus,
   addQuantities,
+  formatPantryQuantity,
+  parsePantryInput,
   PantryLocation,
 } from './shelfLife.js';
 import {
@@ -3029,7 +3031,8 @@ app.get('/api/inventory', (req, res) => {
       (i) =>
         i.name.toLowerCase().includes(search) ||
         (i.category && i.category.toLowerCase().includes(search)) ||
-        (i.location && i.location.toLowerCase().includes(search))
+        (i.location && i.location.toLowerCase().includes(search)) ||
+        (i.unit && i.unit.toLowerCase().includes(search))
     );
   }
 
@@ -3215,8 +3218,22 @@ app.post('/api/inventory', (req, res) => {
   }
 
   const now = new Date().toISOString();
-  const cleanName = name.trim();
+  let cleanName = name.trim();
   const cleanBarcode = barcode ? String(barcode).trim() : null;
+  let cleanQuantity = quantity ? String(quantity).trim() : null;
+  let cleanUnit = unit ? String(unit).trim() : null;
+
+  // Smart natural language fallback: e.g. "16oz can of tomato sauce and I have 12 of them"
+  if (!cleanUnit) {
+    const smart = parsePantryInput(cleanName);
+    if (smart) {
+      cleanName = smart.name;
+      if (!cleanQuantity || cleanQuantity === '1') {
+        cleanQuantity = smart.quantity || cleanQuantity || '1';
+      }
+      cleanUnit = smart.unit || cleanUnit;
+    }
+  }
 
   // Check if item already exists in this household
   let existing: any = null;
@@ -3244,7 +3261,7 @@ app.post('/api/inventory', (req, res) => {
 
   if (existing) {
     // Duplicate item found: increment existing quantity
-    const newQuantity = addQuantities(existing.quantity, quantity);
+    const newQuantity = addQuantities(existing.quantity, cleanQuantity);
     const calculatedExpiry = calculateExpiryDate(cleanName, existing.category || category, existing.location || location);
     const candidateExpiry = customExpiresAt || calculatedExpiry;
     const finalExpiresAt =
@@ -3255,6 +3272,7 @@ app.post('/api/inventory', (req, res) => {
     execute(
       `UPDATE inventory_items SET
          quantity = ?,
+         unit = COALESCE(?, unit),
          expiresAt = ?,
          barcode = COALESCE(barcode, ?),
          imageUrl = COALESCE(?, imageUrl),
@@ -3263,6 +3281,7 @@ app.post('/api/inventory', (req, res) => {
        WHERE id = ?`,
       [
         newQuantity,
+        cleanUnit || null,
         finalExpiresAt,
         cleanBarcode,
         imageUrl || null,
@@ -3299,8 +3318,8 @@ app.post('/api/inventory', (req, res) => {
       cleanBarcode,
       category,
       location,
-      quantity ? String(quantity).trim() : null,
-      unit ? String(unit).trim() : null,
+      cleanQuantity,
+      cleanUnit,
       imageUrl || null,
       isStock ? 1 : 0,
       restockCadenceDays ? parseInt(String(restockCadenceDays), 10) : null,
@@ -3336,10 +3355,23 @@ app.post('/api/inventory/batch', (req, res) => {
 
   for (const it of items) {
     if (!it.name || !it.name.trim()) continue;
-    const cleanName = it.name.trim();
+    let cleanName = it.name.trim();
     const cleanBarcode = it.barcode ? String(it.barcode).trim() : null;
     const loc = it.location || 'pantry';
     const cat = it.category || 'Pantry';
+    let cleanQuantity = it.quantity ? String(it.quantity).trim() : null;
+    let cleanUnit = it.unit ? String(it.unit).trim() : null;
+
+    if (!cleanUnit) {
+      const smart = parsePantryInput(cleanName);
+      if (smart) {
+        cleanName = smart.name;
+        if (!cleanQuantity || cleanQuantity === '1') {
+          cleanQuantity = smart.quantity || cleanQuantity || '1';
+        }
+        cleanUnit = smart.unit || cleanUnit;
+      }
+    }
 
     let existing: any = null;
     if (cleanBarcode) {
@@ -3359,7 +3391,7 @@ app.post('/api/inventory/batch', (req, res) => {
     }
 
     if (existing) {
-      const newQuantity = addQuantities(existing.quantity, it.quantity);
+      const newQuantity = addQuantities(existing.quantity, cleanQuantity);
       const calculatedExpiry = calculateExpiryDate(cleanName, existing.category || cat, existing.location || loc);
       const candidateExpiry = it.expiresAt || calculatedExpiry;
       const finalExpiresAt =
@@ -3370,6 +3402,7 @@ app.post('/api/inventory/batch', (req, res) => {
       execute(
         `UPDATE inventory_items SET
            quantity = ?,
+           unit = COALESCE(?, unit),
            expiresAt = ?,
            barcode = COALESCE(barcode, ?),
            imageUrl = COALESCE(?, imageUrl),
@@ -3378,6 +3411,7 @@ app.post('/api/inventory/batch', (req, res) => {
          WHERE id = ?`,
         [
           newQuantity,
+          cleanUnit || null,
           finalExpiresAt,
           cleanBarcode,
           it.imageUrl || null,
@@ -3402,8 +3436,8 @@ app.post('/api/inventory/batch', (req, res) => {
           cleanBarcode,
           cat,
           loc,
-          it.quantity ? String(it.quantity).trim() : null,
-          it.unit ? String(it.unit).trim() : null,
+          cleanQuantity,
+          cleanUnit,
           it.imageUrl || null,
           it.isStock ? 1 : 0,
           it.restockCadenceDays ? parseInt(String(it.restockCadenceDays), 10) : null,

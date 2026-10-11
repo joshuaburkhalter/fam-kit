@@ -26,6 +26,7 @@ import { Drawer } from '../components/ui/Drawer';
 import { Toast } from '../components/ui/Toast';
 import { NewGroceryStoreModal } from '../components/grocery/NewGroceryStoreModal';
 import { ManageGroceryStoresModal } from '../components/grocery/ManageGroceryStoresModal';
+import { formatPantryQuantity } from '../lib/shelfLife';
 
 interface GroceryDataCache {
   householdId: string;
@@ -365,8 +366,9 @@ export const GroceryPage: React.FC = () => {
 
   const formatPantryTooltip = (pantryItem: InventoryItem) => {
     const parts: string[] = [];
-    if (pantryItem.quantity) {
-      parts.push(`${pantryItem.quantity}${pantryItem.unit ? ` ${pantryItem.unit}` : ''}`);
+    const formattedQty = formatPantryQuantity(pantryItem.quantity, pantryItem.unit);
+    if (formattedQty) {
+      parts.push(formattedQty);
     }
     if (pantryItem.location) {
       parts.push(pantryItem.location.charAt(0).toUpperCase() + pantryItem.location.slice(1));

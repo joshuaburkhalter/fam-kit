@@ -241,3 +241,99 @@ export function addQuantities(
   return '2';
 }
 
+/**
+ * Cleanly formats a pantry item's quantity and unit for display.
+ * E.g.:
+ * - ("12", "16oz can") => "12 × 16oz can"
+ * - ("12", "can") => "12 cans"
+ * - ("1", "cans") => "1 can"
+ * - ("2", "lbs") => "2 lbs"
+ * - ("12 cans", "can") => "12 cans"
+ */
+export function formatPantryQuantity(
+  quantity?: string | null,
+  unit?: string | null
+): string {
+  const q = (quantity || '').trim();
+  const u = (unit || '').trim();
+
+  if (!q && !u) return '';
+  if (!u) return q;
+  if (!q) return u;
+
+  // Check if quantity string already contains the unit (e.g. '12 cans' contains 'can')
+  const baseU = u.replace(/s$/i, '').toLowerCase();
+  if (baseU.length >= 2 && q.toLowerCase().includes(baseU)) {
+    return q;
+  }
+
+  // If unit starts with a number (e.g. "16oz can", "12 oz bottle"), use "×"
+  if (/^\d/.test(u)) {
+    return `${q} × ${u}`;
+  }
+
+  const num = parseFloat(q);
+  if (!isNaN(num)) {
+    if (num > 1) {
+      const lowerU = u.toLowerCase();
+      if (!['oz', 'g', 'kg', 'ml', 'l', 'lbs', 'lb', 'fl oz'].includes(lowerU)) {
+        if (!lowerU.endsWith('s')) {
+          if (lowerU === 'loaf') return `${q} loaves`;
+          return `${q} ${u}s`;
+        }
+      }
+    } else if (num === 1) {
+      const lowerU = u.toLowerCase();
+      if (lowerU.endsWith('s') && !lowerU.endsWith('ss') && !['lbs'].includes(lowerU)) {
+        if (lowerU === 'loaves') return `${q} loaf`;
+        return `${q} ${u.slice(0, -1)}`;
+      }
+    }
+  }
+
+  return `${q} ${u}`;
+}
+
+/**
+ * Parses smart natural language text when entering a pantry item.
+ * E.g.:
+ * - "16oz can of tomato sauce and I have 12 of them" => name: "Tomato Sauce", quantity: "12", unit: "16oz can"
+ * - "12 16oz cans of tomato sauce" => name: "Tomato Sauce", quantity: "12", unit: "16oz cans"
+ * - "10 lbs flour" => name: "Flour", quantity: "10", unit: "lbs"
+ */
+export function parsePantryInput(input: string): { name: string; quantity: string; unit: string } | null {
+  const str = (input || '').trim();
+  if (!str) return null;
+  let quantity = '';
+  let unit = '';
+  let name = str;
+
+  // 1. Check for trailing: '... and I have 12 of them' or '... (have 12)' or '... qty: 12'
+  const trailingHave = str.match(/^(.*?)\s*(?:,|and|\&|\-)?\s*(?:I\s+have|have|quantity[:=]?|qty[:=]?)\s+(\d+(?:\.\d+)?)\s*(?:of\s+them)?$/i);
+  if (trailingHave) {
+    name = trailingHave[1].trim();
+    quantity = trailingHave[2].trim();
+  }
+
+  // 2. Check for leading count: '12 16oz cans of tomato sauce' or '12 cans of tomato sauce'
+  const leadingQty = name.match(/^(\d+(?:\.\d+)?)\s+(.*)$/);
+  if (leadingQty && !quantity) {
+    quantity = leadingQty[1];
+    name = leadingQty[2].trim();
+  }
+
+  // 3. Check for unit/package size at the beginning of name:
+  const unitRegex = /^(\d+(?:\.\d+)?\s*(?:oz|fl\s*oz|g|kg|ml|l|lb|lbs|ct|count)\s*(?:can|cans|bottle|bottles|jar|jars|box|boxes|bag|bags|carton|cartons|pack|packs|container|containers)?|(?:can|cans|bottle|bottles|jar|jars|box|boxes|bag|bags|carton|cartons|pack|packs|loaf|loaves|lb|lbs|oz|g|kg|ml|l|gallon|gallons|liter|liters|pint|pints|quart|quarts))\s+(?:of\s+)?(.*)$/i;
+  const unitMatch = name.match(unitRegex);
+  if (unitMatch) {
+    unit = unitMatch[1].trim();
+    name = unitMatch[2].trim();
+  }
+
+  if (!quantity && !unit) return null;
+
+  const cleanName = name.replace(/\b\w/g, (c) => c.toUpperCase()).trim();
+  return { name: cleanName, quantity, unit };
+}
+
+

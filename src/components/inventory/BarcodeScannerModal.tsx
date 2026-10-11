@@ -39,6 +39,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     category: string;
     location: PantryLocation;
     quantity: string;
+    unit?: string | null;
     imageUrl?: string | null;
     expiresAt: string;
   } | null>(null);
@@ -348,13 +349,19 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
       const res = await api.lookupBarcode(clean);
       if (res.found && res.item) {
         const inferred = inferStorageLocation(res.item.name || '', res.item.category || '');
+        let initQty = '1';
+        let initUnit = '';
+        if (res.item.quantity) {
+          initUnit = res.item.quantity.split('(')[0].trim();
+        }
         setLookupResult({
           found: true,
           barcode: clean,
           name: res.item.name || 'Pantry Item',
           category: inferred.category || res.item.category || 'Pantry',
           location: (inferred.location as PantryLocation) || (res.item.location as PantryLocation) || 'pantry',
-          quantity: res.item.quantity || '1',
+          quantity: initQty,
+          unit: initUnit || null,
           imageUrl: res.item.imageUrl || null,
           expiresAt: res.item.expiresAt || new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
         });
@@ -366,6 +373,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
           category: 'Pantry',
           location: 'pantry',
           quantity: '1',
+          unit: '',
           expiresAt: new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
         });
       }
@@ -377,6 +385,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
         category: 'Pantry',
         location: 'pantry',
         quantity: '1',
+        unit: '',
         expiresAt: new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
       });
     } finally {
@@ -393,7 +402,8 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
         barcode: lookupResult.barcode,
         category: lookupResult.category,
         location: lookupResult.location,
-        quantity: lookupResult.quantity,
+        quantity: lookupResult.quantity.trim(),
+        unit: lookupResult.unit ? lookupResult.unit.trim() : null,
         imageUrl: lookupResult.imageUrl,
         isStock,
         restockCadenceDays: isStock ? restockCadenceDays : null,
@@ -696,7 +706,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                     onChange={(e) =>
                       setLookupResult({ ...lookupResult, location: e.target.value as PantryLocation })
                     }
-                    className="w-full px-3 py-2 bg-slate-900 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500"
+                    className="w-full px-3 py-2 bg-slate-900 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500 cursor-pointer"
                   >
                     <option value="fridge">🧊 Fridge</option>
                     <option value="freezer">❄️ Freezer</option>
@@ -706,13 +716,40 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Category
+                  </label>
+                  <input
+                    type="text"
+                    value={lookupResult.category}
+                    onChange={(e) => setLookupResult({ ...lookupResult, category: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-900 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
                     Quantity
                   </label>
                   <input
                     type="text"
                     value={lookupResult.quantity}
                     onChange={(e) => setLookupResult({ ...lookupResult, quantity: e.target.value })}
-                    placeholder="e.g. 1 carton"
+                    placeholder="e.g. 1, 12, 0.5"
+                    className="w-full px-3 py-2 bg-slate-900 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Unit / Size
+                  </label>
+                  <input
+                    type="text"
+                    value={lookupResult.unit || ''}
+                    onChange={(e) => setLookupResult({ ...lookupResult, unit: e.target.value })}
+                    placeholder="e.g. 16oz can, box, lbs"
                     className="w-full px-3 py-2 bg-slate-900 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500"
                   />
                 </div>
