@@ -88,7 +88,14 @@ function saveDeviceProfile(user: User, householdName?: string) {
       householdName?: string;
     }> = stored ? JSON.parse(stored) : [];
 
-    const existingIndex = list.findIndex((p) => p.id === user.id);
+    // Clean up duplicates or stale entries for the same user
+    list = list.filter((p) => {
+      if (p.id === user.id) return false;
+      if (user.username && p.username && p.username.toLowerCase() === user.username.toLowerCase()) return false;
+      if (user.username === 'joshuaburkhalter' && p.username === 'joshua') return false;
+      return true;
+    });
+
     const profileEntry = {
       id: user.id,
       name: user.name,
@@ -100,11 +107,7 @@ function saveDeviceProfile(user: User, householdName?: string) {
       householdName: householdName || undefined,
     };
 
-    if (existingIndex >= 0) {
-      list[existingIndex] = profileEntry;
-    } else {
-      list.unshift(profileEntry);
-    }
+    list.unshift(profileEntry);
     list = list.slice(0, 10);
     localStorage.setItem('famkit_device_profiles', JSON.stringify(list));
   } catch (err) {

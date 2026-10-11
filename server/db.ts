@@ -714,49 +714,45 @@ function initSchema(db: Database) {
     `);
   } catch {}
   try {
-    // Ensure Joshua's account exists and is properly set as primary admin
-    const joshuaRows = db.exec(`
-      SELECT id FROM users 
-      WHERE LOWER(username) IN ('joshua', 'joshuaburkhalter') 
-         OR LOWER(email) IN ('joshua@redpointaudio.com', 'joshuaburkhalter@gmail.com')
-         OR LOWER(name) = 'joshua'
+    // 1. Remove preseeded demo users (Sarah, Leo, Emma) from the primary family household
+    db.run(`
+      DELETE FROM users 
+      WHERE id IN ('u2', 'u3', 'u4') 
+         OR LOWER(username) IN ('sarah', 'leo', 'emma') 
+         OR email LIKE '%@famkit.app'
     `);
-    const hasJoshua = (joshuaRows[0]?.values?.length || 0) > 0;
+    db.run(`
+      DELETE FROM calendar_events 
+      WHERE assignedMemberId IN ('u2', 'u3', 'u4') 
+         OR title LIKE 'Leo %' 
+         OR title LIKE 'Emma %'
+    `);
 
-    if (!hasJoshua) {
-      // If u1 is currently Alex (from legacy demo seed), restore u1 to Joshua
-      const u1Rows = db.exec("SELECT id, name, username, email FROM users WHERE id = 'u1'");
-      if ((u1Rows[0]?.values?.length || 0) > 0) {
-        db.run(`
-          UPDATE users 
-          SET name = 'Joshua', 
-              username = 'joshua', 
-              email = 'joshua@redpointaudio.com', 
-              role = 'Admin',
-              avatar = '👨‍💻',
-              color = '#10b981'
-          WHERE id = 'u1'
-        `);
-      } else {
-        const defaultHousehold = db.exec("SELECT id FROM households LIMIT 1");
-        const hid = (defaultHousehold[0]?.values[0]?.[0] as string) || 'fam_default_1';
-        db.run(`
-          INSERT INTO users (id, name, username, email, avatar, color, role, householdId, password, createdAt)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `, ['u1', 'Joshua', 'joshua', 'joshua@redpointaudio.com', '👨‍💻', '#10b981', 'Admin', hid, 'password123', new Date().toISOString()]);
-      }
-    } else {
-      // Ensure Joshua has Admin role
+    // 2. Ensure Joshua's account username is strictly 'joshuaburkhalter' and role is Admin
+    const u1Rows = db.exec("SELECT id, name, username, email FROM users WHERE id = 'u1' OR LOWER(username) IN ('joshua', 'joshuaburkhalter')");
+    if ((u1Rows[0]?.values?.length || 0) > 0) {
       db.run(`
         UPDATE users 
-        SET role = 'Admin' 
-        WHERE LOWER(username) IN ('joshua', 'joshuaburkhalter') 
+        SET name = 'Joshua', 
+            username = 'joshuaburkhalter', 
+            email = 'joshua@redpointaudio.com', 
+            role = 'Admin',
+            avatar = '👨‍💻',
+            color = '#10b981'
+        WHERE id = 'u1' 
+           OR LOWER(username) IN ('joshua', 'joshuaburkhalter')
            OR LOWER(email) IN ('joshua@redpointaudio.com', 'joshuaburkhalter@gmail.com')
-           OR LOWER(name) = 'joshua'
       `);
+    } else {
+      const defaultHousehold = db.exec("SELECT id FROM households LIMIT 1");
+      const hid = (defaultHousehold[0]?.values[0]?.[0] as string) || 'fam_default_1';
+      db.run(`
+        INSERT INTO users (id, name, username, email, avatar, color, role, householdId, password, createdAt)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, ['u1', 'Joshua', 'joshuaburkhalter', 'joshua@redpointaudio.com', '👨‍💻', '#10b981', 'Admin', hid, 'password123', new Date().toISOString()]);
     }
   } catch (err) {
-    console.error('Error ensuring Joshua account:', err);
+    console.error('Error ensuring joshuaburkhalter account and removing demo family:', err);
   }
 
   // Backfill demo households with active lifetime access so demo users remain functional
@@ -1006,10 +1002,7 @@ function seedDemoData(db: Database) {
 
   db.run(`INSERT INTO households (id, name, inviteCode, createdAt, subscriptionStatus, subscriptionPlan) VALUES (?, ?, ?, ?, ?, ?)`, [householdId, 'My Family', demoInviteCode, now, 'active', 'lifetime_founder']);
 
-  db.run(`INSERT INTO users (id, name, username, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, ['u1', 'Joshua', 'joshua', 'joshua@redpointaudio.com', '👨‍💻', '#10b981', 'Admin', householdId, 'password123']);
-  db.run(`INSERT INTO users (id, name, username, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, ['u2', 'Sarah', 'sarah', 'sarah@famkit.app', '👩‍🏫', '#ec4899', 'Parent', householdId, 'password123']);
-  db.run(`INSERT INTO users (id, name, username, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, ['u3', 'Leo', 'leo', 'leo@famkit.app', '👦', '#f59e0b', 'Kid', householdId, 'password123']);
-  db.run(`INSERT INTO users (id, name, username, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, ['u4', 'Emma', 'emma', 'emma@famkit.app', '👧', '#06b6d4', 'Kid', householdId, 'password123']);
+  db.run(`INSERT INTO users (id, name, username, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, ['u1', 'Joshua', 'joshuaburkhalter', 'joshua@redpointaudio.com', '👨‍💻', '#10b981', 'Admin', householdId, 'password123']);
 
   createDefaultAisles(householdId, db);
 
@@ -1132,12 +1125,8 @@ function seedDemoData(db: Database) {
   }
 
   // Calendar Events
-  const tomorrowStr = new Date(Date.now() + 86400000).toISOString().split('T')[0];
-  const dayAfterStr = new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0];
   const fridayStr = new Date(Date.now() + 86400000 * 4).toISOString().split('T')[0];
 
-  db.run(`INSERT INTO calendar_events (id, title, description, date, startTime, endTime, category, location, assignedMemberId, householdId, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, ['ev1', 'Leo Soccer Practice', '', tomorrowStr, '16:30', '17:45', 'Sports', 'Community Park Field #2', 'u3', householdId, now, now]);
-  db.run(`INSERT INTO calendar_events (id, title, description, date, startTime, endTime, category, location, assignedMemberId, householdId, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, ['ev2', 'Emma Ballet Class', '', dayAfterStr, '15:30', '16:30', 'School', 'Downtown Dance Studio', 'u4', householdId, now, now]);
   db.run(`INSERT INTO calendar_events (id, title, description, date, startTime, endTime, category, location, assignedMemberId, householdId, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, ['ev3', 'Family Pizza & Movie Night 🍕', '', fridayStr, '18:30', '21:00', 'Family', 'Living Room', 'u1', householdId, now, now]);
 }
 

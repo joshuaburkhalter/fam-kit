@@ -15,6 +15,7 @@ import {
   Home,
   ArrowLeft,
   Gift,
+  X,
 } from 'lucide-react';
 import { usePWA } from '../context/PWAContext';
 import { HomebaseLogo } from './HomebaseLogo';
@@ -42,7 +43,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
   const [tab, setTab] = useState<'login' | 'register'>(initialTab);
 
   // Sign in state
-  const [savedProfiles] = useState<Array<{
+  const [savedProfiles, setSavedProfiles] = useState<Array<{
     id: string;
     name: string;
     username?: string;
@@ -250,47 +251,64 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                     {savedProfiles.map((p) => {
                       const isSelected = selectedProfileId === p.id || loginIdentifier.toLowerCase() === (p.username || '').toLowerCase() || loginIdentifier.toLowerCase() === p.name.toLowerCase();
                       return (
-                        <button
-                          key={p.id}
-                          type="button"
-                          onClick={() => {
-                            setSelectedProfileId(p.id);
-                            setLoginIdentifier(p.username || p.name);
-                            setErrorMessage(null);
-                          }}
-                          className={`p-2.5 rounded-2xl border flex items-center gap-2.5 text-left transition-all cursor-pointer ${
-                            isSelected
-                              ? 'bg-emerald-500/15 border-emerald-500/50 ring-1 ring-emerald-500/30 shadow-md shadow-emerald-500/10'
-                              : 'bg-slate-900/60 border-white/5 hover:border-white/20 hover:bg-slate-900/90'
-                          }`}
-                        >
-                          {p.avatar && (p.avatar.startsWith('data:image') || p.avatar.startsWith('http')) ? (
-                            <img
-                              src={p.avatar}
-                              alt={p.name}
-                              className="w-8 h-8 rounded-xl object-cover shrink-0 ring-1 ring-white/10"
-                            />
-                          ) : (
-                            <div
-                              className="w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold text-white shrink-0 shadow"
-                              style={{ backgroundColor: p.avatar_color || '#10b981' }}
-                            >
-                              {p.name.charAt(0).toUpperCase()}
-                            </div>
-                          )}
-                          <div className="min-w-0">
-                            <div className="text-xs font-bold text-white truncate">{p.name}</div>
-                            {p.username ? (
-                              <div className="text-[10px] font-mono text-emerald-400 truncate">
-                                @{p.username}
-                              </div>
+                        <div key={p.id} className="relative group">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedProfileId(p.id);
+                              setLoginIdentifier(p.username || p.name);
+                              setErrorMessage(null);
+                            }}
+                            className={`w-full p-2.5 rounded-2xl border flex items-center gap-2.5 text-left transition-all cursor-pointer ${
+                              isSelected
+                                ? 'bg-emerald-500/15 border-emerald-500/50 ring-1 ring-emerald-500/30 shadow-md shadow-emerald-500/10'
+                                : 'bg-slate-900/60 border-white/5 hover:border-white/20 hover:bg-slate-900/90'
+                            }`}
+                          >
+                            {p.avatar && (p.avatar.startsWith('data:image') || p.avatar.startsWith('http')) ? (
+                              <img
+                                src={p.avatar}
+                                alt={p.name}
+                                className="w-8 h-8 rounded-xl object-cover shrink-0 ring-1 ring-white/10"
+                              />
                             ) : (
-                              <div className="text-[10px] text-slate-400 truncate capitalize">
-                                {p.role || 'Member'}
+                              <div
+                                className="w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold text-white shrink-0 shadow"
+                                style={{ backgroundColor: p.avatar_color || '#10b981' }}
+                              >
+                                {p.name.charAt(0).toUpperCase()}
                               </div>
                             )}
-                          </div>
-                        </button>
+                            <div className="min-w-0 pr-4">
+                              <div className="text-xs font-bold text-white truncate">{p.name}</div>
+                              {p.username ? (
+                                <div className="text-[10px] font-mono text-emerald-400 truncate">
+                                  @{p.username}
+                                </div>
+                              ) : (
+                                <div className="text-[10px] text-slate-400 truncate capitalize">
+                                  {p.role || 'Member'}
+                                </div>
+                              )}
+                            </div>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const updated = savedProfiles.filter((item) => item.id !== p.id && item.username !== p.username);
+                              setSavedProfiles(updated);
+                              try {
+                                localStorage.setItem('famkit_device_profiles', JSON.stringify(updated));
+                              } catch {}
+                              if (selectedProfileId === p.id) setSelectedProfileId(null);
+                            }}
+                            className="absolute top-1.5 right-1.5 p-1 rounded-full text-slate-500 hover:text-red-400 hover:bg-white/10 transition-colors cursor-pointer"
+                            title="Remove profile from this device"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
                       );
                     })}
                   </div>
