@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import {
   Mic,
   MicOff,
@@ -83,6 +83,8 @@ export const FloatingAssistant: React.FC = () => {
   const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const historyPushedRef = useRef(false);
   const closedByPopstateRef = useRef(false);
+  const prevMessagesLengthRef = useRef(messages.length);
+  const wasExpandedRef = useRef(false);
 
   // Smooth close with animated out transition
   const handleSmoothClose = (fromPopState: boolean = false) => {
@@ -198,14 +200,38 @@ export const FloatingAssistant: React.FC = () => {
     }
   };
 
-  // Scroll to bottom when new messages arrive or loading
-  useEffect(() => {
-    if (!isExpanded || !chatContainerRef.current) return;
+  // Position at latest message instantly on open; smoothly scroll on new incoming messages while open
+  useLayoutEffect(() => {
+    if (!isExpanded || !chatContainerRef.current) {
+      wasExpandedRef.current = false;
+      return;
+    }
+
     const container = chatContainerRef.current;
-    container.scrollTo({
-      top: container.scrollHeight,
-      behavior: 'smooth',
-    });
+
+    if (!wasExpandedRef.current) {
+      // Just opened: immediately jump to the latest message with zero scrolling animation
+      wasExpandedRef.current = true;
+      prevMessagesLengthRef.current = messages.length;
+      container.scrollTop = container.scrollHeight;
+
+      // Ensure layout stabilizes at the bottom on next frame without animation
+      requestAnimationFrame(() => {
+        if (chatContainerRef.current) {
+          chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+        }
+      });
+      return;
+    }
+
+    // While already open: smoothly scroll down when user sends a message, receives a reply, or when loading starts
+    if (messages.length > prevMessagesLengthRef.current || isLoading) {
+      container.scrollTo({
+        top: container.scrollHeight,
+        behavior: 'smooth',
+      });
+    }
+    prevMessagesLengthRef.current = messages.length;
   }, [messages, isLoading, isExpanded]);
 
   const handleSendMessage = async (textToSend?: string) => {
