@@ -2105,8 +2105,13 @@ export const GroceryPage: React.FC = () => {
                                   })()}
                                 </div>
                                 {item.notes && (
-                                  <p className="text-[11px] text-emerald-400/80 truncate leading-tight mt-0.5">
-                                    {item.notes}
+                                  <p className="text-[11px] text-emerald-400/80 truncate leading-tight mt-0.5 flex items-center gap-1">
+                                    {item.notes.toLowerCase().includes('substitute for') && (
+                                      <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0">
+                                        ⇄ Swap
+                                      </span>
+                                    )}
+                                    <span className="truncate">{item.notes}</span>
                                   </p>
                                 )}
                               </div>
@@ -2273,8 +2278,13 @@ export const GroceryPage: React.FC = () => {
                           })()}
                         </div>
                         {item.notes && (
-                          <p className="text-[11px] text-emerald-400/80 truncate leading-tight mt-0.5">
-                            {item.notes}
+                          <p className="text-[11px] text-emerald-400/80 truncate leading-tight mt-0.5 flex items-center gap-1">
+                            {item.notes.toLowerCase().includes('substitute for') && (
+                              <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0">
+                                ⇄ Swap
+                              </span>
+                            )}
+                            <span className="truncate">{item.notes}</span>
                           </p>
                         )}
                       </div>
@@ -2421,8 +2431,13 @@ export const GroceryPage: React.FC = () => {
                         })()}
                       </div>
                       {item.notes && (
-                        <p className="text-[11px] text-emerald-400/80 truncate leading-tight mt-0.5">
-                          {item.notes}
+                        <p className="text-[11px] text-emerald-400/80 truncate leading-tight mt-0.5 flex items-center gap-1">
+                          {item.notes.toLowerCase().includes('substitute for') && (
+                            <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0">
+                              ⇄ Swap
+                            </span>
+                          )}
+                          <span className="truncate">{item.notes}</span>
                         </p>
                       )}
                     </div>

@@ -20,15 +20,92 @@ import {
   BookOpen,
   Pencil,
   Camera,
+  ArrowLeftRight,
 } from 'lucide-react';
-import type { Recipe, GroceryItem } from '../types';
+import type { Recipe, GroceryItem, IngredientSubstitution } from '../types';
 import { usePWA } from '../context/PWAContext';
 import { api } from '../lib/api';
 import { compressImageFile } from '../lib/imageCompression';
 import { RecipeScraperModal, extractSharedUrl } from '../components/RecipeScraperModal';
 import { EditRecipeModal } from '../components/EditRecipeModal';
+import { IngredientSubstitutionModal } from '../components/IngredientSubstitutionModal';
+import { useLongPress } from '../hooks/useLongPress';
 import { CheckSparkle, CelebrationConfetti, triggerHapticCheck } from '../components/CheckSparkle';
 import { Toast } from '../components/ui/Toast';
+
+const RecipeIngredientRow: React.FC<{
+  ing: { item: string; amount?: string; unit?: string };
+  index: number;
+  isChecked: boolean;
+  isJustChecked: boolean;
+  onToggle: () => void;
+  onOpenSubstitutions: () => void;
+}> = ({ ing, index, isChecked, isJustChecked, onToggle, onOpenSubstitutions }) => {
+  const { handlers, isPressing } = useLongPress({
+    threshold: 420,
+    onLongPress: onOpenSubstitutions,
+    onClick: onToggle,
+  });
+
+  return (
+    <div
+      {...handlers}
+      className={`p-3 rounded-2xl flex items-center justify-between text-xs cursor-pointer transition-all border select-none ${
+        isChecked
+          ? 'bg-emerald-500/10 text-slate-400 border-emerald-500/20'
+          : 'bg-slate-900/60 hover:bg-slate-900/90 text-slate-200 border-white/5'
+      } ${isJustChecked ? 'animate-row-crossing ring-1 ring-emerald-500/30' : ''} ${
+        isPressing ? 'scale-[0.98] ring-2 ring-emerald-500/40 bg-slate-850' : ''
+      }`}
+      title="Tap to check off · Hold or right-click to suggest substitutions"
+    >
+      <div className="flex items-center gap-2.5 min-w-0 pr-2">
+        <div
+          className={`relative w-4 h-4 rounded-md border flex items-center justify-center shrink-0 transition-all ${
+            isChecked
+              ? 'border-emerald-500 bg-emerald-500 text-slate-950 shadow-sm shadow-emerald-500/30 ' +
+                (isJustChecked ? 'animate-check-pop' : '')
+              : 'border-white/20'
+          }`}
+        >
+          <CheckSparkle trigger={isJustChecked} />
+          {isChecked && <Check className="w-3 h-3 font-bold stroke-[3]" />}
+        </div>
+        <span
+          className={`font-medium selectable-text transition-colors ${
+            isChecked ? 'text-slate-400' : ''
+          }`}
+        >
+          {ing.item}
+        </span>
+      </div>
+
+      <div className="flex items-center gap-2 shrink-0">
+        {ing.amount && (
+          <span
+            className={`font-mono font-bold shrink-0 ${
+              isChecked ? 'text-slate-500' : 'text-slate-400'
+            }`}
+          >
+            {ing.amount} {ing.unit || ''}
+          </span>
+        )}
+
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenSubstitutions();
+          }}
+          className="p-1 rounded-lg text-slate-500 hover:text-emerald-400 hover:bg-white/10 transition-colors opacity-75 hover:opacity-100 cursor-pointer"
+          title="Suggest substitutions (e.g. Greek yogurt for sour cream)"
+        >
+          <ArrowLeftRight className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+};
 
 export const RecipesPage: React.FC = () => {
   const { household, apiKey } = usePWA();
@@ -41,6 +118,10 @@ export const RecipesPage: React.FC = () => {
   const [isEditRecipeModalOpen, setIsEditRecipeModalOpen] = useState(false);
   const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [substitutionTarget, setSubstitutionTarget] = useState<{
+    ingredient: { item: string; amount?: string; unit?: string };
+    index: number;
+  } | null>(null);
 
   // Check URL parameters for Web Share Target PWA sharing
   useEffect(() => {
@@ -372,6 +453,90 @@ export const RecipesPage: React.FC = () => {
       setGroceryItems(prevItems);
       alert(err.message || 'Failed to add ingredients to grocery list');
     }
+  };
+
+  const handleSelectSubstitution = async ({
+    substitution,
+    updateRecipeInDb,
+  }: {
+    substitution: IngredientSubstitution;
+    updateRecipeInDb: boolean;
+  }) => {
+    if (!selectedRecipe || !household || !substitutionTarget) return;
+
+    const originalItem = substitutionTarget.ingredient.item;
+    const originalAmount = substitutionTarget.ingredient.amount;
+    const originalUnit = substitutionTarget.ingredient.unit;
+    const recipeTitle = selectedRecipe.title;
+    const prefix = `for: ${recipeTitle.trim().toLowerCase()}`;
+
+    // 1. Check if the original ingredient is already on the grocery list for this recipe
+    const existingGroceryItem = groceryItems.find(
+      (g) =>
+        !g.is_completed &&
+        g.notes &&
+        g.notes.trim().toLowerCase().startsWith(prefix) &&
+        (g.name.toLowerCase().includes(originalItem.toLowerCase()) ||
+          originalItem.toLowerCase().includes(g.name.toLowerCase()))
+    );
+
+    if (existingGroceryItem) {
+      // Update existing grocery item with the replacement
+      const updated = await api.updateGroceryItem(existingGroceryItem.id, {
+        name: substitution.groceryItemName || substitution.name,
+        quantity: substitution.amount || existingGroceryItem.quantity || '1',
+        unit: substitution.unit || existingGroceryItem.unit,
+        note: `For: ${recipeTitle} (substitute for ${originalItem})`,
+      });
+      setGroceryItems((prev) =>
+        prev.map((item) =>
+          item.id === existingGroceryItem.id
+            ? {
+                ...item,
+                name: substitution.groceryItemName || substitution.name,
+                quantity: substitution.amount || item.quantity || '1',
+                unit: substitution.unit || item.unit,
+                notes: `For: ${recipeTitle} (substitute for ${originalItem})`,
+              }
+            : item
+        )
+      );
+    } else {
+      // Add replacement to grocery list
+      const newItem = await api.addGroceryItem(household.id, {
+        name: substitution.groceryItemName || substitution.name,
+        quantity: substitution.amount || originalAmount || '1',
+        unit: substitution.unit || originalUnit,
+        notes: `For: ${recipeTitle} (substitute for ${originalItem})`,
+        list_type: 'grocery',
+      });
+      setGroceryItems((prev) => [newItem, ...prev]);
+    }
+
+    // 2. If requested, also update the recipe itself permanently
+    if (updateRecipeInDb) {
+      const updatedIngredients = selectedRecipe.ingredients.map((item, idx) =>
+        idx === substitutionTarget.index
+          ? {
+              ...item,
+              item: substitution.name,
+              amount: substitution.amount || item.amount,
+              unit: substitution.unit || item.unit,
+            }
+          : item
+      );
+      const updated = await api.updateRecipe(selectedRecipe.id, {
+        ingredients: updatedIngredients,
+      });
+      setSelectedRecipe(updated);
+      setRecipes((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+    }
+
+    setAddedGroceryFeedback(
+      `Substituted "${originalItem}" with "${substitution.name}" on Grocery list!`
+    );
+    setTimeout(() => setAddedGroceryFeedback(null), 3500);
+    triggerHapticCheck();
   };
 
   const handleToggleStep = (index: number) => {
@@ -782,52 +947,26 @@ export const RecipesPage: React.FC = () => {
                   </button>
                 </div>
 
+                {/* Substitution Tip Banner */}
+                <div className="flex items-center gap-2 text-[11px] text-slate-400 bg-slate-900/60 p-2.5 rounded-2xl border border-white/5">
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <span>
+                    <strong>Hold or tap ⇄ on any ingredient</strong> to see healthy or pantry substitutions (e.g. Greek yogurt for sour cream).
+                  </span>
+                </div>
+
                 <div className="space-y-1.5">
-                  {selectedRecipe.ingredients.map((ing, i) => {
-                    const isJustChecked = justCheckedIngredient === i;
-                    const isChecked = Boolean(checkedIngredients[i]);
-                    return (
-                      <div
-                        key={i}
-                        onClick={() => handleToggleIngredient(i)}
-                        className={`p-3 rounded-2xl flex items-center justify-between text-xs cursor-pointer transition-all border ${
-                          isChecked
-                            ? 'bg-emerald-500/10 text-slate-400 border-emerald-500/20'
-                            : 'bg-slate-900/60 hover:bg-slate-900/90 text-slate-200 border-white/5'
-                        } ${isJustChecked ? 'animate-row-crossing ring-1 ring-emerald-500/30' : ''}`}
-                      >
-                        <div className="flex items-center gap-2.5 min-w-0 pr-2">
-                          <div
-                            className={`relative w-4 h-4 rounded-md border flex items-center justify-center shrink-0 transition-all ${
-                              isChecked
-                                ? 'border-emerald-500 bg-emerald-500 text-slate-950 shadow-sm shadow-emerald-500/30 ' +
-                                  (isJustChecked ? 'animate-check-pop' : '')
-                                : 'border-white/20'
-                            }`}
-                          >
-                            <CheckSparkle trigger={isJustChecked} />
-                            {isChecked && <Check className="w-3 h-3 font-bold stroke-[3]" />}
-                          </div>
-                          <span
-                            className={`font-medium selectable-text transition-colors ${
-                              isChecked ? 'text-slate-400' : ''
-                            }`}
-                          >
-                            {ing.item}
-                          </span>
-                        </div>
-                        {ing.amount && (
-                          <span
-                            className={`font-mono font-bold shrink-0 ${
-                              isChecked ? 'text-slate-500' : 'text-slate-400'
-                            }`}
-                          >
-                            {ing.amount} {ing.unit || ''}
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })}
+                  {selectedRecipe.ingredients.map((ing, i) => (
+                    <RecipeIngredientRow
+                      key={i}
+                      ing={ing}
+                      index={i}
+                      isChecked={Boolean(checkedIngredients[i])}
+                      isJustChecked={justCheckedIngredient === i}
+                      onToggle={() => handleToggleIngredient(i)}
+                      onOpenSubstitutions={() => setSubstitutionTarget({ ingredient: ing, index: i })}
+                    />
+                  ))}
                 </div>
               </div>
 
@@ -1198,6 +1337,30 @@ export const RecipesPage: React.FC = () => {
             setIsEditRecipeModalOpen(false);
             setEditingRecipe(null);
           }}
+        />
+      )}
+
+      {/* Ingredient Substitution Modal */}
+      {selectedRecipe && (
+        <IngredientSubstitutionModal
+          isOpen={Boolean(substitutionTarget)}
+          onClose={() => setSubstitutionTarget(null)}
+          ingredient={substitutionTarget?.ingredient || null}
+          recipeTitle={selectedRecipe.title}
+          recipeId={selectedRecipe.id}
+          householdId={household?.id || ''}
+          isAlreadyOnGrocery={Boolean(
+            substitutionTarget &&
+              groceryItems.some(
+                (g) =>
+                  !g.is_completed &&
+                  g.notes &&
+                  g.notes.toLowerCase().includes(`for: ${selectedRecipe.title.toLowerCase()}`) &&
+                  (g.name.toLowerCase().includes(substitutionTarget.ingredient.item.toLowerCase()) ||
+                    substitutionTarget.ingredient.item.toLowerCase().includes(g.name.toLowerCase()))
+              )
+          )}
+          onSelectSubstitution={handleSelectSubstitution}
         />
       )}
     </div>

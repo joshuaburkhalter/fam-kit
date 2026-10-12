@@ -25,8 +25,10 @@ import type {
   PantryCategory,
   RecipeCategory,
   GroceryStore,
+  IngredientSubstitution,
 } from '../types';
 import { filterRecipeIngredientsForGrocery } from './groceryStaples';
+import { getCuratedSubstitutions } from './substitutions';
 
 const BASE_URL = '/api';
 
@@ -669,6 +671,25 @@ export const api = {
 
   deleteRecipe: (id: string) =>
     fetchJson<{ success: boolean }>(`/recipes?id=${id}`, { method: 'DELETE' }),
+
+  getIngredientSubstitutions: async (params: {
+    ingredient: string;
+    amount?: string;
+    unit?: string;
+    recipeTitle?: string;
+    apiKey?: string;
+  }): Promise<{ substitutions: IngredientSubstitution[] }> => {
+    try {
+      const res = await fetchJson<{ substitutions: IngredientSubstitution[] }>('/recipes/substitutions', {
+        method: 'POST',
+        body: JSON.stringify(params),
+      });
+      return res;
+    } catch (err) {
+      console.warn('Falling back to local curated substitutions:', err);
+      return { substitutions: getCuratedSubstitutions(params.ingredient, params.amount, params.unit) };
+    }
+  },
 
   regenerateRecipeImage: async (
     recipeId: string,

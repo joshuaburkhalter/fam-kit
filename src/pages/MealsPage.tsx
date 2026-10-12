@@ -36,6 +36,7 @@ import {
   Star,
   Tag,
   FolderPlus,
+  ArrowLeftRight,
 } from 'lucide-react';
 import { compressImageFile } from '../lib/imageCompression';
 import {
@@ -46,13 +47,15 @@ import {
   isYesterday,
   parseISO,
 } from 'date-fns';
-import type { WeeklyMeal, MealLog, Recipe, GroceryItem, InventoryItem, PantryLocation, PantryCategory, RecipeCategory } from '../types';
+import type { WeeklyMeal, MealLog, Recipe, GroceryItem, InventoryItem, PantryLocation, PantryCategory, RecipeCategory, IngredientSubstitution } from '../types';
 import { usePWA } from '../context/PWAContext';
 import { api } from '../lib/api';
 import { CheckSparkle, CelebrationConfetti, triggerHapticCheck } from '../components/CheckSparkle';
 import { Drawer } from '../components/ui/Drawer';
 import { RecipeScraperModal, extractSharedUrl } from '../components/RecipeScraperModal';
 import { EditRecipeModal } from '../components/EditRecipeModal';
+import { IngredientSubstitutionModal } from '../components/IngredientSubstitutionModal';
+import { useLongPress } from '../hooks/useLongPress';
 import { NewRecipeCategoryModal } from '../components/recipes/NewRecipeCategoryModal';
 import { ManageRecipeCategoriesModal, CORE_RECIPE_CATEGORIES } from '../components/recipes/ManageRecipeCategoriesModal';
 import { BarcodeScannerModal } from '../components/inventory/BarcodeScannerModal';
@@ -120,6 +123,84 @@ function resolveInitialSubTab(): 'recipes' | 'planner' | 'pantry' | 'history' {
   } catch {}
   return 'recipes';
 }
+
+const MealRecipeIngredientRow: React.FC<{
+  ing: { item: string; amount?: string; unit?: string; category?: string };
+  idx: number;
+  isChecked: boolean;
+  pantryMatch?: InventoryItem | null;
+  onToggle: () => void;
+  onOpenSubstitutions: () => void;
+}> = ({ ing, idx, isChecked, pantryMatch, onToggle, onOpenSubstitutions }) => {
+  const { handlers, isPressing } = useLongPress({
+    threshold: 420,
+    onLongPress: onOpenSubstitutions,
+    onClick: onToggle,
+  });
+
+  return (
+    <div
+      {...handlers}
+      className={`p-2.5 rounded-2xl border transition-all cursor-pointer flex items-center gap-2.5 select-none ${
+        isChecked
+          ? 'bg-emerald-500/15 border-emerald-500/35 text-white shadow-xs'
+          : 'bg-slate-900/60 border-white/5 hover:border-white/10 text-slate-200'
+      } ${isPressing ? 'scale-[0.98] ring-2 ring-emerald-500/40 bg-slate-850' : ''}`}
+      title={
+        isChecked
+          ? 'On Grocery list (tap to remove · hold to find substitutions)'
+          : 'Click to add to Grocery list · hold to find substitutions'
+      }
+    >
+      <div
+        className={`w-5 h-5 rounded-lg flex items-center justify-center text-xs transition-all shrink-0 ${
+          isChecked
+            ? 'bg-emerald-500 text-slate-950 font-black shadow-xs'
+            : 'bg-slate-800 border border-slate-700 text-transparent'
+        }`}
+      >
+        <Check className="w-3.5 h-3.5 stroke-[3]" />
+      </div>
+      <span className="text-xs leading-tight flex-1">
+        {ing.amount && (
+          <strong className="font-semibold text-emerald-400 mr-1">
+            {ing.amount} {ing.unit || ''}
+          </strong>
+        )}
+        <span className={isChecked ? 'text-white font-medium' : 'text-slate-300'}>{ing.item}</span>
+      </span>
+      {isChecked ? (
+        <span
+          className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 flex items-center gap-1 shrink-0 font-bold"
+          title="Item is on your Grocery list"
+        >
+          <ShoppingCart className="w-2.5 h-2.5" />
+          <span>In Grocery</span>
+        </span>
+      ) : (
+        pantryMatch && (
+          <span
+            className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800/80 text-emerald-400 border border-emerald-500/20 flex items-center gap-1 shrink-0 font-medium"
+            title={`In pantry: ${pantryMatch.name} (${pantryMatch.quantity || 'Available'})`}
+          >
+            <span>✓ In Pantry</span>
+          </span>
+        )
+      )}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onOpenSubstitutions();
+        }}
+        className="p-1 rounded-lg text-slate-500 hover:text-emerald-400 hover:bg-white/10 transition-colors opacity-70 hover:opacity-100 cursor-pointer shrink-0"
+        title="Suggest substitutions (e.g. Greek yogurt for sour cream)"
+      >
+        <ArrowLeftRight className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  );
+};
 
 export const MealsPage: React.FC = () => {
   const { household, users, currentUser, apiKey } = usePWA();
@@ -197,6 +278,10 @@ export const MealsPage: React.FC = () => {
   const [justCompletedStep, setJustCompletedStep] = useState<number | null>(null);
   const [justCheckedIngredient, setJustCheckedIngredient] = useState<number | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [mealSubstitutionTarget, setMealSubstitutionTarget] = useState<{
+    ingredient: { item: string; amount?: string; unit?: string };
+    index: number;
+  } | null>(null);
 
   // Image regeneration & photo replacement
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
@@ -2164,6 +2249,91 @@ export const MealsPage: React.FC = () => {
     }
   };
 
+  const handleSelectMealSubstitution = async ({
+    substitution,
+    updateRecipeInDb,
+  }: {
+    substitution: IngredientSubstitution;
+    updateRecipeInDb: boolean;
+  }) => {
+    if (!selectedRecipe || !householdId || !mealSubstitutionTarget) return;
+
+    const originalItem = mealSubstitutionTarget.ingredient.item;
+    const originalAmount = mealSubstitutionTarget.ingredient.amount;
+    const originalUnit = mealSubstitutionTarget.ingredient.unit;
+    const recipeTitle = selectedRecipe.title;
+    const prefix = `for: ${recipeTitle.trim().toLowerCase()}`;
+
+    // 1. Check if original ingredient is already on grocery list
+    const existing = groceryItems.find(
+      (g) =>
+        !g.is_completed &&
+        g.notes &&
+        g.notes.trim().toLowerCase().startsWith(prefix) &&
+        (g.name.toLowerCase().includes(originalItem.toLowerCase()) ||
+          originalItem.toLowerCase().includes(g.name.toLowerCase()))
+    );
+
+    if (existing) {
+      const updated = await api.updateGroceryItem(existing.id, {
+        name: substitution.groceryItemName || substitution.name,
+        quantity: substitution.amount || existing.quantity || '1',
+        unit: substitution.unit || existing.unit,
+        note: `For: ${recipeTitle} (substitute for ${originalItem})`,
+      });
+      const nextGrocery = groceryItems.map((g) =>
+        g.id === existing.id
+          ? {
+              ...g,
+              name: substitution.groceryItemName || substitution.name,
+              quantity: substitution.amount || g.quantity || '1',
+              unit: substitution.unit || g.unit,
+              notes: `For: ${recipeTitle} (substitute for ${originalItem})`,
+            }
+          : g
+      );
+      setGroceryItems(nextGrocery);
+      if (mealsDataCache && mealsDataCache.householdId === householdId) {
+        mealsDataCache.groceryItems = nextGrocery;
+      }
+    } else {
+      const created = await api.addGroceryItem(householdId, {
+        name: substitution.groceryItemName || substitution.name,
+        quantity: substitution.amount || originalAmount || '1',
+        unit: substitution.unit || originalUnit,
+        notes: `For: ${recipeTitle} (substitute for ${originalItem})`,
+        list_type: 'grocery',
+      });
+      const nextGrocery = [created, ...groceryItems];
+      setGroceryItems(nextGrocery);
+      if (mealsDataCache && mealsDataCache.householdId === householdId) {
+        mealsDataCache.groceryItems = nextGrocery;
+      }
+    }
+
+    // 2. If user chose to update recipe permanently
+    if (updateRecipeInDb) {
+      const updatedIngredients = selectedRecipe.ingredients.map((item, idx) =>
+        idx === mealSubstitutionTarget.index
+          ? {
+              ...item,
+              item: substitution.name,
+              amount: substitution.amount || item.amount,
+              unit: substitution.unit || item.unit,
+            }
+          : item
+      );
+      const updated = await api.updateRecipe(selectedRecipe.id, {
+        ingredients: updatedIngredients,
+      });
+      setSelectedRecipe(updated);
+      setRecipes((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+    }
+
+    showToast(`Substituted "${originalItem}" with "${substitution.name}" on Grocery list!`);
+    triggerHapticCheck();
+  };
+
   const handleResetProgress = () => {
     setCheckedIngredients({});
     setCompletedSteps({});
@@ -2696,55 +2866,26 @@ export const MealsPage: React.FC = () => {
               })()}
             </div>
 
+            {/* Substitution Tip Banner */}
+            <div className="flex items-center gap-2 text-[11px] text-slate-400 bg-slate-900/60 p-2.5 rounded-2xl border border-white/5">
+              <Sparkles className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              <span>
+                <strong>Hold or tap ⇄ on any ingredient</strong> to see healthy or pantry substitutions (e.g. Greek yogurt for sour cream).
+              </span>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-              {selectedRecipe.ingredients.map((ing, idx) => {
-                const isChecked = Boolean(checkedIngredients[idx]);
-                const pantryMatch = getIngredientPantryMatch(ing.item);
-                return (
-                  <div
-                    key={idx}
-                    onClick={() => handleToggleIngredient(idx)}
-                    className={`p-2.5 rounded-2xl border transition-all cursor-pointer flex items-center gap-2.5 ${
-                      isChecked
-                        ? 'bg-emerald-500/15 border-emerald-500/35 text-white shadow-xs'
-                        : 'bg-slate-900/60 border-white/5 hover:border-white/10 text-slate-200'
-                    }`}
-                    title={isChecked ? 'On Grocery list (click to remove)' : 'Click to add to Grocery list'}
-                  >
-                    <div
-                      className={`w-5 h-5 rounded-lg flex items-center justify-center text-xs transition-all shrink-0 ${
-                        isChecked
-                          ? 'bg-emerald-500 text-slate-950 font-black shadow-xs'
-                          : 'bg-slate-800 border border-slate-700 text-transparent'
-                      }`}
-                    >
-                      <Check className="w-3.5 h-3.5 stroke-[3]" />
-                    </div>
-                    <span className="text-xs leading-tight flex-1">
-                      {ing.amount && <strong className="font-semibold text-emerald-400 mr-1">{ing.amount} {ing.unit || ''}</strong>}
-                      <span className={isChecked ? 'text-white font-medium' : 'text-slate-300'}>{ing.item}</span>
-                    </span>
-                    {isChecked ? (
-                      <span
-                        className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 flex items-center gap-1 shrink-0 font-bold"
-                        title="Item is on your Grocery list"
-                      >
-                        <ShoppingCart className="w-2.5 h-2.5" />
-                        <span>In Grocery</span>
-                      </span>
-                    ) : (
-                      pantryMatch && (
-                        <span
-                          className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800/80 text-emerald-400 border border-emerald-500/20 flex items-center gap-1 shrink-0 font-medium"
-                          title={`In pantry: ${pantryMatch.name} (${pantryMatch.quantity || 'Available'})`}
-                        >
-                          <span>✓ In Pantry</span>
-                        </span>
-                      )
-                    )}
-                  </div>
-                );
-              })}
+              {selectedRecipe.ingredients.map((ing, idx) => (
+                <MealRecipeIngredientRow
+                  key={idx}
+                  ing={ing}
+                  idx={idx}
+                  isChecked={Boolean(checkedIngredients[idx])}
+                  pantryMatch={getIngredientPantryMatch(ing.item)}
+                  onToggle={() => handleToggleIngredient(idx)}
+                  onOpenSubstitutions={() => setMealSubstitutionTarget({ ingredient: ing, index: idx })}
+                />
+              ))}
             </div>
           </div>
 
@@ -4911,6 +5052,30 @@ export const MealsPage: React.FC = () => {
         onCategoryDeleted={(catName) => handleDeleteRecipeCategory(catName, true, true)}
         onOpenNewCategory={() => setIsNewRecipeCategoryModalOpen(true)}
       />
+
+      {/* ================= MODAL: INGREDIENT SUBSTITUTIONS ================= */}
+      {selectedRecipe && (
+        <IngredientSubstitutionModal
+          isOpen={Boolean(mealSubstitutionTarget)}
+          onClose={() => setMealSubstitutionTarget(null)}
+          ingredient={mealSubstitutionTarget?.ingredient || null}
+          recipeTitle={selectedRecipe.title}
+          recipeId={selectedRecipe.id}
+          householdId={householdId || ''}
+          isAlreadyOnGrocery={Boolean(
+            mealSubstitutionTarget &&
+              groceryItems.some(
+                (g) =>
+                  !g.is_completed &&
+                  g.notes &&
+                  g.notes.toLowerCase().includes(`for: ${selectedRecipe.title.toLowerCase()}`) &&
+                  (g.name.toLowerCase().includes(mealSubstitutionTarget.ingredient.item.toLowerCase()) ||
+                    mealSubstitutionTarget.ingredient.item.toLowerCase().includes(g.name.toLowerCase()))
+              )
+          )}
+          onSelectSubstitution={handleSelectMealSubstitution}
+        />
+      )}
     </div>
   );
 };

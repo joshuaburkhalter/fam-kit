@@ -55,6 +55,7 @@ import {
   getHouseholdGrocerySuggestions,
   recordGroceryHistoryItem,
 } from './groceryPreferences.js';
+import { getMergedSubstitutions, getServerCuratedSubstitutions } from './substitutions.js';
 
 dotenv.config();
 dotenv.config({ path: '.env.local' });
@@ -2407,6 +2408,27 @@ app.post('/api/recipes', (req, res) => {
   } catch (err: any) {
     console.error('Create recipe error:', err);
     res.status(500).json({ error: err.message || 'Failed to create recipe' });
+  }
+});
+
+app.post('/api/recipes/substitutions', async (req, res) => {
+  try {
+    const { ingredient, amount, unit, recipeTitle, apiKey } = req.body;
+    if (!ingredient || !ingredient.trim()) {
+      return res.status(400).json({ error: 'Ingredient is required' });
+    }
+    const substitutions = await getMergedSubstitutions(
+      ingredient.trim(),
+      amount ? String(amount).trim() : undefined,
+      unit ? String(unit).trim() : undefined,
+      recipeTitle ? String(recipeTitle).trim() : undefined,
+      apiKey
+    );
+    res.json({ substitutions });
+  } catch (err: any) {
+    console.error('Substitutions error:', err);
+    const fallback = getServerCuratedSubstitutions(req.body.ingredient, req.body.amount, req.body.unit);
+    res.json({ substitutions: fallback });
   }
 });
 

@@ -416,5 +416,14 @@ export interface PantryCategory {
   createdAt?: string;
   created_at?: string;
 }
-
-
+export interface IngredientSubstitution {
+  id: string;
+  name: string;
+  amount?: string;
+  unit?: string;
+  ratio: string;
+  badge: string;
+  reason: string;
+  groceryItemName: string;
+  isAiGenerated?: boolean;
+}
