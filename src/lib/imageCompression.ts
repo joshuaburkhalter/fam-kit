@@ -1,3 +1,4 @@
+import { API_HOST } from './api';
 /**
  * High-performance browser-side image compression utility for profile photos, recipe images, and inventory items.
  * Handles high-resolution mobile photos, EXIF orientation, and automatically transcodes HEIC/HEIF photos
@@ -71,7 +72,7 @@ async function convertViaServer(
     reader.readAsDataURL(fileOrBlob);
   });
 
-  const res = await fetch('/api/convert-image', {
+  const res = await fetch(`${API_HOST}/api/convert-image`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

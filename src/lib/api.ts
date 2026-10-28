@@ -30,7 +30,13 @@ import type {
 import { filterRecipeIngredientsForGrocery } from './groceryStaples';
 import { getCuratedSubstitutions } from './substitutions';
 
-const BASE_URL = '/api';
+import { Capacitor } from '@capacitor/core';
+
+export const API_HOST =
+  import.meta.env.VITE_API_URL ||
+  (Capacitor.isNativePlatform() ? 'https://homebase-atgh.onrender.com' : '');
+
+const BASE_URL = `${API_HOST}/api`;
 
 type ServerUpdatingListener = (isUpdating: boolean) => void;
 const serverUpdatingListeners = new Set<ServerUpdatingListener>();

@@ -10,9 +10,22 @@
     "build": "vite build",
     "start": "tsx server/index.ts",
     "preview": "vite preview",
-    "verify-deploy": "tsx scripts/verify-deploy.ts"
+    "verify-deploy": "tsx scripts/verify-deploy.ts",
+    "cap:sync": "npx cap sync",
+    "cap:build": "npm run build && npx cap sync",
+    "cap:open:android": "npx cap open android",
+    "cap:open:ios": "npx cap open ios"
   },
   "dependencies": {
+    "@capacitor/android": "^8.6.0",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/cli": "^8.6.0",
+    "@capacitor/core": "^8.6.0",
+    "@capacitor/haptics": "^8.0.2",
+    "@capacitor/ios": "^8.6.0",
+    "@capacitor/keyboard": "^8.0.6",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.4",
     "@google/generative-ai": "^0.24.1",
     "cheerio": "^1.0.0",
     "clsx": "^2.1.1",
@@ -38,6 +51,7 @@
     "node": ">=20.0.0"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
     "@resvg/resvg-js": "^2.6.2",
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",

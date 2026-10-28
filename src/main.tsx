@@ -1,3 +1,6 @@
+import { initCapacitorPlugins } from './lib/capacitorInit';
+
+initCapacitorPlugins();
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
