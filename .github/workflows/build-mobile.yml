@@ -47,8 +47,25 @@ jobs:
 
       - name: Build Android Release Bundle (AAB) & APK
         working-directory: android
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          ./gradlew assembleRelease bundleRelease
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "Keystore secret detected, creating keystore file and building signed release..."
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > app/release-keystore.jks
+            ./gradlew assembleRelease bundleRelease \
+              -Pandroid.injected.signing.store.file=$(pwd)/app/release-keystore.jks \
+              -Pandroid.injected.signing.store.password="$ANDROID_KEYSTORE_PASSWORD" \
+              -Pandroid.injected.signing.key.alias="$ANDROID_KEY_ALIAS" \
+              -Pandroid.injected.signing.key.password="$ANDROID_KEY_PASSWORD"
+            rm -f app/release-keystore.jks
+          else
+            echo "No keystore secret detected, building unsigned release..."
+            ./gradlew assembleRelease bundleRelease
+          fi
 
       - name: Upload Android Release Artifacts
         uses: actions/upload-artifact@v4
