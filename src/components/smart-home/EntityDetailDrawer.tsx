@@ -296,6 +296,10 @@ export const EntityDetailDrawer: React.FC<EntityDetailDrawerProps> = ({
 
   const renderLightControls = () => {
     const isOn = state === 'on';
+    const supportsBrightness =
+      attributes.brightness !== undefined ||
+      (Array.isArray(attributes.supported_color_modes) &&
+        attributes.supported_color_modes.some((m: string) => m !== 'onoff'));
 
     return (
       <div className="space-y-6">
@@ -313,99 +317,76 @@ export const EntityDetailDrawer: React.FC<EntityDetailDrawerProps> = ({
             <Lightbulb className={`w-10 h-10 ${isOn ? 'fill-slate-950 stroke-[2.5]' : ''}`} />
           </button>
           <div className="mt-4 text-base font-bold text-white capitalize">
-            {isOn ? `Light is On (${brightness}%)` : 'Light is Off'}
+            {isOn ? (supportsBrightness ? `Light is On (${brightness}%)` : 'Light is On') : 'Light is Off'}
           </div>
         </div>
 
-        {/* Brightness Slider */}
-        <div className="glass-panel p-5 rounded-3xl border border-white/10 space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-              <Sun className="w-4 h-4 text-amber-400" />
-              Brightness
-            </span>
-            <span className="text-sm font-bold text-amber-400">{brightness}%</span>
-          </div>
+        {/* Brightness Slider (only when dimming/brightness is supported by the entity) */}
+        {supportsBrightness && (
+          <div className="glass-panel p-5 rounded-3xl border border-white/10 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                <Sun className="w-4 h-4 text-amber-400" />
+                Brightness
+              </span>
+              <span className="text-sm font-bold text-amber-400">{brightness}%</span>
+            </div>
 
-          <input
-            type="range"
-            min="1"
-            max="100"
-            value={brightness}
-            onChange={(e) => setBrightness(parseInt(e.target.value, 10))}
-            onMouseUp={() => handleAction('light', 'turn_on', { brightness: Math.round((brightness / 100) * 255) })}
-            onTouchEnd={() => handleAction('light', 'turn_on', { brightness: Math.round((brightness / 100) * 255) })}
-            className="w-full h-3 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-400"
-          />
+            <input
+              type="range"
+              min="1"
+              max="100"
+              value={brightness}
+              onChange={(e) => setBrightness(parseInt(e.target.value, 10))}
+              onMouseUp={() => handleAction('light', 'turn_on', { brightness: Math.round((brightness / 100) * 255) })}
+              onTouchEnd={() => handleAction('light', 'turn_on', { brightness: Math.round((brightness / 100) * 255) })}
+              className="w-full h-3 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-400"
+            />
 
-          <div className="flex justify-between text-[11px] text-slate-400 pt-1">
-            <button
-              type="button"
-              onClick={() => {
-                setBrightness(25);
-                handleAction('light', 'turn_on', { brightness: Math.round(0.25 * 255) });
-              }}
-              className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 cursor-pointer"
-            >
-              25%
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setBrightness(50);
-                handleAction('light', 'turn_on', { brightness: Math.round(0.5 * 255) });
-              }}
-              className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 cursor-pointer"
-            >
-              50%
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setBrightness(75);
-                handleAction('light', 'turn_on', { brightness: Math.round(0.75 * 255) });
-              }}
-              className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 cursor-pointer"
-            >
-              75%
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setBrightness(100);
-                handleAction('light', 'turn_on', { brightness: 255 });
-              }}
-              className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 cursor-pointer"
-            >
-              100%
-            </button>
-          </div>
-        </div>
-
-        {/* Color Temperature Presets */}
-        <div className="space-y-2">
-          <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-            Tone Presets
-          </span>
-          <div className="grid grid-cols-2 gap-2">
-            {[
-              { name: 'Warm Sunset', kelvin: 2700, bg: 'from-amber-500/20 to-orange-500/20', text: 'text-amber-300' },
-              { name: 'Soft White', kelvin: 3000, bg: 'from-amber-400/20 to-yellow-500/20', text: 'text-yellow-200' },
-              { name: 'Neutral Daylight', kelvin: 4000, bg: 'from-blue-400/20 to-cyan-500/20', text: 'text-cyan-200' },
-              { name: 'Crisp Cool', kelvin: 5000, bg: 'from-cyan-400/20 to-blue-500/20', text: 'text-blue-300' },
-            ].map((tone) => (
+            <div className="flex justify-between text-[11px] text-slate-400 pt-1">
               <button
-                key={tone.name}
                 type="button"
-                onClick={() => handleAction('light', 'turn_on', { color_temp_kelvin: tone.kelvin })}
-                className={`p-3 rounded-2xl border border-white/10 bg-gradient-to-r ${tone.bg} hover:scale-[1.02] transition-all text-left cursor-pointer`}
+                onClick={() => {
+                  setBrightness(25);
+                  handleAction('light', 'turn_on', { brightness: Math.round(0.25 * 255) });
+                }}
+                className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 cursor-pointer"
               >
-                <div className={`text-xs font-bold ${tone.text}`}>{tone.name}</div>
-                <div className="text-[10px] text-slate-400 mt-0.5">{tone.kelvin}K</div>
+                25%
               </button>
-            ))}
+              <button
+                type="button"
+                onClick={() => {
+                  setBrightness(50);
+                  handleAction('light', 'turn_on', { brightness: Math.round(0.5 * 255) });
+                }}
+                className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 cursor-pointer"
+              >
+                50%
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setBrightness(75);
+                  handleAction('light', 'turn_on', { brightness: Math.round(0.75 * 255) });
+                }}
+                className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 cursor-pointer"
+              >
+                75%
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setBrightness(100);
+                  handleAction('light', 'turn_on', { brightness: 255 });
+                }}
+                className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 cursor-pointer"
+              >
+                100%
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     );
   };
