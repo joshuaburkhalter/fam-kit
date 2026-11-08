@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { PWAProvider } from './context/PWAContext';
 import { Navbar } from './components/Navbar';
 import { MobileNav } from './components/MobileNav';
-import { FloatingAssistant } from './components/FloatingAssistant';
+import { ActionFab } from './components/ActionFab';
+import { ActionFabProvider } from './context/ActionFabContext';
 import { GroceryPage } from './pages/GroceryPage';
 import { MealsPage } from './pages/MealsPage';
 import { CalendarPage } from './pages/CalendarPage';
@@ -429,7 +430,7 @@ export const AppContent: React.FC = () => {
       </main>
 
       <MobileNav activeTab={activeTab} setActiveTab={setActiveTab} />
-      <FloatingAssistant />
+      <ActionFab />
     </div>
   );
 };
@@ -437,7 +438,9 @@ export const AppContent: React.FC = () => {
 export function App() {
   return (
     <PWAProvider>
-      <AppContent />
+      <ActionFabProvider>
+        <AppContent />
+      </ActionFabProvider>
       <AppUpdatingOverlay />
     </PWAProvider>
   );

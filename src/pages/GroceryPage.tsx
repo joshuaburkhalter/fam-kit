@@ -27,7 +27,7 @@ import { Toast } from '../components/ui/Toast';
 import { NewGroceryStoreModal } from '../components/grocery/NewGroceryStoreModal';
 import { ManageGroceryStoresModal } from '../components/grocery/ManageGroceryStoresModal';
 import { formatPantryQuantity } from '../lib/shelfLife';
-import { MobileHeaderPortal } from '../components/ui/MobileHeaderPortal';
+import { useRegisterFab } from '../context/ActionFabContext';
 
 interface GroceryDataCache {
   householdId: string;
@@ -76,8 +76,6 @@ export const GroceryPage: React.FC = () => {
   const [newItemName, setNewItemName] = useState('');
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
   const addMenuRef = useRef<HTMLDivElement>(null);
-  const [isMobileAddMenuOpen, setIsMobileAddMenuOpen] = useState(false);
-  const mobileAddMenuRef = useRef<HTMLDivElement>(null);
   const [isNewListModalOpen, setIsNewListModalOpen] = useState(false);
   const [newListTitle, setNewListTitle] = useState('');
   const [isNewCategoryModalOpen, setIsNewCategoryModalOpen] = useState(false);
@@ -176,9 +174,6 @@ export const GroceryPage: React.FC = () => {
       }
       if (addMenuRef.current && !addMenuRef.current.contains(event.target as Node)) {
         setIsAddMenuOpen(false);
-      }
-      if (mobileAddMenuRef.current && !mobileAddMenuRef.current.contains(event.target as Node)) {
-        setIsMobileAddMenuOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -1438,95 +1433,6 @@ export const GroceryPage: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-3 sm:px-6 pt-3 pb-28 md:pb-20 space-y-4">
-      {/* Mobile Header Portal: Injects Add button into the top Navbar next to profile */}
-      <MobileHeaderPortal>
-        <div className="relative" ref={mobileAddMenuRef}>
-          <button
-            type="button"
-            onClick={() => setIsMobileAddMenuOpen((prev) => !prev)}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer"
-            title="Add options"
-          >
-            <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-            <span>Add</span>
-            <ChevronDown
-              className={`w-3 h-3 stroke-[2.5] transition-transform duration-200 ${
-                isMobileAddMenuOpen ? 'rotate-180' : ''
-              }`}
-            />
-          </button>
-
-          {isMobileAddMenuOpen && (
-            <div className="absolute right-0 top-full mt-2 w-48 bg-slate-900/95 backdrop-blur-xl rounded-2xl p-1.5 shadow-2xl z-50 border border-white/15 animate-in fade-in zoom-in-95 duration-100 space-y-1">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsMobileAddMenuOpen(false);
-                  quickAddInputRef.current?.focus();
-                  quickAddInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }}
-                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:bg-white/10 hover:text-emerald-400 transition-colors cursor-pointer text-left"
-              >
-                <Plus className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span>Add Item</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setIsMobileAddMenuOpen(false);
-                  setIsNewCategoryModalOpen(true);
-                }}
-                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:bg-white/10 hover:text-emerald-400 transition-colors cursor-pointer text-left"
-              >
-                <FolderPlus className="w-4 h-4 text-teal-400 shrink-0" />
-                <span>Add Category</span>
-              </button>
-
-              {isGroceryList && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsMobileAddMenuOpen(false);
-                      setIsNewStoreModalOpen(true);
-                    }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:bg-white/10 hover:text-emerald-400 transition-colors cursor-pointer text-left"
-                  >
-                    <Store className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span>Add Store</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsMobileAddMenuOpen(false);
-                      setIsManageStoresModalOpen(true);
-                    }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:bg-white/10 hover:text-emerald-400 transition-colors cursor-pointer text-left"
-                  >
-                    <Store className="w-4 h-4 text-slate-400 shrink-0" />
-                    <span>Manage Stores</span>
-                  </button>
-                </>
-              )}
-
-              <button
-                type="button"
-                onClick={() => {
-                  setIsMobileAddMenuOpen(false);
-                  setIsNewListModalOpen(true);
-                }}
-                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:bg-white/10 hover:text-emerald-400 transition-colors cursor-pointer text-left"
-              >
-                <ListPlus className="w-4 h-4 text-cyan-400 shrink-0" />
-                <span>Add List</span>
-              </button>
-            </div>
-          )}
-        </div>
-      </MobileHeaderPortal>
-
       {/* Header - Desktop only, on mobile it is merged into top Navbar */}
       <div className="hidden md:flex items-center justify-between mb-1">
         <div className="flex items-center gap-2.5">

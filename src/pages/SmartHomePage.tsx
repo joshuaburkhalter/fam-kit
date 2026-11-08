@@ -37,7 +37,7 @@ import { EntityDetailDrawer } from '../components/smart-home/EntityDetailDrawer'
 import { ManageControlsModal } from '../components/smart-home/ManageControlsModal';
 import { EditEntityModal, getCustomIconComponent } from '../components/smart-home/EditEntityModal';
 import { EntityCustomization } from '../types';
-import { MobileHeaderPortal } from '../components/ui/MobileHeaderPortal';
+import { useRegisterFab } from '../context/ActionFabContext';
 
 export const isDataOnlyEntity = (e: HomeAssistantEntity): boolean => {
   return e.domain === 'sensor' || e.domain === 'binary_sensor' || e.domain === 'person';
@@ -106,8 +106,6 @@ export const SmartHomePage: React.FC = () => {
   const [isManageModalOpen, setIsManageModalOpen] = useState(false);
   const [isOptionsMenuOpen, setIsOptionsMenuOpen] = useState(false);
   const optionsMenuRef = useRef<HTMLDivElement>(null);
-  const [isMobileOptionsMenuOpen, setIsMobileOptionsMenuOpen] = useState(false);
-  const mobileOptionsMenuRef = useRef<HTMLDivElement>(null);
 
   // Close options dropdown on outside click or Escape
   useEffect(() => {
@@ -115,14 +113,10 @@ export const SmartHomePage: React.FC = () => {
       if (optionsMenuRef.current && !optionsMenuRef.current.contains(event.target as Node)) {
         setIsOptionsMenuOpen(false);
       }
-      if (mobileOptionsMenuRef.current && !mobileOptionsMenuRef.current.contains(event.target as Node)) {
-        setIsMobileOptionsMenuOpen(false);
-      }
     };
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setIsOptionsMenuOpen(false);
-        setIsMobileOptionsMenuOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -877,79 +871,22 @@ export const SmartHomePage: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-3 sm:px-6 pt-3 pb-28 md:pb-20 space-y-4 min-h-[calc(100vh-8rem)] flex flex-col w-full">
-      {/* Mobile Header Portal: Injects Manage button & offline status into the top Navbar next to profile */}
-      <MobileHeaderPortal>
-        <div className="flex items-center gap-1.5" ref={mobileOptionsMenuRef}>
-          {!isLiveConnected && (
-            <button
-              type="button"
-              onClick={() => loadStates(false)}
-              className="flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-500/15 text-amber-400 border border-amber-500/30 text-[10px] font-bold cursor-pointer"
-              title="Home Assistant disconnected. Tap to reconnect."
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-              <span>{isRefreshing ? 'Connecting...' : 'HA Offline'}</span>
-            </button>
-          )}
-
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setIsMobileOptionsMenuOpen((prev) => !prev)}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer"
-              title="Manage Controls"
-            >
-              <SlidersHorizontal className="w-3.5 h-3.5 stroke-[2.5]" />
-              <span>Manage</span>
-              <ChevronDown
-                className={`w-3 h-3 stroke-[2.5] transition-transform duration-200 ${
-                  isMobileOptionsMenuOpen ? 'rotate-180' : ''
-                }`}
-              />
-            </button>
-
-            {isMobileOptionsMenuOpen && (
-              <div className="absolute right-0 top-full mt-2 w-52 bg-slate-900/95 backdrop-blur-xl border border-white/15 rounded-2xl p-1.5 shadow-2xl shadow-slate-950/80 z-50 animate-in fade-in zoom-in-95 duration-150 space-y-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsMobileOptionsMenuOpen(false);
-                    setIsManageModalOpen(true);
-                  }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/10 transition-colors text-left cursor-pointer group"
-                >
-                  <div className="w-7 h-7 rounded-lg bg-emerald-500/15 text-emerald-400 group-hover:bg-emerald-500/25 flex items-center justify-center shrink-0 transition-colors">
-                    <SlidersHorizontal className="w-4 h-4 stroke-[2]" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="font-bold text-white">Edit Controls</div>
-                    <div className="text-[10px] text-slate-400">
-                      {visibleEntityIds.length > 0 ? `${visibleEntityIds.length} on dashboard` : 'Add or remove devices'}
-                    </div>
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsMobileOptionsMenuOpen(false);
-                    loadStates(false);
-                  }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/10 transition-colors text-left cursor-pointer group"
-                >
-                  <div className="w-7 h-7 rounded-lg bg-teal-500/15 text-teal-400 group-hover:bg-teal-500/25 flex items-center justify-center shrink-0 transition-colors">
-                    <RefreshCw className={`w-4 h-4 stroke-[2] ${isRefreshing ? 'animate-spin' : ''}`} />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="font-bold text-white">Refresh</div>
-                    <div className="text-[10px] text-slate-400">Sync latest states</div>
-                  </div>
-                </button>
-              </div>
-            )}
+      {/* Mobile Disconnected Banner (Alert-only: only shown when HA is offline) */}
+      {!isLiveConnected && (
+        <div className="md:hidden flex items-center justify-between px-3 py-2 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-amber-400 text-xs font-semibold animate-in fade-in duration-200">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+            <span>{isRefreshing ? 'Reconnecting to Home Assistant...' : 'Home Assistant is disconnected'}</span>
           </div>
+          <button
+            type="button"
+            onClick={() => loadStates(false)}
+            className="text-[11px] font-bold underline hover:text-amber-300 cursor-pointer"
+          >
+            Reconnect
+          </button>
         </div>
-      </MobileHeaderPortal>
+      )}
 
       {/* Header Bar - Hidden on mobile, shown on desktop */}
       <div className="hidden md:flex items-center justify-between mb-0.5">

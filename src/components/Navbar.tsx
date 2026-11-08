@@ -169,8 +169,6 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
             </div>
           )}
 
-          {/* Mobile Page Action Slot (Portaled from active page) */}
-          <div id="navbar-page-action" className="md:hidden flex items-center" />
 
           {/* PWA Install Button */}
           {canInstallPWA && (

@@ -31,6 +31,7 @@ import {
 } from 'date-fns';
 import type { CalendarEvent } from '../types';
 import { usePWA } from '../context/PWAContext';
+import { useRegisterFab } from '../context/ActionFabContext';
 import { api } from '../lib/api';
 import { Drawer } from '../components/ui/Drawer';
 import { Toast } from '../components/ui/Toast';
@@ -170,6 +171,34 @@ export const CalendarPage: React.FC = () => {
       return ev.assigned_user_id === selectedMemberId;
     });
   }, [events, selectedMemberId]);
+
+  // Register bottom speed-dial FAB actions for Calendar
+  useRegisterFab(
+    useMemo(
+      () => ({
+        pillLabel: 'Event',
+        icon: Plus,
+        actions: [
+          {
+            id: 'add-calendar-event',
+            label: 'Add Event',
+            icon: Plus,
+            color: 'emerald',
+            onClick: () => handleOpenAddModal(),
+          },
+          {
+            id: 'sync-google-calendar',
+            label: 'Sync Google Calendar',
+            icon: RefreshCw,
+            color: 'teal',
+            onClick: handleManualSync,
+          },
+        ],
+      }),
+      [handleManualSync]
+    ),
+    [handleManualSync]
+  );
 
   // Dynamic Navigation Title based on view mode (Google Calendar style)
   const headerTitle = useMemo(() => {

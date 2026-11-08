@@ -9,7 +9,6 @@ import {
   Loader2,
 } from 'lucide-react';
 import type { User } from '../../types';
-import { MobileHeaderPortal } from '../ui/MobileHeaderPortal';
 
 export type CalendarViewMode = 'month' | 'week' | 'day' | 'schedule';
 
@@ -46,16 +45,11 @@ export const CalendarHeader: React.FC<CalendarHeaderProps> = ({
 }) => {
   const [isSyncMenuOpen, setIsSyncMenuOpen] = useState(false);
   const syncMenuRef = useRef<HTMLDivElement>(null);
-  const [isMobileSyncMenuOpen, setIsMobileSyncMenuOpen] = useState(false);
-  const mobileSyncMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (syncMenuRef.current && !syncMenuRef.current.contains(event.target as Node)) {
         setIsSyncMenuOpen(false);
-      }
-      if (mobileSyncMenuRef.current && !mobileSyncMenuRef.current.contains(event.target as Node)) {
-        setIsMobileSyncMenuOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -64,68 +58,6 @@ export const CalendarHeader: React.FC<CalendarHeaderProps> = ({
 
   return (
     <div className="space-y-3">
-      {/* Mobile Header Portal: Injects Add Event / Sync into top Navbar next to profile */}
-      <MobileHeaderPortal>
-        <div className="relative" ref={mobileSyncMenuRef}>
-          <button
-            type="button"
-            onClick={() => setIsMobileSyncMenuOpen(!isMobileSyncMenuOpen)}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 text-xs font-black transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer shrink-0"
-          >
-            <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-            <span>Event</span>
-            {isSyncing ? (
-              <RefreshCw className="w-3 h-3 stroke-[2.5] animate-spin" />
-            ) : (
-              <ChevronDown
-                className={`w-3 h-3 stroke-[2.5] transition-transform duration-200 ${
-                  isMobileSyncMenuOpen ? 'rotate-180' : ''
-                }`}
-              />
-            )}
-          </button>
-
-          {isMobileSyncMenuOpen && (
-            <div className="absolute right-0 top-full mt-2 w-52 bg-slate-900/95 backdrop-blur-xl border border-white/15 rounded-2xl p-1.5 shadow-2xl shadow-slate-950/80 z-50 animate-in fade-in zoom-in-95 duration-150 space-y-1">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsMobileSyncMenuOpen(false);
-                  onAddEvent();
-                }}
-                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/10 transition-colors text-left cursor-pointer group"
-              >
-                <div className="w-7 h-7 rounded-lg bg-emerald-500/15 text-emerald-400 group-hover:bg-emerald-500/25 flex items-center justify-center shrink-0 transition-colors">
-                  <Plus className="w-4 h-4 stroke-[2.5]" />
-                </div>
-                <div className="min-w-0">
-                  <div className="font-bold text-white">Add Event</div>
-                  <div className="text-[10px] text-slate-400">Schedule on calendar</div>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setIsMobileSyncMenuOpen(false);
-                  onSyncGoogle();
-                }}
-                disabled={isSyncing}
-                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/10 transition-colors text-left cursor-pointer group disabled:opacity-50"
-              >
-                <div className="w-7 h-7 rounded-lg bg-teal-500/15 text-teal-400 group-hover:bg-teal-500/25 flex items-center justify-center shrink-0 transition-colors">
-                  <RefreshCw className={`w-4 h-4 stroke-[2] ${isSyncing ? 'animate-spin' : ''}`} />
-                </div>
-                <div className="min-w-0">
-                  <div className="font-bold text-white">Sync Google Calendar</div>
-                  <div className="text-[10px] text-slate-400">Pull latest events</div>
-                </div>
-              </button>
-            </div>
-          )}
-        </div>
-      </MobileHeaderPortal>
-
       {/* Top Main Navigation Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-slate-900/60 backdrop-blur-xl border border-white/10 rounded-3xl p-3 sm:p-4 shadow-xl">
         {/* Left Cluster: Brand, Today, Nav Arrows, and Month Title */}

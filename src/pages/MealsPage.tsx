@@ -50,7 +50,7 @@ import {
 import type { WeeklyMeal, MealLog, Recipe, GroceryItem, InventoryItem, PantryLocation, PantryCategory, RecipeCategory, IngredientSubstitution } from '../types';
 import { usePWA } from '../context/PWAContext';
 import { api } from '../lib/api';
-import { MobileHeaderPortal } from '../components/ui/MobileHeaderPortal';
+import { useRegisterFab } from '../context/ActionFabContext';
 import { CheckSparkle, CelebrationConfetti, triggerHapticCheck } from '../components/CheckSparkle';
 import { Drawer } from '../components/ui/Drawer';
 import { RecipeScraperModal, extractSharedUrl } from '../components/RecipeScraperModal';
@@ -317,10 +317,6 @@ export const MealsPage: React.FC = () => {
   const [isManageRecipeCategoriesModalOpen, setIsManageRecipeCategoriesModalOpen] = useState(false);
   const [isRecipeAddMenuOpen, setIsRecipeAddMenuOpen] = useState(false);
   const recipeAddDropdownRef = useRef<HTMLDivElement>(null);
-  const [isMobileRecipeAddMenuOpen, setIsMobileRecipeAddMenuOpen] = useState(false);
-  const mobileRecipeAddDropdownRef = useRef<HTMLDivElement>(null);
-  const [isMobilePantryAddMenuOpen, setIsMobilePantryAddMenuOpen] = useState(false);
-  const mobilePantryAddDropdownRef = useRef<HTMLDivElement>(null);
 
   // Pantry state & modals
   const [pantryFilter, setPantryFilter] = useState<string>('all');
@@ -352,14 +348,8 @@ export const MealsPage: React.FC = () => {
       if (pantryAddDropdownRef.current && !pantryAddDropdownRef.current.contains(e.target as Node)) {
         setIsPantryAddMenuOpen(false);
       }
-      if (mobilePantryAddDropdownRef.current && !mobilePantryAddDropdownRef.current.contains(e.target as Node)) {
-        setIsMobilePantryAddMenuOpen(false);
-      }
       if (recipeAddDropdownRef.current && !recipeAddDropdownRef.current.contains(e.target as Node)) {
         setIsRecipeAddMenuOpen(false);
-      }
-      if (mobileRecipeAddDropdownRef.current && !mobileRecipeAddDropdownRef.current.contains(e.target as Node)) {
-        setIsMobileRecipeAddMenuOpen(false);
       }
       if (recipeSearchContainerRef.current && !recipeSearchContainerRef.current.contains(e.target as Node)) {
         setIsTagDropdownOpen(false);
@@ -3001,184 +2991,6 @@ export const MealsPage: React.FC = () => {
       ) : (
         /* ================= MAIN MEALS VIEW (TABS) ================= */
         <div className="space-y-4">
-          {/* Mobile Header Portal: Injects active subtab's action into the top Navbar next to profile */}
-          <MobileHeaderPortal>
-            {activeTab === 'recipes' && (
-              <div className="relative" ref={mobileRecipeAddDropdownRef}>
-                <button
-                  type="button"
-                  onClick={() => setIsMobileRecipeAddMenuOpen(!isMobileRecipeAddMenuOpen)}
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer"
-                  title="Add Recipe"
-                >
-                  <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-                  <span>Recipe</span>
-                  <ChevronDown className={`w-3 h-3 stroke-[2.5] transition-transform duration-200 ${isMobileRecipeAddMenuOpen ? 'rotate-180' : ''}`} />
-                </button>
-
-                {isMobileRecipeAddMenuOpen && (
-                  <div className="absolute right-0 top-full mt-2 w-52 bg-slate-900/95 backdrop-blur-xl border border-white/15 rounded-2xl p-1.5 shadow-2xl shadow-slate-950/80 z-50 animate-in fade-in zoom-in-95 duration-150 space-y-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsMobileRecipeAddMenuOpen(false);
-                        setScraperInitialMode('url');
-                        setIsScraperOpen(true);
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/10 transition-colors text-left cursor-pointer"
-                    >
-                      <div className="w-7 h-7 rounded-lg bg-teal-500/15 text-teal-400 flex items-center justify-center shrink-0">
-                        <Link2 className="w-4 h-4" />
-                      </div>
-                      <span className="font-bold text-white">Import from Web</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsMobileRecipeAddMenuOpen(false);
-                        setScraperInitialMode('scan');
-                        setIsScraperOpen(true);
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/10 transition-colors text-left cursor-pointer"
-                    >
-                      <div className="w-7 h-7 rounded-lg bg-purple-500/15 text-purple-400 flex items-center justify-center shrink-0">
-                        <Camera className="w-4 h-4" />
-                      </div>
-                      <span className="font-bold text-white">Scan from Photo</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsMobileRecipeAddMenuOpen(false);
-                        setEditingRecipe({
-                          id: '',
-                          household_id: householdId || '',
-                          title: '',
-                          category: 'Dinner',
-                          tags: [],
-                          ingredients: [],
-                          instructions: [],
-                          created_at: new Date().toISOString(),
-                        });
-                        setIsEditRecipeModalOpen(true);
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/10 transition-colors text-left cursor-pointer"
-                    >
-                      <div className="w-7 h-7 rounded-lg bg-emerald-500/15 text-emerald-400 flex items-center justify-center shrink-0">
-                        <Plus className="w-4 h-4" />
-                      </div>
-                      <span className="font-bold text-white">Create Manually</span>
-                    </button>
-
-                    <div className="border-t border-white/5 my-1" />
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsMobileRecipeAddMenuOpen(false);
-                        setIsNewRecipeCategoryModalOpen(true);
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/10 transition-colors text-left cursor-pointer"
-                    >
-                      <div className="w-7 h-7 rounded-lg bg-cyan-500/15 text-cyan-400 flex items-center justify-center shrink-0">
-                        <FolderPlus className="w-4 h-4" />
-                      </div>
-                      <span className="font-bold text-white">Add Category</span>
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {activeTab === 'pantry' && (
-              <div className="relative" ref={mobilePantryAddDropdownRef}>
-                <button
-                  type="button"
-                  onClick={() => setIsMobilePantryAddMenuOpen(!isMobilePantryAddMenuOpen)}
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer"
-                  title="Add to Pantry"
-                >
-                  <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-                  <span>Item</span>
-                  <ChevronDown className={`w-3 h-3 stroke-[2.5] transition-transform duration-200 ${isMobilePantryAddMenuOpen ? 'rotate-180' : ''}`} />
-                </button>
-
-                {isMobilePantryAddMenuOpen && (
-                  <div className="absolute right-0 top-full mt-2 w-48 bg-slate-900/95 backdrop-blur-xl border border-white/15 rounded-2xl p-1.5 shadow-2xl shadow-slate-950/80 z-50 animate-in fade-in zoom-in-95 duration-150 space-y-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsMobilePantryAddMenuOpen(false);
-                        setEditingInventoryItem(null);
-                        setIsEditInventoryModalOpen(true);
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/10 transition-colors text-left cursor-pointer"
-                    >
-                      <div className="w-7 h-7 rounded-lg bg-teal-500/15 text-teal-400 flex items-center justify-center shrink-0">
-                        <Plus className="w-4 h-4" />
-                      </div>
-                      <span className="font-bold text-white">Add Item</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsMobilePantryAddMenuOpen(false);
-                        setIsNewCategoryModalOpen(true);
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/10 transition-colors text-left cursor-pointer"
-                    >
-                      <div className="w-7 h-7 rounded-lg bg-cyan-500/15 text-cyan-400 flex items-center justify-center shrink-0">
-                        <FolderPlus className="w-4 h-4" />
-                      </div>
-                      <span className="font-bold text-white">Add Category</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsMobilePantryAddMenuOpen(false);
-                        setIsBarcodeModalOpen(true);
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/10 transition-colors text-left cursor-pointer"
-                    >
-                      <div className="w-7 h-7 rounded-lg bg-emerald-500/15 text-emerald-400 flex items-center justify-center shrink-0">
-                        <Barcode className="w-4 h-4" />
-                      </div>
-                      <span className="font-bold text-white">Scan Barcode</span>
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {activeTab === 'planner' && (
-              <button
-                type="button"
-                onClick={() => setIsRecipePickerOpen(true)}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer"
-                title="Add meal to planner"
-              >
-                <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-                <span>Meal</span>
-              </button>
-            )}
-
-            {activeTab === 'history' && (
-              <button
-                type="button"
-                onClick={handleOpenNewLog}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer"
-                title="Log a cooked meal"
-              >
-                <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-                <span>Log</span>
-              </button>
-            )}
-          </MobileHeaderPortal>
-
           {/* Desktop-only Header (reclaimed on mobile) */}
           <div className="hidden md:flex items-center justify-between mb-1">
             <div className="flex items-center gap-2.5">
