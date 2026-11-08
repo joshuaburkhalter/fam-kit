@@ -20,12 +20,13 @@ import {
   DoorClosed,
   Fan,
 } from 'lucide-react';
-import { HomeAssistantEntity } from '../../types';
+import { HomeAssistantEntity, EntityCustomization } from '../../types';
 
 interface ManageControlsModalProps {
   isOpen: boolean;
   onClose: () => void;
   allEntities: HomeAssistantEntity[];
+  customizations?: Record<string, EntityCustomization>;
   initialVisibleIds: string[];
   onSave: (visibleIds: string[]) => Promise<void>;
 }
@@ -38,6 +39,7 @@ export const ManageControlsModal: React.FC<ManageControlsModalProps> = ({
   isOpen,
   onClose,
   allEntities,
+  customizations = {},
   initialVisibleIds,
   onSave,
 }) => {
@@ -169,8 +171,9 @@ export const ManageControlsModal: React.FC<ManageControlsModalProps> = ({
       // Search query filter
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase();
+        const customName = customizations[entity.entity_id]?.name || entity.friendly_name;
         return (
-          entity.friendly_name.toLowerCase().includes(query) ||
+          customName.toLowerCase().includes(query) ||
           entity.entity_id.toLowerCase().includes(query) ||
           entity.domain.toLowerCase().includes(query)
         );
@@ -247,7 +250,7 @@ export const ManageControlsModal: React.FC<ManageControlsModalProps> = ({
           </div>
           <div className="min-w-0">
             <div className="text-xs font-bold text-white truncate flex items-center gap-2">
-              <span>{entity.friendly_name}</span>
+              <span>{customizations[entity.entity_id]?.name || entity.friendly_name}</span>
               {isUnavailable && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/5 text-slate-500 font-normal">
                   Offline

@@ -55,10 +55,11 @@ const CONTROL_GROUPS = [
 ];
 
 
-const PersonAvatar: React.FC<{ entity: HomeAssistantEntity; householdId?: string }> = ({ entity, householdId }) => {
+const PersonAvatar: React.FC<{ entity: HomeAssistantEntity; householdId?: string; customName?: string }> = ({ entity, householdId, customName }) => {
   const [imgError, setImgError] = useState(false);
   const photo = entity.attributes?.entity_picture;
   const isHome = (entity.state || '').toLowerCase() === 'home';
+  const name = customName || entity.friendly_name || '';
 
   const photoUrl = photo && !imgError ? api.getHomeAssistantImageUrl(photo, householdId) : null;
 
@@ -66,7 +67,7 @@ const PersonAvatar: React.FC<{ entity: HomeAssistantEntity; householdId?: string
     return (
       <img
         src={photoUrl}
-        alt={entity.friendly_name}
+        alt={name}
         onError={() => setImgError(true)}
         className="w-5 h-5 rounded-full object-cover ring-1 ring-emerald-400/40"
       />
@@ -77,7 +78,7 @@ const PersonAvatar: React.FC<{ entity: HomeAssistantEntity; householdId?: string
     <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black ${
       isHome ? 'bg-emerald-500/30 text-emerald-300' : 'bg-slate-700/60 text-slate-300'
     }`}>
-      {entity.friendly_name.charAt(0).toUpperCase()}
+      {name.charAt(0).toUpperCase()}
     </div>
   );
 };
@@ -388,13 +389,14 @@ export const SmartHomePage: React.FC = () => {
     return activeEntities.filter(isDataOnlyEntity).filter((entity) => {
       if (!searchQuery.trim()) return true;
       const q = searchQuery.toLowerCase();
+      const customName = entityCustomizations[entity.entity_id]?.name || entity.friendly_name;
       return (
-        entity.friendly_name.toLowerCase().includes(q) ||
+        customName.toLowerCase().includes(q) ||
         entity.entity_id.toLowerCase().includes(q) ||
         entity.domain.toLowerCase().includes(q)
       );
     });
-  }, [activeEntities, searchQuery]);
+  }, [activeEntities, searchQuery, entityCustomizations]);
 
   // Interactive controls
   const activeControlEntities = useMemo(() => {
@@ -445,10 +447,14 @@ export const SmartHomePage: React.FC = () => {
       ...CONTROL_GROUPS.map((g) => ({
         id: g.id,
         label: g.title,
-        count: activeControlEntities.filter(g.match).length,
+        count: activeControlEntities.filter((e) => {
+          const custom = entityCustomizations[e.entity_id];
+          if (custom?.category) return custom.category === g.id;
+          return g.match(e);
+        }).length,
       })).filter((c) => c.count > 0),
     ];
-  }, [activeControlEntities]);
+  }, [activeControlEntities, entityCustomizations]);
 
   const handleSaveVisibleControls = async (newIds: string[]) => {
     setVisibleEntityIds(newIds);
@@ -463,7 +469,8 @@ export const SmartHomePage: React.FC = () => {
 
     if (entity.domain === 'person') {
       const isHome = effectiveState === 'home';
-      const icon = <PersonAvatar entity={entity} householdId={household?.id} />;
+      const custom = entityCustomizations[entity.entity_id];
+      const icon = <PersonAvatar entity={entity} householdId={household?.id} customName={custom?.name} />;
       const color = isHome ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-700/50 text-slate-400';
       const displayState = isHome ? 'Home' : effectiveState === 'not_home' ? 'Away' : effectiveState;
       return { icon, color, displayState };
@@ -630,7 +637,7 @@ export const SmartHomePage: React.FC = () => {
       const isGarage =
         entity.attributes?.device_class === 'garage' ||
         entity.entity_id.toLowerCase().includes('garage') ||
-        (entity.friendly_name || '').toLowerCase().includes('garage');
+        (displayName || entity.friendly_name || '').toLowerCase().includes('garage');
       iconComponent = isGarage ? (
         <Warehouse className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400" />
       ) : (
@@ -728,7 +735,7 @@ export const SmartHomePage: React.FC = () => {
         {/* Bottom Info: Friendly Name and Live State */}
         <div className="pt-2 sm:pt-3 min-w-0">
           <h4 className="text-[11px] sm:text-xs font-bold text-white truncate block group-hover:text-emerald-300 transition-colors leading-tight">
-            {entity.friendly_name}
+            {displayName}
           </h4>
           <div className="text-[10px] sm:text-[11px] font-medium text-slate-400 truncate mt-0.5 capitalize">
             {stateDisplay}
@@ -1058,6 +1065,7 @@ export const SmartHomePage: React.FC = () => {
       <EntityDetailDrawer
         isOpen={Boolean(selectedEntityForDrawer)}
         entity={selectedEntityForDrawer}
+        customization={selectedEntityForDrawer ? entityCustomizations[selectedEntityForDrawer.entity_id] : undefined}
         onClose={() => setSelectedEntityForDrawer(null)}
         onCallService={handleCallService}
       />
@@ -1076,6 +1084,7 @@ export const SmartHomePage: React.FC = () => {
         isOpen={isManageModalOpen}
         onClose={() => setIsManageModalOpen(false)}
         allEntities={entities}
+        customizations={entityCustomizations}
         initialVisibleIds={visibleEntityIds}
         onSave={handleSaveVisibleControls}
       />

@@ -32,34 +32,36 @@ import {
 } from 'lucide-react';
 import { Drawer } from '../ui/Drawer';
 import { api } from '../../lib/api';
-import { HomeAssistantEntity } from '../../types';
+import { HomeAssistantEntity, EntityCustomization } from '../../types';
 
 interface EntityDetailDrawerProps {
   entity: HomeAssistantEntity | null;
+  customization?: EntityCustomization;
   isOpen: boolean;
   onClose: () => void;
   onCallService: (domain: string, service: string, serviceData: any) => Promise<void>;
 }
 
 
-const PersonDrawerAvatar: React.FC<{ entity: HomeAssistantEntity }> = ({ entity }) => {
+const PersonDrawerAvatar: React.FC<{ entity: HomeAssistantEntity; customName?: string }> = ({ entity, customName }) => {
   const [imgError, setImgError] = useState(false);
   const photo = entity.attributes?.entity_picture;
   const isHome = entity.state === 'home';
   const photoUrl = photo && !imgError ? api.getHomeAssistantImageUrl(photo) : null;
+  const name = customName || entity.friendly_name || '';
 
   return (
     <div className="relative mb-3">
       {photoUrl ? (
         <img
           src={photoUrl}
-          alt={entity.friendly_name}
+          alt={name}
           onError={() => setImgError(true)}
           className="w-20 h-20 rounded-full object-cover ring-4 ring-emerald-500/30"
         />
       ) : (
         <div className="w-20 h-20 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center text-3xl font-black">
-          {entity.friendly_name.charAt(0).toUpperCase()}
+          {name.charAt(0).toUpperCase()}
         </div>
       )}
       <span
@@ -73,6 +75,7 @@ const PersonDrawerAvatar: React.FC<{ entity: HomeAssistantEntity }> = ({ entity 
 
 export const EntityDetailDrawer: React.FC<EntityDetailDrawerProps> = ({
   entity,
+  customization,
   isOpen,
   onClose,
   onCallService,
@@ -80,6 +83,7 @@ export const EntityDetailDrawer: React.FC<EntityDetailDrawerProps> = ({
   if (!entity) return null;
 
   const { domain, entity_id, state, attributes, friendly_name } = entity;
+  const displayName = customization?.name || friendly_name;
   const isAvailable = state !== 'unavailable' && state !== 'unknown';
 
   // Local state for optimistic slider/control changes
@@ -643,9 +647,9 @@ export const EntityDetailDrawer: React.FC<EntityDetailDrawerProps> = ({
     return (
       <div className="space-y-6">
         <div className="glass-panel p-6 rounded-3xl border border-white/10 flex flex-col items-center justify-center text-center">
-          <PersonDrawerAvatar entity={entity} />
+          <PersonDrawerAvatar entity={entity} customName={displayName} />
           <div className="text-xl font-bold text-white capitalize">{isHome ? 'At Home' : state === 'not_home' ? 'Away' : state}</div>
-          <p className="text-xs text-slate-400 mt-1">{friendly_name}</p>
+          <p className="text-xs text-slate-400 mt-1">{displayName}</p>
         </div>
 
         <div className="glass-panel p-5 rounded-3xl border border-white/10 space-y-3 text-xs">
@@ -682,7 +686,7 @@ export const EntityDetailDrawer: React.FC<EntityDetailDrawerProps> = ({
     <Drawer
       isOpen={isOpen}
       onClose={onClose}
-      title={friendly_name}
+      title={displayName}
       subtitle={`Home Assistant • ${domain}`}
       badge={
         <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
