@@ -10,7 +10,7 @@ import {
   ShoppingCart,
   ChefHat,
   Calendar,
-  Home,
+  SlidersHorizontal,
   LogOut,
   ChevronDown,
   User,
@@ -150,8 +150,8 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
                   : 'text-slate-400 hover:text-slate-200 hover:bg-white/5 font-semibold'
               }`}
             >
-              <Home className="w-3.5 h-3.5" />
-              Home
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+              Control
             </button>
           )}
         </nav>

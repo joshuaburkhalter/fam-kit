@@ -28,6 +28,7 @@ import {
   Clock,
   Check,
   AlertTriangle,
+  User,
 } from 'lucide-react';
 import { Drawer } from '../ui/Drawer';
 import { HomeAssistantEntity } from '../../types';
@@ -61,7 +62,6 @@ export const EntityDetailDrawer: React.FC<EntityDetailDrawerProps> = ({
     return attributes.current_position ?? (state === 'open' ? 100 : 0);
   });
   const [isCallingService, setIsCallingService] = useState(false);
-  const [feedbackMsg, setFeedbackMsg] = useState<string | null>(null);
 
   // Sync with incoming entity updates
   useEffect(() => {
@@ -80,16 +80,11 @@ export const EntityDetailDrawer: React.FC<EntityDetailDrawerProps> = ({
     }
   }, [entity]);
 
-  const showFeedback = (msg: string) => {
-    setFeedbackMsg(msg);
-    setTimeout(() => setFeedbackMsg(null), 2500);
-  };
 
   const handleAction = async (serviceDomain: string, service: string, serviceData: any = {}) => {
     try {
       setIsCallingService(true);
       await onCallService(serviceDomain, service, { entity_id, ...serviceData });
-      showFeedback('Command sent');
     } catch (err: any) {
       console.error('Service call error:', err);
       alert(err.message || 'Failed to execute command');
@@ -607,6 +602,68 @@ export const EntityDetailDrawer: React.FC<EntityDetailDrawerProps> = ({
     );
   };
 
+
+  const renderPersonDetails = () => {
+    const isHome = state === 'home';
+    const photo = attributes.entity_picture;
+    const source = attributes.source;
+    const lastChanged = entity.last_changed;
+
+    return (
+      <div className="space-y-6">
+        <div className="glass-panel p-6 rounded-3xl border border-white/10 flex flex-col items-center justify-center text-center">
+          <div className="relative mb-3">
+            {photo ? (
+              <img
+                src={photo}
+                alt={friendly_name}
+                className="w-20 h-20 rounded-full object-cover ring-4 ring-emerald-500/30"
+              />
+            ) : (
+              <div className="w-20 h-20 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center text-2xl font-bold">
+                <User className="w-9 h-9" />
+              </div>
+            )}
+            <span
+              className={`absolute bottom-0.5 right-0.5 w-5 h-5 rounded-full border-2 border-slate-900 ${
+                isHome ? 'bg-emerald-400' : 'bg-slate-500'
+              }`}
+            />
+          </div>
+          <div className="text-xl font-bold text-white capitalize">{isHome ? 'At Home' : state === 'not_home' ? 'Away' : state}</div>
+          <p className="text-xs text-slate-400 mt-1">{friendly_name}</p>
+        </div>
+
+        <div className="glass-panel p-5 rounded-3xl border border-white/10 space-y-3 text-xs">
+          <div className="flex justify-between py-1.5 border-b border-white/5">
+            <span className="text-slate-400">Status</span>
+            <span className={`font-semibold capitalize ${isHome ? 'text-emerald-400' : 'text-slate-300'}`}>
+              {isHome ? 'Home' : state === 'not_home' ? 'Away' : state}
+            </span>
+          </div>
+          {source && (
+            <div className="flex justify-between py-1.5 border-b border-white/5">
+              <span className="text-slate-400">Tracking Device</span>
+              <span className="text-slate-300 font-mono text-[11px]">{source}</span>
+            </div>
+          )}
+          {lastChanged && (
+            <div className="flex justify-between py-1.5 border-b border-white/5">
+              <span className="text-slate-400">Updated</span>
+              <span className="text-slate-300">
+                {new Date(lastChanged).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+              </span>
+            </div>
+          )}
+          <div className="flex justify-between py-1.5">
+            <span className="text-slate-400">Entity ID</span>
+            <span className="font-mono text-[11px] text-slate-300">{entity_id}</span>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <Drawer
       isOpen={isOpen}
@@ -624,21 +681,16 @@ export const EntityDetailDrawer: React.FC<EntityDetailDrawerProps> = ({
       }
     >
       <div className="space-y-6">
-        {feedbackMsg && (
-          <div className="p-3 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2 animate-in fade-in duration-200">
-            <Check className="w-4 h-4" />
-            <span>{feedbackMsg}</span>
-          </div>
-        )}
 
         {domain === 'climate' && renderClimateControls()}
         {domain === 'light' && renderLightControls()}
         {domain === 'cover' && renderCoverControls()}
         {domain === 'lock' && renderLockControls()}
         {(domain === 'sensor' || domain === 'binary_sensor') && renderSensorDetails()}
+        {domain === 'person' && renderPersonDetails()}
 
         {/* Fallback for other domains */}
-        {domain !== 'climate' && domain !== 'light' && domain !== 'cover' && domain !== 'lock' && domain !== 'sensor' && domain !== 'binary_sensor' && (
+        {domain !== 'climate' && domain !== 'light' && domain !== 'cover' && domain !== 'lock' && domain !== 'sensor' && domain !== 'binary_sensor' && domain !== 'person' && (
           <div className="space-y-4">
             <div className="glass-panel p-5 rounded-3xl border border-white/10">
               <span className="text-xs text-slate-400">Current State</span>

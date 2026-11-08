@@ -119,7 +119,7 @@ export function formatHaStateToEntity(item: any): HomeAssistantEntity | null {
       supportedModes.includes('rgb') ||
       attrs.brightness !== undefined;
     needsDrawer = Boolean(hasBrightness);
-  } else if (domain === 'sensor' || domain === 'binary_sensor') {
+  } else if (domain === 'sensor' || domain === 'binary_sensor' || domain === 'person') {
     needsDrawer = true;
   } else if (domain === 'button' || domain === 'input_button') {
     // Buttons are momentary trigger actions - no drawer needed

@@ -22,15 +22,35 @@ import {
   Flame,
   Snowflake,
   Fan,
-  Home,
   Settings,
   Search,
+  User,
+  Droplets,
+  Battery,
+  DoorClosed,
+  DoorOpen,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { usePWA } from '../context/PWAContext';
 import { HomeAssistantEntity } from '../types';
 import { EntityDetailDrawer } from '../components/smart-home/EntityDetailDrawer';
 import { ManageControlsModal } from '../components/smart-home/ManageControlsModal';
+
+export const isDataOnlyEntity = (e: HomeAssistantEntity): boolean => {
+  return e.domain === 'sensor' || e.domain === 'binary_sensor' || e.domain === 'person';
+};
+
+const CONTROL_GROUPS = [
+  { id: 'climate', title: 'Climate', icon: Gauge, iconColor: 'bg-amber-500/15 text-amber-400', match: (e: HomeAssistantEntity) => e.domain === 'climate' },
+  { id: 'lights', title: 'Lights', icon: Lightbulb, iconColor: 'bg-amber-500/15 text-amber-400', match: (e: HomeAssistantEntity) => e.domain === 'light' },
+  { id: 'locks', title: 'Locks', icon: Lock, iconColor: 'bg-purple-500/15 text-purple-400', match: (e: HomeAssistantEntity) => e.domain === 'lock' },
+  { id: 'covers', title: 'Covers & Doors', icon: Warehouse, iconColor: 'bg-blue-500/15 text-blue-400', match: (e: HomeAssistantEntity) => e.domain === 'cover' },
+  { id: 'switches', title: 'Switches', icon: Power, iconColor: 'bg-emerald-500/15 text-emerald-400', match: (e: HomeAssistantEntity) => e.domain === 'switch' },
+  { id: 'fans', title: 'Fans', icon: Fan, iconColor: 'bg-cyan-500/15 text-cyan-400', match: (e: HomeAssistantEntity) => e.domain === 'fan' },
+  { id: 'triggers', title: 'Triggers & Scenes', icon: Zap, iconColor: 'bg-amber-500/15 text-amber-400', match: (e: HomeAssistantEntity) => ['button', 'input_button', 'scene', 'script'].includes(e.domain) },
+  { id: 'media', title: 'Media Players', icon: Sliders, iconColor: 'bg-indigo-500/15 text-indigo-400', match: (e: HomeAssistantEntity) => e.domain === 'media_player' },
+  { id: 'other', title: 'Other Controls', icon: Sliders, iconColor: 'bg-white/10 text-slate-400', match: (e: HomeAssistantEntity) => !['climate', 'light', 'lock', 'cover', 'switch', 'fan', 'button', 'input_button', 'scene', 'script', 'media_player'].includes(e.domain) },
+];
 
 export const SmartHomePage: React.FC = () => {
   const { household } = usePWA();
@@ -187,7 +207,7 @@ export const SmartHomePage: React.FC = () => {
       }
       clearInterval(backupInterval);
     };
-  }, [household?.id, loadStates]);
+  }, [household?.id, loadStates, loadConfig]);
 
   const handleCallService = async (domain: string, service: string, serviceData: any) => {
     const entityId = serviceData?.entity_id;
@@ -210,10 +230,8 @@ export const SmartHomePage: React.FC = () => {
 
     try {
       await api.callHomeAssistantService(domain, service, serviceData);
-      // Re-fetch states shortly after service execution to ensure sync
       setTimeout(() => loadStates(true), 600);
     } catch (err: any) {
-      // Revert optimistic state
       if (entityId) {
         setOptimisticStates((prev) => {
           const next = { ...prev };
@@ -250,7 +268,6 @@ export const SmartHomePage: React.FC = () => {
         }, 1200);
       }
     } else if (entity.domain === 'lock') {
-      // Toggle or pulse unlock
       const nextService = currentState === 'locked' ? 'unlock' : 'lock';
       await handleCallService('lock', nextService, { entity_id: entity.entity_id });
     }
@@ -263,70 +280,348 @@ export const SmartHomePage: React.FC = () => {
     return entities.filter((e) => visibleSet.has(e.entity_id));
   }, [entities, visibleEntityIds]);
 
-  // Helper to detect access-related entities (doors, locks, gates, intercom relays)
-  const isAccessEntity = (e: HomeAssistantEntity) => {
-    if (e.domain === 'lock' || e.domain === 'cover') return true;
-    const s = (e.entity_id + ' ' + e.friendly_name).toLowerCase();
-    return (
-      (e.domain === 'button' || e.domain === 'input_button' || e.domain === 'switch') &&
-      (s.includes('door') || s.includes('gate') || s.includes('lock') || s.includes('relay') || s.includes('verso') || s.includes('intercom') || s.includes('strike'))
-    );
-  };
+  // Data-only entities (sensors, binary sensors, presence)
+  const activeDataEntities = useMemo(() => {
+    return activeEntities.filter(isDataOnlyEntity).filter((entity) => {
+      if (!searchQuery.trim()) return true;
+      const q = searchQuery.toLowerCase();
+      return (
+        entity.friendly_name.toLowerCase().includes(q) ||
+        entity.entity_id.toLowerCase().includes(q) ||
+        entity.domain.toLowerCase().includes(q)
+      );
+    });
+  }, [activeEntities, searchQuery]);
 
-  // Grouping categories based on active controls
-  const categories = useMemo(() => {
-    const cats = [
-      { id: 'all', label: 'All', count: activeEntities.length },
-      { id: 'access', label: 'Locks & Entry', count: activeEntities.filter(isAccessEntity).length },
-      { id: 'lights', label: 'Lights', count: activeEntities.filter((e) => e.domain === 'light').length },
-      { id: 'switches', label: 'Switches', count: activeEntities.filter((e) => e.domain === 'switch').length },
-      { id: 'climate', label: 'Climate', count: activeEntities.filter((e) => e.domain === 'climate').length },
-      { id: 'triggers', label: 'Triggers & Buttons', count: activeEntities.filter((e) => e.domain === 'button' || e.domain === 'input_button' || e.domain === 'scene' || e.domain === 'script').length },
-      { id: 'sensors', label: 'Sensors', count: activeEntities.filter((e) => e.domain === 'sensor' || e.domain === 'binary_sensor').length },
-    ];
-    return cats.filter((c) => c.id === 'all' || c.count > 0);
+  // Interactive controls
+  const activeControlEntities = useMemo(() => {
+    return activeEntities.filter((e) => !isDataOnlyEntity(e));
   }, [activeEntities]);
 
-  // Filtered entities on the dashboard
-  const filteredEntities = useMemo(() => {
-    return activeEntities.filter((entity) => {
-      // Category filter
-      if (selectedCategory === 'access' && !isAccessEntity(entity)) return false;
-      if (selectedCategory === 'lights' && entity.domain !== 'light') return false;
-      if (selectedCategory === 'switches' && entity.domain !== 'switch') return false;
-      if (selectedCategory === 'climate' && entity.domain !== 'climate') return false;
-      if (selectedCategory === 'triggers' && entity.domain !== 'button' && entity.domain !== 'input_button' && entity.domain !== 'scene' && entity.domain !== 'script') return false;
-      if (selectedCategory === 'sensors' && entity.domain !== 'sensor' && entity.domain !== 'binary_sensor') return false;
+  // Grouped controls for carousels
+  const controlGroupsWithEntities = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
 
-      // Search filter
-      if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase();
-        return (
-          entity.friendly_name.toLowerCase().includes(query) ||
-          entity.entity_id.toLowerCase().includes(query) ||
-          entity.domain.toLowerCase().includes(query)
-        );
+    return CONTROL_GROUPS.map((group) => {
+      // Category filter
+      if (selectedCategory !== 'all' && selectedCategory !== group.id) {
+        return { ...group, entities: [] };
       }
 
-      return true;
-    });
-  }, [activeEntities, selectedCategory, searchQuery]);
+      const matching = activeControlEntities.filter((e) => {
+        if (!group.match(e)) return false;
+        if (q) {
+          return (
+            e.friendly_name.toLowerCase().includes(q) ||
+            e.entity_id.toLowerCase().includes(q) ||
+            e.domain.toLowerCase().includes(q)
+          );
+        }
+        return true;
+      });
+
+      return {
+        ...group,
+        entities: matching,
+      };
+    }).filter((g) => g.entities.length > 0);
+  }, [activeControlEntities, selectedCategory, searchQuery]);
+
+  // Categories for the filter bar
+  const categories = useMemo(() => {
+    return [
+      { id: 'all', label: 'All Controls', count: activeControlEntities.length },
+      ...CONTROL_GROUPS.map((g) => ({
+        id: g.id,
+        label: g.title,
+        count: activeControlEntities.filter(g.match).length,
+      })).filter((c) => c.count > 0),
+    ];
+  }, [activeControlEntities]);
 
   const handleSaveVisibleControls = async (newIds: string[]) => {
     setVisibleEntityIds(newIds);
     await api.saveHomeAssistantVisibleControls(newIds);
   };
 
+  // Helper for sensor formatting in the top sensor row
+  const getSensorDisplay = (entity: HomeAssistantEntity, effectiveState: string) => {
+    const isUnavailable = effectiveState === 'unavailable' || effectiveState === 'unknown';
+    const s = (entity.entity_id + ' ' + entity.friendly_name).toLowerCase();
+    const dc = (entity.attributes?.device_class || '').toLowerCase();
+
+    if (entity.domain === 'person') {
+      const isHome = effectiveState === 'home';
+      const photo = entity.attributes?.entity_picture;
+      const icon = photo ? (
+        <img src={photo} alt="" className="w-5 h-5 rounded-full object-cover ring-1 ring-emerald-400/40" />
+      ) : (
+        <User className="w-3.5 h-3.5" />
+      );
+      const color = isHome ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-700/50 text-slate-400';
+      const displayState = isHome ? 'Home' : effectiveState === 'not_home' ? 'Away' : effectiveState;
+      return { icon, color, displayState };
+    }
+
+    if (dc === 'temperature' || s.includes('temp')) {
+      const unit = entity.attributes?.unit_of_measurement || '°';
+      return {
+        icon: <Gauge className="w-3.5 h-3.5" />,
+        color: 'bg-amber-500/15 text-amber-400',
+        displayState: isUnavailable ? 'Offline' : `${effectiveState}${unit}`,
+      };
+    }
+
+    if (dc === 'humidity' || s.includes('humidity')) {
+      return {
+        icon: <Droplets className="w-3.5 h-3.5" />,
+        color: 'bg-cyan-500/15 text-cyan-400',
+        displayState: isUnavailable ? 'Offline' : `${effectiveState}%`,
+      };
+    }
+
+    if (dc === 'power' || dc === 'energy' || s.includes('power') || s.includes('watt')) {
+      const unit = entity.attributes?.unit_of_measurement || 'W';
+      return {
+        icon: <Zap className="w-3.5 h-3.5" />,
+        color: 'bg-amber-500/15 text-amber-400',
+        displayState: isUnavailable ? 'Offline' : `${effectiveState} ${unit}`,
+      };
+    }
+
+    if (dc === 'battery' || s.includes('battery')) {
+      return {
+        icon: <Battery className="w-3.5 h-3.5" />,
+        color: 'bg-emerald-500/15 text-emerald-400',
+        displayState: isUnavailable ? 'Offline' : `${effectiveState}%`,
+      };
+    }
+
+    if (dc === 'door' || dc === 'window' || dc === 'garage_door' || s.includes('door') || s.includes('window') || s.includes('contact')) {
+      const isOpen = effectiveState === 'on' || effectiveState === 'open';
+      return {
+        icon: isOpen ? <DoorOpen className="w-3.5 h-3.5" /> : <DoorClosed className="w-3.5 h-3.5" />,
+        color: isOpen ? 'bg-rose-500/15 text-rose-400' : 'bg-emerald-500/15 text-emerald-400',
+        displayState: isUnavailable ? 'Offline' : isOpen ? 'Open' : 'Closed',
+      };
+    }
+
+    const unit = entity.attributes?.unit_of_measurement || '';
+    return {
+      icon: <Activity className="w-3.5 h-3.5" />,
+      color: 'bg-cyan-500/15 text-cyan-400',
+      displayState: isUnavailable ? 'Offline' : `${effectiveState} ${unit}`.trim(),
+    };
+  };
+
+  // Render a compact control tile inside a carousel
+  const renderControlTile = (entity: HomeAssistantEntity) => {
+    const currentEffectiveState = optimisticStates[entity.entity_id] || entity.state;
+    const isUnavailable = currentEffectiveState === 'unavailable' || currentEffectiveState === 'unknown';
+    const isOn = currentEffectiveState === 'on';
+    const isLocked = currentEffectiveState === 'locked';
+    const isClosed = currentEffectiveState === 'closed';
+    const isTriggered = Boolean(triggeredButtons[entity.entity_id]);
+
+    let iconComponent = <Sliders className="w-4 h-4 sm:w-5 sm:h-5" />;
+    let stateDisplay = isUnavailable ? 'Unavailable' : currentEffectiveState;
+    let tileBg = 'bg-slate-900/60 border-white/10 hover:border-white/20';
+    let iconBg = 'bg-white/5 text-slate-400';
+
+    if (entity.domain === 'climate') {
+      const currentTemp = entity.attributes.current_temperature;
+      const targetTemp = entity.attributes.temperature;
+      const hvacAction = entity.attributes.hvac_action;
+      const isCooling = hvacAction === 'cooling' || currentEffectiveState === 'cool';
+      const isHeating = hvacAction === 'heating' || currentEffectiveState === 'heat';
+
+      iconComponent = (
+        <Gauge
+          className={`w-4 h-4 sm:w-5 sm:h-5 ${
+            isCooling
+              ? 'text-cyan-400'
+              : isHeating
+              ? 'text-amber-400'
+              : 'text-amber-300'
+          }`}
+        />
+      );
+
+      stateDisplay = targetTemp ? `${Math.round(targetTemp)}° • ${currentEffectiveState}` : currentEffectiveState;
+      if (currentTemp) {
+        stateDisplay = `${Math.round(currentTemp)}° (${stateDisplay})`;
+      }
+
+      tileBg = isCooling
+        ? 'bg-gradient-to-b from-cyan-500/10 to-slate-900/80 border-cyan-500/25 hover:border-cyan-400/40'
+        : isHeating
+        ? 'bg-gradient-to-b from-amber-500/10 to-slate-900/80 border-amber-500/25 hover:border-amber-400/40'
+        : 'bg-gradient-to-b from-slate-900/80 to-slate-950/80 border-white/10 hover:border-white/25';
+      iconBg = isCooling
+        ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/20'
+        : isHeating
+        ? 'bg-amber-500/15 text-amber-400 border border-amber-500/20'
+        : 'bg-amber-500/10 text-amber-400 border border-amber-500/20';
+    } else if (entity.domain === 'light') {
+      iconComponent = <Lightbulb className={`w-4 h-4 sm:w-5 sm:h-5 ${isOn ? 'fill-amber-400 text-amber-400' : 'text-slate-400'}`} />;
+      if (isOn) {
+        const bVal = entity.attributes.brightness
+          ? Math.round((entity.attributes.brightness / 255) * 100)
+          : null;
+        stateDisplay = bVal ? `On (${bVal}%)` : 'On';
+        tileBg = 'bg-gradient-to-b from-amber-500/15 to-slate-900/80 border-amber-500/30 hover:border-amber-400/50 shadow-lg shadow-amber-500/5';
+        iconBg = 'bg-amber-400/20 text-amber-300 ring-2 ring-amber-400/30';
+      } else {
+        stateDisplay = 'Off';
+      }
+    } else if (entity.domain === 'switch') {
+      iconComponent = <Power className={`w-4 h-4 sm:w-5 sm:h-5 ${isOn ? 'text-emerald-400' : 'text-slate-400'}`} />;
+      if (isOn) {
+        stateDisplay = 'On';
+        tileBg = 'bg-gradient-to-b from-emerald-500/15 to-slate-900/80 border-emerald-500/30 hover:border-emerald-400/50 shadow-lg shadow-emerald-500/5';
+        iconBg = 'bg-emerald-400/20 text-emerald-300 ring-2 ring-emerald-400/30';
+      } else {
+        stateDisplay = 'Off';
+      }
+    } else if (entity.domain === 'lock') {
+      if (isUnavailable) {
+        iconComponent = <Lock className="w-4 h-4 sm:w-5 sm:h-5 text-slate-500" />;
+        stateDisplay = 'Offline';
+        tileBg = 'bg-slate-900/40 border-white/5 opacity-60 hover:opacity-85';
+        iconBg = 'bg-white/5 text-slate-500';
+      } else if (isLocked) {
+        iconComponent = <Lock className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400" />;
+        stateDisplay = 'Locked';
+        tileBg = 'bg-slate-900/60 border-emerald-500/20 hover:border-emerald-500/40';
+        iconBg = 'bg-emerald-500/15 text-emerald-400';
+      } else {
+        iconComponent = <Unlock className="w-4 h-4 sm:w-5 sm:h-5 text-rose-400" />;
+        stateDisplay = currentEffectiveState === 'open' ? 'Open' : 'Unlocked';
+        tileBg = 'bg-rose-500/10 border-rose-500/30 hover:border-rose-500/50 shadow-lg shadow-rose-500/5';
+        iconBg = 'bg-rose-500/20 text-rose-400 ring-2 ring-rose-500/30';
+      }
+    } else if (entity.domain === 'button' || entity.domain === 'input_button') {
+      iconComponent = isTriggered ? <Check className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-300" /> : <Zap className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400" />;
+      if (isUnavailable) {
+        stateDisplay = 'Offline';
+        tileBg = 'bg-slate-900/40 border-white/5 opacity-60';
+        iconBg = 'bg-white/5 text-slate-500';
+      } else if (isTriggered) {
+        stateDisplay = 'Triggered!';
+        tileBg = 'bg-emerald-500/15 border-emerald-500/35 shadow-lg shadow-emerald-500/10';
+        iconBg = 'bg-emerald-500/20 text-emerald-300 ring-2 ring-emerald-500/30';
+      } else {
+        stateDisplay = 'Tap to Trigger';
+        tileBg = 'bg-slate-900/60 border-amber-500/20 hover:border-amber-500/40 hover:bg-slate-900/80';
+        iconBg = 'bg-amber-500/15 text-amber-400';
+      }
+    } else if (entity.domain === 'cover') {
+      const isGarage =
+        entity.attributes?.device_class === 'garage' ||
+        entity.entity_id.toLowerCase().includes('garage') ||
+        (entity.friendly_name || '').toLowerCase().includes('garage');
+      iconComponent = isGarage ? (
+        <Warehouse className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400" />
+      ) : (
+        <Blinds className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400" />
+      );
+      stateDisplay = isClosed ? 'Closed' : currentEffectiveState;
+      tileBg = 'bg-slate-900/60 border-white/10 hover:border-white/25';
+      iconBg = 'bg-blue-500/15 text-blue-400';
+    } else if (entity.domain === 'scene' || entity.domain === 'script') {
+      iconComponent = <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-purple-400" />;
+      stateDisplay = 'Tap to Activate';
+      tileBg = 'bg-slate-900/60 border-purple-500/20 hover:border-purple-500/40';
+      iconBg = 'bg-purple-500/15 text-purple-400';
+    } else if (entity.domain === 'fan') {
+      iconComponent = <Fan className={`w-4 h-4 sm:w-5 sm:h-5 ${isOn ? 'text-cyan-400 animate-spin' : 'text-slate-400'}`} style={{ animationDuration: '3s' }} />;
+      stateDisplay = isOn ? 'Running' : 'Off';
+      tileBg = isOn ? 'bg-gradient-to-b from-cyan-500/15 to-slate-900/80 border-cyan-500/30' : 'bg-slate-900/60 border-white/10';
+      iconBg = isOn ? 'bg-cyan-500/20 text-cyan-300 ring-2 ring-cyan-500/30' : 'bg-white/5 text-slate-400';
+    }
+
+    return (
+      <div
+        key={entity.entity_id}
+        onClick={() => {
+          if (entity.needsDrawer) {
+            setSelectedEntityForDrawer(entity);
+          } else {
+            handleTileQuickAction({ stopPropagation: () => {} } as any, entity);
+          }
+        }}
+        className={`p-3 sm:p-4 rounded-2xl sm:rounded-3xl border transition-all duration-200 cursor-pointer flex flex-col justify-between select-none relative group min-h-[5.5rem] sm:min-h-[7.5rem] w-full ${tileBg}`}
+      >
+        {/* Top Row: Icon + Right Arrow (if needsDrawer) OR Toggle Button */}
+        <div className="flex items-center justify-between gap-1.5 sm:gap-2">
+          <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 transition-all ${iconBg}`}>
+            {iconComponent}
+          </div>
+
+          {/* Multi-button control: Show Arrow pointing right */}
+          {entity.needsDrawer ? (
+            <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-white/5 group-hover:bg-white/15 flex items-center justify-center text-slate-400 group-hover:text-white transition-all shrink-0">
+              <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.5]" />
+            </div>
+          ) : (entity.domain === 'button' || entity.domain === 'input_button') ? (
+            /* Momentary trigger button */
+            <button
+              type="button"
+              disabled={isUnavailable}
+              onClick={(e) => handleTileQuickAction(e, entity)}
+              className={`px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg sm:rounded-xl border text-[10px] sm:text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                isUnavailable
+                  ? 'opacity-30 bg-white/5 border-white/5 text-slate-500 cursor-not-allowed'
+                  : isTriggered
+                  ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-md shadow-emerald-500/20 font-black'
+                  : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/30'
+              }`}
+            >
+              <Zap className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+              <span>{isTriggered ? 'Triggered' : 'Press'}</span>
+            </button>
+          ) : (
+            /* Single action toggle button */
+            <button
+              type="button"
+              disabled={isUnavailable}
+              onClick={(e) => handleTileQuickAction(e, entity)}
+              className={`p-0.5 sm:p-1 rounded-xl hover:bg-white/10 transition-all cursor-pointer shrink-0 ${
+                isUnavailable ? 'opacity-30 cursor-not-allowed text-slate-600' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              {isOn ? (
+                <ToggleRight className="w-6 h-6 sm:w-7 sm:h-7 text-emerald-400" />
+              ) : (
+                <ToggleLeft className="w-6 h-6 sm:w-7 sm:h-7 text-slate-500" />
+              )}
+            </button>
+          )}
+        </div>
+
+        {/* Bottom Info: Friendly Name and Live State */}
+        <div className="pt-2 sm:pt-3 min-w-0">
+          <h4 className="text-[11px] sm:text-xs font-bold text-white truncate block group-hover:text-emerald-300 transition-colors leading-tight">
+            {entity.friendly_name}
+          </h4>
+          <div className="text-[10px] sm:text-[11px] font-medium text-slate-400 truncate mt-0.5 capitalize">
+            {stateDisplay}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
-    <div className="max-w-7xl mx-auto px-3 sm:px-6 pt-3 pb-28 md:pb-20 space-y-3 sm:space-y-4 min-h-[calc(100vh-8rem)] flex flex-col w-full">
-      {/* Consistent Mobile-First Header */}
-      <div className="flex items-center justify-between mb-1">
+    <div className="max-w-7xl mx-auto px-3 sm:px-6 pt-3 pb-28 md:pb-20 space-y-4 min-h-[calc(100vh-8rem)] flex flex-col w-full">
+      {/* Header Bar */}
+      <div className="flex items-center justify-between mb-0.5">
         <div className="flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-md shadow-emerald-500/20 text-slate-950 shrink-0">
-            <Home className="w-5 h-5 stroke-[2.2]" />
+            <SlidersHorizontal className="w-5 h-5 stroke-[2.2]" />
           </div>
           <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white flex items-center gap-2">
-            Home
+            Control
           </h1>
         </div>
 
@@ -424,6 +719,48 @@ export const SmartHomePage: React.FC = () => {
         </div>
       </div>
 
+      {/* SENSOR ROW JUST UNDER THE HEADER (Only rendered if data-only entities have been added to the screen) */}
+      {!isLoading && activeDataEntities.length > 0 && (
+        <div className="space-y-1.5 animate-in fade-in duration-200">
+          <div className="flex items-center justify-between px-1">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+              <Activity className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Sensors & Status</span>
+            </span>
+            <span className="text-[10px] text-slate-500 font-semibold">
+              {activeDataEntities.length} active
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1 px-0.5 snap-x">
+            {activeDataEntities.map((entity) => {
+              const currentEffectiveState = optimisticStates[entity.entity_id] || entity.state;
+              const { icon, color, displayState } = getSensorDisplay(entity, currentEffectiveState);
+
+              return (
+                <div
+                  key={entity.entity_id}
+                  onClick={() => setSelectedEntityForDrawer(entity)}
+                  className="flex items-center gap-2 px-3 py-1.5 sm:py-2 rounded-2xl bg-slate-900/80 hover:bg-slate-900 border border-white/10 hover:border-white/20 transition-all cursor-pointer shrink-0 snap-start active:scale-95 group shadow-sm"
+                >
+                  <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${color}`}>
+                    {icon}
+                  </div>
+                  <div className="min-w-0 pr-1">
+                    <div className="text-[11px] font-bold text-white truncate max-w-[130px] group-hover:text-cyan-300 transition-colors">
+                      {entity.friendly_name}
+                    </div>
+                    <div className="text-[10px] font-semibold text-slate-400 truncate">
+                      {displayState}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Search & Category Filter Bar (Desktop only, hidden on mobile) */}
       {visibleEntityIds.length > 0 && (
         <div className="hidden md:block space-y-3">
@@ -465,9 +802,16 @@ export const SmartHomePage: React.FC = () => {
 
       {/* Loading Skeleton */}
       {isLoading && (
-        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-4">
-          {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-            <div key={i} className="h-24 sm:h-32 rounded-2xl sm:rounded-3xl bg-white/5 border border-white/5 animate-pulse" />
+        <div className="space-y-6">
+          {[1, 2].map((g) => (
+            <div key={g} className="space-y-2">
+              <div className="h-4 w-28 bg-white/10 rounded-lg animate-pulse" />
+              <div className="flex gap-2.5 sm:gap-4 overflow-hidden">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="h-24 sm:h-32 w-[155px] sm:w-[195px] shrink-0 rounded-2xl sm:rounded-3xl bg-white/5 border border-white/5 animate-pulse" />
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       )}
@@ -498,7 +842,7 @@ export const SmartHomePage: React.FC = () => {
       )}
 
       {/* Filtered Empty State (when controls exist but search or filter yields nothing) */}
-      {!isLoading && visibleEntityIds.length > 0 && filteredEntities.length === 0 && (
+      {!isLoading && visibleEntityIds.length > 0 && controlGroupsWithEntities.length === 0 && activeDataEntities.length === 0 && (
         <div className="glass-panel p-10 rounded-3xl border border-white/10 text-center space-y-3">
           <div className="w-12 h-12 rounded-2xl bg-white/5 text-slate-400 flex items-center justify-center mx-auto">
             <Sliders className="w-6 h-6" />
@@ -520,209 +864,44 @@ export const SmartHomePage: React.FC = () => {
         </div>
       )}
 
-      {/* Tiles Grid: 4 wide on desktop, 2 wide on mobile */}
-      {!isLoading && filteredEntities.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-4">
-          {filteredEntities.map((entity) => {
-            const currentEffectiveState = optimisticStates[entity.entity_id] || entity.state;
-            const isUnavailable = currentEffectiveState === 'unavailable' || currentEffectiveState === 'unknown';
-            const isOn = currentEffectiveState === 'on';
-            const isLocked = currentEffectiveState === 'locked';
-            const isClosed = currentEffectiveState === 'closed';
-            const isTriggered = Boolean(triggeredButtons[entity.entity_id]);
-
-            // Determine tile visual style and icon based on domain and state
-            let iconComponent = <Sliders className="w-4 h-4 sm:w-5 sm:h-5" />;
-            let stateDisplay = isUnavailable ? 'Unavailable' : currentEffectiveState;
-            let tileBg = 'bg-slate-900/60 border-white/10 hover:border-white/20';
-            let iconBg = 'bg-white/5 text-slate-400';
-
-            if (entity.domain === 'climate') {
-              const currentTemp = entity.attributes.current_temperature;
-              const targetTemp = entity.attributes.temperature;
-              const hvacAction = entity.attributes.hvac_action;
-              const isCooling = hvacAction === 'cooling' || currentEffectiveState === 'cool';
-              const isHeating = hvacAction === 'heating' || currentEffectiveState === 'heat';
-
-              iconComponent = (
-                <Gauge
-                  className={`w-4 h-4 sm:w-5 sm:h-5 ${
-                    isCooling
-                      ? 'text-cyan-400'
-                      : isHeating
-                      ? 'text-amber-400'
-                      : 'text-amber-300'
-                  }`}
-                />
-              );
-
-              stateDisplay = targetTemp ? `${Math.round(targetTemp)}° • ${currentEffectiveState}` : currentEffectiveState;
-              if (currentTemp) {
-                stateDisplay = `${Math.round(currentTemp)}° (${stateDisplay})`;
-              }
-
-              tileBg = isCooling
-                ? 'bg-gradient-to-b from-cyan-500/10 to-slate-900/80 border-cyan-500/25 hover:border-cyan-400/40'
-                : isHeating
-                ? 'bg-gradient-to-b from-amber-500/10 to-slate-900/80 border-amber-500/25 hover:border-amber-400/40'
-                : 'bg-gradient-to-b from-slate-900/80 to-slate-950/80 border-white/10 hover:border-white/25';
-              iconBg = isCooling
-                ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/20'
-                : isHeating
-                ? 'bg-amber-500/15 text-amber-400 border border-amber-500/20'
-                : 'bg-amber-500/10 text-amber-400 border border-amber-500/20';
-            } else if (entity.domain === 'light') {
-              iconComponent = <Lightbulb className={`w-4 h-4 sm:w-5 sm:h-5 ${isOn ? 'fill-amber-400 text-amber-400' : 'text-slate-400'}`} />;
-              if (isOn) {
-                const bVal = entity.attributes.brightness
-                  ? Math.round((entity.attributes.brightness / 255) * 100)
-                  : null;
-                stateDisplay = bVal ? `On (${bVal}%)` : 'On';
-                tileBg = 'bg-gradient-to-b from-amber-500/15 to-slate-900/80 border-amber-500/30 hover:border-amber-400/50 shadow-lg shadow-amber-500/5';
-                iconBg = 'bg-amber-400/20 text-amber-300 ring-2 ring-amber-400/30';
-              } else {
-                stateDisplay = 'Off';
-              }
-            } else if (entity.domain === 'switch') {
-              iconComponent = <Power className={`w-4 h-4 sm:w-5 sm:h-5 ${isOn ? 'text-emerald-400' : 'text-slate-400'}`} />;
-              if (isOn) {
-                stateDisplay = 'On';
-                tileBg = 'bg-gradient-to-b from-emerald-500/15 to-slate-900/80 border-emerald-500/30 hover:border-emerald-400/50 shadow-lg shadow-emerald-500/5';
-                iconBg = 'bg-emerald-400/20 text-emerald-300 ring-2 ring-emerald-400/30';
-              } else {
-                stateDisplay = 'Off';
-              }
-            } else if (entity.domain === 'lock') {
-              if (isUnavailable) {
-                iconComponent = <Lock className="w-4 h-4 sm:w-5 sm:h-5 text-slate-500" />;
-                stateDisplay = 'Offline / Unavailable';
-                tileBg = 'bg-slate-900/40 border-white/5 opacity-60 hover:opacity-85';
-                iconBg = 'bg-white/5 text-slate-500';
-              } else if (isLocked) {
-                iconComponent = <Lock className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400" />;
-                stateDisplay = 'Locked';
-                tileBg = 'bg-slate-900/60 border-emerald-500/20 hover:border-emerald-500/40';
-                iconBg = 'bg-emerald-500/15 text-emerald-400';
-              } else {
-                iconComponent = <Unlock className="w-4 h-4 sm:w-5 sm:h-5 text-rose-400" />;
-                stateDisplay = currentEffectiveState === 'open' ? 'Open' : 'Unlocked';
-                tileBg = 'bg-rose-500/10 border-rose-500/30 hover:border-rose-500/50 shadow-lg shadow-rose-500/5';
-                iconBg = 'bg-rose-500/20 text-rose-400 ring-2 ring-rose-500/30';
-              }
-            } else if (entity.domain === 'button' || entity.domain === 'input_button') {
-              iconComponent = isTriggered ? <Check className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-300" /> : <Zap className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400" />;
-              if (isUnavailable) {
-                stateDisplay = 'Offline';
-                tileBg = 'bg-slate-900/40 border-white/5 opacity-60';
-                iconBg = 'bg-white/5 text-slate-500';
-              } else if (isTriggered) {
-                stateDisplay = 'Triggered!';
-                tileBg = 'bg-emerald-500/15 border-emerald-500/35 shadow-lg shadow-emerald-500/10';
-                iconBg = 'bg-emerald-500/20 text-emerald-300 ring-2 ring-emerald-500/30';
-              } else {
-                stateDisplay = 'Tap to Trigger';
-                tileBg = 'bg-slate-900/60 border-amber-500/20 hover:border-amber-500/40 hover:bg-slate-900/80';
-                iconBg = 'bg-amber-500/15 text-amber-400';
-              }
-            } else if (entity.domain === 'cover') {
-              const isGarage =
-                entity.attributes?.device_class === 'garage' ||
-                entity.entity_id.toLowerCase().includes('garage') ||
-                (entity.friendly_name || '').toLowerCase().includes('garage');
-              iconComponent = isGarage ? (
-                <Warehouse className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400" />
-              ) : (
-                <Blinds className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400" />
-              );
-              stateDisplay = isClosed ? 'Closed' : currentEffectiveState;
-              tileBg = 'bg-slate-900/60 border-white/10 hover:border-white/25';
-              iconBg = 'bg-blue-500/15 text-blue-400';
-            } else if (entity.domain === 'scene' || entity.domain === 'script') {
-              iconComponent = <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-purple-400" />;
-              stateDisplay = 'Tap to Activate';
-              tileBg = 'bg-slate-900/60 border-purple-500/20 hover:border-purple-500/40';
-              iconBg = 'bg-purple-500/15 text-purple-400';
-            } else if (entity.domain === 'fan') {
-              iconComponent = <Fan className={`w-4 h-4 sm:w-5 sm:h-5 ${isOn ? 'text-cyan-400 animate-spin' : 'text-slate-400'}`} style={{ animationDuration: '3s' }} />;
-              stateDisplay = isOn ? 'Running' : 'Off';
-              tileBg = isOn ? 'bg-gradient-to-b from-cyan-500/15 to-slate-900/80 border-cyan-500/30' : 'bg-slate-900/60 border-white/10';
-              iconBg = isOn ? 'bg-cyan-500/20 text-cyan-300 ring-2 ring-cyan-500/30' : 'bg-white/5 text-slate-400';
-            } else if (entity.domain === 'sensor' || entity.domain === 'binary_sensor') {
-              iconComponent = <Activity className="w-4 h-4 sm:w-5 sm:h-5 text-cyan-400" />;
-              const unit = entity.attributes.unit_of_measurement || '';
-              stateDisplay = `${currentEffectiveState} ${unit}`.trim();
-              tileBg = 'bg-slate-900/60 border-white/10 hover:border-white/20';
-              iconBg = 'bg-cyan-500/15 text-cyan-400';
-            }
-
+      {/* CAROUSEL GROUPS FOR CONTROLS */}
+      {!isLoading && controlGroupsWithEntities.length > 0 && (
+        <div className="space-y-6">
+          {controlGroupsWithEntities.map((group) => {
+            const GroupIcon = group.icon;
             return (
-              <div
-                key={entity.entity_id}
-                onClick={() => {
-                  if (entity.needsDrawer) {
-                    setSelectedEntityForDrawer(entity);
-                  } else {
-                    // For single-action buttons, tile click toggles directly
-                    handleTileQuickAction({ stopPropagation: () => {} } as any, entity);
-                  }
-                }}
-                className={`p-3 sm:p-4 rounded-2xl sm:rounded-3xl border transition-all duration-200 cursor-pointer flex flex-col justify-between select-none relative group min-h-[5.5rem] sm:min-h-[7.5rem] ${tileBg}`}
-              >
-                {/* Top Row: Icon + Right Arrow (if needsDrawer) OR Toggle Button */}
-                <div className="flex items-center justify-between gap-1.5 sm:gap-2">
-                  <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 transition-all ${iconBg}`}>
-                    {iconComponent}
+              <div key={group.id} className="space-y-2">
+                {/* Carousel Group Header */}
+                <div className="flex items-center justify-between px-1">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${group.iconColor}`}>
+                      <GroupIcon className="w-3.5 h-3.5 stroke-[2.2]" />
+                    </div>
+                    <h3 className="text-xs font-black uppercase tracking-wider text-white flex items-center gap-1.5">
+                      <span>{group.title}</span>
+                      <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-white/10 text-slate-400 font-bold">
+                        {group.entities.length}
+                      </span>
+                    </h3>
                   </div>
 
-                  {/* Multi-button control: Show Arrow pointing right */}
-                  {entity.needsDrawer ? (
-                    <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-white/5 group-hover:bg-white/15 flex items-center justify-center text-slate-400 group-hover:text-white transition-all shrink-0">
-                      <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.5]" />
-                    </div>
-                  ) : (entity.domain === 'button' || entity.domain === 'input_button') ? (
-                    /* Momentary trigger button */
-                    <button
-                      type="button"
-                      disabled={isUnavailable}
-                      onClick={(e) => handleTileQuickAction(e, entity)}
-                      className={`px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg sm:rounded-xl border text-[10px] sm:text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
-                        isUnavailable
-                          ? 'opacity-30 bg-white/5 border-white/5 text-slate-500 cursor-not-allowed'
-                          : isTriggered
-                          ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-md shadow-emerald-500/20 font-black'
-                          : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/30'
-                      }`}
-                    >
-                      <Zap className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                      <span>{isTriggered ? 'Triggered' : 'Press'}</span>
-                    </button>
-                  ) : (
-                    /* Single action toggle button */
-                    <button
-                      type="button"
-                      disabled={isUnavailable}
-                      onClick={(e) => handleTileQuickAction(e, entity)}
-                      className={`p-0.5 sm:p-1 rounded-xl hover:bg-white/10 transition-all cursor-pointer shrink-0 ${
-                        isUnavailable ? 'opacity-30 cursor-not-allowed text-slate-600' : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      {isOn ? (
-                        <ToggleRight className="w-6 h-6 sm:w-7 sm:h-7 text-emerald-400" />
-                      ) : (
-                        <ToggleLeft className="w-6 h-6 sm:w-7 sm:h-7 text-slate-500" />
-                      )}
-                    </button>
+                  {group.entities.length > 2 && (
+                    <span className="text-[10px] text-slate-500 font-medium hidden sm:inline">
+                      Swipe for more →
+                    </span>
                   )}
                 </div>
 
-                {/* Bottom Info: Friendly Name and Live State */}
-                <div className="pt-2 sm:pt-3 min-w-0">
-                  <h4 className="text-[11px] sm:text-xs font-bold text-white truncate block group-hover:text-emerald-300 transition-colors leading-tight">
-                    {entity.friendly_name}
-                  </h4>
-                  <div className="text-[10px] sm:text-[11px] font-medium text-slate-400 truncate mt-0.5 capitalize">
-                    {stateDisplay}
-                  </div>
+                {/* Horizontal Swipeable Track */}
+                <div className="flex gap-2.5 sm:gap-3.5 overflow-x-auto no-scrollbar py-1 px-0.5 snap-x scroll-smooth">
+                  {group.entities.map((entity) => (
+                    <div
+                      key={entity.entity_id}
+                      className="w-[155px] sm:w-[195px] shrink-0 snap-start"
+                    >
+                      {renderControlTile(entity)}
+                    </div>
+                  ))}
                 </div>
               </div>
             );
@@ -730,7 +909,7 @@ export const SmartHomePage: React.FC = () => {
         </div>
       )}
 
-      {/* Slide Drawer from the Right Side for Multi-Button Controls */}
+      {/* Slide Drawer from the Right Side for Multi-Button / Sensor Details */}
       <EntityDetailDrawer
         isOpen={Boolean(selectedEntityForDrawer)}
         entity={selectedEntityForDrawer}

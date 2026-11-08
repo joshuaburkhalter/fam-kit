@@ -3,7 +3,7 @@ import {
   ShoppingCart,
   ChefHat,
   Calendar,
-  Home,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { usePWA } from '../context/PWAContext';
 
@@ -19,7 +19,7 @@ export const MobileNav: React.FC<MobileNavProps> = ({ activeTab, setActiveTab })
     { id: 'grocery', label: 'Lists', icon: ShoppingCart },
     { id: 'meals', label: 'Meals', icon: ChefHat },
     { id: 'calendar', label: 'Calendar', icon: Calendar },
-    ...(hasSmartHome ? [{ id: 'home', label: 'Home', icon: Home }] : []),
+    ...(hasSmartHome ? [{ id: 'home', label: 'Control', icon: SlidersHorizontal }] : []),
   ];
 
   return (
