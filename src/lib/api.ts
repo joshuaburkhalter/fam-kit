@@ -1727,6 +1727,19 @@ export const api = {
     });
   },
 
+  saveHomeAssistantEntityCustomization: async (
+    entityId: string,
+    customization: { name?: string; icon?: string; category?: string } | null
+  ): Promise<{ success: boolean; entityCustomizations: Record<string, any> }> => {
+    return fetchJson<{ success: boolean; entityCustomizations: Record<string, any> }>(
+      '/home-assistant/entity-customization',
+      {
+        method: 'POST',
+        body: JSON.stringify({ entityId, customization }),
+      }
+    );
+  },
+
   saveHomeAssistantVisibleControls: async (visibleEntityIds: string[]): Promise<{ success: boolean; visibleEntityIds: string[] }> => {
     return fetchJson<{ success: boolean; visibleEntityIds: string[] }>('/home-assistant/visible-controls', {
       method: 'POST',

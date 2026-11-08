@@ -35,6 +35,8 @@ import { usePWA } from '../context/PWAContext';
 import { HomeAssistantEntity } from '../types';
 import { EntityDetailDrawer } from '../components/smart-home/EntityDetailDrawer';
 import { ManageControlsModal } from '../components/smart-home/ManageControlsModal';
+import { EditEntityModal, getCustomIconComponent } from '../components/smart-home/EditEntityModal';
+import { EntityCustomization } from '../types';
 
 export const isDataOnlyEntity = (e: HomeAssistantEntity): boolean => {
   return e.domain === 'sensor' || e.domain === 'binary_sensor' || e.domain === 'person';
@@ -64,7 +66,7 @@ const PersonAvatar: React.FC<{ entity: HomeAssistantEntity; householdId?: string
     return (
       <img
         src={photoUrl}
-        alt={entity.friendly_name}
+        alt={displayName}
         onError={() => setImgError(true)}
         className="w-5 h-5 rounded-full object-cover ring-1 ring-emerald-400/40"
       />
@@ -92,6 +94,13 @@ export const SmartHomePage: React.FC = () => {
   const [isLiveConnected, setIsLiveConnected] = useState(false);
   const [triggeredButtons, setTriggeredButtons] = useState<Record<string, boolean>>({});
   const [visibleEntityIds, setVisibleEntityIds] = useState<string[]>([]);
+  const [entityCustomizations, setEntityCustomizations] = useState<Record<string, EntityCustomization>>({});
+  const [editingEntity, setEditingEntity] = useState<HomeAssistantEntity | null>(null);
+
+  // Long press tracking refs
+  const longPressTimerRef = useRef<any>(null);
+  const isLongPressActiveRef = useRef<boolean>(false);
+  const touchStartPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isManageModalOpen, setIsManageModalOpen] = useState(false);
   const [isOptionsMenuOpen, setIsOptionsMenuOpen] = useState(false);
   const optionsMenuRef = useRef<HTMLDivElement>(null);
@@ -121,6 +130,9 @@ export const SmartHomePage: React.FC = () => {
       const cfg = await api.getHomeAssistantConfig();
       if (cfg?.visibleEntityIds && Array.isArray(cfg.visibleEntityIds)) {
         setVisibleEntityIds(cfg.visibleEntityIds);
+      }
+      if (cfg?.entityCustomizations && typeof cfg.entityCustomizations === 'object') {
+        setEntityCustomizations(cfg.entityCustomizations);
       }
     } catch (err) {
       console.error('Failed to load HA config:', err);
@@ -173,6 +185,9 @@ export const SmartHomePage: React.FC = () => {
           const payload = JSON.parse(e.data);
           if (payload?.visibleEntityIds && Array.isArray(payload.visibleEntityIds)) {
             setVisibleEntityIds(payload.visibleEntityIds);
+          }
+          if (payload?.entityCustomizations && typeof payload.entityCustomizations === 'object') {
+            setEntityCustomizations(payload.entityCustomizations);
           }
         } catch (err) {
           console.error('Failed to parse live config update:', err);
@@ -301,6 +316,66 @@ export const SmartHomePage: React.FC = () => {
     }
   };
 
+
+  const handleTouchStart = (entity: HomeAssistantEntity, e: React.TouchEvent | React.MouseEvent) => {
+    isLongPressActiveRef.current = false;
+    if ('touches' in e && e.touches[0]) {
+      touchStartPosRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    } else if ('clientX' in e) {
+      touchStartPosRef.current = { x: (e as React.MouseEvent).clientX, y: (e as React.MouseEvent).clientY };
+    }
+
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+
+    longPressTimerRef.current = setTimeout(() => {
+      isLongPressActiveRef.current = true;
+      try {
+        if (navigator.vibrate) navigator.vibrate(40);
+      } catch {}
+      setEditingEntity(entity);
+    }, 450);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent | React.MouseEvent) => {
+    if (!longPressTimerRef.current) return;
+    let currentX = 0;
+    let currentY = 0;
+    if ('touches' in e && e.touches[0]) {
+      currentX = e.touches[0].clientX;
+      currentY = e.touches[0].clientY;
+    } else if ('clientX' in e) {
+      currentX = (e as React.MouseEvent).clientX;
+      currentY = (e as React.MouseEvent).clientY;
+    }
+    const dx = Math.abs(currentX - touchStartPosRef.current.x);
+    const dy = Math.abs(currentY - touchStartPosRef.current.y);
+    if (dx > 10 || dy > 10) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  const handleSaveCustomization = async (entityId: string, custom: EntityCustomization | null) => {
+    setEntityCustomizations((prev) => {
+      const next = { ...prev };
+      if (!custom) {
+        delete next[entityId];
+      } else {
+        next[entityId] = custom;
+      }
+      return next;
+    });
+
+    await api.saveHomeAssistantEntityCustomization(entityId, custom);
+  };
+
   // Entities chosen by the user to appear on the dashboard
   const activeEntities = useMemo(() => {
     if (visibleEntityIds.length === 0) return [];
@@ -337,10 +412,18 @@ export const SmartHomePage: React.FC = () => {
       }
 
       const matching = activeControlEntities.filter((e) => {
-        if (!group.match(e)) return false;
+        const custom = entityCustomizations[e.entity_id];
+        // If customized category exists, check if it matches this group
+        if (custom?.category) {
+          if (custom.category !== group.id) return false;
+        } else {
+          if (!group.match(e)) return false;
+        }
+
         if (q) {
+          const effectiveName = (custom?.name || e.friendly_name).toLowerCase();
           return (
-            e.friendly_name.toLowerCase().includes(q) ||
+            effectiveName.includes(q) ||
             e.entity_id.toLowerCase().includes(q) ||
             e.domain.toLowerCase().includes(q)
           );
@@ -353,7 +436,7 @@ export const SmartHomePage: React.FC = () => {
         entities: matching,
       };
     }).filter((g) => g.entities.length > 0);
-  }, [activeControlEntities, selectedCategory, searchQuery]);
+  }, [activeControlEntities, selectedCategory, searchQuery, entityCustomizations]);
 
   // Categories for the filter bar
   const categories = useMemo(() => {
@@ -439,6 +522,9 @@ export const SmartHomePage: React.FC = () => {
 
   // Render a compact control tile inside a carousel
   const renderControlTile = (entity: HomeAssistantEntity) => {
+    const custom = entityCustomizations[entity.entity_id];
+    const displayName = custom?.name || entity.friendly_name;
+    const CustomIcon = getCustomIconComponent(custom?.icon);
     const currentEffectiveState = optimisticStates[entity.entity_id] || entity.state;
     const isUnavailable = currentEffectiveState === 'unavailable' || currentEffectiveState === 'unknown';
     const isOn = currentEffectiveState === 'on';
@@ -451,7 +537,9 @@ export const SmartHomePage: React.FC = () => {
     let tileBg = 'bg-slate-900/60 border-white/10 hover:border-white/20';
     let iconBg = 'bg-white/5 text-slate-400';
 
-    if (entity.domain === 'climate') {
+    if (CustomIcon) {
+      iconComponent = <CustomIcon className="w-4 h-4 sm:w-5 sm:h-5" />;
+    } else if (entity.domain === 'climate') {
       const currentTemp = entity.attributes.current_temperature;
       const targetTemp = entity.attributes.temperature;
       const hvacAction = entity.attributes.hvac_action;
@@ -567,13 +655,28 @@ export const SmartHomePage: React.FC = () => {
       <div
         key={entity.entity_id}
         onClick={() => {
+          if (isLongPressActiveRef.current) {
+            isLongPressActiveRef.current = false;
+            return;
+          }
           if (entity.needsDrawer) {
             setSelectedEntityForDrawer(entity);
           } else {
             handleTileQuickAction({ stopPropagation: () => {} } as any, entity);
           }
         }}
-        className={`p-3 sm:p-4 rounded-2xl sm:rounded-3xl border transition-all duration-200 cursor-pointer flex flex-col justify-between select-none relative group min-h-[5.5rem] sm:min-h-[7.5rem] w-full ${tileBg}`}
+        onMouseDown={(e) => handleTouchStart(entity, e)}
+        onMouseMove={handleTouchMove}
+        onMouseUp={handleTouchEnd}
+        onMouseLeave={handleTouchEnd}
+        onTouchStart={(e) => handleTouchStart(entity, e)}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          setEditingEntity(entity);
+        }}
+        className={`p-3 sm:p-4 rounded-2xl sm:rounded-3xl border transition-all duration-200 cursor-pointer flex flex-col justify-between select-none relative group min-h-[5.5rem] sm:min-h-[7.5rem] w-full active:scale-[0.98] ${tileBg}`}
       >
         {/* Top Row: Icon + Right Arrow (if needsDrawer) OR Toggle Button */}
         <div className="flex items-center justify-between gap-1.5 sm:gap-2">
@@ -758,12 +861,31 @@ export const SmartHomePage: React.FC = () => {
           <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1 px-0.5 snap-x">
             {activeDataEntities.map((entity) => {
               const currentEffectiveState = optimisticStates[entity.entity_id] || entity.state;
+              const custom = entityCustomizations[entity.entity_id];
+              const displayName = custom?.name || entity.friendly_name;
               const { icon, color, displayState } = getSensorDisplay(entity, currentEffectiveState);
 
               return (
                 <div
                   key={entity.entity_id}
-                  onClick={() => setSelectedEntityForDrawer(entity)}
+                  onClick={() => {
+                    if (isLongPressActiveRef.current) {
+                      isLongPressActiveRef.current = false;
+                      return;
+                    }
+                    setSelectedEntityForDrawer(entity);
+                  }}
+                  onMouseDown={(e) => handleTouchStart(entity, e)}
+                  onMouseMove={handleTouchMove}
+                  onMouseUp={handleTouchEnd}
+                  onMouseLeave={handleTouchEnd}
+                  onTouchStart={(e) => handleTouchStart(entity, e)}
+                  onTouchMove={handleTouchMove}
+                  onTouchEnd={handleTouchEnd}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setEditingEntity(entity);
+                  }}
                   className="flex items-center gap-2 px-3 py-1.5 sm:py-2 rounded-2xl bg-slate-900/80 hover:bg-slate-900 border border-white/10 hover:border-white/20 transition-all cursor-pointer shrink-0 snap-start active:scale-95 group shadow-sm"
                 >
                   <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${color}`}>
@@ -771,7 +893,7 @@ export const SmartHomePage: React.FC = () => {
                   </div>
                   <div className="min-w-0 pr-1">
                     <div className="text-[11px] font-bold text-white truncate max-w-[130px] group-hover:text-cyan-300 transition-colors">
-                      {entity.friendly_name}
+                      {displayName}
                     </div>
                     <div className="text-[10px] font-semibold text-slate-400 truncate">
                       {displayState}
@@ -941,6 +1063,15 @@ export const SmartHomePage: React.FC = () => {
       />
 
       {/* Manage / Show-Hide Controls Modal */}
+      {/* Edit Entity Customization Modal (Triggered on Long Press or Right Click) */}
+      <EditEntityModal
+        isOpen={Boolean(editingEntity)}
+        entity={editingEntity}
+        currentCustomization={editingEntity ? entityCustomizations[editingEntity.entity_id] : undefined}
+        onClose={() => setEditingEntity(null)}
+        onSave={handleSaveCustomization}
+      />
+
       <ManageControlsModal
         isOpen={isManageModalOpen}
         onClose={() => setIsManageModalOpen(false)}

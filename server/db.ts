@@ -261,6 +261,7 @@ function initSchema(db: Database) {
       lastConnectedAt TEXT,
       entityCount INTEGER DEFAULT 0,
       visibleEntityIds TEXT,
+      entityCustomizations TEXT,
       createdAt TEXT NOT NULL,
       updatedAt TEXT NOT NULL
     );
@@ -464,6 +465,9 @@ function initSchema(db: Database) {
 
   try {
     db.run(`ALTER TABLE home_assistant_config ADD COLUMN visibleEntityIds TEXT`);
+  } catch {}
+  try {
+    db.run(`ALTER TABLE home_assistant_config ADD COLUMN entityCustomizations TEXT`);
   } catch {}
 
   try {

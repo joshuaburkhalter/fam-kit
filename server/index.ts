@@ -23,6 +23,7 @@ import {
   callHomeAssistantService,
   subscribeToHomeAssistantEvents,
   saveHomeAssistantVisibleEntities,
+  saveHomeAssistantEntityCustomization,
   proxyHomeAssistantImage,
 } from './home-assistant.js';
 import { buildSelectiveAssistantContext } from './assistant-context.js';
@@ -4072,6 +4073,21 @@ app.post('/api/home-assistant/visible-controls', (req, res) => {
     res.json(result);
   } catch (err: any) {
     res.status(400).json({ error: err.message || 'Failed to save visible controls' });
+  }
+});
+
+
+app.post('/api/home-assistant/entity-customization', (req, res) => {
+  try {
+    const householdId = getHouseholdId(req);
+    const { entityId, customization } = req.body;
+    if (!entityId) {
+      return res.status(400).json({ error: 'entityId is required' });
+    }
+    const result = saveHomeAssistantEntityCustomization(householdId, entityId, customization);
+    res.json(result);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message || 'Failed to save entity customization' });
   }
 });
 

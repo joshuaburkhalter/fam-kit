@@ -428,6 +428,12 @@ export interface IngredientSubstitution {
   isAiGenerated?: boolean;
 }
 
+export interface EntityCustomization {
+  name?: string;
+  icon?: string;
+  category?: string;
+}
+
 export interface HomeAssistantConfig {
   configured: boolean;
   haUrl?: string;
@@ -436,6 +442,7 @@ export interface HomeAssistantConfig {
   lastConnectedAt?: string | null;
   entityCount?: number;
   visibleEntityIds?: string[];
+  entityCustomizations?: Record<string, EntityCustomization>;
   message?: string;
 }
 

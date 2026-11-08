@@ -1,5 +1,13 @@
 import { queryOne, queryAll, execute, saveDb } from './db.js';
 
+export interface EntityCustomization {
+  name?: string;
+  icon?: string;
+  category?: string;
+}
+
+export type EntityCustomizationsMap = Record<string, EntityCustomization>;
+
 export interface HomeAssistantConfigRow {
   id: string;
   householdId: string;
@@ -9,6 +17,7 @@ export interface HomeAssistantConfigRow {
   lastConnectedAt: string | null;
   entityCount: number;
   visibleEntityIds?: string | null;
+  entityCustomizations?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -227,6 +236,16 @@ export function getHomeAssistantConfig(householdId: string) {
     }
   } catch {}
 
+  let entityCustomizations: Record<string, EntityCustomization> = {};
+  try {
+    if (row.entityCustomizations) {
+      const parsed = JSON.parse(row.entityCustomizations);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        entityCustomizations = parsed;
+      }
+    }
+  } catch {}
+
   return {
     configured: true,
     haUrl: row.haUrl,
@@ -235,6 +254,7 @@ export function getHomeAssistantConfig(householdId: string) {
     lastConnectedAt: row.lastConnectedAt,
     entityCount: row.entityCount || 0,
     visibleEntityIds,
+    entityCustomizations,
     updatedAt: row.updatedAt,
   };
 }
@@ -346,6 +366,61 @@ export function saveHomeAssistantVisibleEntities(
 /**
  * Fetch and categorize all active controllable & readable entities from Home Assistant
  */
+
+/**
+ * Save custom name, icon, or category override for an entity
+ */
+export function saveHomeAssistantEntityCustomization(
+  householdId: string,
+  entityId: string,
+  customization: EntityCustomization | null
+) {
+  if (!householdId) throw new Error('householdId is required');
+  if (!entityId) throw new Error('entityId is required');
+
+  const row = queryOne<HomeAssistantConfigRow>(
+    'SELECT * FROM home_assistant_config WHERE householdId = ?',
+    [householdId]
+  );
+  if (!row) throw new Error('Home Assistant is not configured for this household');
+
+  let currentMap: Record<string, EntityCustomization> = {};
+  try {
+    if (row.entityCustomizations) {
+      const parsed = JSON.parse(row.entityCustomizations);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) currentMap = parsed;
+    }
+  } catch {}
+
+  if (!customization || (!customization.name && !customization.icon && !customization.category)) {
+    delete currentMap[entityId];
+  } else {
+    currentMap[entityId] = {
+      ...(customization.name?.trim() ? { name: customization.name.trim() } : {}),
+      ...(customization.icon?.trim() ? { icon: customization.icon.trim() } : {}),
+      ...(customization.category?.trim() ? { category: customization.category.trim() } : {}),
+    };
+  }
+
+  const now = new Date().toISOString();
+  execute(
+    'UPDATE home_assistant_config SET entityCustomizations = ?, updatedAt = ? WHERE householdId = ?',
+    [JSON.stringify(currentMap), now, householdId]
+  );
+  saveDb();
+
+  // Instantly broadcast to all connected family members
+  const bridge = householdBridges.get(householdId);
+  if (bridge) {
+    bridge.broadcast('config_updated', { entityCustomizations: currentMap });
+  }
+
+  return {
+    success: true,
+    entityCustomizations: currentMap,
+  };
+}
+
 export async function fetchHomeAssistantStates(householdId: string): Promise<HomeAssistantEntity[]> {
   const row = queryOne<HomeAssistantConfigRow>(
     'SELECT * FROM home_assistant_config WHERE householdId = ? AND enabled = 1',
