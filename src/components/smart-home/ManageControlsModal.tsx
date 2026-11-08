@@ -10,8 +10,9 @@ import {
   Lightbulb,
   Power,
   Zap,
-  Thermometer,
-  Shield,
+  Gauge,
+  Warehouse,
+  Blinds,
   Activity,
   Sparkles,
   SlidersHorizontal,
@@ -275,10 +276,14 @@ export const ManageControlsModal: React.FC<ManageControlsModalProps> = ({
                 icon = <Lock className="w-4 h-4" />;
                 iconColor = 'bg-purple-500/15 text-purple-400';
               } else if (entity.domain === 'cover') {
-                icon = <Shield className="w-4 h-4" />;
+                const isGarage =
+                  entity.attributes?.device_class === 'garage' ||
+                  entity.entity_id.toLowerCase().includes('garage') ||
+                  (entity.friendly_name || '').toLowerCase().includes('garage');
+                icon = isGarage ? <Warehouse className="w-4 h-4" /> : <Blinds className="w-4 h-4" />;
                 iconColor = 'bg-blue-500/15 text-blue-400';
               } else if (entity.domain === 'climate') {
-                icon = <Thermometer className="w-4 h-4" />;
+                icon = <Gauge className="w-4 h-4" />;
                 iconColor = 'bg-rose-500/15 text-rose-400';
               } else if (entity.domain === 'sensor' || entity.domain === 'binary_sensor') {
                 icon = <Activity className="w-4 h-4" />;

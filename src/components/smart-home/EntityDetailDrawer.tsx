@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Zap,
-  Thermometer,
+  Gauge,
   Lock,
   Unlock,
   Lightbulb,
@@ -17,7 +17,8 @@ import {
   Power,
   RotateCcw,
   Sun,
-  Shield,
+  Warehouse,
+  Blinds,
   ArrowUp,
   ArrowDown,
   Square,
@@ -380,7 +381,7 @@ export const EntityDetailDrawer: React.FC<EntityDetailDrawerProps> = ({
   };
 
   const renderCoverControls = () => {
-    const isGarage = attributes.device_class === 'garage' || entity_id.includes('garage');
+    const isGarage = attributes.device_class === 'garage' || entity_id.toLowerCase().includes('garage') || friendly_name.toLowerCase().includes('garage');
     const isOpenState = state === 'open';
 
     return (
@@ -391,7 +392,7 @@ export const EntityDetailDrawer: React.FC<EntityDetailDrawerProps> = ({
               ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
               : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
           }`}>
-            <Shield className="w-10 h-10" />
+            {isGarage ? <Warehouse className="w-10 h-10" /> : <Blinds className="w-10 h-10" />}
           </div>
           <div className="text-xl font-bold text-white capitalize">{state}</div>
           <p className="text-xs text-slate-400 mt-1">

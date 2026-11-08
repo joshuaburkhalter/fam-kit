@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
-  Thermometer,
+  Gauge,
   Lock,
   Unlock,
   Lightbulb,
@@ -13,7 +13,8 @@ import {
   Sliders,
   SlidersHorizontal,
   Plus,
-  Shield,
+  Warehouse,
+  Blinds,
   Activity,
   Sparkles,
   Zap,
@@ -317,7 +318,7 @@ export const SmartHomePage: React.FC = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-3 sm:px-6 pt-3 pb-28 md:pb-20 space-y-4 min-h-[calc(100vh-8rem)] flex flex-col w-full">
+    <div className="max-w-7xl mx-auto px-3 sm:px-6 pt-3 pb-28 md:pb-20 space-y-3 sm:space-y-4 min-h-[calc(100vh-8rem)] flex flex-col w-full">
       {/* Consistent Mobile-First Header */}
       <div className="flex items-center justify-between mb-1">
         <div className="flex items-center gap-2.5">
@@ -464,9 +465,9 @@ export const SmartHomePage: React.FC = () => {
 
       {/* Loading Skeleton */}
       {isLoading && (
-        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-4">
           {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-            <div key={i} className="h-32 rounded-3xl bg-white/5 border border-white/5 animate-pulse" />
+            <div key={i} className="h-24 sm:h-32 rounded-2xl sm:rounded-3xl bg-white/5 border border-white/5 animate-pulse" />
           ))}
         </div>
       )}
@@ -521,7 +522,7 @@ export const SmartHomePage: React.FC = () => {
 
       {/* Tiles Grid: 4 wide on desktop, 2 wide on mobile */}
       {!isLoading && filteredEntities.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-4">
           {filteredEntities.map((entity) => {
             const currentEffectiveState = optimisticStates[entity.entity_id] || entity.state;
             const isUnavailable = currentEffectiveState === 'unavailable' || currentEffectiveState === 'unknown';
@@ -531,7 +532,7 @@ export const SmartHomePage: React.FC = () => {
             const isTriggered = Boolean(triggeredButtons[entity.entity_id]);
 
             // Determine tile visual style and icon based on domain and state
-            let iconComponent = <Sliders className="w-5 h-5" />;
+            let iconComponent = <Sliders className="w-4 h-4 sm:w-5 sm:h-5" />;
             let stateDisplay = isUnavailable ? 'Unavailable' : currentEffectiveState;
             let tileBg = 'bg-slate-900/60 border-white/10 hover:border-white/20';
             let iconBg = 'bg-white/5 text-slate-400';
@@ -540,11 +541,19 @@ export const SmartHomePage: React.FC = () => {
               const currentTemp = entity.attributes.current_temperature;
               const targetTemp = entity.attributes.temperature;
               const hvacAction = entity.attributes.hvac_action;
+              const isCooling = hvacAction === 'cooling' || currentEffectiveState === 'cool';
+              const isHeating = hvacAction === 'heating' || currentEffectiveState === 'heat';
 
-              iconComponent = hvacAction === 'cooling' ? (
-                <Snowflake className="w-5 h-5 text-cyan-400" />
-              ) : (
-                <Flame className="w-5 h-5 text-amber-400" />
+              iconComponent = (
+                <Gauge
+                  className={`w-4 h-4 sm:w-5 sm:h-5 ${
+                    isCooling
+                      ? 'text-cyan-400'
+                      : isHeating
+                      ? 'text-amber-400'
+                      : 'text-amber-300'
+                  }`}
+                />
               );
 
               stateDisplay = targetTemp ? `${Math.round(targetTemp)}° • ${currentEffectiveState}` : currentEffectiveState;
@@ -552,10 +561,18 @@ export const SmartHomePage: React.FC = () => {
                 stateDisplay = `${Math.round(currentTemp)}° (${stateDisplay})`;
               }
 
-              tileBg = 'bg-gradient-to-b from-slate-900/80 to-slate-950/80 border-white/10 hover:border-white/25';
-              iconBg = 'bg-amber-500/10 text-amber-400 border border-amber-500/20';
+              tileBg = isCooling
+                ? 'bg-gradient-to-b from-cyan-500/10 to-slate-900/80 border-cyan-500/25 hover:border-cyan-400/40'
+                : isHeating
+                ? 'bg-gradient-to-b from-amber-500/10 to-slate-900/80 border-amber-500/25 hover:border-amber-400/40'
+                : 'bg-gradient-to-b from-slate-900/80 to-slate-950/80 border-white/10 hover:border-white/25';
+              iconBg = isCooling
+                ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/20'
+                : isHeating
+                ? 'bg-amber-500/15 text-amber-400 border border-amber-500/20'
+                : 'bg-amber-500/10 text-amber-400 border border-amber-500/20';
             } else if (entity.domain === 'light') {
-              iconComponent = <Lightbulb className={`w-5 h-5 ${isOn ? 'fill-amber-400 text-amber-400' : 'text-slate-400'}`} />;
+              iconComponent = <Lightbulb className={`w-4 h-4 sm:w-5 sm:h-5 ${isOn ? 'fill-amber-400 text-amber-400' : 'text-slate-400'}`} />;
               if (isOn) {
                 const bVal = entity.attributes.brightness
                   ? Math.round((entity.attributes.brightness / 255) * 100)
@@ -567,7 +584,7 @@ export const SmartHomePage: React.FC = () => {
                 stateDisplay = 'Off';
               }
             } else if (entity.domain === 'switch') {
-              iconComponent = <Power className={`w-5 h-5 ${isOn ? 'text-emerald-400' : 'text-slate-400'}`} />;
+              iconComponent = <Power className={`w-4 h-4 sm:w-5 sm:h-5 ${isOn ? 'text-emerald-400' : 'text-slate-400'}`} />;
               if (isOn) {
                 stateDisplay = 'On';
                 tileBg = 'bg-gradient-to-b from-emerald-500/15 to-slate-900/80 border-emerald-500/30 hover:border-emerald-400/50 shadow-lg shadow-emerald-500/5';
@@ -577,23 +594,23 @@ export const SmartHomePage: React.FC = () => {
               }
             } else if (entity.domain === 'lock') {
               if (isUnavailable) {
-                iconComponent = <Lock className="w-5 h-5 text-slate-500" />;
+                iconComponent = <Lock className="w-4 h-4 sm:w-5 sm:h-5 text-slate-500" />;
                 stateDisplay = 'Offline / Unavailable';
                 tileBg = 'bg-slate-900/40 border-white/5 opacity-60 hover:opacity-85';
                 iconBg = 'bg-white/5 text-slate-500';
               } else if (isLocked) {
-                iconComponent = <Lock className="w-5 h-5 text-emerald-400" />;
+                iconComponent = <Lock className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400" />;
                 stateDisplay = 'Locked';
                 tileBg = 'bg-slate-900/60 border-emerald-500/20 hover:border-emerald-500/40';
                 iconBg = 'bg-emerald-500/15 text-emerald-400';
               } else {
-                iconComponent = <Unlock className="w-5 h-5 text-rose-400" />;
+                iconComponent = <Unlock className="w-4 h-4 sm:w-5 sm:h-5 text-rose-400" />;
                 stateDisplay = currentEffectiveState === 'open' ? 'Open' : 'Unlocked';
                 tileBg = 'bg-rose-500/10 border-rose-500/30 hover:border-rose-500/50 shadow-lg shadow-rose-500/5';
                 iconBg = 'bg-rose-500/20 text-rose-400 ring-2 ring-rose-500/30';
               }
             } else if (entity.domain === 'button' || entity.domain === 'input_button') {
-              iconComponent = isTriggered ? <Check className="w-5 h-5 text-emerald-300" /> : <Zap className="w-5 h-5 text-amber-400" />;
+              iconComponent = isTriggered ? <Check className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-300" /> : <Zap className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400" />;
               if (isUnavailable) {
                 stateDisplay = 'Offline';
                 tileBg = 'bg-slate-900/40 border-white/5 opacity-60';
@@ -608,17 +625,30 @@ export const SmartHomePage: React.FC = () => {
                 iconBg = 'bg-amber-500/15 text-amber-400';
               }
             } else if (entity.domain === 'cover') {
-              iconComponent = <Shield className="w-5 h-5 text-blue-400" />;
+              const isGarage =
+                entity.attributes?.device_class === 'garage' ||
+                entity.entity_id.toLowerCase().includes('garage') ||
+                (entity.friendly_name || '').toLowerCase().includes('garage');
+              iconComponent = isGarage ? (
+                <Warehouse className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400" />
+              ) : (
+                <Blinds className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400" />
+              );
               stateDisplay = isClosed ? 'Closed' : currentEffectiveState;
               tileBg = 'bg-slate-900/60 border-white/10 hover:border-white/25';
               iconBg = 'bg-blue-500/15 text-blue-400';
             } else if (entity.domain === 'scene' || entity.domain === 'script') {
-              iconComponent = <Sparkles className="w-5 h-5 text-purple-400" />;
+              iconComponent = <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-purple-400" />;
               stateDisplay = 'Tap to Activate';
               tileBg = 'bg-slate-900/60 border-purple-500/20 hover:border-purple-500/40';
               iconBg = 'bg-purple-500/15 text-purple-400';
+            } else if (entity.domain === 'fan') {
+              iconComponent = <Fan className={`w-4 h-4 sm:w-5 sm:h-5 ${isOn ? 'text-cyan-400 animate-spin' : 'text-slate-400'}`} style={{ animationDuration: '3s' }} />;
+              stateDisplay = isOn ? 'Running' : 'Off';
+              tileBg = isOn ? 'bg-gradient-to-b from-cyan-500/15 to-slate-900/80 border-cyan-500/30' : 'bg-slate-900/60 border-white/10';
+              iconBg = isOn ? 'bg-cyan-500/20 text-cyan-300 ring-2 ring-cyan-500/30' : 'bg-white/5 text-slate-400';
             } else if (entity.domain === 'sensor' || entity.domain === 'binary_sensor') {
-              iconComponent = <Activity className="w-5 h-5 text-cyan-400" />;
+              iconComponent = <Activity className="w-4 h-4 sm:w-5 sm:h-5 text-cyan-400" />;
               const unit = entity.attributes.unit_of_measurement || '';
               stateDisplay = `${currentEffectiveState} ${unit}`.trim();
               tileBg = 'bg-slate-900/60 border-white/10 hover:border-white/20';
@@ -636,18 +666,18 @@ export const SmartHomePage: React.FC = () => {
                     handleTileQuickAction({ stopPropagation: () => {} } as any, entity);
                   }
                 }}
-                className={`p-4 rounded-3xl border transition-all duration-200 cursor-pointer flex flex-col justify-between select-none relative group ${tileBg}`}
+                className={`p-3 sm:p-4 rounded-2xl sm:rounded-3xl border transition-all duration-200 cursor-pointer flex flex-col justify-between select-none relative group min-h-[5.5rem] sm:min-h-[7.5rem] ${tileBg}`}
               >
                 {/* Top Row: Icon + Right Arrow (if needsDrawer) OR Toggle Button */}
-                <div className="flex items-center justify-between gap-2">
-                  <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 transition-all ${iconBg}`}>
+                <div className="flex items-center justify-between gap-1.5 sm:gap-2">
+                  <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 transition-all ${iconBg}`}>
                     {iconComponent}
                   </div>
 
                   {/* Multi-button control: Show Arrow pointing right */}
                   {entity.needsDrawer ? (
-                    <div className="w-7 h-7 rounded-full bg-white/5 group-hover:bg-white/15 flex items-center justify-center text-slate-400 group-hover:text-white transition-all shrink-0">
-                      <ChevronRight className="w-4 h-4 stroke-[2.5]" />
+                    <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-white/5 group-hover:bg-white/15 flex items-center justify-center text-slate-400 group-hover:text-white transition-all shrink-0">
+                      <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.5]" />
                     </div>
                   ) : (entity.domain === 'button' || entity.domain === 'input_button') ? (
                     /* Momentary trigger button */
@@ -655,7 +685,7 @@ export const SmartHomePage: React.FC = () => {
                       type="button"
                       disabled={isUnavailable}
                       onClick={(e) => handleTileQuickAction(e, entity)}
-                      className={`px-2.5 py-1 rounded-xl border text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                      className={`px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg sm:rounded-xl border text-[10px] sm:text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
                         isUnavailable
                           ? 'opacity-30 bg-white/5 border-white/5 text-slate-500 cursor-not-allowed'
                           : isTriggered
@@ -663,7 +693,7 @@ export const SmartHomePage: React.FC = () => {
                           : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/30'
                       }`}
                     >
-                      <Zap className="w-3.5 h-3.5" />
+                      <Zap className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                       <span>{isTriggered ? 'Triggered' : 'Press'}</span>
                     </button>
                   ) : (
@@ -672,25 +702,25 @@ export const SmartHomePage: React.FC = () => {
                       type="button"
                       disabled={isUnavailable}
                       onClick={(e) => handleTileQuickAction(e, entity)}
-                      className={`p-1 rounded-xl hover:bg-white/10 transition-all cursor-pointer shrink-0 ${
+                      className={`p-0.5 sm:p-1 rounded-xl hover:bg-white/10 transition-all cursor-pointer shrink-0 ${
                         isUnavailable ? 'opacity-30 cursor-not-allowed text-slate-600' : 'text-slate-400 hover:text-white'
                       }`}
                     >
                       {isOn ? (
-                        <ToggleRight className="w-7 h-7 text-emerald-400" />
+                        <ToggleRight className="w-6 h-6 sm:w-7 sm:h-7 text-emerald-400" />
                       ) : (
-                        <ToggleLeft className="w-7 h-7 text-slate-500" />
+                        <ToggleLeft className="w-6 h-6 sm:w-7 sm:h-7 text-slate-500" />
                       )}
                     </button>
                   )}
                 </div>
 
                 {/* Bottom Info: Friendly Name and Live State */}
-                <div className="pt-3 min-w-0">
-                  <h4 className="text-xs font-bold text-white truncate block group-hover:text-emerald-300 transition-colors">
+                <div className="pt-2 sm:pt-3 min-w-0">
+                  <h4 className="text-[11px] sm:text-xs font-bold text-white truncate block group-hover:text-emerald-300 transition-colors leading-tight">
                     {entity.friendly_name}
                   </h4>
-                  <div className="text-[11px] font-medium text-slate-400 truncate mt-0.5 capitalize">
+                  <div className="text-[10px] sm:text-[11px] font-medium text-slate-400 truncate mt-0.5 capitalize">
                     {stateDisplay}
                   </div>
                 </div>
