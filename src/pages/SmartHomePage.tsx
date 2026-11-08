@@ -377,11 +377,13 @@ export const SmartHomePage: React.FC = () => {
     await api.saveHomeAssistantEntityCustomization(entityId, custom);
   };
 
-  // Entities chosen by the user to appear on the dashboard
+  // Entities chosen by the user to appear on the dashboard (preserves visibleEntityIds order)
   const activeEntities = useMemo(() => {
     if (visibleEntityIds.length === 0) return [];
-    const visibleSet = new Set(visibleEntityIds);
-    return entities.filter((e) => visibleSet.has(e.entity_id));
+    const entityMap = new Map(entities.map((e) => [e.entity_id, e]));
+    return visibleEntityIds
+      .map((id) => entityMap.get(id))
+      .filter((e): e is HomeAssistantEntity => Boolean(e));
   }, [entities, visibleEntityIds]);
 
   // Data-only entities (sensors, binary sensors, presence)
@@ -525,6 +527,90 @@ export const SmartHomePage: React.FC = () => {
       color: 'bg-cyan-500/15 text-cyan-400',
       displayState: isUnavailable ? 'Offline' : `${effectiveState} ${unit}`.trim(),
     };
+  };
+
+  // Compute position of entity currently being customized in its row
+  const editingEntityPositionInfo = useMemo(() => {
+    if (!editingEntity) return undefined;
+    if (isDataOnlyEntity(editingEntity)) {
+      const idx = activeDataEntities.findIndex((e) => e.entity_id === editingEntity.entity_id);
+      if (idx === -1) return undefined;
+      return {
+        index: idx,
+        total: activeDataEntities.length,
+        groupTitle: 'Sensors & Status',
+      };
+    }
+
+    for (const group of controlGroupsWithEntities) {
+      const idx = group.entities.findIndex((e) => e.entity_id === editingEntity.entity_id);
+      if (idx !== -1) {
+        return {
+          index: idx,
+          total: group.entities.length,
+          groupTitle: group.title,
+        };
+      }
+    }
+    return undefined;
+  }, [editingEntity, activeDataEntities, controlGroupsWithEntities]);
+
+  // Handle re-ordering entity within its carousel row
+  const handleReorderEntity = async (direction: 'front' | 'left' | 'right' | 'end') => {
+    if (!editingEntity) return;
+    const entityId = editingEntity.entity_id;
+
+    // 1. Identify peer entity IDs in the same row
+    let peers: string[] = [];
+    const isData = activeDataEntities.some((e) => e.entity_id === entityId);
+    if (isData) {
+      peers = activeDataEntities.map((e) => e.entity_id);
+    } else {
+      for (const group of controlGroupsWithEntities) {
+        if (group.entities.some((e) => e.entity_id === entityId)) {
+          peers = group.entities.map((e) => e.entity_id);
+          break;
+        }
+      }
+    }
+
+    const peerIndex = peers.indexOf(entityId);
+    if (peerIndex === -1 || peers.length <= 1) return;
+
+    let targetPeerId: string | null = null;
+    let insertBefore = true;
+
+    if (direction === 'left') {
+      if (peerIndex === 0) return;
+      targetPeerId = peers[peerIndex - 1];
+      insertBefore = true;
+    } else if (direction === 'right') {
+      if (peerIndex === peers.length - 1) return;
+      targetPeerId = peers[peerIndex + 1];
+      insertBefore = false;
+    } else if (direction === 'front') {
+      if (peerIndex === 0) return;
+      targetPeerId = peers[0];
+      insertBefore = true;
+    } else if (direction === 'end') {
+      if (peerIndex === peers.length - 1) return;
+      targetPeerId = peers[peers.length - 1];
+      insertBefore = false;
+    }
+
+    if (!targetPeerId || targetPeerId === entityId) return;
+
+    // 2. Reorder in visibleEntityIds
+    const nextVisibleIds = visibleEntityIds.filter((id) => id !== entityId);
+    const targetIndex = nextVisibleIds.indexOf(targetPeerId);
+    if (targetIndex === -1) return;
+
+    const insertIndex = insertBefore ? targetIndex : targetIndex + 1;
+    nextVisibleIds.splice(insertIndex, 0, entityId);
+
+    // 3. Save & update
+    setVisibleEntityIds(nextVisibleIds);
+    await api.saveHomeAssistantVisibleControls(nextVisibleIds);
   };
 
   // Render a compact control tile inside a carousel
@@ -1113,6 +1199,8 @@ export const SmartHomePage: React.FC = () => {
         isOpen={Boolean(editingEntity)}
         entity={editingEntity}
         currentCustomization={editingEntity ? entityCustomizations[editingEntity.entity_id] : undefined}
+        positionInfo={editingEntityPositionInfo}
+        onMove={handleReorderEntity}
         onClose={() => setEditingEntity(null)}
         onSave={handleSaveCustomization}
       />

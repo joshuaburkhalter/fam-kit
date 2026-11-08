@@ -41,13 +41,26 @@ import {
   Sliders,
   SlidersHorizontal,
   Pencil,
+  ArrowLeftRight,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from 'lucide-react';
 import { HomeAssistantEntity, EntityCustomization } from '../../types';
+
+export interface PositionInfo {
+  index: number;
+  total: number;
+  groupTitle: string;
+}
 
 interface EditEntityModalProps {
   isOpen: boolean;
   entity: HomeAssistantEntity | null;
   currentCustomization?: EntityCustomization;
+  positionInfo?: PositionInfo;
+  onMove?: (direction: 'front' | 'left' | 'right' | 'end') => Promise<void> | void;
   onClose: () => void;
   onSave: (entityId: string, customization: EntityCustomization | null) => Promise<void>;
 }
@@ -115,6 +128,8 @@ export const EditEntityModal: React.FC<EditEntityModalProps> = ({
   isOpen,
   entity,
   currentCustomization,
+  positionInfo,
+  onMove,
   onClose,
   onSave,
 }) => {
@@ -267,6 +282,84 @@ export const EditEntityModal: React.FC<EditEntityModalProps> = ({
               Choose which carousel track this control appears inside.
             </p>
           </div>
+
+          {/* Carousel Row Position (Reordering) */}
+          {positionInfo && positionInfo.total > 1 && (
+            <div className="space-y-2 pt-2 border-t border-white/10">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                  <ArrowLeftRight className="w-3.5 h-3.5 text-emerald-400" />
+                  Order in {positionInfo.groupTitle}
+                </span>
+                <span className="text-xs font-semibold text-slate-400">
+                  Position <span className="text-white font-bold">{positionInfo.index + 1}</span> of{' '}
+                  {positionInfo.total}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-4 gap-2">
+                <button
+                  type="button"
+                  disabled={positionInfo.index === 0}
+                  onClick={() => onMove?.('front')}
+                  title="Move to Front"
+                  className={`px-2.5 py-2 rounded-xl border text-xs font-bold flex items-center justify-center gap-1 transition-all ${
+                    positionInfo.index === 0
+                      ? 'opacity-30 bg-white/5 border-white/5 text-slate-500 cursor-not-allowed'
+                      : 'bg-white/5 hover:bg-white/10 text-slate-200 hover:text-white border-white/10 active:scale-95 cursor-pointer'
+                  }`}
+                >
+                  <ChevronsLeft className="w-4 h-4 shrink-0" />
+                  <span className="truncate">Front</span>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={positionInfo.index === 0}
+                  onClick={() => onMove?.('left')}
+                  title="Move Left"
+                  className={`px-2.5 py-2 rounded-xl border text-xs font-bold flex items-center justify-center gap-1 transition-all ${
+                    positionInfo.index === 0
+                      ? 'opacity-30 bg-white/5 border-white/5 text-slate-500 cursor-not-allowed'
+                      : 'bg-white/5 hover:bg-white/10 text-slate-200 hover:text-white border-white/10 active:scale-95 cursor-pointer'
+                  }`}
+                >
+                  <ChevronLeft className="w-4 h-4 shrink-0" />
+                  <span className="truncate">Left</span>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={positionInfo.index === positionInfo.total - 1}
+                  onClick={() => onMove?.('right')}
+                  title="Move Right"
+                  className={`px-2.5 py-2 rounded-xl border text-xs font-bold flex items-center justify-center gap-1 transition-all ${
+                    positionInfo.index === positionInfo.total - 1
+                      ? 'opacity-30 bg-white/5 border-white/5 text-slate-500 cursor-not-allowed'
+                      : 'bg-white/5 hover:bg-white/10 text-slate-200 hover:text-white border-white/10 active:scale-95 cursor-pointer'
+                  }`}
+                >
+                  <span className="truncate">Right</span>
+                  <ChevronRight className="w-4 h-4 shrink-0" />
+                </button>
+
+                <button
+                  type="button"
+                  disabled={positionInfo.index === positionInfo.total - 1}
+                  onClick={() => onMove?.('end')}
+                  title="Move to End"
+                  className={`px-2.5 py-2 rounded-xl border text-xs font-bold flex items-center justify-center gap-1 transition-all ${
+                    positionInfo.index === positionInfo.total - 1
+                      ? 'opacity-30 bg-white/5 border-white/5 text-slate-500 cursor-not-allowed'
+                      : 'bg-white/5 hover:bg-white/10 text-slate-200 hover:text-white border-white/10 active:scale-95 cursor-pointer'
+                  }`}
+                >
+                  <span className="truncate">End</span>
+                  <ChevronsRight className="w-4 h-4 shrink-0" />
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* 3. Icon Selection Grid */}
           <div className="space-y-2">
