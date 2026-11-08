@@ -1074,24 +1074,6 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
           </div>
         </div>
 
-        {/* Instructions / How to connect */}
-        {!hasSmartHome && (
-          <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-2 text-xs text-slate-300">
-            <div className="font-bold text-white flex items-center gap-1.5">
-              <Info className="w-4 h-4 text-cyan-400" />
-              <span>How to connect your Home Assistant:</span>
-            </div>
-            <ol className="list-decimal list-inside space-y-1.5 text-slate-400 text-[11px] leading-relaxed">
-              <li>
-                <strong className="text-slate-200">External HTTPS URL:</strong> Use your remote URL (e.g. <span className="font-mono text-emerald-400">https://your-id.ui.nabu.casa</span> from Nabu Casa Cloud, or your Cloudflare Tunnel).
-              </li>
-              <li>
-                <strong className="text-slate-200">Long-Lived Access Token:</strong> In Home Assistant, click your user profile (bottom left) ➔ scroll down to <em>Long-Lived Access Tokens</em> ➔ click <em>Create Token</em>, name it "Homebase", and paste it below.
-              </li>
-            </ol>
-          </div>
-        )}
-
         {/* Connection Form or Active Status */}
         {hasSmartHome && smartHomeConfig?.haUrl ? (
           <div className="space-y-3 pt-1">
