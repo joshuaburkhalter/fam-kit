@@ -3,6 +3,7 @@ import { PWAProvider } from './context/PWAContext';
 import { Navbar } from './components/Navbar';
 import { MobileNav } from './components/MobileNav';
 import { ActionFab } from './components/ActionFab';
+import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import { ActionFabProvider } from './context/ActionFabContext';
 import { GroceryPage } from './pages/GroceryPage';
 import { MealsPage } from './pages/MealsPage';
@@ -409,6 +410,7 @@ export const AppContent: React.FC = () => {
       />
 
       <main className="flex-1 w-full overflow-x-hidden">
+        <ErrorBoundary fallbackTitle="Unable to load page content">
         {activeTab === 'grocery' && <GroceryPage />}
         {(activeTab === 'meals' || activeTab === 'recipes') && <MealsPage />}
         {activeTab === 'calendar' && <CalendarPage />}
@@ -427,10 +429,11 @@ export const AppContent: React.FC = () => {
             }}
           />
         )}
+        </ErrorBoundary>
       </main>
 
       <MobileNav activeTab={activeTab} setActiveTab={setActiveTab} />
-      <ActionFab />
+      <ActionFab activeTab={activeTab} />
     </div>
   );
 };

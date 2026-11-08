@@ -1,6 +1,18 @@
-import React, { useEffect } from 'react';
-import { X, Plus } from 'lucide-react';
-import { useActionFab, FabActionItem } from '../context/ActionFabContext';
+import React, { useEffect, useMemo } from 'react';
+import {
+  X,
+  Plus,
+  SlidersHorizontal,
+  FolderPlus,
+  Store,
+  ListPlus,
+  RefreshCw,
+  Link2,
+  Camera,
+  Tag,
+  Barcode,
+} from 'lucide-react';
+import { useActionFab, FabActionItem, FabConfig } from '../context/ActionFabContext';
 
 function getActionColorClasses(color?: FabActionItem['color']) {
   switch (color) {
@@ -24,10 +36,10 @@ function getActionColorClasses(color?: FabActionItem['color']) {
   }
 }
 
-export const ActionFab: React.FC = () => {
-  const { config, isOpen, setIsOpen, toggleOpen } = useActionFab();
+export const ActionFab: React.FC<{ activeTab: string }> = ({ activeTab }) => {
+  const { tabConfigs, isOpen, setIsOpen, toggleOpen } = useActionFab();
 
-  // Close on Escape
+  // Close speed dial on Escape key
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isOpen) {
@@ -38,7 +50,153 @@ export const ActionFab: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, setIsOpen]);
 
-  // If no actions registered, don't render anything
+  // Close speed dial when switching tabs
+  useEffect(() => {
+    setIsOpen(false);
+  }, [activeTab, setIsOpen]);
+
+  // Built-in fallback config ensures the FAB is ALWAYS visible on supported tabs
+  const fallbackConfig: FabConfig | null = useMemo(() => {
+    if (activeTab === 'grocery') {
+      return {
+        pillLabel: 'Add',
+        icon: Plus,
+        actions: [
+          {
+            id: 'add-item',
+            label: 'Add Item',
+            icon: Plus,
+            color: 'emerald',
+            onClick: () => window.dispatchEvent(new CustomEvent('famkit:action', { detail: 'add-item' })),
+          },
+          {
+            id: 'add-category',
+            label: 'Add Category',
+            icon: FolderPlus,
+            color: 'teal',
+            onClick: () => window.dispatchEvent(new CustomEvent('famkit:action', { detail: 'add-category' })),
+          },
+          {
+            id: 'add-store',
+            label: 'Add Store',
+            icon: Store,
+            color: 'emerald',
+            onClick: () => window.dispatchEvent(new CustomEvent('famkit:action', { detail: 'add-store' })),
+          },
+          {
+            id: 'manage-stores',
+            label: 'Manage Stores',
+            icon: Store,
+            color: 'slate',
+            onClick: () => window.dispatchEvent(new CustomEvent('famkit:action', { detail: 'manage-stores' })),
+          },
+          {
+            id: 'add-list',
+            label: 'Add List',
+            icon: ListPlus,
+            color: 'cyan',
+            onClick: () => window.dispatchEvent(new CustomEvent('famkit:action', { detail: 'add-list' })),
+          },
+        ],
+      };
+    }
+
+    if (activeTab === 'home') {
+      return {
+        pillLabel: 'Manage',
+        icon: SlidersHorizontal,
+        actions: [
+          {
+            id: 'edit-controls',
+            label: 'Edit Controls',
+            icon: SlidersHorizontal,
+            color: 'emerald',
+            onClick: () => window.dispatchEvent(new CustomEvent('famkit:action', { detail: 'edit-controls' })),
+          },
+          {
+            id: 'refresh-controls',
+            label: 'Refresh Devices',
+            icon: RefreshCw,
+            color: 'teal',
+            onClick: () => window.dispatchEvent(new CustomEvent('famkit:action', { detail: 'refresh-controls' })),
+          },
+        ],
+      };
+    }
+
+    if (activeTab === 'calendar') {
+      return {
+        pillLabel: 'Event',
+        icon: Plus,
+        actions: [
+          {
+            id: 'add-calendar-event',
+            label: 'Add Event',
+            icon: Plus,
+            color: 'emerald',
+            onClick: () => window.dispatchEvent(new CustomEvent('famkit:action', { detail: 'add-event' })),
+          },
+          {
+            id: 'sync-google-calendar',
+            label: 'Sync Google Calendar',
+            icon: RefreshCw,
+            color: 'teal',
+            onClick: () => window.dispatchEvent(new CustomEvent('famkit:action', { detail: 'sync-google' })),
+          },
+        ],
+      };
+    }
+
+    if (activeTab === 'meals' || activeTab === 'recipes') {
+      return {
+        pillLabel: 'Recipe',
+        icon: Plus,
+        actions: [
+          {
+            id: 'import-web',
+            label: 'Import from Web',
+            icon: Link2,
+            color: 'teal',
+            onClick: () => window.dispatchEvent(new CustomEvent('famkit:action', { detail: 'import-web' })),
+          },
+          {
+            id: 'scan-photo',
+            label: 'Scan from Photo',
+            icon: Camera,
+            color: 'purple',
+            onClick: () => window.dispatchEvent(new CustomEvent('famkit:action', { detail: 'scan-photo' })),
+          },
+          {
+            id: 'create-manual',
+            label: 'Create Manually',
+            icon: Plus,
+            color: 'emerald',
+            onClick: () => window.dispatchEvent(new CustomEvent('famkit:action', { detail: 'create-recipe-manual' })),
+          },
+          {
+            id: 'add-recipe-category',
+            label: 'Add Category',
+            icon: FolderPlus,
+            color: 'cyan',
+            onClick: () => window.dispatchEvent(new CustomEvent('famkit:action', { detail: 'add-recipe-category' })),
+          },
+          {
+            id: 'manage-recipe-categories',
+            label: 'Manage Categories',
+            icon: Tag,
+            color: 'amber',
+            onClick: () => window.dispatchEvent(new CustomEvent('famkit:action', { detail: 'manage-recipe-categories' })),
+          },
+        ],
+      };
+    }
+
+    return null;
+  }, [activeTab]);
+
+  const config = tabConfigs[activeTab] || fallbackConfig;
+
+  // Don't render on settings, admin, family, pricing, etc.
   if (!config || !config.actions || config.actions.length === 0) {
     return null;
   }

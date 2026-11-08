@@ -203,6 +203,18 @@ const MealRecipeIngredientRow: React.FC<{
   );
 };
 
+
+export const safeFormatScheduledDate = (dateStr?: string | null): string => {
+  if (!dateStr || dateStr === 'null' || dateStr === 'undefined') return '';
+  try {
+    const d = parseISO(dateStr);
+    if (isNaN(d.getTime())) return '';
+    return format(d, 'EEE, MMM d');
+  } catch {
+    return '';
+  }
+};
+
 export const MealsPage: React.FC = () => {
   const { household, users, currentUser, apiKey } = usePWA();
   const householdId = household?.id;
@@ -315,6 +327,203 @@ export const MealsPage: React.FC = () => {
   });
   const [isNewRecipeCategoryModalOpen, setIsNewRecipeCategoryModalOpen] = useState(false);
   const [isManageRecipeCategoriesModalOpen, setIsManageRecipeCategoriesModalOpen] = useState(false);
+  // Register bottom speed-dial FAB actions for Meals
+  useRegisterFab(
+    'meals',
+    useMemo(() => {
+      if (activeTab === 'recipes') {
+        return {
+          pillLabel: 'Recipe',
+          icon: Plus,
+          actions: [
+            {
+              id: 'import-web',
+              label: 'Import from Web',
+              icon: Link2,
+              color: 'teal',
+              onClick: () => {
+                setScraperInitialMode('url');
+                setIsScraperOpen(true);
+              },
+            },
+            {
+              id: 'scan-photo',
+              label: 'Scan from Photo',
+              icon: Camera,
+              color: 'purple',
+              onClick: () => {
+                setScraperInitialMode('scan');
+                setIsScraperOpen(true);
+              },
+            },
+            {
+              id: 'create-manual',
+              label: 'Create Manually',
+              icon: Plus,
+              color: 'emerald',
+              onClick: () => {
+                setEditingRecipe({
+                  id: '',
+                  household_id: householdId || '',
+                  title: '',
+                  category: 'Dinner',
+                  tags: [],
+                  ingredients: [],
+                  instructions: [],
+                  created_at: new Date().toISOString(),
+                });
+                setIsEditRecipeModalOpen(true);
+              },
+            },
+            {
+              id: 'add-recipe-category',
+              label: 'Add Category',
+              icon: FolderPlus,
+              color: 'cyan',
+              onClick: () => setIsNewRecipeCategoryModalOpen(true),
+            },
+            {
+              id: 'manage-recipe-categories',
+              label: 'Manage Categories',
+              icon: Tag,
+              color: 'amber',
+              onClick: () => setIsManageRecipeCategoriesModalOpen(true),
+            },
+          ],
+        };
+      }
+      if (activeTab === 'pantry') {
+        return {
+          pillLabel: 'Item',
+          icon: Plus,
+          actions: [
+            {
+              id: 'add-pantry-item',
+              label: 'Add Item',
+              icon: Plus,
+              color: 'teal',
+              onClick: () => {
+                setEditingInventoryItem(null);
+                setIsEditInventoryModalOpen(true);
+              },
+            },
+            {
+              id: 'add-pantry-category',
+              label: 'Add Category',
+              icon: FolderPlus,
+              color: 'cyan',
+              onClick: () => setIsNewCategoryModalOpen(true),
+            },
+            {
+              id: 'scan-barcode',
+              label: 'Scan Barcode',
+              icon: Barcode,
+              color: 'emerald',
+              onClick: () => setIsBarcodeModalOpen(true),
+            },
+            {
+              id: 'ai-vision-scan',
+              label: 'AI Photo Scan',
+              icon: Camera,
+              color: 'purple',
+              onClick: () => setIsVisionModalOpen(true),
+            },
+            {
+              id: 'manage-pantry-categories',
+              label: 'Manage Categories',
+              icon: Tag,
+              color: 'amber',
+              onClick: () => setIsManagePantryCategoriesModalOpen(true),
+            },
+          ],
+        };
+      }
+      if (activeTab === 'planner') {
+        return {
+          pillLabel: 'Add Meal',
+          icon: Plus,
+          actions: [
+            {
+              id: 'add-planner-meal',
+              label: 'Add to Planner',
+              icon: Plus,
+              color: 'emerald',
+              onClick: () => setIsRecipePickerOpen(true),
+            },
+          ],
+        };
+      }
+      if (activeTab === 'history') {
+        return {
+          pillLabel: 'Log Meal',
+          icon: Plus,
+          actions: [
+            {
+              id: 'log-cooked-meal',
+              label: 'Log Meal',
+              icon: Plus,
+              color: 'emerald',
+              onClick: handleOpenNewLog,
+            },
+          ],
+        };
+      }
+      return {
+        pillLabel: 'Recipe',
+        icon: Plus,
+        actions: [],
+      };
+    }, [activeTab, householdId]),
+    [activeTab, householdId]
+  );
+
+  // Global action dispatcher listener for Meals actions
+  useEffect(() => {
+    const handleAction = (e: any) => {
+      const detail = e.detail;
+      if (detail === 'import-web') {
+        setScraperInitialMode('url');
+        setIsScraperOpen(true);
+      } else if (detail === 'scan-photo') {
+        setScraperInitialMode('scan');
+        setIsScraperOpen(true);
+      } else if (detail === 'create-recipe-manual') {
+        setEditingRecipe({
+          id: '',
+          household_id: householdId || '',
+          title: '',
+          category: 'Dinner',
+          tags: [],
+          ingredients: [],
+          instructions: [],
+          created_at: new Date().toISOString(),
+        });
+        setIsEditRecipeModalOpen(true);
+      } else if (detail === 'add-recipe-category') {
+        setIsNewRecipeCategoryModalOpen(true);
+      } else if (detail === 'manage-recipe-categories') {
+        setIsManageRecipeCategoriesModalOpen(true);
+      } else if (detail === 'add-pantry-item') {
+        setEditingInventoryItem(null);
+        setIsEditInventoryModalOpen(true);
+      } else if (detail === 'add-pantry-category') {
+        setIsNewCategoryModalOpen(true);
+      } else if (detail === 'scan-barcode') {
+        setIsBarcodeModalOpen(true);
+      } else if (detail === 'ai-vision-scan') {
+        setIsVisionModalOpen(true);
+      } else if (detail === 'manage-pantry-categories') {
+        setIsManagePantryCategoriesModalOpen(true);
+      } else if (detail === 'add-planner-meal') {
+        setIsRecipePickerOpen(true);
+      } else if (detail === 'log-meal') {
+        handleOpenNewLog();
+      }
+    };
+    window.addEventListener('famkit:action', handleAction as EventListener);
+    return () => window.removeEventListener('famkit:action', handleAction as EventListener);
+  }, [householdId]);
+
   const [isRecipeAddMenuOpen, setIsRecipeAddMenuOpen] = useState(false);
   const recipeAddDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -626,7 +835,7 @@ export const MealsPage: React.FC = () => {
     if (!recipeTitle) return false;
     const prefix = `for: ${recipeTitle.trim().toLowerCase()}`;
     return groceryItems.some(
-      (item) => !item.is_completed && item.notes && item.notes.trim().toLowerCase().startsWith(prefix)
+      (item) => !item.is_completed && typeof item.notes === 'string' && item.notes.trim().toLowerCase().startsWith(prefix)
     );
   };
 
@@ -3736,7 +3945,7 @@ export const MealsPage: React.FC = () => {
                             </div>
 
                             <div className="flex items-center gap-1.5 shrink-0">
-                              {meal.scheduled_date && (
+                              {Boolean(safeFormatScheduledDate(meal.scheduled_date)) && (
                                 <span className="text-[10px] font-semibold pl-2 pr-1 py-0.5 rounded-full border bg-emerald-500/10 text-emerald-400 border-emerald-500/20 flex items-center gap-1 shrink-0 whitespace-nowrap">
                                   <button
                                     type="button"
@@ -3749,7 +3958,7 @@ export const MealsPage: React.FC = () => {
                                     title="Change scheduled date"
                                   >
                                     <Calendar className="w-3 h-3" />
-                                    <span>{format(parseISO(meal.scheduled_date), 'EEE, MMM d')}</span>
+                                    <span>{safeFormatScheduledDate(meal.scheduled_date)}</span>
                                   </button>
                                   <button
                                     type="button"
@@ -3817,7 +4026,7 @@ export const MealsPage: React.FC = () => {
                                 title="Schedule on calendar"
                               >
                                 <Calendar className="w-3 h-3 text-emerald-400" />
-                                <span>{meal.scheduled_date ? 'Reschedule' : 'Schedule'}</span>
+                                <span>{safeFormatScheduledDate(meal.scheduled_date) ? 'Reschedule' : 'Schedule'}</span>
                               </button>
 
                               {/* Delete button with Undo */}

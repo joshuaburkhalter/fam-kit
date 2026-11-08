@@ -77,6 +77,26 @@ export const GroceryPage: React.FC = () => {
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
   const addMenuRef = useRef<HTMLDivElement>(null);
   const [isNewListModalOpen, setIsNewListModalOpen] = useState(false);
+  // Global action dispatcher listener for Grocery/Lists actions
+  useEffect(() => {
+    const handleAction = (e: any) => {
+      if (e.detail === 'add-item') {
+        quickAddInputRef.current?.focus();
+        quickAddInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else if (e.detail === 'add-category') {
+        setIsNewCategoryModalOpen(true);
+      } else if (e.detail === 'add-store') {
+        setIsNewStoreModalOpen(true);
+      } else if (e.detail === 'manage-stores') {
+        setIsManageStoresModalOpen(true);
+      } else if (e.detail === 'add-list') {
+        setIsNewListModalOpen(true);
+      }
+    };
+    window.addEventListener('famkit:action', handleAction as EventListener);
+    return () => window.removeEventListener('famkit:action', handleAction as EventListener);
+  }, []);
+
   const [newListTitle, setNewListTitle] = useState('');
   const [isNewCategoryModalOpen, setIsNewCategoryModalOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');

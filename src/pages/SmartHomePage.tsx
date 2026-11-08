@@ -104,6 +104,47 @@ export const SmartHomePage: React.FC = () => {
   const isLongPressActiveRef = useRef<boolean>(false);
   const touchStartPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isManageModalOpen, setIsManageModalOpen] = useState(false);
+  // Register bottom speed-dial FAB actions for Control (home)
+  useRegisterFab(
+    'home',
+    useMemo(
+      () => ({
+        pillLabel: 'Manage',
+        icon: SlidersHorizontal,
+        actions: [
+          {
+            id: 'edit-controls',
+            label: 'Edit Controls',
+            description: visibleEntityIds.length > 0 ? `${visibleEntityIds.length} on dashboard` : 'Add or remove devices',
+            icon: SlidersHorizontal,
+            color: 'emerald',
+            onClick: () => setIsManageModalOpen(true),
+          },
+          {
+            id: 'refresh-controls',
+            label: 'Refresh Devices',
+            description: 'Sync latest states',
+            icon: RefreshCw,
+            color: 'teal',
+            onClick: () => loadStates(false),
+          },
+        ],
+      }),
+      [visibleEntityIds.length, loadStates]
+    ),
+    [visibleEntityIds.length, loadStates]
+  );
+
+  // Global action dispatcher listener for Smart Home actions
+  useEffect(() => {
+    const handleAction = (e: any) => {
+      if (e.detail === 'edit-controls') setIsManageModalOpen(true);
+      if (e.detail === 'refresh-controls') loadStates(false);
+    };
+    window.addEventListener('famkit:action', handleAction as EventListener);
+    return () => window.removeEventListener('famkit:action', handleAction as EventListener);
+  }, [loadStates]);
+
   const [isOptionsMenuOpen, setIsOptionsMenuOpen] = useState(false);
   const optionsMenuRef = useRef<HTMLDivElement>(null);
 

@@ -174,6 +174,7 @@ export const CalendarPage: React.FC = () => {
 
   // Register bottom speed-dial FAB actions for Calendar
   useRegisterFab(
+    'calendar',
     useMemo(
       () => ({
         pillLabel: 'Event',
