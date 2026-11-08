@@ -1708,6 +1708,13 @@ export const api = {
     return fetchJson<{ states: HomeAssistantEntity[] }>('/home-assistant/states');
   },
 
+  getHomeAssistantImageUrl: (path?: string, householdId?: string): string => {
+    if (!path) return '';
+    if (path.startsWith('data:image')) return path;
+    const householdParam = householdId ? `&householdId=${encodeURIComponent(householdId)}` : '';
+    return `${BASE_URL}/home-assistant/image-proxy?path=${encodeURIComponent(path)}${householdParam}`;
+  },
+
   getHomeAssistantEventsUrl: (householdId?: string): string => {
     const query = householdId ? `?householdId=${encodeURIComponent(householdId)}` : '';
     return `${BASE_URL}/home-assistant/events${query}`;

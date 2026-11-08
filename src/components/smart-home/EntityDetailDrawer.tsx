@@ -31,6 +31,7 @@ import {
   User,
 } from 'lucide-react';
 import { Drawer } from '../ui/Drawer';
+import { api } from '../../lib/api';
 import { HomeAssistantEntity } from '../../types';
 
 interface EntityDetailDrawerProps {
@@ -39,6 +40,36 @@ interface EntityDetailDrawerProps {
   onClose: () => void;
   onCallService: (domain: string, service: string, serviceData: any) => Promise<void>;
 }
+
+
+const PersonDrawerAvatar: React.FC<{ entity: HomeAssistantEntity }> = ({ entity }) => {
+  const [imgError, setImgError] = useState(false);
+  const photo = entity.attributes?.entity_picture;
+  const isHome = entity.state === 'home';
+  const photoUrl = photo && !imgError ? api.getHomeAssistantImageUrl(photo) : null;
+
+  return (
+    <div className="relative mb-3">
+      {photoUrl ? (
+        <img
+          src={photoUrl}
+          alt={entity.friendly_name}
+          onError={() => setImgError(true)}
+          className="w-20 h-20 rounded-full object-cover ring-4 ring-emerald-500/30"
+        />
+      ) : (
+        <div className="w-20 h-20 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center text-3xl font-black">
+          {entity.friendly_name.charAt(0).toUpperCase()}
+        </div>
+      )}
+      <span
+        className={`absolute bottom-0.5 right-0.5 w-5 h-5 rounded-full border-2 border-slate-900 ${
+          isHome ? 'bg-emerald-400' : 'bg-slate-500'
+        }`}
+      />
+    </div>
+  );
+};
 
 export const EntityDetailDrawer: React.FC<EntityDetailDrawerProps> = ({
   entity,
@@ -612,24 +643,7 @@ export const EntityDetailDrawer: React.FC<EntityDetailDrawerProps> = ({
     return (
       <div className="space-y-6">
         <div className="glass-panel p-6 rounded-3xl border border-white/10 flex flex-col items-center justify-center text-center">
-          <div className="relative mb-3">
-            {photo ? (
-              <img
-                src={photo}
-                alt={friendly_name}
-                className="w-20 h-20 rounded-full object-cover ring-4 ring-emerald-500/30"
-              />
-            ) : (
-              <div className="w-20 h-20 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center text-2xl font-bold">
-                <User className="w-9 h-9" />
-              </div>
-            )}
-            <span
-              className={`absolute bottom-0.5 right-0.5 w-5 h-5 rounded-full border-2 border-slate-900 ${
-                isHome ? 'bg-emerald-400' : 'bg-slate-500'
-              }`}
-            />
-          </div>
+          <PersonDrawerAvatar entity={entity} />
           <div className="text-xl font-bold text-white capitalize">{isHome ? 'At Home' : state === 'not_home' ? 'Away' : state}</div>
           <p className="text-xs text-slate-400 mt-1">{friendly_name}</p>
         </div>

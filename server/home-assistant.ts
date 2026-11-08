@@ -739,3 +739,47 @@ export function disconnectHouseholdWebSocket(householdId: string) {
     householdBridges.delete(householdId);
   }
 }
+
+
+/**
+ * Securely proxy images from Home Assistant (e.g. person profile avatars, camera snapshots)
+ */
+export async function proxyHomeAssistantImage(
+  householdId: string,
+  rawPath: string
+): Promise<{ buffer: Buffer; contentType: string }> {
+  if (!householdId) throw new Error('householdId is required');
+  if (!rawPath) throw new Error('path is required');
+
+  const row = queryOne<HomeAssistantConfigRow>(
+    'SELECT * FROM home_assistant_config WHERE householdId = ? AND enabled = 1',
+    [householdId]
+  );
+
+  if (!row || !row.haUrl || !row.haToken) {
+    throw new Error('Home Assistant is not configured or disabled');
+  }
+
+  const cleanUrl = normalizeHaUrl(row.haUrl);
+  const targetUrl = rawPath.startsWith('http')
+    ? rawPath
+    : `${cleanUrl}${rawPath.startsWith('/') ? '' : '/'}${rawPath}`;
+
+  const res = await fetch(targetUrl, {
+    headers: {
+      Authorization: `Bearer ${row.haToken}`,
+    },
+    signal: AbortSignal.timeout(10000),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch image from Home Assistant (${res.status}): ${res.statusText}`);
+  }
+
+  const contentType = res.headers.get('content-type') || 'image/jpeg';
+  const arrayBuf = await res.arrayBuffer();
+  return {
+    buffer: Buffer.from(arrayBuf),
+    contentType,
+  };
+}

@@ -23,6 +23,7 @@ import {
   callHomeAssistantService,
   subscribeToHomeAssistantEvents,
   saveHomeAssistantVisibleEntities,
+  proxyHomeAssistantImage,
 } from './home-assistant.js';
 import { buildSelectiveAssistantContext } from './assistant-context.js';
 import {
@@ -4120,6 +4121,24 @@ app.get('/api/home-assistant/events', (req, res) => {
       res.end();
     } catch {}
   });
+});
+
+
+app.get('/api/home-assistant/image-proxy', async (req, res) => {
+  try {
+    const householdId = (req.query.householdId as string) || getHouseholdId(req);
+    const path = req.query.path as string;
+    if (!path) {
+      return res.status(400).send('path is required');
+    }
+
+    const { buffer, contentType } = await proxyHomeAssistantImage(householdId, path);
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.send(buffer);
+  } catch (err: any) {
+    res.status(404).send(err.message || 'Image proxy failed');
+  }
 });
 
 app.post('/api/home-assistant/call-service', async (req, res) => {

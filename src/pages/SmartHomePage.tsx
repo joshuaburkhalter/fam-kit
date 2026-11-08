@@ -52,6 +52,34 @@ const CONTROL_GROUPS = [
   { id: 'other', title: 'Other Controls', icon: Sliders, iconColor: 'bg-white/10 text-slate-400', match: (e: HomeAssistantEntity) => !['climate', 'light', 'lock', 'cover', 'switch', 'fan', 'button', 'input_button', 'scene', 'script', 'media_player'].includes(e.domain) },
 ];
 
+
+const PersonAvatar: React.FC<{ entity: HomeAssistantEntity; householdId?: string }> = ({ entity, householdId }) => {
+  const [imgError, setImgError] = useState(false);
+  const photo = entity.attributes?.entity_picture;
+  const isHome = (entity.state || '').toLowerCase() === 'home';
+
+  const photoUrl = photo && !imgError ? api.getHomeAssistantImageUrl(photo, householdId) : null;
+
+  if (photoUrl) {
+    return (
+      <img
+        src={photoUrl}
+        alt={entity.friendly_name}
+        onError={() => setImgError(true)}
+        className="w-5 h-5 rounded-full object-cover ring-1 ring-emerald-400/40"
+      />
+    );
+  }
+
+  return (
+    <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black ${
+      isHome ? 'bg-emerald-500/30 text-emerald-300' : 'bg-slate-700/60 text-slate-300'
+    }`}>
+      {entity.friendly_name.charAt(0).toUpperCase()}
+    </div>
+  );
+};
+
 export const SmartHomePage: React.FC = () => {
   const { household } = usePWA();
   const [entities, setEntities] = useState<HomeAssistantEntity[]>([]);
@@ -352,12 +380,7 @@ export const SmartHomePage: React.FC = () => {
 
     if (entity.domain === 'person') {
       const isHome = effectiveState === 'home';
-      const photo = entity.attributes?.entity_picture;
-      const icon = photo ? (
-        <img src={photo} alt="" className="w-5 h-5 rounded-full object-cover ring-1 ring-emerald-400/40" />
-      ) : (
-        <User className="w-3.5 h-3.5" />
-      );
+      const icon = <PersonAvatar entity={entity} householdId={household?.id} />;
       const color = isHome ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-700/50 text-slate-400';
       const displayState = isHome ? 'Home' : effectiveState === 'not_home' ? 'Away' : effectiveState;
       return { icon, color, displayState };
