@@ -97,9 +97,23 @@ export const EntityDetailDrawer: React.FC<EntityDetailDrawerProps> = ({
   const [coverPosition, setCoverPosition] = useState<number>(() => {
     return attributes.current_position ?? (state === 'open' ? 100 : 0);
   });
-  const [fanPercentage, setFanPercentage] = useState<number>(() => {
-    return attributes.percentage ?? (state === 'on' ? 100 : 0);
-  });
+  const getEntitySpeed = (): 'off' | 'low' | 'medium' | 'high' => {
+    if (state === 'off' || state === 'unavailable' || state === 'unknown') return 'off';
+    const preset = (attributes?.preset_mode || attributes?.speed || '').toLowerCase();
+    if (preset.includes('low')) return 'low';
+    if (preset.includes('med')) return 'medium';
+    if (preset.includes('high')) return 'high';
+    const pct = attributes?.percentage;
+    if (typeof pct === 'number') {
+      if (pct <= 0) return 'off';
+      if (pct <= 35) return 'low';
+      if (pct <= 70) return 'medium';
+      return 'high';
+    }
+    return 'medium';
+  };
+
+  const [activeSpeed, setActiveSpeed] = useState<'off' | 'low' | 'medium' | 'high'>(getEntitySpeed);
   const [isCallingService, setIsCallingService] = useState(false);
 
   // Sync with incoming entity updates
@@ -118,11 +132,7 @@ export const EntityDetailDrawer: React.FC<EntityDetailDrawerProps> = ({
       setCoverPosition(attributes.current_position);
     }
 
-    if (attributes.percentage !== undefined) {
-      setFanPercentage(attributes.percentage);
-    } else if (state === 'on' && fanPercentage === 0) {
-      setFanPercentage(100);
-    }
+    setActiveSpeed(getEntitySpeed());
   }, [entity]);
 
 
@@ -401,163 +411,107 @@ export const EntityDetailDrawer: React.FC<EntityDetailDrawerProps> = ({
     );
   };
 
-  const renderFanControls = () => {
-    const isOn = state === 'on';
-    const isOscillating = Boolean(attributes.oscillating);
-    const direction = attributes.direction;
-    const presetModes: string[] = Array.isArray(attributes.preset_modes) ? attributes.preset_modes : [];
-    const currentPreset = attributes.preset_mode;
+  const handleSelectFanSpeed = async (speed: 'off' | 'low' | 'medium' | 'high') => {
+    const previous = activeSpeed;
+    setActiveSpeed(speed);
+    try {
+      if (speed === 'off') {
+        await handleAction('fan', 'turn_off');
+      } else {
+        const presetModes: string[] = Array.isArray(attributes.preset_modes) ? attributes.preset_modes : [];
+        const matchingPreset = presetModes.find((m) =>
+          m.toLowerCase().includes(speed === 'medium' ? 'med' : speed)
+        );
 
-    const supportsSpeed =
-      attributes.percentage !== undefined ||
-      (typeof attributes.supported_features === 'number' && (attributes.supported_features & 1) !== 0);
-    const supportsOscillation =
-      attributes.oscillating !== undefined ||
-      (typeof attributes.supported_features === 'number' && (attributes.supported_features & 2) !== 0);
-    const supportsDirection =
-      attributes.direction !== undefined ||
-      (typeof attributes.supported_features === 'number' && (attributes.supported_features & 4) !== 0);
-    const supportsPresets = presetModes.length > 0;
+        if (matchingPreset) {
+          await handleAction('fan', 'set_preset_mode', { preset_mode: matchingPreset });
+        } else {
+          const pct = speed === 'low' ? 33 : speed === 'medium' ? 66 : 100;
+          await handleAction('fan', 'set_percentage', { percentage: pct });
+        }
+      }
+    } catch (err) {
+      setActiveSpeed(previous);
+    }
+  };
+
+  const renderFanControls = () => {
+    const isFanOn = activeSpeed !== 'off';
+
+    const speedOptions: { id: 'off' | 'low' | 'medium' | 'high'; label: string; sub: string }[] = [
+      { id: 'off', label: 'Off', sub: 'Stop' },
+      { id: 'low', label: 'Low', sub: 'Speed 1' },
+      { id: 'medium', label: 'Medium', sub: 'Speed 2' },
+      { id: 'high', label: 'High', sub: 'Speed 3' },
+    ];
 
     return (
       <div className="space-y-6">
-        {/* Master Power Toggle Button */}
+        {/* Main Status Display */}
         <div className="glass-panel p-6 rounded-3xl border border-white/10 flex flex-col items-center justify-center text-center">
-          <button
-            type="button"
-            onClick={() => handleAction('fan', isOn ? 'turn_off' : 'turn_on')}
-            className={`w-24 h-24 rounded-3xl flex items-center justify-center transition-all cursor-pointer shadow-xl ${
-              isOn
-                ? 'bg-cyan-500 text-slate-950 shadow-cyan-500/30 scale-105 ring-4 ring-cyan-500/20'
-                : 'bg-white/10 text-slate-400 hover:text-white border border-white/10'
+          <div
+            className={`w-24 h-24 rounded-3xl flex items-center justify-center mb-3 shadow-xl transition-all ${
+              isFanOn
+                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 shadow-cyan-500/10'
+                : 'bg-white/10 text-slate-400 border border-white/10'
             }`}
           >
             <Fan
-              className={`w-10 h-10 ${isOn ? 'animate-spin stroke-[2.5]' : ''}`}
-              style={isOn ? { animationDuration: `${Math.max(0.6, 2.2 - ((fanPercentage || 50) / 100) * 1.6)}s` } : undefined}
+              className={`w-12 h-12 ${isFanOn ? 'animate-spin stroke-[2.5]' : ''}`}
+              style={
+                isFanOn
+                  ? {
+                      animationDuration:
+                        activeSpeed === 'low' ? '2.4s' : activeSpeed === 'medium' ? '1.4s' : '0.7s',
+                    }
+                  : undefined
+              }
             />
-          </button>
-          <div className="mt-4 text-base font-bold text-white capitalize">
-            {isOn
-              ? supportsSpeed && fanPercentage > 0
-                ? `Fan is Running (${fanPercentage}%)`
-                : 'Fan is Running'
-              : 'Fan is Off'}
           </div>
+          <div className="text-2xl font-black text-white capitalize">
+            {activeSpeed === 'off' ? 'Fan is Off' : `${activeSpeed.toUpperCase()} Speed`}
+          </div>
+          <p className="text-xs text-slate-400 mt-1">{displayName}</p>
         </div>
 
-        {/* Speed Slider (only if speed control supported) */}
-        {supportsSpeed && (
-          <div className="glass-panel p-5 rounded-3xl border border-white/10 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-                <Wind className="w-4 h-4 text-cyan-400" />
-                Speed
-              </span>
-              <span className="text-sm font-bold text-cyan-400">{fanPercentage}%</span>
-            </div>
-
-            <input
-              type="range"
-              min="0"
-              max="100"
-              value={fanPercentage}
-              onChange={(e) => setFanPercentage(parseInt(e.target.value, 10))}
-              onMouseUp={() => handleAction('fan', 'set_percentage', { percentage: fanPercentage })}
-              onTouchEnd={() => handleAction('fan', 'set_percentage', { percentage: fanPercentage })}
-              className="w-full h-3 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-400"
-            />
-
-            <div className="flex justify-between text-[11px] text-slate-400 pt-1">
-              {[
-                { label: 'Off', pct: 0 },
-                { label: 'Low', pct: 33 },
-                { label: 'Med', pct: 66 },
-                { label: 'High', pct: 100 },
-              ].map((step) => (
+        {/* 4-State Buttons */}
+        <div className="space-y-2">
+          <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+            Speed Control
+          </span>
+          <div className="grid grid-cols-4 gap-2">
+            {speedOptions.map((opt) => {
+              const isSelected = activeSpeed === opt.id;
+              return (
                 <button
-                  key={step.pct}
+                  key={opt.id}
                   type="button"
-                  onClick={() => {
-                    setFanPercentage(step.pct);
-                    if (step.pct === 0) {
-                      handleAction('fan', 'turn_off');
-                    } else {
-                      handleAction('fan', 'set_percentage', { percentage: step.pct });
-                    }
-                  }}
-                  className={`px-3 py-1 rounded-lg border text-xs font-semibold cursor-pointer transition-all ${
-                    isOn && Math.abs(fanPercentage - step.pct) < 15
-                      ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
-                      : 'bg-white/5 text-slate-400 border-white/5 hover:bg-white/10'
+                  onClick={() => handleSelectFanSpeed(opt.id)}
+                  className={`p-3.5 rounded-2xl border flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
+                    isSelected
+                      ? opt.id === 'off'
+                        ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 ring-2 ring-rose-500/20 font-bold'
+                        : 'bg-cyan-500 text-slate-950 border-cyan-400 font-black shadow-lg shadow-cyan-500/25 scale-[1.03]'
+                      : 'bg-white/5 text-slate-300 hover:text-white border-white/10 hover:bg-white/10'
                   }`}
                 >
-                  {step.label}
+                  <span className="text-xs font-bold">{opt.label}</span>
+                  <span
+                    className={`text-[10px] ${
+                      isSelected
+                        ? opt.id === 'off'
+                          ? 'text-rose-300/80'
+                          : 'text-slate-900/80 font-semibold'
+                        : 'text-slate-500'
+                    }`}
+                  >
+                    {opt.sub}
+                  </span>
                 </button>
-              ))}
-            </div>
+              );
+            })}
           </div>
-        )}
-
-        {/* Oscillation and Direction */}
-        {(supportsOscillation || supportsDirection) && (
-          <div className="grid grid-cols-2 gap-3">
-            {supportsOscillation && (
-              <button
-                type="button"
-                onClick={() => handleAction('fan', 'oscillate', { oscillating: !isOscillating })}
-                className={`p-3 rounded-2xl border flex flex-col items-center gap-1.5 transition-all cursor-pointer ${
-                  isOscillating
-                    ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
-                    : 'bg-white/5 text-slate-400 border-white/10 hover:bg-white/10'
-                }`}
-              >
-                <RotateCcw className="w-5 h-5" />
-                <span className="text-xs font-bold">Oscillate: {isOscillating ? 'On' : 'Off'}</span>
-              </button>
-            )}
-
-            {supportsDirection && (
-              <button
-                type="button"
-                onClick={() =>
-                  handleAction('fan', 'set_direction', {
-                    direction: direction === 'forward' ? 'reverse' : 'forward',
-                  })
-                }
-                className="p-3 rounded-2xl border bg-white/5 text-slate-400 border-white/10 hover:bg-white/10 flex flex-col items-center gap-1.5 transition-all cursor-pointer"
-              >
-                <Wind className="w-5 h-5" />
-                <span className="text-xs font-bold capitalize">Dir: {direction || 'Forward'}</span>
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Preset Modes (if supported by entity) */}
-        {supportsPresets && (
-          <div className="space-y-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-              Preset Modes
-            </span>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {presetModes.map((mode) => (
-                <button
-                  key={mode}
-                  type="button"
-                  onClick={() => handleAction('fan', 'set_preset_mode', { preset_mode: mode })}
-                  className={`px-3 py-2 rounded-xl border text-xs capitalize transition-all cursor-pointer ${
-                    currentPreset === mode
-                      ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 font-bold'
-                      : 'bg-white/5 text-slate-400 border-white/5 hover:bg-white/10'
-                  }`}
-                >
-                  {mode}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+        </div>
       </div>
     );
   };

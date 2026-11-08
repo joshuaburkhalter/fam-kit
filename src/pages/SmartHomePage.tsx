@@ -652,10 +652,36 @@ export const SmartHomePage: React.FC = () => {
       tileBg = 'bg-slate-900/60 border-purple-500/20 hover:border-purple-500/40';
       iconBg = 'bg-purple-500/15 text-purple-400';
     } else if (entity.domain === 'fan') {
-      iconComponent = <Fan className={`w-4 h-4 sm:w-5 sm:h-5 ${isOn ? 'text-cyan-400 animate-spin' : 'text-slate-400'}`} style={{ animationDuration: '3s' }} />;
-      stateDisplay = isOn ? 'Running' : 'Off';
-      tileBg = isOn ? 'bg-gradient-to-b from-cyan-500/15 to-slate-900/80 border-cyan-500/30' : 'bg-slate-900/60 border-white/10';
-      iconBg = isOn ? 'bg-cyan-500/20 text-cyan-300 ring-2 ring-cyan-500/30' : 'bg-white/5 text-slate-400';
+      const preset = (entity.attributes?.preset_mode || entity.attributes?.speed || '').toLowerCase();
+      const pct = entity.attributes?.percentage;
+      let fanSpeed: 'Off' | 'Low' | 'Medium' | 'High' = 'Off';
+
+      if (isOn) {
+        if (preset.includes('low') || (typeof pct === 'number' && pct > 0 && pct <= 35)) {
+          fanSpeed = 'Low';
+        } else if (preset.includes('high') || (typeof pct === 'number' && pct > 70)) {
+          fanSpeed = 'High';
+        } else {
+          fanSpeed = 'Medium';
+        }
+      }
+
+      const isFanOn = isOn && fanSpeed !== 'Off';
+      const animDuration = fanSpeed === 'Low' ? '2.4s' : fanSpeed === 'Medium' ? '1.4s' : '0.7s';
+
+      iconComponent = (
+        <Fan
+          className={`w-4 h-4 sm:w-5 sm:h-5 ${isFanOn ? 'text-cyan-400 animate-spin' : 'text-slate-400'}`}
+          style={isFanOn ? { animationDuration: animDuration } : undefined}
+        />
+      );
+      stateDisplay = fanSpeed;
+      tileBg = isFanOn
+        ? 'bg-gradient-to-b from-cyan-500/15 to-slate-900/80 border-cyan-500/30'
+        : 'bg-slate-900/60 border-white/10';
+      iconBg = isFanOn
+        ? 'bg-cyan-500/20 text-cyan-300 ring-2 ring-cyan-500/30'
+        : 'bg-white/5 text-slate-400';
     }
 
     return (
