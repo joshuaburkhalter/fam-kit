@@ -30,6 +30,8 @@ export const ALLOWED_DOMAINS = new Set([
   'cover',
   'light',
   'switch',
+  'button',
+  'input_button',
   'fan',
   'scene',
   'script',
@@ -109,6 +111,9 @@ export function formatHaStateToEntity(item: any): HomeAssistantEntity | null {
     needsDrawer = Boolean(hasBrightness);
   } else if (domain === 'sensor' || domain === 'binary_sensor') {
     needsDrawer = true;
+  } else if (domain === 'button' || domain === 'input_button') {
+    // Buttons are momentary trigger actions - no drawer needed
+    needsDrawer = false;
   }
 
   return {
@@ -327,6 +332,20 @@ export async function fetchHomeAssistantStates(householdId: string): Promise<Hom
     }
   }
 
+  // Debug log for buttons and intercom devices
+  const debugIntercoms = rawStates.filter((i: any) => {
+    const s = ((i.entity_id || '') + ' ' + (i.attributes?.friendly_name || '')).toLowerCase();
+    return s.includes('2n') || s.includes('verso') || s.includes('relay') || (i.entity_id || '').startsWith('button.');
+  });
+  if (debugIntercoms.length > 0) {
+    console.log('[HomeAssistant Intercom/Button Entities]', JSON.stringify(debugIntercoms.map((i: any) => ({
+      entity_id: i.entity_id,
+      state: i.state,
+      friendly_name: i.attributes?.friendly_name,
+      restored: i.attributes?.restored
+    }))));
+  }
+
   // Domain sort priority for logical dashboard grouping
   const DOMAIN_ORDER: Record<string, number> = {
     climate: 1,
@@ -334,13 +353,15 @@ export async function fetchHomeAssistantStates(householdId: string): Promise<Hom
     cover: 3,
     light: 4,
     switch: 5,
-    fan: 6,
-    scene: 7,
-    script: 8,
-    person: 9,
-    sensor: 10,
-    binary_sensor: 11,
-    media_player: 12,
+    button: 6,
+    input_button: 7,
+    fan: 8,
+    scene: 9,
+    script: 10,
+    person: 11,
+    sensor: 12,
+    binary_sensor: 13,
+    media_player: 14,
   };
 
   filtered.sort((a, b) => {

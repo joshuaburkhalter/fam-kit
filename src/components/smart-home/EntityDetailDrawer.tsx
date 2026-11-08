@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
+  Zap,
   Thermometer,
   Lock,
   Unlock,
@@ -455,29 +456,52 @@ export const EntityDetailDrawer: React.FC<EntityDetailDrawerProps> = ({
   };
 
   const renderLockControls = () => {
+    const isUnavailable = state === 'unavailable' || state === 'unknown';
     const isLocked = state === 'locked';
+    const isUnlocked = state === 'unlocked' || state === 'open';
 
     return (
       <div className="space-y-6">
         <div className="glass-panel p-6 rounded-3xl border border-white/10 flex flex-col items-center justify-center text-center">
-          <div className={`w-24 h-24 rounded-3xl flex items-center justify-center mb-3 shadow-xl ${
-            isLocked
+          <div className={`w-24 h-24 rounded-3xl flex items-center justify-center mb-3 shadow-xl transition-all ${
+            isUnavailable
+              ? 'bg-slate-800/60 text-slate-500 border border-white/5'
+              : isLocked
               ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-emerald-500/10'
               : 'bg-rose-500/20 text-rose-400 border border-rose-500/30 shadow-rose-500/10'
           }`}>
             {isLocked ? <Lock className="w-10 h-10" /> : <Unlock className="w-10 h-10" />}
           </div>
-          <div className="text-2xl font-black text-white capitalize">{state}</div>
-          <p className="text-xs text-slate-400 mt-1">Smart Door Lock</p>
+          <div className={`text-2xl font-black capitalize ${
+            isUnavailable ? 'text-slate-400' : 'text-white'
+          }`}>
+            {isUnavailable ? 'Unavailable / Offline' : state}
+          </div>
+          <p className="text-xs text-slate-400 mt-1">Smart Door Lock / Access Control</p>
         </div>
+
+        {/* Unavailable notice */}
+        {isUnavailable && (
+          <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 shrink-0 text-amber-400 mt-0.5" />
+            <div className="space-y-1">
+              <span className="font-bold block">Entity is Offline in Home Assistant</span>
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                {attributes.restored
+                  ? 'This entity is marked as "restored" from cache, meaning the physical device or integration is no longer reporting it live. If this is a 2N intercom trigger, check if the integration provides a Button or Switch entity instead.'
+                  : 'Home Assistant cannot reach this device. Check that your lock or intercom station is powered and connected to your local network.'}
+              </p>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-3">
           <button
             type="button"
-            disabled={isLocked}
+            disabled={isUnavailable || isLocked}
             onClick={() => handleAction('lock', 'lock')}
             className={`p-4 rounded-2xl border flex items-center justify-center gap-2 font-bold text-sm transition-all cursor-pointer ${
-              isLocked
+              isUnavailable || isLocked
                 ? 'opacity-40 bg-white/5 border-white/5 text-slate-400 cursor-not-allowed'
                 : 'bg-emerald-500 text-slate-950 border-emerald-400 hover:bg-emerald-400 shadow-lg shadow-emerald-500/20'
             }`}
@@ -488,20 +512,41 @@ export const EntityDetailDrawer: React.FC<EntityDetailDrawerProps> = ({
 
           <button
             type="button"
-            disabled={!isLocked}
+            disabled={isUnavailable || isUnlocked}
             onClick={() => {
               if (confirm(`Unlock ${friendly_name}?`)) {
                 handleAction('lock', 'unlock');
               }
             }}
             className={`p-4 rounded-2xl border flex items-center justify-center gap-2 font-bold text-sm transition-all cursor-pointer ${
-              !isLocked
+              isUnavailable || isUnlocked
                 ? 'opacity-40 bg-white/5 border-white/5 text-slate-400 cursor-not-allowed'
                 : 'bg-rose-500 text-white border-rose-400 hover:bg-rose-600 shadow-lg shadow-rose-500/20'
             }`}
           >
             <Unlock className="w-4 h-4" />
             Unlock
+          </button>
+        </div>
+
+        {/* Pulse / Buzz Trigger button for momentary door strikes */}
+        <div className="pt-2">
+          <button
+            type="button"
+            disabled={isUnavailable}
+            onClick={() => {
+              if (confirm(`Buzz / pulse trigger for ${friendly_name}?`)) {
+                handleAction('lock', 'unlock');
+              }
+            }}
+            className={`w-full p-3.5 rounded-2xl border flex items-center justify-center gap-2 text-xs font-bold transition-all ${
+              isUnavailable
+                ? 'opacity-30 bg-white/5 border-white/5 text-slate-500 cursor-not-allowed'
+                : 'bg-white/5 hover:bg-white/10 text-amber-300 border-amber-500/30 hover:border-amber-500/50 cursor-pointer'
+            }`}
+          >
+            <Zap className="w-4 h-4 text-amber-400" />
+            <span>Pulse Trigger (Buzz Door)</span>
           </button>
         </div>
       </div>

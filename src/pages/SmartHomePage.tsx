@@ -13,6 +13,8 @@ import {
   Shield,
   Activity,
   Sparkles,
+  Zap,
+  Check,
   Flame,
   Snowflake,
   Fan,
@@ -37,6 +39,7 @@ export const SmartHomePage: React.FC = () => {
   const [selectedEntityForDrawer, setSelectedEntityForDrawer] = useState<HomeAssistantEntity | null>(null);
   const [optimisticStates, setOptimisticStates] = useState<Record<string, string>>({});
   const [isLiveConnected, setIsLiveConnected] = useState(false);
+  const [triggeredButtons, setTriggeredButtons] = useState<Record<string, boolean>>({});
 
   const loadStates = useCallback(async (quiet = false) => {
     try {
@@ -183,24 +186,52 @@ export const SmartHomePage: React.FC = () => {
   const handleTileQuickAction = async (e: React.MouseEvent, entity: HomeAssistantEntity) => {
     e.stopPropagation();
     const currentState = optimisticStates[entity.entity_id] || entity.state;
+    if (currentState === 'unavailable' || currentState === 'unknown') return;
 
     if (entity.domain === 'switch' || entity.domain === 'light') {
       const nextService = currentState === 'on' ? 'turn_off' : 'turn_on';
       await handleCallService(entity.domain, nextService, { entity_id: entity.entity_id });
     } else if (entity.domain === 'scene' || entity.domain === 'script') {
       await handleCallService(entity.domain, 'turn_on', { entity_id: entity.entity_id });
+    } else if (entity.domain === 'button' || entity.domain === 'input_button') {
+      setTriggeredButtons((prev) => ({ ...prev, [entity.entity_id]: true }));
+      try {
+        await handleCallService(entity.domain, 'press', { entity_id: entity.entity_id });
+      } finally {
+        setTimeout(() => {
+          setTriggeredButtons((prev) => {
+            const next = { ...prev };
+            delete next[entity.entity_id];
+            return next;
+          });
+        }, 1200);
+      }
+    } else if (entity.domain === 'lock') {
+      // Toggle or pulse unlock
+      const nextService = currentState === 'locked' ? 'unlock' : 'lock';
+      await handleCallService('lock', nextService, { entity_id: entity.entity_id });
     }
+  };
+
+  // Helper to detect access-related entities (doors, locks, gates, intercom relays)
+  const isAccessEntity = (e: HomeAssistantEntity) => {
+    if (e.domain === 'lock' || e.domain === 'cover') return true;
+    const s = (e.entity_id + ' ' + e.friendly_name).toLowerCase();
+    return (
+      (e.domain === 'button' || e.domain === 'input_button' || e.domain === 'switch') &&
+      (s.includes('door') || s.includes('gate') || s.includes('lock') || s.includes('relay') || s.includes('verso') || s.includes('intercom') || s.includes('strike'))
+    );
   };
 
   // Grouping categories
   const categories = useMemo(() => {
     const cats = [
       { id: 'all', label: 'All', count: entities.length },
-      { id: 'climate', label: 'Climate', count: entities.filter((e) => e.domain === 'climate').length },
-      { id: 'access', label: 'Locks & Garage', count: entities.filter((e) => e.domain === 'lock' || e.domain === 'cover').length },
+      { id: 'access', label: 'Locks & Entry', count: entities.filter(isAccessEntity).length },
       { id: 'lights', label: 'Lights', count: entities.filter((e) => e.domain === 'light').length },
       { id: 'switches', label: 'Switches', count: entities.filter((e) => e.domain === 'switch').length },
-      { id: 'scenes', label: 'Scenes', count: entities.filter((e) => e.domain === 'scene' || e.domain === 'script').length },
+      { id: 'climate', label: 'Climate', count: entities.filter((e) => e.domain === 'climate').length },
+      { id: 'triggers', label: 'Triggers & Buttons', count: entities.filter((e) => e.domain === 'button' || e.domain === 'input_button' || e.domain === 'scene' || e.domain === 'script').length },
       { id: 'sensors', label: 'Sensors', count: entities.filter((e) => e.domain === 'sensor' || e.domain === 'binary_sensor').length },
     ];
     return cats.filter((c) => c.id === 'all' || c.count > 0);
@@ -210,11 +241,11 @@ export const SmartHomePage: React.FC = () => {
   const filteredEntities = useMemo(() => {
     return entities.filter((entity) => {
       // Category filter
-      if (selectedCategory === 'climate' && entity.domain !== 'climate') return false;
-      if (selectedCategory === 'access' && entity.domain !== 'lock' && entity.domain !== 'cover') return false;
+      if (selectedCategory === 'access' && !isAccessEntity(entity)) return false;
       if (selectedCategory === 'lights' && entity.domain !== 'light') return false;
       if (selectedCategory === 'switches' && entity.domain !== 'switch') return false;
-      if (selectedCategory === 'scenes' && entity.domain !== 'scene' && entity.domain !== 'script') return false;
+      if (selectedCategory === 'climate' && entity.domain !== 'climate') return false;
+      if (selectedCategory === 'triggers' && entity.domain !== 'button' && entity.domain !== 'input_button' && entity.domain !== 'scene' && entity.domain !== 'script') return false;
       if (selectedCategory === 'sensors' && entity.domain !== 'sensor' && entity.domain !== 'binary_sensor') return false;
 
       // Search filter
@@ -383,13 +414,15 @@ export const SmartHomePage: React.FC = () => {
         <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
           {filteredEntities.map((entity) => {
             const currentEffectiveState = optimisticStates[entity.entity_id] || entity.state;
+            const isUnavailable = currentEffectiveState === 'unavailable' || currentEffectiveState === 'unknown';
             const isOn = currentEffectiveState === 'on';
             const isLocked = currentEffectiveState === 'locked';
             const isClosed = currentEffectiveState === 'closed';
+            const isTriggered = Boolean(triggeredButtons[entity.entity_id]);
 
             // Determine tile visual style and icon based on domain and state
             let iconComponent = <Sliders className="w-5 h-5" />;
-            let stateDisplay = currentEffectiveState;
+            let stateDisplay = isUnavailable ? 'Unavailable' : currentEffectiveState;
             let tileBg = 'bg-slate-900/60 border-white/10 hover:border-white/20';
             let iconBg = 'bg-white/5 text-slate-400';
 
@@ -433,14 +466,36 @@ export const SmartHomePage: React.FC = () => {
                 stateDisplay = 'Off';
               }
             } else if (entity.domain === 'lock') {
-              iconComponent = isLocked ? <Lock className="w-5 h-5 text-emerald-400" /> : <Unlock className="w-5 h-5 text-rose-400" />;
-              stateDisplay = isLocked ? 'Locked' : 'Unlocked';
-              if (isLocked) {
+              if (isUnavailable) {
+                iconComponent = <Lock className="w-5 h-5 text-slate-500" />;
+                stateDisplay = 'Offline / Unavailable';
+                tileBg = 'bg-slate-900/40 border-white/5 opacity-60 hover:opacity-85';
+                iconBg = 'bg-white/5 text-slate-500';
+              } else if (isLocked) {
+                iconComponent = <Lock className="w-5 h-5 text-emerald-400" />;
+                stateDisplay = 'Locked';
                 tileBg = 'bg-slate-900/60 border-emerald-500/20 hover:border-emerald-500/40';
                 iconBg = 'bg-emerald-500/15 text-emerald-400';
               } else {
+                iconComponent = <Unlock className="w-5 h-5 text-rose-400" />;
+                stateDisplay = currentEffectiveState === 'open' ? 'Open' : 'Unlocked';
                 tileBg = 'bg-rose-500/10 border-rose-500/30 hover:border-rose-500/50 shadow-lg shadow-rose-500/5';
                 iconBg = 'bg-rose-500/20 text-rose-400 ring-2 ring-rose-500/30';
+              }
+            } else if (entity.domain === 'button' || entity.domain === 'input_button') {
+              iconComponent = isTriggered ? <Check className="w-5 h-5 text-emerald-300" /> : <Zap className="w-5 h-5 text-amber-400" />;
+              if (isUnavailable) {
+                stateDisplay = 'Offline';
+                tileBg = 'bg-slate-900/40 border-white/5 opacity-60';
+                iconBg = 'bg-white/5 text-slate-500';
+              } else if (isTriggered) {
+                stateDisplay = 'Triggered!';
+                tileBg = 'bg-emerald-500/15 border-emerald-500/35 shadow-lg shadow-emerald-500/10';
+                iconBg = 'bg-emerald-500/20 text-emerald-300 ring-2 ring-emerald-500/30';
+              } else {
+                stateDisplay = 'Tap to Trigger';
+                tileBg = 'bg-slate-900/60 border-amber-500/20 hover:border-amber-500/40 hover:bg-slate-900/80';
+                iconBg = 'bg-amber-500/15 text-amber-400';
               }
             } else if (entity.domain === 'cover') {
               iconComponent = <Shield className="w-5 h-5 text-blue-400" />;
@@ -484,12 +539,32 @@ export const SmartHomePage: React.FC = () => {
                     <div className="w-7 h-7 rounded-full bg-white/5 group-hover:bg-white/15 flex items-center justify-center text-slate-400 group-hover:text-white transition-all shrink-0">
                       <ChevronRight className="w-4 h-4 stroke-[2.5]" />
                     </div>
-                  ) : (
-                    /* Single action button: Direct interactive toggle button */
+                  ) : (entity.domain === 'button' || entity.domain === 'input_button') ? (
+                    /* Momentary trigger button */
                     <button
                       type="button"
+                      disabled={isUnavailable}
                       onClick={(e) => handleTileQuickAction(e, entity)}
-                      className="p-1 rounded-xl hover:bg-white/10 text-slate-400 hover:text-white transition-all cursor-pointer shrink-0"
+                      className={`px-2.5 py-1 rounded-xl border text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                        isUnavailable
+                          ? 'opacity-30 bg-white/5 border-white/5 text-slate-500 cursor-not-allowed'
+                          : isTriggered
+                          ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-md shadow-emerald-500/20 font-black'
+                          : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/30'
+                      }`}
+                    >
+                      <Zap className="w-3.5 h-3.5" />
+                      <span>{isTriggered ? 'Triggered' : 'Press'}</span>
+                    </button>
+                  ) : (
+                    /* Single action toggle button */
+                    <button
+                      type="button"
+                      disabled={isUnavailable}
+                      onClick={(e) => handleTileQuickAction(e, entity)}
+                      className={`p-1 rounded-xl hover:bg-white/10 transition-all cursor-pointer shrink-0 ${
+                        isUnavailable ? 'opacity-30 cursor-not-allowed text-slate-600' : 'text-slate-400 hover:text-white'
+                      }`}
                     >
                       {isOn ? (
                         <ToggleRight className="w-7 h-7 text-emerald-400" />

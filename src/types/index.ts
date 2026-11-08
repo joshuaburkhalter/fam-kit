@@ -444,6 +444,8 @@ export type HomeAssistantDomain =
   | 'cover'
   | 'light'
   | 'switch'
+  | 'button'
+  | 'input_button'
   | 'fan'
   | 'scene'
   | 'script'
