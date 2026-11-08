@@ -66,7 +66,7 @@ const PersonAvatar: React.FC<{ entity: HomeAssistantEntity; householdId?: string
     return (
       <img
         src={photoUrl}
-        alt={displayName}
+        alt={entity.friendly_name}
         onError={() => setImgError(true)}
         className="w-5 h-5 rounded-full object-cover ring-1 ring-emerald-400/40"
       />
