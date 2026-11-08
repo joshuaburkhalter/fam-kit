@@ -331,6 +331,12 @@ export function saveHomeAssistantVisibleEntities(
   );
   saveDb();
 
+  // Instantly sync dashboard controls to all connected family members
+  const bridge = householdBridges.get(householdId);
+  if (bridge) {
+    bridge.broadcast('config_updated', { visibleEntityIds: cleanList });
+  }
+
   return {
     success: true,
     visibleEntityIds: cleanList,
@@ -518,7 +524,7 @@ class HouseholdSocketBridge {
     }
   }
 
-  private broadcast(event: string, data: any) {
+  public broadcast(event: string, data: any) {
     for (const listener of this.listeners) {
       try {
         listener({ event, data });

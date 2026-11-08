@@ -105,6 +105,18 @@ export const SmartHomePage: React.FC = () => {
         } catch {}
       });
 
+      // Real-time synchronization when any family member adds or removes controls
+      eventSource.addEventListener('config_updated', (e: MessageEvent) => {
+        try {
+          const payload = JSON.parse(e.data);
+          if (payload?.visibleEntityIds && Array.isArray(payload.visibleEntityIds)) {
+            setVisibleEntityIds(payload.visibleEntityIds);
+          }
+        } catch (err) {
+          console.error('Failed to parse live config update:', err);
+        }
+      });
+
       eventSource.addEventListener('state_changed', (e: MessageEvent) => {
         try {
           const payload = JSON.parse(e.data);
@@ -292,7 +304,7 @@ export const SmartHomePage: React.FC = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6 space-y-6 pb-24 md:pb-12">
+    <div className="max-w-7xl mx-auto px-4 py-6 space-y-6 pb-24 md:pb-12 min-h-[calc(100vh-8rem)] flex flex-col w-full">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -443,26 +455,28 @@ export const SmartHomePage: React.FC = () => {
         </div>
       )}
 
-      {/* Initial Zero-Controls State */}
+      {/* Initial Zero-Controls State (Centered Vertically) */}
       {!isLoading && visibleEntityIds.length === 0 && (
-        <div className="glass-panel p-8 sm:p-12 rounded-3xl border border-white/10 text-center space-y-4 max-w-lg mx-auto my-6 sm:my-10 animate-fade-in">
-          <div className="w-16 h-16 rounded-3xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/10">
-            <SlidersHorizontal className="w-8 h-8" />
+        <div className="flex-1 flex items-center justify-center py-8 sm:py-16 animate-fade-in my-auto">
+          <div className="glass-panel p-8 sm:p-12 rounded-3xl border border-white/10 text-center space-y-4 max-w-lg w-full shadow-2xl">
+            <div className="w-16 h-16 rounded-3xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/10">
+              <SlidersHorizontal className="w-8 h-8" />
+            </div>
+            <div className="space-y-1.5">
+              <h3 className="text-xl font-black text-white">Add Your Smart Home Controls</h3>
+              <p className="text-xs text-slate-400 leading-relaxed max-w-sm mx-auto">
+                Your Home Assistant is connected! Choose which controls (switches, door triggers, lights, locks, or sensors) you want to display for your family.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsManageModalOpen(true)}
+              className="px-6 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs transition-all shadow-xl shadow-emerald-500/20 cursor-pointer inline-flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add Controls</span>
+            </button>
           </div>
-          <div className="space-y-1.5">
-            <h3 className="text-xl font-black text-white">Add Your Smart Home Controls</h3>
-            <p className="text-xs text-slate-400 leading-relaxed max-w-sm mx-auto">
-              Your Home Assistant is connected! Choose which controls (switches, door triggers, lights, locks, or sensors) you want to display on this dashboard.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setIsManageModalOpen(true)}
-            className="px-6 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs transition-all shadow-xl shadow-emerald-500/20 cursor-pointer inline-flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Add Controls</span>
-          </button>
         </div>
       )}
 

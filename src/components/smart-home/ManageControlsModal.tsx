@@ -161,7 +161,7 @@ export const ManageControlsModal: React.FC<ManageControlsModalProps> = ({
                 Manage Home Controls
               </h2>
               <p className="text-xs text-slate-400">
-                Choose which devices and triggers appear on your Home dashboard
+                Choose which devices and triggers appear on your Home dashboard for your entire family
               </p>
             </div>
           </div>
@@ -342,7 +342,7 @@ export const ManageControlsModal: React.FC<ManageControlsModalProps> = ({
         {/* Modal Footer */}
         <div className="px-6 py-4 border-t border-white/10 bg-slate-900 flex items-center justify-between gap-4">
           <div className="text-xs text-slate-400">
-            <span className="font-bold text-white">{selectedIds.size}</span> control{selectedIds.size === 1 ? '' : 's'} selected
+            <span className="font-bold text-white">{selectedIds.size}</span> control{selectedIds.size === 1 ? '' : 's'} shared with your family
           </div>
           <div className="flex items-center gap-2.5">
             <button
