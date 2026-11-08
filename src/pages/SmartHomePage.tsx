@@ -22,7 +22,6 @@ import {
   Snowflake,
   Fan,
   Home,
-  AlertCircle,
   Settings,
   Search,
 } from 'lucide-react';
@@ -37,7 +36,6 @@ export const SmartHomePage: React.FC = () => {
   const [entities, setEntities] = useState<HomeAssistantEntity[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedEntityForDrawer, setSelectedEntityForDrawer] = useState<HomeAssistantEntity | null>(null);
@@ -85,12 +83,10 @@ export const SmartHomePage: React.FC = () => {
       if (!quiet) setIsRefreshing(true);
       const res = await api.getHomeAssistantStates();
       setEntities(res.states || []);
-      setErrorMessage(null);
+      setIsLiveConnected(true);
     } catch (err: any) {
-      console.error('Failed to load Home Assistant states:', err);
-      if (!quiet) {
-        setErrorMessage(err.message || 'Unable to connect to Home Assistant. Check your settings.');
-      }
+      console.warn('Failed to load Home Assistant states:', err?.message || err);
+      setIsLiveConnected(false);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -109,20 +105,14 @@ export const SmartHomePage: React.FC = () => {
     try {
       eventSource = new EventSource(eventsUrl);
 
-      eventSource.onopen = () => {
-        setIsLiveConnected(true);
-      };
-
       eventSource.addEventListener('status', (e: MessageEvent) => {
         try {
           const data = JSON.parse(e.data);
           if (data?.status === 'connected') {
             setIsLiveConnected(true);
-            setErrorMessage(null);
-          } else if (data?.status === 'auth_failed') {
+          } else if (data?.status === 'auth_failed' || data?.status === 'disconnected') {
             setIsLiveConnected(false);
-            setErrorMessage('Home Assistant authentication failed. Check your Long-Lived Access Token in Settings.');
-          } else if (data?.status === 'disconnected') {
+          } else if (data?.status === 'connecting') {
             setIsLiveConnected(false);
           }
         } catch {}
@@ -342,16 +332,18 @@ export const SmartHomePage: React.FC = () => {
         {/* Options & Status Dropdown Actions */}
         <div className="flex items-center gap-2">
           {/* Live WebSocket Status Badge */}
-          <div
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold transition-all border ${
+          <button
+            type="button"
+            onClick={() => loadStates(false)}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold transition-all border cursor-pointer active:scale-95 ${
               isLiveConnected
-                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25 shadow-sm shadow-emerald-500/10'
-                : 'bg-white/5 text-slate-400 border-white/10'
+                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25 shadow-sm shadow-emerald-500/10 hover:bg-emerald-500/15'
+                : 'bg-amber-500/10 text-amber-400 border-amber-500/25 hover:bg-amber-500/20'
             }`}
             title={
               isLiveConnected
-                ? 'Live WebSocket Connected: devices update instantly in real time'
-                : 'Connecting to Home Assistant WebSocket...'
+                ? 'Live WebSocket Connected: devices update instantly in real time. Click to refresh.'
+                : 'Disconnected from Home Assistant. Tap to reconnect.'
             }
           >
             <span className="relative flex h-2 w-2">
@@ -365,9 +357,9 @@ export const SmartHomePage: React.FC = () => {
               />
             </span>
             <span className="text-[11px] font-bold">
-              {isLiveConnected ? 'Live' : 'Connecting...'}
+              {isLiveConnected ? 'Live' : isRefreshing ? 'Connecting...' : 'Disconnected'}
             </span>
-          </div>
+          </button>
 
           {/* Manage Dropdown Menu */}
           <div className="relative" ref={optionsMenuRef}>
@@ -430,24 +422,6 @@ export const SmartHomePage: React.FC = () => {
           </div>
         </div>
       </div>
-
-      {/* Error Banner */}
-      {errorMessage && (
-        <div className="p-4 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-3">
-          <AlertCircle className="w-5 h-5 shrink-0 text-rose-400" />
-          <div className="flex-1">
-            <span className="font-bold">Home Assistant Notice: </span>
-            {errorMessage}
-          </div>
-          <button
-            type="button"
-            onClick={() => loadStates(false)}
-            className="px-3 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 font-bold transition-all cursor-pointer"
-          >
-            Retry
-          </button>
-        </div>
-      )}
 
       {/* Search & Category Filter Bar (Desktop only, hidden on mobile) */}
       {visibleEntityIds.length > 0 && (

@@ -505,10 +505,13 @@ class HouseholdSocketBridge {
       clearTimeout(this.graceTimeout);
       this.graceTimeout = null;
     }
-    if (!this.isConnected && !this.isConnecting) {
-      this.connect();
-    } else if (this.isConnected) {
+    if (this.isConnected) {
       listener({ event: 'status', data: { status: 'connected' } });
+    } else if (this.isConnecting) {
+      listener({ event: 'status', data: { status: 'connecting' } });
+    } else {
+      listener({ event: 'status', data: { status: 'disconnected' } });
+      this.connect();
     }
   }
 

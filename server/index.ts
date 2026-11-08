@@ -4099,10 +4099,7 @@ app.get('/api/home-assistant/events', (req, res) => {
     (res as any).flushHeaders();
   }
 
-  // Initial connection confirmation
-  res.write(`event: status\ndata: ${JSON.stringify({ status: 'connected' })}\n\n`);
-
-  // Subscribe to live Home Assistant state updates
+  // Subscribe to live Home Assistant state updates (bridge immediately sends actual initial status)
   const unsubscribe = subscribeToHomeAssistantEvents(householdId, ({ event, data }) => {
     try {
       res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
