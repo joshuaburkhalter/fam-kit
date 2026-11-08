@@ -116,7 +116,11 @@ export function formatHaStateToEntity(item: any): HomeAssistantEntity | null {
   } else if (domain === 'lock') {
     needsDrawer = true;
   } else if (domain === 'fan') {
-    needsDrawer = true;
+    const hasSpeed =
+      attrs.percentage !== undefined ||
+      (typeof attrs.supported_features === 'number' && (attrs.supported_features & 1) !== 0) ||
+      Array.isArray(attrs.preset_modes);
+    needsDrawer = Boolean(hasSpeed);
   } else if (domain === 'media_player') {
     needsDrawer = true;
   } else if (domain === 'light') {

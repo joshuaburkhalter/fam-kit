@@ -293,7 +293,7 @@ export const SmartHomePage: React.FC = () => {
     const currentState = optimisticStates[entity.entity_id] || entity.state;
     if (currentState === 'unavailable' || currentState === 'unknown') return;
 
-    if (entity.domain === 'switch' || entity.domain === 'light') {
+    if (entity.domain === 'switch' || entity.domain === 'light' || entity.domain === 'fan') {
       const nextService = currentState === 'on' ? 'turn_off' : 'turn_on';
       await handleCallService(entity.domain, nextService, { entity_id: entity.entity_id });
     } else if (entity.domain === 'scene' || entity.domain === 'script') {

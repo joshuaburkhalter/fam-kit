@@ -8,6 +8,7 @@ import {
   ToggleLeft,
   ToggleRight,
   Fan,
+  Wind,
   Play,
   Pause,
   Volume2,
@@ -96,6 +97,9 @@ export const EntityDetailDrawer: React.FC<EntityDetailDrawerProps> = ({
   const [coverPosition, setCoverPosition] = useState<number>(() => {
     return attributes.current_position ?? (state === 'open' ? 100 : 0);
   });
+  const [fanPercentage, setFanPercentage] = useState<number>(() => {
+    return attributes.percentage ?? (state === 'on' ? 100 : 0);
+  });
   const [isCallingService, setIsCallingService] = useState(false);
 
   // Sync with incoming entity updates
@@ -112,6 +116,12 @@ export const EntityDetailDrawer: React.FC<EntityDetailDrawerProps> = ({
 
     if (attributes.current_position !== undefined) {
       setCoverPosition(attributes.current_position);
+    }
+
+    if (attributes.percentage !== undefined) {
+      setFanPercentage(attributes.percentage);
+    } else if (state === 'on' && fanPercentage === 0) {
+      setFanPercentage(100);
     }
   }, [entity]);
 
@@ -384,6 +394,167 @@ export const EntityDetailDrawer: React.FC<EntityDetailDrawerProps> = ({
               >
                 100%
               </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderFanControls = () => {
+    const isOn = state === 'on';
+    const isOscillating = Boolean(attributes.oscillating);
+    const direction = attributes.direction;
+    const presetModes: string[] = Array.isArray(attributes.preset_modes) ? attributes.preset_modes : [];
+    const currentPreset = attributes.preset_mode;
+
+    const supportsSpeed =
+      attributes.percentage !== undefined ||
+      (typeof attributes.supported_features === 'number' && (attributes.supported_features & 1) !== 0);
+    const supportsOscillation =
+      attributes.oscillating !== undefined ||
+      (typeof attributes.supported_features === 'number' && (attributes.supported_features & 2) !== 0);
+    const supportsDirection =
+      attributes.direction !== undefined ||
+      (typeof attributes.supported_features === 'number' && (attributes.supported_features & 4) !== 0);
+    const supportsPresets = presetModes.length > 0;
+
+    return (
+      <div className="space-y-6">
+        {/* Master Power Toggle Button */}
+        <div className="glass-panel p-6 rounded-3xl border border-white/10 flex flex-col items-center justify-center text-center">
+          <button
+            type="button"
+            onClick={() => handleAction('fan', isOn ? 'turn_off' : 'turn_on')}
+            className={`w-24 h-24 rounded-3xl flex items-center justify-center transition-all cursor-pointer shadow-xl ${
+              isOn
+                ? 'bg-cyan-500 text-slate-950 shadow-cyan-500/30 scale-105 ring-4 ring-cyan-500/20'
+                : 'bg-white/10 text-slate-400 hover:text-white border border-white/10'
+            }`}
+          >
+            <Fan
+              className={`w-10 h-10 ${isOn ? 'animate-spin stroke-[2.5]' : ''}`}
+              style={isOn ? { animationDuration: `${Math.max(0.6, 2.2 - ((fanPercentage || 50) / 100) * 1.6)}s` } : undefined}
+            />
+          </button>
+          <div className="mt-4 text-base font-bold text-white capitalize">
+            {isOn
+              ? supportsSpeed && fanPercentage > 0
+                ? `Fan is Running (${fanPercentage}%)`
+                : 'Fan is Running'
+              : 'Fan is Off'}
+          </div>
+        </div>
+
+        {/* Speed Slider (only if speed control supported) */}
+        {supportsSpeed && (
+          <div className="glass-panel p-5 rounded-3xl border border-white/10 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                <Wind className="w-4 h-4 text-cyan-400" />
+                Speed
+              </span>
+              <span className="text-sm font-bold text-cyan-400">{fanPercentage}%</span>
+            </div>
+
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={fanPercentage}
+              onChange={(e) => setFanPercentage(parseInt(e.target.value, 10))}
+              onMouseUp={() => handleAction('fan', 'set_percentage', { percentage: fanPercentage })}
+              onTouchEnd={() => handleAction('fan', 'set_percentage', { percentage: fanPercentage })}
+              className="w-full h-3 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+            />
+
+            <div className="flex justify-between text-[11px] text-slate-400 pt-1">
+              {[
+                { label: 'Off', pct: 0 },
+                { label: 'Low', pct: 33 },
+                { label: 'Med', pct: 66 },
+                { label: 'High', pct: 100 },
+              ].map((step) => (
+                <button
+                  key={step.pct}
+                  type="button"
+                  onClick={() => {
+                    setFanPercentage(step.pct);
+                    if (step.pct === 0) {
+                      handleAction('fan', 'turn_off');
+                    } else {
+                      handleAction('fan', 'set_percentage', { percentage: step.pct });
+                    }
+                  }}
+                  className={`px-3 py-1 rounded-lg border text-xs font-semibold cursor-pointer transition-all ${
+                    isOn && Math.abs(fanPercentage - step.pct) < 15
+                      ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
+                      : 'bg-white/5 text-slate-400 border-white/5 hover:bg-white/10'
+                  }`}
+                >
+                  {step.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Oscillation and Direction */}
+        {(supportsOscillation || supportsDirection) && (
+          <div className="grid grid-cols-2 gap-3">
+            {supportsOscillation && (
+              <button
+                type="button"
+                onClick={() => handleAction('fan', 'oscillate', { oscillating: !isOscillating })}
+                className={`p-3 rounded-2xl border flex flex-col items-center gap-1.5 transition-all cursor-pointer ${
+                  isOscillating
+                    ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
+                    : 'bg-white/5 text-slate-400 border-white/10 hover:bg-white/10'
+                }`}
+              >
+                <RotateCcw className="w-5 h-5" />
+                <span className="text-xs font-bold">Oscillate: {isOscillating ? 'On' : 'Off'}</span>
+              </button>
+            )}
+
+            {supportsDirection && (
+              <button
+                type="button"
+                onClick={() =>
+                  handleAction('fan', 'set_direction', {
+                    direction: direction === 'forward' ? 'reverse' : 'forward',
+                  })
+                }
+                className="p-3 rounded-2xl border bg-white/5 text-slate-400 border-white/10 hover:bg-white/10 flex flex-col items-center gap-1.5 transition-all cursor-pointer"
+              >
+                <Wind className="w-5 h-5" />
+                <span className="text-xs font-bold capitalize">Dir: {direction || 'Forward'}</span>
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Preset Modes (if supported by entity) */}
+        {supportsPresets && (
+          <div className="space-y-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+              Preset Modes
+            </span>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {presetModes.map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => handleAction('fan', 'set_preset_mode', { preset_mode: mode })}
+                  className={`px-3 py-2 rounded-xl border text-xs capitalize transition-all cursor-pointer ${
+                    currentPreset === mode
+                      ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 font-bold'
+                      : 'bg-white/5 text-slate-400 border-white/5 hover:bg-white/10'
+                  }`}
+                >
+                  {mode}
+                </button>
+              ))}
             </div>
           </div>
         )}
@@ -683,13 +854,14 @@ export const EntityDetailDrawer: React.FC<EntityDetailDrawerProps> = ({
 
         {domain === 'climate' && renderClimateControls()}
         {domain === 'light' && renderLightControls()}
+        {domain === 'fan' && renderFanControls()}
         {domain === 'cover' && renderCoverControls()}
         {domain === 'lock' && renderLockControls()}
         {(domain === 'sensor' || domain === 'binary_sensor') && renderSensorDetails()}
         {domain === 'person' && renderPersonDetails()}
 
         {/* Fallback for other domains */}
-        {domain !== 'climate' && domain !== 'light' && domain !== 'cover' && domain !== 'lock' && domain !== 'sensor' && domain !== 'binary_sensor' && domain !== 'person' && (
+        {domain !== 'climate' && domain !== 'light' && domain !== 'fan' && domain !== 'cover' && domain !== 'lock' && domain !== 'sensor' && domain !== 'binary_sensor' && domain !== 'person' && (
           <div className="space-y-4">
             <div className="glass-panel p-5 rounded-3xl border border-white/10">
               <span className="text-xs text-slate-400">Current State</span>
