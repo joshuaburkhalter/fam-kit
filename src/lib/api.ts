@@ -1720,6 +1720,13 @@ export const api = {
     });
   },
 
+  saveHomeAssistantVisibleControls: async (visibleEntityIds: string[]): Promise<{ success: boolean; visibleEntityIds: string[] }> => {
+    return fetchJson<{ success: boolean; visibleEntityIds: string[] }>('/home-assistant/visible-controls', {
+      method: 'POST',
+      body: JSON.stringify({ visibleEntityIds }),
+    });
+  },
+
   checkHealth: async (): Promise<boolean> => {
     try {
       const res = await fetch(`${BASE_URL}/health?_t=${Date.now()}`, {

@@ -260,6 +260,7 @@ function initSchema(db: Database) {
       enabled INTEGER NOT NULL DEFAULT 1,
       lastConnectedAt TEXT,
       entityCount INTEGER DEFAULT 0,
+      visibleEntityIds TEXT,
       createdAt TEXT NOT NULL,
       updatedAt TEXT NOT NULL
     );
@@ -454,10 +455,15 @@ function initSchema(db: Database) {
         enabled INTEGER NOT NULL DEFAULT 1,
         lastConnectedAt TEXT,
         entityCount INTEGER DEFAULT 0,
+        visibleEntityIds TEXT,
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL
       );
     `);
+  } catch {}
+
+  try {
+    db.run(`ALTER TABLE home_assistant_config ADD COLUMN visibleEntityIds TEXT`);
   } catch {}
 
   try {

@@ -22,6 +22,7 @@ import {
   fetchHomeAssistantStates,
   callHomeAssistantService,
   subscribeToHomeAssistantEvents,
+  saveHomeAssistantVisibleEntities,
 } from './home-assistant.js';
 import { buildSelectiveAssistantContext } from './assistant-context.js';
 import {
@@ -4059,6 +4060,17 @@ app.delete('/api/home-assistant/config', (req, res) => {
     res.json(result);
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Failed to disconnect Home Assistant' });
+  }
+});
+
+app.post('/api/home-assistant/visible-controls', (req, res) => {
+  try {
+    const householdId = getHouseholdId(req);
+    const { visibleEntityIds } = req.body;
+    const result = saveHomeAssistantVisibleEntities(householdId, visibleEntityIds || []);
+    res.json(result);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message || 'Failed to save visible controls' });
   }
 });
 

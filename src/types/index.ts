@@ -435,6 +435,7 @@ export interface HomeAssistantConfig {
   enabled?: boolean;
   lastConnectedAt?: string | null;
   entityCount?: number;
+  visibleEntityIds?: string[];
   message?: string;
 }
 

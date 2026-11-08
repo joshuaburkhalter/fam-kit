@@ -10,6 +10,8 @@ import {
   ChevronRight,
   RefreshCw,
   Sliders,
+  SlidersHorizontal,
+  Plus,
   Shield,
   Activity,
   Sparkles,
@@ -27,6 +29,7 @@ import { api } from '../lib/api';
 import { usePWA } from '../context/PWAContext';
 import { HomeAssistantEntity } from '../types';
 import { EntityDetailDrawer } from '../components/smart-home/EntityDetailDrawer';
+import { ManageControlsModal } from '../components/smart-home/ManageControlsModal';
 
 export const SmartHomePage: React.FC = () => {
   const { household } = usePWA();
@@ -40,6 +43,19 @@ export const SmartHomePage: React.FC = () => {
   const [optimisticStates, setOptimisticStates] = useState<Record<string, string>>({});
   const [isLiveConnected, setIsLiveConnected] = useState(false);
   const [triggeredButtons, setTriggeredButtons] = useState<Record<string, boolean>>({});
+  const [visibleEntityIds, setVisibleEntityIds] = useState<string[]>([]);
+  const [isManageModalOpen, setIsManageModalOpen] = useState(false);
+
+  const loadConfig = useCallback(async () => {
+    try {
+      const cfg = await api.getHomeAssistantConfig();
+      if (cfg?.visibleEntityIds && Array.isArray(cfg.visibleEntityIds)) {
+        setVisibleEntityIds(cfg.visibleEntityIds);
+      }
+    } catch (err) {
+      console.error('Failed to load HA config:', err);
+    }
+  }, []);
 
   const loadStates = useCallback(async (quiet = false) => {
     try {
@@ -61,6 +77,7 @@ export const SmartHomePage: React.FC = () => {
   useEffect(() => {
     // Initial fetch for fast first render
     loadStates(false);
+    loadConfig();
 
     // Live WebSocket / SSE push connection to Home Assistant
     const eventsUrl = api.getHomeAssistantEventsUrl(household?.id);
@@ -213,6 +230,13 @@ export const SmartHomePage: React.FC = () => {
     }
   };
 
+  // Entities chosen by the user to appear on the dashboard
+  const activeEntities = useMemo(() => {
+    if (visibleEntityIds.length === 0) return [];
+    const visibleSet = new Set(visibleEntityIds);
+    return entities.filter((e) => visibleSet.has(e.entity_id));
+  }, [entities, visibleEntityIds]);
+
   // Helper to detect access-related entities (doors, locks, gates, intercom relays)
   const isAccessEntity = (e: HomeAssistantEntity) => {
     if (e.domain === 'lock' || e.domain === 'cover') return true;
@@ -223,23 +247,23 @@ export const SmartHomePage: React.FC = () => {
     );
   };
 
-  // Grouping categories
+  // Grouping categories based on active controls
   const categories = useMemo(() => {
     const cats = [
-      { id: 'all', label: 'All', count: entities.length },
-      { id: 'access', label: 'Locks & Entry', count: entities.filter(isAccessEntity).length },
-      { id: 'lights', label: 'Lights', count: entities.filter((e) => e.domain === 'light').length },
-      { id: 'switches', label: 'Switches', count: entities.filter((e) => e.domain === 'switch').length },
-      { id: 'climate', label: 'Climate', count: entities.filter((e) => e.domain === 'climate').length },
-      { id: 'triggers', label: 'Triggers & Buttons', count: entities.filter((e) => e.domain === 'button' || e.domain === 'input_button' || e.domain === 'scene' || e.domain === 'script').length },
-      { id: 'sensors', label: 'Sensors', count: entities.filter((e) => e.domain === 'sensor' || e.domain === 'binary_sensor').length },
+      { id: 'all', label: 'All', count: activeEntities.length },
+      { id: 'access', label: 'Locks & Entry', count: activeEntities.filter(isAccessEntity).length },
+      { id: 'lights', label: 'Lights', count: activeEntities.filter((e) => e.domain === 'light').length },
+      { id: 'switches', label: 'Switches', count: activeEntities.filter((e) => e.domain === 'switch').length },
+      { id: 'climate', label: 'Climate', count: activeEntities.filter((e) => e.domain === 'climate').length },
+      { id: 'triggers', label: 'Triggers & Buttons', count: activeEntities.filter((e) => e.domain === 'button' || e.domain === 'input_button' || e.domain === 'scene' || e.domain === 'script').length },
+      { id: 'sensors', label: 'Sensors', count: activeEntities.filter((e) => e.domain === 'sensor' || e.domain === 'binary_sensor').length },
     ];
     return cats.filter((c) => c.id === 'all' || c.count > 0);
-  }, [entities]);
+  }, [activeEntities]);
 
-  // Filtered entities
+  // Filtered entities on the dashboard
   const filteredEntities = useMemo(() => {
-    return entities.filter((entity) => {
+    return activeEntities.filter((entity) => {
       // Category filter
       if (selectedCategory === 'access' && !isAccessEntity(entity)) return false;
       if (selectedCategory === 'lights' && entity.domain !== 'light') return false;
@@ -260,7 +284,12 @@ export const SmartHomePage: React.FC = () => {
 
       return true;
     });
-  }, [entities, selectedCategory, searchQuery]);
+  }, [activeEntities, selectedCategory, searchQuery]);
+
+  const handleSaveVisibleControls = async (newIds: string[]) => {
+    setVisibleEntityIds(newIds);
+    await api.saveHomeAssistantVisibleControls(newIds);
+  };
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6 space-y-6 pb-24 md:pb-12">
@@ -276,10 +305,10 @@ export const SmartHomePage: React.FC = () => {
                 Home
               </h1>
               <p className="text-xs text-slate-400">
-                {entities.length > 0 ? (
-                  <span>{entities.length} configured devices & controls • Home Assistant</span>
+                {visibleEntityIds.length > 0 ? (
+                  <span>{visibleEntityIds.length} active controls on dashboard • Home Assistant</span>
                 ) : (
-                  <span>Connected Smart Home</span>
+                  <span>Connected Smart Home • No controls added yet</span>
                 )}
               </p>
             </div>
@@ -316,12 +345,30 @@ export const SmartHomePage: React.FC = () => {
             </span>
           </div>
 
+          {/* Manage Controls Button */}
+          <button
+            type="button"
+            onClick={() => setIsManageModalOpen(true)}
+            className="p-2 sm:px-3 sm:py-2 rounded-2xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 transition-all flex items-center gap-2 text-xs font-semibold cursor-pointer"
+            title="Add or remove controls from your dashboard"
+          >
+            <SlidersHorizontal className="w-4 h-4 text-emerald-400" />
+            <span className="hidden sm:inline">
+              {visibleEntityIds.length === 0 ? 'Add Controls' : 'Manage Controls'}
+            </span>
+            {visibleEntityIds.length > 0 && (
+              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 font-bold">
+                {visibleEntityIds.length}
+              </span>
+            )}
+          </button>
+
           {/* Refresh Button */}
           <button
             type="button"
             onClick={() => loadStates(false)}
             disabled={isRefreshing}
-            className="p-2.5 rounded-2xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 transition-all flex items-center gap-2 text-xs font-semibold cursor-pointer"
+            className="p-2 sm:px-3 sm:py-2 rounded-2xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 transition-all flex items-center gap-2 text-xs font-semibold cursor-pointer"
             title="Refresh device states"
           >
             <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-emerald-400' : ''}`} />
@@ -348,42 +395,44 @@ export const SmartHomePage: React.FC = () => {
         </div>
       )}
 
-      {/* Search & Category Filter Bar */}
-      <div className="space-y-3">
-        <div className="relative">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="Search lights, climate, locks, rooms..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-slate-900/60 border border-white/10 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/50 transition-all"
-          />
-        </div>
+      {/* Search & Category Filter Bar (only when controls are added) */}
+      {visibleEntityIds.length > 0 && (
+        <div className="space-y-3">
+          <div className="relative">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Search active lights, climate, locks, triggers..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-slate-900/60 border border-white/10 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/50 transition-all"
+            />
+          </div>
 
-        {/* Category Filter Pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1">
-          {categories.map((cat) => (
-            <button
-              key={cat.id}
-              type="button"
-              onClick={() => setSelectedCategory(cat.id)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
-                selectedCategory === cat.id
-                  ? 'bg-emerald-500 text-slate-950 font-bold shadow-md shadow-emerald-500/20'
-                  : 'bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 border border-white/5'
-              }`}
-            >
-              <span>{cat.label}</span>
-              <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
-                selectedCategory === cat.id ? 'bg-slate-950/20 text-slate-950 font-black' : 'bg-white/10 text-slate-400'
-              }`}>
-                {cat.count}
-              </span>
-            </button>
-          ))}
+          {/* Category Filter Pills */}
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1">
+            {categories.map((cat) => (
+              <button
+                key={cat.id}
+                type="button"
+                onClick={() => setSelectedCategory(cat.id)}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
+                  selectedCategory === cat.id
+                    ? 'bg-emerald-500 text-slate-950 font-bold shadow-md shadow-emerald-500/20'
+                    : 'bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 border border-white/5'
+                }`}
+              >
+                <span>{cat.label}</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                  selectedCategory === cat.id ? 'bg-slate-950/20 text-slate-950 font-black' : 'bg-white/10 text-slate-400'
+                }`}>
+                  {cat.count}
+                </span>
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Loading Skeleton */}
       {isLoading && (
@@ -394,18 +443,49 @@ export const SmartHomePage: React.FC = () => {
         </div>
       )}
 
-      {/* Empty State */}
-      {!isLoading && filteredEntities.length === 0 && (
+      {/* Initial Zero-Controls State */}
+      {!isLoading && visibleEntityIds.length === 0 && (
+        <div className="glass-panel p-8 sm:p-12 rounded-3xl border border-white/10 text-center space-y-4 max-w-lg mx-auto my-6 sm:my-10 animate-fade-in">
+          <div className="w-16 h-16 rounded-3xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/10">
+            <SlidersHorizontal className="w-8 h-8" />
+          </div>
+          <div className="space-y-1.5">
+            <h3 className="text-xl font-black text-white">Add Your Smart Home Controls</h3>
+            <p className="text-xs text-slate-400 leading-relaxed max-w-sm mx-auto">
+              Your Home Assistant is connected! Choose which controls (switches, door triggers, lights, locks, or sensors) you want to display on this dashboard.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsManageModalOpen(true)}
+            className="px-6 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs transition-all shadow-xl shadow-emerald-500/20 cursor-pointer inline-flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add Controls</span>
+          </button>
+        </div>
+      )}
+
+      {/* Filtered Empty State (when controls exist but search or filter yields nothing) */}
+      {!isLoading && visibleEntityIds.length > 0 && filteredEntities.length === 0 && (
         <div className="glass-panel p-10 rounded-3xl border border-white/10 text-center space-y-3">
           <div className="w-12 h-12 rounded-2xl bg-white/5 text-slate-400 flex items-center justify-center mx-auto">
             <Sliders className="w-6 h-6" />
           </div>
-          <h3 className="text-base font-bold text-white">No devices found</h3>
+          <h3 className="text-base font-bold text-white">No matching controls</h3>
           <p className="text-xs text-slate-400 max-w-md mx-auto">
             {searchQuery
               ? 'No smart home devices matched your search query.'
-              : 'Homebase is connected, but no supported entities were found in your Home Assistant instance.'}
+              : 'No devices found under this category filter.'}
           </p>
+          <button
+            type="button"
+            onClick={() => setIsManageModalOpen(true)}
+            className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 text-xs font-bold transition-all cursor-pointer inline-flex items-center gap-1.5"
+          >
+            <SlidersHorizontal className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Manage Controls</span>
+          </button>
         </div>
       )}
 
@@ -596,6 +676,15 @@ export const SmartHomePage: React.FC = () => {
         entity={selectedEntityForDrawer}
         onClose={() => setSelectedEntityForDrawer(null)}
         onCallService={handleCallService}
+      />
+
+      {/* Manage / Show-Hide Controls Modal */}
+      <ManageControlsModal
+        isOpen={isManageModalOpen}
+        onClose={() => setIsManageModalOpen(false)}
+        allEntities={entities}
+        initialVisibleIds={visibleEntityIds}
+        onSave={handleSaveVisibleControls}
       />
     </div>
   );

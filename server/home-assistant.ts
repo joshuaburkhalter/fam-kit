@@ -8,6 +8,7 @@ export interface HomeAssistantConfigRow {
   enabled: number;
   lastConnectedAt: string | null;
   entityCount: number;
+  visibleEntityIds?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -218,6 +219,14 @@ export function getHomeAssistantConfig(householdId: string) {
     ? `••••••••${row.haToken.slice(-4)}`
     : '••••••••';
 
+  let visibleEntityIds: string[] = [];
+  try {
+    if (row.visibleEntityIds) {
+      const parsed = JSON.parse(row.visibleEntityIds);
+      if (Array.isArray(parsed)) visibleEntityIds = parsed;
+    }
+  } catch {}
+
   return {
     configured: true,
     haUrl: row.haUrl,
@@ -225,6 +234,7 @@ export function getHomeAssistantConfig(householdId: string) {
     enabled: Boolean(row.enabled),
     lastConnectedAt: row.lastConnectedAt,
     entityCount: row.entityCount || 0,
+    visibleEntityIds,
     updatedAt: row.updatedAt,
   };
 }
@@ -299,6 +309,32 @@ export function deleteHomeAssistantConfig(householdId: string) {
   execute('DELETE FROM home_assistant_config WHERE householdId = ?', [householdId]);
   saveDb();
   return { success: true };
+}
+
+/**
+ * Save the user-selected list of visible controls/entities for the dashboard
+ */
+export function saveHomeAssistantVisibleEntities(
+  householdId: string,
+  visibleEntityIds: string[]
+) {
+  if (!householdId) throw new Error('householdId is required');
+
+  const cleanList = Array.isArray(visibleEntityIds)
+    ? Array.from(new Set(visibleEntityIds.filter((id) => typeof id === 'string' && id.trim())))
+    : [];
+
+  const now = new Date().toISOString();
+  execute(
+    'UPDATE home_assistant_config SET visibleEntityIds = ?, updatedAt = ? WHERE householdId = ?',
+    [JSON.stringify(cleanList), now, householdId]
+  );
+  saveDb();
+
+  return {
+    success: true,
+    visibleEntityIds: cleanList,
+  };
 }
 
 /**
