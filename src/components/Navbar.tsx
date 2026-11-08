@@ -158,20 +158,19 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
 
         {/* Right: User Switcher, PWA Install, Status */}
         <div className="flex items-center gap-2">
-          {/* Offline / Online indicator */}
-          <div
-            className="flex items-center"
-            title={isOnline ? 'Online (Connected)' : 'Offline (Cached Mode)'}
-          >
-            {isOnline ? (
-              <span className="flex h-2 w-2 relative">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-              </span>
-            ) : (
-              <WifiOff className="w-4 h-4 text-amber-500" />
-            )}
-          </div>
+          {/* Offline indicator: Only show if something isn't working */}
+          {!isOnline && (
+            <div
+              className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 text-[10px] font-bold"
+              title="Offline (Cached Mode)"
+            >
+              <WifiOff className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Offline</span>
+            </div>
+          )}
+
+          {/* Mobile Page Action Slot (Portaled from active page) */}
+          <div id="navbar-page-action" className="md:hidden flex items-center" />
 
           {/* PWA Install Button */}
           {canInstallPWA && (
