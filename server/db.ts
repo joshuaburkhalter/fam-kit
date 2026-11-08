@@ -251,6 +251,19 @@ function initSchema(db: Database) {
       UNIQUE(userId, householdId)
     );
 
+
+    CREATE TABLE IF NOT EXISTS home_assistant_config (
+      id TEXT PRIMARY KEY,
+      householdId TEXT NOT NULL UNIQUE,
+      haUrl TEXT NOT NULL,
+      haToken TEXT NOT NULL,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      lastConnectedAt TEXT,
+      entityCount INTEGER DEFAULT 0,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS feedback_requests (
       id TEXT PRIMARY KEY,
       type TEXT NOT NULL,
@@ -430,6 +443,23 @@ function initSchema(db: Database) {
       );
     `);
   } catch {}
+
+  try {
+    db.run(`
+      CREATE TABLE IF NOT EXISTS home_assistant_config (
+        id TEXT PRIMARY KEY,
+        householdId TEXT NOT NULL UNIQUE,
+        haUrl TEXT NOT NULL,
+        haToken TEXT NOT NULL,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        lastConnectedAt TEXT,
+        entityCount INTEGER DEFAULT 0,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      );
+    `);
+  } catch {}
+
   try {
     db.run(`ALTER TABLE calendar_events ADD COLUMN googleEventId TEXT`);
   } catch {}

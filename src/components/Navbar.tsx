@@ -10,6 +10,7 @@ import {
   ShoppingCart,
   ChefHat,
   Calendar,
+  Home,
   LogOut,
   ChevronDown,
   User,
@@ -38,6 +39,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
     logout,
     isOnline,
     canInstallPWA,
+    hasSmartHome,
     installPWA,
   } = usePWA();
 
@@ -139,6 +141,19 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
             <Calendar className="w-3.5 h-3.5" />
             Calendar
           </button>
+          {hasSmartHome && (
+            <button
+              onClick={() => setActiveTab('home')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                activeTab === 'home'
+                  ? 'bg-emerald-500 text-slate-950 font-bold shadow-md shadow-emerald-500/20'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-white/5 font-semibold'
+              }`}
+            >
+              <Home className="w-3.5 h-3.5" />
+              Home
+            </button>
+          )}
         </nav>
 
         {/* Right: User Switcher, PWA Install, Status */}

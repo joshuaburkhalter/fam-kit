@@ -1,10 +1,11 @@
 import React from 'react';
 import {
-  Sparkles,
   ShoppingCart,
   ChefHat,
   Calendar,
+  Home,
 } from 'lucide-react';
+import { usePWA } from '../context/PWAContext';
 
 interface MobileNavProps {
   activeTab: string;
@@ -12,10 +13,13 @@ interface MobileNavProps {
 }
 
 export const MobileNav: React.FC<MobileNavProps> = ({ activeTab, setActiveTab }) => {
+  const { hasSmartHome } = usePWA();
+
   const tabs = [
     { id: 'grocery', label: 'Lists', icon: ShoppingCart },
     { id: 'meals', label: 'Meals', icon: ChefHat },
     { id: 'calendar', label: 'Calendar', icon: Calendar },
+    ...(hasSmartHome ? [{ id: 'home', label: 'Home', icon: Home }] : []),
   ];
 
   return (

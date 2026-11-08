@@ -427,3 +427,65 @@ export interface IngredientSubstitution {
   groceryItemName: string;
   isAiGenerated?: boolean;
 }
+
+export interface HomeAssistantConfig {
+  configured: boolean;
+  haUrl?: string;
+  maskedToken?: string;
+  enabled?: boolean;
+  lastConnectedAt?: string | null;
+  entityCount?: number;
+  message?: string;
+}
+
+export type HomeAssistantDomain =
+  | 'climate'
+  | 'lock'
+  | 'cover'
+  | 'light'
+  | 'switch'
+  | 'fan'
+  | 'scene'
+  | 'script'
+  | 'sensor'
+  | 'binary_sensor'
+  | 'person'
+  | 'media_player'
+  | 'other';
+
+export interface HomeAssistantEntity {
+  entity_id: string;
+  state: string;
+  domain: string;
+  friendly_name: string;
+  icon?: string;
+  needsDrawer: boolean;
+  attributes: {
+    friendly_name?: string;
+    icon?: string;
+    unit_of_measurement?: string;
+    device_class?: string;
+    temperature?: number;
+    current_temperature?: number;
+    target_temp_high?: number;
+    target_temp_low?: number;
+    min_temp?: number;
+    max_temp?: number;
+    target_temp_step?: number;
+    hvac_modes?: string[];
+    hvac_action?: string;
+    fan_modes?: string[];
+    fan_mode?: string;
+    brightness?: number;
+    color_temp?: number;
+    color_temp_kelvin?: number;
+    rgb_color?: [number, number, number];
+    current_position?: number;
+    supported_features?: number;
+    battery_level?: number;
+    entity_picture?: string;
+    [key: string]: any;
+  };
+  last_changed?: string;
+  last_updated?: string;
+}

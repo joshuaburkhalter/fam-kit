@@ -7,6 +7,7 @@ import { GroceryPage } from './pages/GroceryPage';
 import { MealsPage } from './pages/MealsPage';
 import { CalendarPage } from './pages/CalendarPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { SmartHomePage } from './pages/SmartHomePage';
 import { AdminPage } from './pages/AdminPage';
 import { LandingPage } from './pages/LandingPage';
 import { LegalPage } from './pages/LegalPage';
@@ -18,7 +19,7 @@ import { AppUpdatingOverlay } from './components/AppUpdatingOverlay';
 import { Loader2, ArrowRight, CheckCircle2, X } from 'lucide-react';
 import { Toast } from './components/ui/Toast';
 
-const VALID_TABS = ['grocery', 'meals', 'recipes', 'calendar', 'settings', 'family', 'admin'];
+const VALID_TABS = ['grocery', 'meals', 'recipes', 'calendar', 'home', 'settings', 'family', 'admin'];
 const LAST_TAB_KEY = 'homebase_last_active_tab';
 
 function resolveInitialOverlayView(): 'privacy' | 'terms' | 'pricing' | null {
@@ -410,6 +411,7 @@ export const AppContent: React.FC = () => {
         {activeTab === 'grocery' && <GroceryPage />}
         {(activeTab === 'meals' || activeTab === 'recipes') && <MealsPage />}
         {activeTab === 'calendar' && <CalendarPage />}
+        {activeTab === 'home' && <SmartHomePage />}
         {(activeTab === 'settings' || activeTab === 'family') && (
           <SettingsPage onOpenPricing={handleOpenPricing} />
         )}

@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import type { Household, User, Aisle } from '../types';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import type { Household, User, Aisle, HomeAssistantConfig } from '../types';
 import { api } from '../lib/api';
 import { cleanupReloadUrlParam } from '../lib/reload';
 
@@ -55,6 +55,9 @@ interface PWAContextType {
     password?: string;
   }) => Promise<User>;
   switchUser: (user: User) => void;
+  hasSmartHome: boolean;
+  smartHomeConfig: HomeAssistantConfig | null;
+  refreshSmartHomeStatus: () => Promise<boolean>;
 }
 
 const normalizeUser = (u: any): User | null => {
@@ -211,6 +214,36 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setAutoAudioResponsesState(enabled);
     localStorage.setItem('homebase_auto_audio', String(enabled));
   };
+
+  const [hasSmartHome, setHasSmartHome] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('famkit_has_smart_home') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [smartHomeConfig, setSmartHomeConfig] = useState<HomeAssistantConfig | null>(null);
+
+  const refreshSmartHomeStatus = useCallback(async (): Promise<boolean> => {
+    try {
+      const cfg = await api.getHomeAssistantConfig();
+      const isConfigured = Boolean(cfg?.configured && cfg?.enabled !== false);
+      setHasSmartHome(isConfigured);
+      setSmartHomeConfig(cfg);
+      try {
+        localStorage.setItem('famkit_has_smart_home', String(isConfigured));
+      } catch {}
+      return isConfigured;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (household?.id) {
+      refreshSmartHomeStatus().catch(() => {});
+    }
+  }, [household?.id, refreshSmartHomeStatus]);
 
   // Load household members & aisles for active household
   const refreshHouseholdsAndUsers = async () => {
@@ -735,6 +768,9 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setAutoAudioResponses,
         updateProfile,
         switchUser,
+        hasSmartHome,
+        smartHomeConfig,
+        refreshSmartHomeStatus,
       }}
     >
       {children}

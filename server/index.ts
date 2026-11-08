@@ -14,6 +14,14 @@ import {
   getNotificationPreferences,
   saveNotificationPreferences,
 } from './push.js';
+import {
+  getHomeAssistantConfig,
+  saveHomeAssistantConfig,
+  deleteHomeAssistantConfig,
+  testHomeAssistantConnection,
+  fetchHomeAssistantStates,
+  callHomeAssistantService,
+} from './home-assistant.js';
 import { buildSelectiveAssistantContext } from './assistant-context.js';
 import {
   getGoogleAuthUrl,
@@ -4002,6 +4010,78 @@ app.post('/api/calendar/sync/google', async (req, res) => {
     res.json({ success: true, totalSynced: result.totalSynced, totalPushed: pushResult.pushedCount });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Failed to sync Google Calendar' });
+  }
+});
+
+// Home Assistant Smart Home API
+app.get('/api/home-assistant/config', (req, res) => {
+  try {
+    const householdId = getHouseholdId(req);
+    const config = getHomeAssistantConfig(householdId);
+    res.json(config);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to get Home Assistant config' });
+  }
+});
+
+app.post('/api/home-assistant/test', async (req, res) => {
+  try {
+    const { haUrl, haToken } = req.body;
+    if (!haUrl || !haToken) {
+      return res.status(400).json({ error: 'haUrl and haToken are required.' });
+    }
+    const result = await testHomeAssistantConnection(haUrl, haToken);
+    res.json(result);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message || 'Home Assistant connection failed' });
+  }
+});
+
+app.post('/api/home-assistant/config', async (req, res) => {
+  try {
+    const householdId = getHouseholdId(req);
+    const { haUrl, haToken, enabled } = req.body;
+    if (!haUrl) {
+      return res.status(400).json({ error: 'haUrl is required' });
+    }
+    const result = await saveHomeAssistantConfig(householdId, haUrl, haToken, enabled !== false);
+    res.json(result);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message || 'Failed to save Home Assistant config' });
+  }
+});
+
+app.delete('/api/home-assistant/config', (req, res) => {
+  try {
+    const householdId = getHouseholdId(req);
+    const result = deleteHomeAssistantConfig(householdId);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to disconnect Home Assistant' });
+  }
+});
+
+app.get('/api/home-assistant/states', async (req, res) => {
+  try {
+    const householdId = getHouseholdId(req);
+    const states = await fetchHomeAssistantStates(householdId);
+    res.json({ states });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to fetch Home Assistant states' });
+  }
+});
+
+app.post('/api/home-assistant/call-service', async (req, res) => {
+  try {
+    const householdId = getHouseholdId(req);
+    const { domain, service, serviceData } = req.body;
+    if (!domain || !service) {
+      return res.status(400).json({ error: 'domain and service are required' });
+    }
+    const result = await callHomeAssistantService(householdId, domain, service, serviceData);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to call Home Assistant service' });
   }
 });
 

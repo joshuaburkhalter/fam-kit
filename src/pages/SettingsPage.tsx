@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import {
   Settings as SettingsIcon,
+  Home,
+  AlertTriangle,
+  Info,
   Bell,
   Download,
   Check,
@@ -78,6 +81,9 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
     aisles,
     refreshAisles,
     refreshHouseholdsAndUsers,
+    hasSmartHome,
+    smartHomeConfig,
+    refreshSmartHomeStatus,
   } = usePWA();
 
   // Modals & Panels
@@ -154,6 +160,92 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
       setNotificationPrefs(notificationPrefs);
     } finally {
       setIsSavingPref(false);
+    }
+  };
+
+  // Home Assistant Smart Home State
+  const [haUrl, setHaUrl] = useState('');
+  const [haToken, setHaToken] = useState('');
+  const [haShowToken, setHaShowToken] = useState(false);
+  const [haTesting, setHaTesting] = useState(false);
+  const [haSaving, setHaSaving] = useState(false);
+  const [haDisconnecting, setHaDisconnecting] = useState(false);
+  const [haTestResult, setHaTestResult] = useState<{ success: boolean; message: string; entityCount?: number } | null>(null);
+
+  useEffect(() => {
+    if (smartHomeConfig?.haUrl) {
+      setHaUrl(smartHomeConfig.haUrl);
+    }
+  }, [smartHomeConfig]);
+
+  const handleTestHomeAssistant = async () => {
+    const urlToTest = haUrl || smartHomeConfig?.haUrl || '';
+    if (!urlToTest) {
+      alert('Please enter your Home Assistant URL.');
+      return;
+    }
+    try {
+      setHaTesting(true);
+      setHaTestResult(null);
+      const res = await api.testHomeAssistantConnection(urlToTest, haToken);
+      setHaTestResult({
+        success: true,
+        message: res.message || `Connected! Found ${res.entityCount} entities.`,
+        entityCount: res.entityCount,
+      });
+    } catch (err: any) {
+      setHaTestResult({
+        success: false,
+        message: err.message || 'Connection test failed. Check your URL and token.',
+      });
+    } finally {
+      setHaTesting(false);
+    }
+  };
+
+  const handleSaveHomeAssistant = async () => {
+    if (!haUrl.trim()) {
+      alert('Please enter your Home Assistant URL.');
+      return;
+    }
+    if (!haToken.trim() && !smartHomeConfig?.configured) {
+      alert('Please enter your Long-Lived Access Token.');
+      return;
+    }
+
+    try {
+      setHaSaving(true);
+      setHaTestResult(null);
+      const res = await api.saveHomeAssistantConfig(haUrl, haToken, true);
+      await refreshSmartHomeStatus();
+      setStatusMessage(res.message || 'Home Assistant connected successfully!');
+      setTimeout(() => setStatusMessage(null), 4000);
+      setHaToken('');
+    } catch (err: any) {
+      setHaTestResult({
+        success: false,
+        message: err.message || 'Failed to save Home Assistant configuration.',
+      });
+    } finally {
+      setHaSaving(false);
+    }
+  };
+
+  const handleDisconnectHomeAssistant = async () => {
+    if (!confirm('Disconnect Home Assistant? This will remove the "Home" tab and smart home controls.')) return;
+    try {
+      setHaDisconnecting(true);
+      await api.disconnectHomeAssistant();
+      await refreshSmartHomeStatus();
+      setHaUrl('');
+      setHaToken('');
+      setHaTestResult(null);
+      setStatusMessage('Home Assistant disconnected.');
+      setTimeout(() => setStatusMessage(null), 3000);
+    } catch (err: any) {
+      alert(err.message || 'Failed to disconnect Home Assistant.');
+    } finally {
+      setHaDisconnecting(false);
     }
   };
 
@@ -952,6 +1044,162 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
             );
           })()}
         </div>
+      </div>
+
+      {/* Home Assistant Smart Home Integration */}
+      <div className="glass-panel rounded-3xl p-5 border border-white/10 space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className={`p-2 rounded-xl border shrink-0 transition-colors ${
+              hasSmartHome
+                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                : 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'
+            }`}>
+              <Home className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-white">Home Assistant Integration</h3>
+                {hasSmartHome && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    Connected
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                Automatically pull smart home controls (climate, locks, lights, covers) into a dedicated "Home" tab
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Instructions / How to connect */}
+        {!hasSmartHome && (
+          <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-2 text-xs text-slate-300">
+            <div className="font-bold text-white flex items-center gap-1.5">
+              <Info className="w-4 h-4 text-cyan-400" />
+              <span>How to connect your Home Assistant:</span>
+            </div>
+            <ol className="list-decimal list-inside space-y-1.5 text-slate-400 text-[11px] leading-relaxed">
+              <li>
+                <strong className="text-slate-200">External HTTPS URL:</strong> Use your remote URL (e.g. <span className="font-mono text-emerald-400">https://your-id.ui.nabu.casa</span> from Nabu Casa Cloud, or your Cloudflare Tunnel).
+              </li>
+              <li>
+                <strong className="text-slate-200">Long-Lived Access Token:</strong> In Home Assistant, click your user profile (bottom left) ➔ scroll down to <em>Long-Lived Access Tokens</em> ➔ click <em>Create Token</em>, name it "Homebase", and paste it below.
+              </li>
+            </ol>
+          </div>
+        )}
+
+        {/* Connection Form or Active Status */}
+        {hasSmartHome && smartHomeConfig?.haUrl ? (
+          <div className="space-y-3 pt-1">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-2xl bg-white/5 border border-white/10">
+              <div className="min-w-0">
+                <div className="text-xs font-bold text-white truncate flex items-center gap-1.5">
+                  <span className="text-slate-400 font-normal">URL:</span>
+                  <span className="font-mono text-emerald-400 truncate">{smartHomeConfig.haUrl}</span>
+                </div>
+                <div className="text-[11px] text-slate-400 mt-0.5">
+                  {smartHomeConfig.entityCount ?? 0} controls discovered
+                  {smartHomeConfig.lastConnectedAt && ` • Synced ${new Date(smartHomeConfig.lastConnectedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleTestHomeAssistant}
+                  disabled={haTesting}
+                  className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${haTesting ? 'animate-spin text-emerald-400' : ''}`} />
+                  <span>Test</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDisconnectHomeAssistant}
+                  disabled={haDisconnecting}
+                  className="px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Disconnect</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3 pt-1">
+            <div>
+              <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                Home Assistant URL
+              </label>
+              <input
+                type="url"
+                placeholder="https://your-instance.ui.nabu.casa"
+                value={haUrl}
+                onChange={(e) => setHaUrl(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900/80 border border-white/10 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/50"
+              />
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                  Long-Lived Access Token
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setHaShowToken(!haShowToken)}
+                  className="text-[10px] text-slate-400 hover:text-white cursor-pointer"
+                >
+                  {haShowToken ? 'Hide' : 'Show'}
+                </button>
+              </div>
+              <input
+                type={haShowToken ? 'text' : 'password'}
+                placeholder="Paste Long-Lived Access Token..."
+                value={haToken}
+                onChange={(e) => setHaToken(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900/80 border border-white/10 text-xs text-white placeholder-slate-500 font-mono focus:outline-none focus:border-emerald-500/50"
+              />
+            </div>
+
+            {haTestResult && (
+              <div className={`p-3 rounded-xl border text-xs flex items-center gap-2 ${
+                haTestResult.success
+                  ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                  : 'bg-rose-500/15 border-rose-500/30 text-rose-300'
+              }`}>
+                {haTestResult.success ? <Check className="w-4 h-4 text-emerald-400 shrink-0" /> : <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />}
+                <span>{haTestResult.message}</span>
+              </div>
+            )}
+
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                type="button"
+                onClick={handleTestHomeAssistant}
+                disabled={haTesting || !haUrl || !haToken}
+                className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-bold transition-all disabled:opacity-50 cursor-pointer flex items-center gap-2 border border-white/10"
+              >
+                {haTesting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                <span>Test Connection</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSaveHomeAssistant}
+                disabled={haSaving || !haUrl || !haToken}
+                className="flex-1 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold transition-all disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20"
+              >
+                {haSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Home className="w-3.5 h-3.5" />}
+                <span>Save & Connect</span>
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 4. Assistant Voice Responses */}

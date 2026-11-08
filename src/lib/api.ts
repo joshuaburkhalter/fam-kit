@@ -26,6 +26,8 @@ import type {
   RecipeCategory,
   GroceryStore,
   IngredientSubstitution,
+  HomeAssistantConfig,
+  HomeAssistantEntity,
 } from '../types';
 import { filterRecipeIngredientsForGrocery } from './groceryStaples';
 import { getCuratedSubstitutions } from './substitutions';
@@ -1674,6 +1676,42 @@ export const api = {
   unrestockInventoryItemFromGrocery: async (id: string): Promise<{ success: boolean }> => {
     return fetchJson<{ success: boolean }>(`/inventory/${encodeURIComponent(id)}/restock-to-grocery`, {
       method: 'DELETE',
+    });
+  },
+
+  // Home Assistant Smart Home API
+  getHomeAssistantConfig: async (): Promise<HomeAssistantConfig> => {
+    return fetchJson<HomeAssistantConfig>('/home-assistant/config');
+  },
+
+  testHomeAssistantConnection: async (haUrl: string, haToken: string): Promise<{ success: boolean; message: string; entityCount: number }> => {
+    return fetchJson<{ success: boolean; message: string; entityCount: number }>('/home-assistant/test', {
+      method: 'POST',
+      body: JSON.stringify({ haUrl, haToken }),
+    });
+  },
+
+  saveHomeAssistantConfig: async (haUrl: string, haToken: string, enabled: boolean = true): Promise<HomeAssistantConfig> => {
+    return fetchJson<HomeAssistantConfig>('/home-assistant/config', {
+      method: 'POST',
+      body: JSON.stringify({ haUrl, haToken, enabled }),
+    });
+  },
+
+  disconnectHomeAssistant: async (): Promise<{ success: boolean }> => {
+    return fetchJson<{ success: boolean }>('/home-assistant/config', {
+      method: 'DELETE',
+    });
+  },
+
+  getHomeAssistantStates: async (): Promise<{ states: HomeAssistantEntity[] }> => {
+    return fetchJson<{ states: HomeAssistantEntity[] }>('/home-assistant/states');
+  },
+
+  callHomeAssistantService: async (domain: string, service: string, serviceData: any): Promise<{ success: boolean; result?: any }> => {
+    return fetchJson<{ success: boolean; result?: any }>('/home-assistant/call-service', {
+      method: 'POST',
+      body: JSON.stringify({ domain, service, serviceData }),
     });
   },
 
