@@ -675,7 +675,7 @@ export const RecipesPage: React.FC = () => {
   const hasAiRecipes = recipes.some((r) => isAiRecipe(r));
 
   return (
-    <div className="max-w-3xl mx-auto px-3 sm:px-6 pt-3 pb-36 md:pb-28 space-y-4">
+    <div className="max-w-7xl mx-auto px-3 sm:px-6 pt-3 pb-36 md:pb-28 space-y-4">
       {/* If a recipe is selected, show detail view / Cook Mode */}
       {selectedRecipe ? (
         <div className="space-y-4 animate-in fade-in duration-150 relative">

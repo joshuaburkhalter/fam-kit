@@ -2607,7 +2607,7 @@ export const MealsPage: React.FC = () => {
     selectedRecipe.instructions.every((_, idx) => completedSteps[idx]);
 
   return (
-    <div className="max-w-4xl mx-auto px-3 sm:px-6 pt-3 pb-28 md:pb-20 space-y-4">
+    <div className="max-w-7xl mx-auto px-3 sm:px-6 pt-3 pb-28 md:pb-20 space-y-4">
       {/* Toast Notification */}
       <Toast
         message={toastMessage}
@@ -3507,7 +3507,7 @@ export const MealsPage: React.FC = () => {
                   </div>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                   {filteredRecipes.map((recipe) => {
                     const isAlreadyInPlanner = meals.some((m) => m.recipe_id === recipe.id);
                     return (
@@ -3684,7 +3684,7 @@ export const MealsPage: React.FC = () => {
                   </p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                   {meals.map((meal) => {
                     const linkedRecipe = meal.recipe_id ? recipeMap.get(meal.recipe_id) : undefined;
                     const isCrossing = Boolean(crossingOffMealIds[meal.id]);
@@ -4013,7 +4013,7 @@ export const MealsPage: React.FC = () => {
                   )}
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                   {filteredInventoryItems.map((item) => {
                       const locMeta = getLocationMeta(item.location);
                       const badge = getFreshnessBadge(item.freshness, item.daysUntilExpiry);

@@ -113,7 +113,7 @@ export const FamilyPage: React.FC = () => {
   };
 
   return (
-    <div className="max-w-3xl mx-auto px-3 sm:px-6 pt-3 pb-36 md:pb-28 space-y-4">
+    <div className="max-w-7xl mx-auto px-3 sm:px-6 pt-3 pb-36 md:pb-28 space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between pb-1">
         <div className="flex items-center gap-3">

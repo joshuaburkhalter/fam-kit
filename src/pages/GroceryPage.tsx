@@ -1431,7 +1431,7 @@ export const GroceryPage: React.FC = () => {
   const isDraggingAny = Boolean(draggingAisleId);
 
   return (
-    <div className="max-w-3xl mx-auto px-3 sm:px-6 pt-3 pb-28 md:pb-20 space-y-4">
+    <div className="max-w-7xl mx-auto px-3 sm:px-6 pt-3 pb-28 md:pb-20 space-y-4">
       {/* Consistent Mobile-First Header */}
       <div className="flex items-center justify-between mb-1">
         <div className="flex items-center gap-2.5">
