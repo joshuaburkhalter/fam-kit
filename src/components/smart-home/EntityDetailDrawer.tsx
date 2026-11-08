@@ -97,23 +97,27 @@ export const EntityDetailDrawer: React.FC<EntityDetailDrawerProps> = ({
   const [coverPosition, setCoverPosition] = useState<number>(() => {
     return attributes.current_position ?? (state === 'open' ? 100 : 0);
   });
-  const getEntitySpeed = (): 'off' | 'low' | 'medium' | 'high' => {
+  type FanSpeed = 'off' | '1' | '2' | '3' | '4';
+
+  const getEntitySpeed = (): FanSpeed => {
     if (state === 'off' || state === 'unavailable' || state === 'unknown') return 'off';
     const preset = (attributes?.preset_mode || attributes?.speed || '').toLowerCase();
-    if (preset.includes('low')) return 'low';
-    if (preset.includes('med')) return 'medium';
-    if (preset.includes('high')) return 'high';
+    if (preset === '1' || preset.includes('low') || preset === 'min') return '1';
+    if (preset === '2' || preset.includes('med_low') || preset.includes('med-low')) return '2';
+    if (preset === '3' || preset.includes('med_high') || preset.includes('med-high') || (preset.includes('med') && !preset.includes('low'))) return '3';
+    if (preset === '4' || preset.includes('high') || preset === 'max') return '4';
     const pct = attributes?.percentage;
     if (typeof pct === 'number') {
       if (pct <= 0) return 'off';
-      if (pct <= 35) return 'low';
-      if (pct <= 70) return 'medium';
-      return 'high';
+      if (pct <= 25) return '1';
+      if (pct <= 50) return '2';
+      if (pct <= 75) return '3';
+      return '4';
     }
-    return 'medium';
+    return '2';
   };
 
-  const [activeSpeed, setActiveSpeed] = useState<'off' | 'low' | 'medium' | 'high'>(getEntitySpeed);
+  const [activeSpeed, setActiveSpeed] = useState<FanSpeed>(getEntitySpeed);
   const [isCallingService, setIsCallingService] = useState(false);
 
   // Sync with incoming entity updates
@@ -411,22 +415,35 @@ export const EntityDetailDrawer: React.FC<EntityDetailDrawerProps> = ({
     );
   };
 
-  const handleSelectFanSpeed = async (speed: 'off' | 'low' | 'medium' | 'high') => {
+  const handleSelectFanSpeed = async (speed: FanSpeed) => {
     const previous = activeSpeed;
     setActiveSpeed(speed);
     try {
       if (speed === 'off') {
         await handleAction('fan', 'turn_off');
       } else {
+        const pctMap: Record<'1' | '2' | '3' | '4', number> = {
+          '1': 25,
+          '2': 50,
+          '3': 75,
+          '4': 100,
+        };
+        const pct = pctMap[speed];
+
         const presetModes: string[] = Array.isArray(attributes.preset_modes) ? attributes.preset_modes : [];
-        const matchingPreset = presetModes.find((m) =>
-          m.toLowerCase().includes(speed === 'medium' ? 'med' : speed)
-        );
+        const matchingPreset = presetModes.find((m) => {
+          const lower = m.toLowerCase();
+          return (
+            lower === speed ||
+            lower === `speed ${speed}` ||
+            (speed === '1' && lower.includes('low')) ||
+            (speed === '4' && lower.includes('high'))
+          );
+        });
 
         if (matchingPreset) {
           await handleAction('fan', 'set_preset_mode', { preset_mode: matchingPreset });
         } else {
-          const pct = speed === 'low' ? 33 : speed === 'medium' ? 66 : 100;
           await handleAction('fan', 'set_percentage', { percentage: pct });
         }
       }
@@ -438,11 +455,12 @@ export const EntityDetailDrawer: React.FC<EntityDetailDrawerProps> = ({
   const renderFanControls = () => {
     const isFanOn = activeSpeed !== 'off';
 
-    const speedOptions: { id: 'off' | 'low' | 'medium' | 'high'; label: string; sub: string }[] = [
+    const speedOptions: { id: FanSpeed; label: string; sub: string }[] = [
       { id: 'off', label: 'Off', sub: 'Stop' },
-      { id: 'low', label: 'Low', sub: 'Speed 1' },
-      { id: 'medium', label: 'Medium', sub: 'Speed 2' },
-      { id: 'high', label: 'High', sub: 'Speed 3' },
+      { id: '1', label: '1', sub: 'Low' },
+      { id: '2', label: '2', sub: 'Med' },
+      { id: '3', label: '3', sub: 'Med-Hi' },
+      { id: '4', label: '4', sub: 'High' },
     ];
 
     return (
@@ -462,24 +480,30 @@ export const EntityDetailDrawer: React.FC<EntityDetailDrawerProps> = ({
                 isFanOn
                   ? {
                       animationDuration:
-                        activeSpeed === 'low' ? '2.4s' : activeSpeed === 'medium' ? '1.4s' : '0.7s',
+                        activeSpeed === '1'
+                          ? '3.0s'
+                          : activeSpeed === '2'
+                          ? '2.0s'
+                          : activeSpeed === '3'
+                          ? '1.2s'
+                          : '0.7s',
                     }
                   : undefined
               }
             />
           </div>
           <div className="text-2xl font-black text-white capitalize">
-            {activeSpeed === 'off' ? 'Fan is Off' : `${activeSpeed.toUpperCase()} Speed`}
+            {activeSpeed === 'off' ? 'Fan is Off' : `Speed ${activeSpeed}`}
           </div>
           <p className="text-xs text-slate-400 mt-1">{displayName}</p>
         </div>
 
-        {/* 4-State Buttons */}
+        {/* 4 Speeds + Off Selector */}
         <div className="space-y-2">
           <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-            Speed Control
+            Speed Control (4 Speeds)
           </span>
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
             {speedOptions.map((opt) => {
               const isSelected = activeSpeed === opt.id;
               return (
@@ -487,7 +511,7 @@ export const EntityDetailDrawer: React.FC<EntityDetailDrawerProps> = ({
                   key={opt.id}
                   type="button"
                   onClick={() => handleSelectFanSpeed(opt.id)}
-                  className={`p-3.5 rounded-2xl border flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
+                  className={`p-2.5 sm:p-3.5 rounded-2xl border flex flex-col items-center justify-center gap-0.5 sm:gap-1 transition-all cursor-pointer ${
                     isSelected
                       ? opt.id === 'off'
                         ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 ring-2 ring-rose-500/20 font-bold'
@@ -495,9 +519,9 @@ export const EntityDetailDrawer: React.FC<EntityDetailDrawerProps> = ({
                       : 'bg-white/5 text-slate-300 hover:text-white border-white/10 hover:bg-white/10'
                   }`}
                 >
-                  <span className="text-xs font-bold">{opt.label}</span>
+                  <span className="text-xs sm:text-sm font-bold">{opt.label}</span>
                   <span
-                    className={`text-[10px] ${
+                    className={`text-[9px] sm:text-[10px] ${
                       isSelected
                         ? opt.id === 'off'
                           ? 'text-rose-300/80'

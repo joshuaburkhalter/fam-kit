@@ -654,20 +654,31 @@ export const SmartHomePage: React.FC = () => {
     } else if (entity.domain === 'fan') {
       const preset = (entity.attributes?.preset_mode || entity.attributes?.speed || '').toLowerCase();
       const pct = entity.attributes?.percentage;
-      let fanSpeed: 'Off' | 'Low' | 'Medium' | 'High' = 'Off';
+      let fanSpeedText = 'Off';
+      let speedLevel = 0;
 
       if (isOn) {
-        if (preset.includes('low') || (typeof pct === 'number' && pct > 0 && pct <= 35)) {
-          fanSpeed = 'Low';
-        } else if (preset.includes('high') || (typeof pct === 'number' && pct > 70)) {
-          fanSpeed = 'High';
+        if (preset === '1' || (typeof pct === 'number' && pct > 0 && pct <= 25)) {
+          fanSpeedText = 'Speed 1';
+          speedLevel = 1;
+        } else if (preset === '2' || (typeof pct === 'number' && pct > 25 && pct <= 50)) {
+          fanSpeedText = 'Speed 2';
+          speedLevel = 2;
+        } else if (preset === '3' || (typeof pct === 'number' && pct > 50 && pct <= 75)) {
+          fanSpeedText = 'Speed 3';
+          speedLevel = 3;
+        } else if (preset === '4' || (typeof pct === 'number' && pct > 75)) {
+          fanSpeedText = 'Speed 4';
+          speedLevel = 4;
         } else {
-          fanSpeed = 'Medium';
+          fanSpeedText = 'Speed 2';
+          speedLevel = 2;
         }
       }
 
-      const isFanOn = isOn && fanSpeed !== 'Off';
-      const animDuration = fanSpeed === 'Low' ? '2.4s' : fanSpeed === 'Medium' ? '1.4s' : '0.7s';
+      const isFanOn = isOn && speedLevel > 0;
+      const animDuration =
+        speedLevel === 1 ? '3.0s' : speedLevel === 2 ? '2.0s' : speedLevel === 3 ? '1.2s' : '0.7s';
 
       iconComponent = (
         <Fan
@@ -675,7 +686,7 @@ export const SmartHomePage: React.FC = () => {
           style={isFanOn ? { animationDuration: animDuration } : undefined}
         />
       );
-      stateDisplay = fanSpeed;
+      stateDisplay = fanSpeedText;
       tileBg = isFanOn
         ? 'bg-gradient-to-b from-cyan-500/15 to-slate-900/80 border-cyan-500/30'
         : 'bg-slate-900/60 border-white/10';
