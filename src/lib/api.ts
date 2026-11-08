@@ -1708,6 +1708,11 @@ export const api = {
     return fetchJson<{ states: HomeAssistantEntity[] }>('/home-assistant/states');
   },
 
+  getHomeAssistantEventsUrl: (householdId?: string): string => {
+    const query = householdId ? `?householdId=${encodeURIComponent(householdId)}` : '';
+    return `${BASE_URL}/home-assistant/events${query}`;
+  },
+
   callHomeAssistantService: async (domain: string, service: string, serviceData: any): Promise<{ success: boolean; result?: any }> => {
     return fetchJson<{ success: boolean; result?: any }>('/home-assistant/call-service', {
       method: 'POST',

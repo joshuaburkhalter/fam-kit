@@ -21,6 +21,7 @@ import {
   testHomeAssistantConnection,
   fetchHomeAssistantStates,
   callHomeAssistantService,
+  subscribeToHomeAssistantEvents,
 } from './home-assistant.js';
 import { buildSelectiveAssistantContext } from './assistant-context.js';
 import {
@@ -4069,6 +4070,47 @@ app.get('/api/home-assistant/states', async (req, res) => {
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Failed to fetch Home Assistant states' });
   }
+});
+
+app.get('/api/home-assistant/events', (req, res) => {
+  const householdId = (req.query.householdId as string) || getHouseholdId(req);
+
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
+    'Access-Control-Allow-Origin': '*',
+  });
+
+  if (typeof (res as any).flushHeaders === 'function') {
+    (res as any).flushHeaders();
+  }
+
+  // Initial connection confirmation
+  res.write(`event: status\ndata: ${JSON.stringify({ status: 'connected' })}\n\n`);
+
+  // Subscribe to live Home Assistant state updates
+  const unsubscribe = subscribeToHomeAssistantEvents(householdId, ({ event, data }) => {
+    try {
+      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    } catch {}
+  });
+
+  // Keep-alive heartbeat every 20 seconds to prevent network timeouts
+  const keepAliveInterval = setInterval(() => {
+    try {
+      res.write(': keepalive\n\n');
+    } catch {}
+  }, 20000);
+
+  req.on('close', () => {
+    clearInterval(keepAliveInterval);
+    unsubscribe();
+    try {
+      res.end();
+    } catch {}
+  });
 });
 
 app.post('/api/home-assistant/call-service', async (req, res) => {

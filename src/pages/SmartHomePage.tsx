@@ -36,6 +36,7 @@ export const SmartHomePage: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedEntityForDrawer, setSelectedEntityForDrawer] = useState<HomeAssistantEntity | null>(null);
   const [optimisticStates, setOptimisticStates] = useState<Record<string, string>>({});
+  const [isLiveConnected, setIsLiveConnected] = useState(false);
 
   const loadStates = useCallback(async (quiet = false) => {
     try {
@@ -55,13 +56,92 @@ export const SmartHomePage: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    // Initial fetch for fast first render
     loadStates(false);
-    // Background polling every 12 seconds for fresh smart home states
-    const interval = setInterval(() => {
+
+    // Live WebSocket / SSE push connection to Home Assistant
+    const eventsUrl = api.getHomeAssistantEventsUrl(household?.id);
+    let eventSource: EventSource | null = null;
+
+    try {
+      eventSource = new EventSource(eventsUrl);
+
+      eventSource.onopen = () => {
+        setIsLiveConnected(true);
+      };
+
+      eventSource.addEventListener('status', (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (data?.status === 'connected') {
+            setIsLiveConnected(true);
+            setErrorMessage(null);
+          } else if (data?.status === 'auth_failed') {
+            setIsLiveConnected(false);
+            setErrorMessage('Home Assistant authentication failed. Check your Long-Lived Access Token in Settings.');
+          } else if (data?.status === 'disconnected') {
+            setIsLiveConnected(false);
+          }
+        } catch {}
+      });
+
+      eventSource.addEventListener('state_changed', (e: MessageEvent) => {
+        try {
+          const payload = JSON.parse(e.data);
+          if (payload?.entity) {
+            const updated: HomeAssistantEntity = payload.entity;
+            setEntities((prev) => {
+              const index = prev.findIndex((item) => item.entity_id === updated.entity_id);
+              if (index >= 0) {
+                const next = [...prev];
+                next[index] = updated;
+                return next;
+              } else {
+                return [...prev, updated];
+              }
+            });
+
+            // Reconcile optimistic override now that real device state has landed
+            setOptimisticStates((prev) => {
+              if (!prev[updated.entity_id]) return prev;
+              const next = { ...prev };
+              delete next[updated.entity_id];
+              return next;
+            });
+
+            // Keep open drawer updated in real time
+            setSelectedEntityForDrawer((current) => {
+              if (current && current.entity_id === updated.entity_id) {
+                return updated;
+              }
+              return current;
+            });
+          }
+        } catch (err) {
+          console.error('Failed to parse live Home Assistant update:', err);
+        }
+      });
+
+      eventSource.onerror = () => {
+        setIsLiveConnected(false);
+      };
+    } catch (err) {
+      console.error('Failed to connect to live smart home stream:', err);
+      setIsLiveConnected(false);
+    }
+
+    // Fallback background polling every 45 seconds (for mobile sleep recovery)
+    const backupInterval = setInterval(() => {
       loadStates(true);
-    }, 12000);
-    return () => clearInterval(interval);
-  }, [loadStates]);
+    }, 45000);
+
+    return () => {
+      if (eventSource) {
+        eventSource.close();
+      }
+      clearInterval(backupInterval);
+    };
+  }, [household?.id, loadStates]);
 
   const handleCallService = async (domain: string, service: string, serviceData: any) => {
     const entityId = serviceData?.entity_id;
@@ -177,6 +257,34 @@ export const SmartHomePage: React.FC = () => {
 
         {/* Action Buttons */}
         <div className="flex items-center gap-2">
+          {/* Live WebSocket Status Badge */}
+          <div
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-2xl text-xs font-semibold transition-all border ${
+              isLiveConnected
+                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25 shadow-sm shadow-emerald-500/10'
+                : 'bg-white/5 text-slate-400 border-white/10'
+            }`}
+            title={
+              isLiveConnected
+                ? 'Live WebSocket Connected: devices update instantly in real time'
+                : 'Connecting to Home Assistant WebSocket...'
+            }
+          >
+            <span className="relative flex h-2 w-2">
+              {isLiveConnected && (
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              )}
+              <span
+                className={`relative inline-flex rounded-full h-2 w-2 ${
+                  isLiveConnected ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'
+                }`}
+              />
+            </span>
+            <span className="text-[11px] font-bold">
+              {isLiveConnected ? 'Live' : 'Connecting...'}
+            </span>
+          </div>
+
           {/* Refresh Button */}
           <button
             type="button"
