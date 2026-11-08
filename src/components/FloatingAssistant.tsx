@@ -386,16 +386,16 @@ export const FloatingAssistant: React.FC = () => {
         />
       )}
 
-      {/* Dock Container: Stays anchored above mobile bottom nav and below the top bar */}
+      {/* Dock Container: Stays anchored above mobile bottom nav on mobile, pinned all the way right on desktop */}
       <div
         ref={dockContainerRef}
-        className={`fixed inset-x-0 z-40 px-3 sm:px-6 pointer-events-none flex flex-col items-center justify-end ${
+        className={`fixed z-40 pointer-events-none flex flex-col justify-end ${
           isExpanded || isGhostClosing
-            ? 'top-[calc(4.75rem+env(safe-area-inset-top,0px))] md:top-[4.75rem] bottom-[calc(72px+0.85rem+env(safe-area-inset-bottom,0px))] md:bottom-8'
-            : 'bottom-[calc(72px+0.85rem+env(safe-area-inset-bottom,0px))] md:bottom-8'
+            ? 'inset-x-0 px-3 sm:px-6 top-[calc(4.75rem+env(safe-area-inset-top,0px))] bottom-[calc(72px+0.85rem+env(safe-area-inset-bottom,0px))] md:inset-auto md:top-[4.75rem] md:bottom-8 md:right-8 md:w-[420px] md:px-0 md:items-end items-center'
+            : 'inset-x-0 px-3 sm:px-6 bottom-[calc(72px+0.85rem+env(safe-area-inset-bottom,0px))] md:inset-auto md:bottom-8 md:right-8 md:w-auto md:px-0 md:items-end items-center'
         }`}
       >
-        <div className="max-w-2xl w-full h-full pointer-events-none flex flex-col justify-end items-end">
+        <div className="w-full max-w-2xl md:max-w-[420px] h-full pointer-events-none flex flex-col justify-end items-end">
           {/* Chat history floats transparently directly ABOVE the expanding FAB dock */}
           {(isExpanded || isGhostClosing) && (
             <div className="flex-1 w-full min-h-0 overflow-hidden flex flex-col justify-end pointer-events-none pb-2">
