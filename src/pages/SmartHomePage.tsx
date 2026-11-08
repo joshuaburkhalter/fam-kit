@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Thermometer,
   Lock,
@@ -8,6 +8,7 @@ import {
   ToggleRight,
   Power,
   ChevronRight,
+  ChevronDown,
   RefreshCw,
   Sliders,
   SlidersHorizontal,
@@ -45,6 +46,28 @@ export const SmartHomePage: React.FC = () => {
   const [triggeredButtons, setTriggeredButtons] = useState<Record<string, boolean>>({});
   const [visibleEntityIds, setVisibleEntityIds] = useState<string[]>([]);
   const [isManageModalOpen, setIsManageModalOpen] = useState(false);
+  const [isOptionsMenuOpen, setIsOptionsMenuOpen] = useState(false);
+  const optionsMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close options dropdown on outside click or Escape
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (optionsMenuRef.current && !optionsMenuRef.current.contains(event.target as Node)) {
+        setIsOptionsMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsOptionsMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
 
   const loadConfig = useCallback(async () => {
     try {
@@ -304,34 +327,23 @@ export const SmartHomePage: React.FC = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6 space-y-6 pb-24 md:pb-12 min-h-[calc(100vh-8rem)] flex flex-col w-full">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-2xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              <Home className="w-5 h-5" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-black tracking-tight text-white flex items-center gap-2">
-                Home
-              </h1>
-              <p className="text-xs text-slate-400">
-                {visibleEntityIds.length > 0 ? (
-                  <span>{visibleEntityIds.length} active controls on dashboard • Home Assistant</span>
-                ) : (
-                  <span>Connected Smart Home • No controls added yet</span>
-                )}
-              </p>
-            </div>
+    <div className="max-w-7xl mx-auto px-3 sm:px-6 pt-3 pb-28 md:pb-20 space-y-4 min-h-[calc(100vh-8rem)] flex flex-col w-full">
+      {/* Consistent Mobile-First Header */}
+      <div className="flex items-center justify-between mb-1">
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-md shadow-emerald-500/20 text-slate-950 shrink-0">
+            <Home className="w-5 h-5 stroke-[2.2]" />
           </div>
+          <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white flex items-center gap-2">
+            Home
+          </h1>
         </div>
 
-        {/* Action Buttons */}
+        {/* Options & Status Dropdown Actions */}
         <div className="flex items-center gap-2">
           {/* Live WebSocket Status Badge */}
           <div
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-2xl text-xs font-semibold transition-all border ${
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold transition-all border ${
               isLiveConnected
                 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25 shadow-sm shadow-emerald-500/10'
                 : 'bg-white/5 text-slate-400 border-white/10'
@@ -357,35 +369,65 @@ export const SmartHomePage: React.FC = () => {
             </span>
           </div>
 
-          {/* Manage Controls Button */}
-          <button
-            type="button"
-            onClick={() => setIsManageModalOpen(true)}
-            className="p-2 sm:px-3 sm:py-2 rounded-2xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 transition-all flex items-center gap-2 text-xs font-semibold cursor-pointer"
-            title="Add or remove controls from your dashboard"
-          >
-            <SlidersHorizontal className="w-4 h-4 text-emerald-400" />
-            <span className="hidden sm:inline">
-              {visibleEntityIds.length === 0 ? 'Add Controls' : 'Manage Controls'}
-            </span>
-            {visibleEntityIds.length > 0 && (
-              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 font-bold">
-                {visibleEntityIds.length}
-              </span>
-            )}
-          </button>
+          {/* Manage Dropdown Menu */}
+          <div className="relative" ref={optionsMenuRef}>
+            <button
+              type="button"
+              onClick={() => setIsOptionsMenuOpen((prev) => !prev)}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer shrink-0"
+              title="Options"
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>Manage</span>
+              <ChevronDown
+                className={`w-3.5 h-3.5 stroke-[2.5] transition-transform duration-200 ${
+                  isOptionsMenuOpen ? 'rotate-180' : ''
+                }`}
+              />
+            </button>
 
-          {/* Refresh Button */}
-          <button
-            type="button"
-            onClick={() => loadStates(false)}
-            disabled={isRefreshing}
-            className="p-2 sm:px-3 sm:py-2 rounded-2xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 transition-all flex items-center gap-2 text-xs font-semibold cursor-pointer"
-            title="Refresh device states"
-          >
-            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-emerald-400' : ''}`} />
-            <span className="hidden sm:inline">Refresh</span>
-          </button>
+            {isOptionsMenuOpen && (
+              <div className="absolute right-0 top-full mt-2 w-52 bg-slate-900/95 backdrop-blur-xl border border-white/15 rounded-2xl p-1.5 shadow-2xl shadow-slate-950/80 z-50 animate-in fade-in zoom-in-95 duration-150 space-y-1">
+                {/* Edit Controls */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsOptionsMenuOpen(false);
+                    setIsManageModalOpen(true);
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/10 transition-colors text-left cursor-pointer group"
+                >
+                  <div className="w-7 h-7 rounded-lg bg-emerald-500/15 text-emerald-400 group-hover:bg-emerald-500/25 flex items-center justify-center shrink-0 transition-colors">
+                    <SlidersHorizontal className="w-4 h-4 stroke-[2]" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="font-bold text-white">Edit Controls</div>
+                    <div className="text-[10px] text-slate-400">
+                      {visibleEntityIds.length > 0 ? `${visibleEntityIds.length} on dashboard` : 'Add or remove devices'}
+                    </div>
+                  </div>
+                </button>
+
+                {/* Refresh */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsOptionsMenuOpen(false);
+                    loadStates(false);
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/10 transition-colors text-left cursor-pointer group"
+                >
+                  <div className="w-7 h-7 rounded-lg bg-teal-500/15 text-teal-400 group-hover:bg-teal-500/25 flex items-center justify-center shrink-0 transition-colors">
+                    <RefreshCw className={`w-4 h-4 stroke-[2] ${isRefreshing ? 'animate-spin' : ''}`} />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="font-bold text-white">Refresh</div>
+                    <div className="text-[10px] text-slate-400">Sync latest states</div>
+                  </div>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -407,9 +449,9 @@ export const SmartHomePage: React.FC = () => {
         </div>
       )}
 
-      {/* Search & Category Filter Bar (only when controls are added) */}
+      {/* Search & Category Filter Bar (Desktop only, hidden on mobile) */}
       {visibleEntityIds.length > 0 && (
-        <div className="space-y-3">
+        <div className="hidden md:block space-y-3">
           <div className="relative">
             <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
