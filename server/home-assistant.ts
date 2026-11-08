@@ -69,7 +69,12 @@ export function formatHaStateToEntity(item: any): HomeAssistantEntity | null {
   const domain = item.entity_id.split('.')[0];
   if (!ALLOWED_DOMAINS.has(domain)) return null;
 
-  // Filter out internal system sensors & diagnostic noise
+  // Filter out dead/ghost restored entities from HA cache that are offline
+  if (item.attributes?.restored && (item.state === 'unavailable' || item.state === 'unknown')) {
+    return null;
+  }
+
+  // Filter out internal system sensors & network diagnostics noise
   const entityId = item.entity_id.toLowerCase();
   if (
     entityId.includes('uptime') ||
@@ -79,7 +84,11 @@ export function formatHaStateToEntity(item: any): HomeAssistantEntity | null {
     entityId.includes('ip_address') ||
     entityId.includes('certificate_expiry') ||
     entityId.includes('internet_speed') ||
-    entityId.includes('last_boot')
+    entityId.includes('last_boot') ||
+    entityId.includes('power_cycle') ||
+    entityId.includes('_restart') ||
+    entityId.includes('_reboot') ||
+    entityId.includes('_identify')
   ) {
     return null;
   }
