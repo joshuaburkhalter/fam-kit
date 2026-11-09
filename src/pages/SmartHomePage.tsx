@@ -45,14 +45,14 @@ export const isDataOnlyEntity = (e: HomeAssistantEntity): boolean => {
 
 const CONTROL_GROUPS = [
   { id: 'climate', title: 'Climate', icon: Gauge, iconColor: 'bg-amber-500/15 text-amber-400', match: (e: HomeAssistantEntity) => e.domain === 'climate' },
-  { id: 'lights', title: 'Lights', icon: Lightbulb, iconColor: 'bg-amber-500/15 text-amber-400', match: (e: HomeAssistantEntity) => e.domain === 'light' },
-  { id: 'locks', title: 'Locks', icon: Lock, iconColor: 'bg-purple-500/15 text-purple-400', match: (e: HomeAssistantEntity) => e.domain === 'lock' },
+  { id: 'lights', title: 'Lights', icon: Lightbulb, iconColor: 'bg-amber-400/15 text-amber-400', match: (e: HomeAssistantEntity) => e.domain === 'light' },
+  { id: 'locks', title: 'Locks', icon: Lock, iconColor: 'bg-emerald-500/15 text-emerald-400', match: (e: HomeAssistantEntity) => e.domain === 'lock' },
   { id: 'covers', title: 'Covers & Doors', icon: Warehouse, iconColor: 'bg-blue-500/15 text-blue-400', match: (e: HomeAssistantEntity) => e.domain === 'cover' },
   { id: 'switches', title: 'Switches', icon: Power, iconColor: 'bg-emerald-500/15 text-emerald-400', match: (e: HomeAssistantEntity) => e.domain === 'switch' },
   { id: 'fans', title: 'Fans', icon: Fan, iconColor: 'bg-cyan-500/15 text-cyan-400', match: (e: HomeAssistantEntity) => e.domain === 'fan' },
   { id: 'triggers', title: 'Triggers & Scenes', icon: Zap, iconColor: 'bg-amber-500/15 text-amber-400', match: (e: HomeAssistantEntity) => ['button', 'input_button', 'scene', 'script'].includes(e.domain) },
   { id: 'media', title: 'Media Players', icon: Sliders, iconColor: 'bg-indigo-500/15 text-indigo-400', match: (e: HomeAssistantEntity) => e.domain === 'media_player' },
-  { id: 'other', title: 'Other Controls', icon: Sliders, iconColor: 'bg-white/10 text-slate-400', match: (e: HomeAssistantEntity) => !['climate', 'light', 'lock', 'cover', 'switch', 'fan', 'button', 'input_button', 'scene', 'script', 'media_player'].includes(e.domain) },
+  { id: 'other', title: 'Other Controls', icon: Sliders, iconColor: 'bg-slate-800 text-slate-300', match: (e: HomeAssistantEntity) => !['climate', 'light', 'lock', 'cover', 'switch', 'fan', 'button', 'input_button', 'scene', 'script', 'media_player'].includes(e.domain) },
 ];
 
 
@@ -1067,13 +1067,17 @@ export const SmartHomePage: React.FC = () => {
       {!isLoading && activeDataEntities.length > 0 && (
         <div className="space-y-1.5 animate-in fade-in duration-200">
           <div className="flex items-center justify-between px-1">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-              <Activity className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Sensors & Status</span>
-            </span>
-            <span className="text-[10px] text-slate-500 font-semibold">
-              {activeDataEntities.length} active
-            </span>
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 bg-cyan-500/15 text-cyan-400">
+                <Activity className="w-3.5 h-3.5 stroke-[2.2]" />
+              </div>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-1.5">
+                <span>Sensors & Status</span>
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-white/10 text-slate-400 font-semibold">
+                  {activeDataEntities.length}
+                </span>
+              </h3>
+            </div>
           </div>
 
           <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1 px-0.5 snap-x">
@@ -1240,9 +1244,9 @@ export const SmartHomePage: React.FC = () => {
                     <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${group.iconColor}`}>
                       <GroupIcon className="w-3.5 h-3.5 stroke-[2.2]" />
                     </div>
-                    <h3 className="text-xs font-black uppercase tracking-wider text-white flex items-center gap-1.5">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-1.5">
                       <span>{group.title}</span>
-                      <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-white/10 text-slate-400 font-bold">
+                      <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-white/10 text-slate-400 font-semibold">
                         {group.entities.length}
                       </span>
                     </h3>

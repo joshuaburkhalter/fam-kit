@@ -463,7 +463,7 @@ export const MealsPage: React.FC = () => {
               label: 'Log Meal',
               icon: Plus,
               color: 'emerald',
-              onClick: handleOpenNewLog,
+              onClick: () => handleOpenNewLog(),
             },
           ],
         };

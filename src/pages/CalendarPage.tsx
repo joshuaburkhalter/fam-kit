@@ -235,7 +235,7 @@ export const CalendarPage: React.FC = () => {
             label: 'Sync Google Calendar',
             icon: RefreshCw,
             color: 'teal',
-            onClick: handleManualSync,
+            onClick: () => handleManualSync(),
           },
         ],
       }),
@@ -570,7 +570,7 @@ export const CalendarPage: React.FC = () => {
           )}
 
           {/* Continuous Synchronous Timeline Rail Spine */}
-          <div className="absolute left-[4.5rem] -translate-x-1/2 top-4 bottom-14 w-[2px] bg-slate-800 pointer-events-none" />
+          <div className="absolute left-[50px] -translate-x-1/2 top-4 bottom-14 w-[2px] bg-slate-800 pointer-events-none" />
 
           {timelineDays.map((day, idx) => {
             const dateStr = format(day, 'yyyy-MM-dd');
@@ -635,7 +635,7 @@ export const CalendarPage: React.FC = () => {
             const renderCurrentTimeMarker = () => (
               <div className="relative flex items-center py-1.5 my-0.5 pointer-events-none select-none z-10">
                 {/* Pulsing Green Dot on the Continuous Rail Spine */}
-                <div className="absolute -left-[24px] -translate-x-1/2 flex items-center justify-center pointer-events-none">
+                <div className="absolute -left-[14px] -translate-x-1/2 flex items-center justify-center pointer-events-none">
                   <span className="absolute w-4 h-4 rounded-full bg-emerald-400/40 animate-ping" />
                   <div className="w-3.5 h-3.5 rounded-full bg-emerald-400 ring-4 ring-emerald-400/20 ring-offset-2 ring-offset-slate-950 shadow-sm shadow-emerald-500/60" />
                 </div>
@@ -656,11 +656,11 @@ export const CalendarPage: React.FC = () => {
               <React.Fragment key={dateStr}>
                 {/* Subtle Month Header seamlessly integrated into timeline */}
                 {isFirstOfMonth && (
-                  <div className="relative flex items-center gap-3 pt-4 pb-2 sticky top-0 z-20 backdrop-blur-md bg-slate-950/90">
-                    <div className="w-12 shrink-0 flex items-center justify-center">
+                  <div className="relative flex items-center gap-1.5 pt-4 pb-2 sticky top-0 z-20 backdrop-blur-md bg-slate-950/90">
+                    <div className="w-9 shrink-0 flex items-center justify-center">
                       <CalendarIcon className="w-3.5 h-3.5 text-emerald-400/80" />
                     </div>
-                    <div className="w-6 shrink-0 flex items-center justify-center relative z-10">
+                    <div className="w-4 shrink-0 flex items-center justify-center relative z-10">
                       <div className="w-2.5 h-2.5 rounded-full bg-slate-700 ring-2 ring-slate-950" />
                     </div>
                     <div className="flex-1 min-w-0 flex items-center gap-2">
@@ -675,7 +675,7 @@ export const CalendarPage: React.FC = () => {
                 {/* Day Row */}
                 <div
                   ref={isCurrentDay ? todayRowRef : undefined}
-                  className={`relative flex items-start gap-3 pb-3.5 group ${
+                  className={`relative flex items-start gap-1.5 pb-3.5 group ${
                     isCurrentDay ? 'scroll-mt-20' : ''
                   }`}
                 >
@@ -683,7 +683,7 @@ export const CalendarPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => handleOpenAddModal(dateStr)}
-                    className="w-12 shrink-0 flex flex-col items-center pt-0.5 pb-1 select-none rounded-xl hover:bg-white/5 active:scale-95 transition-all cursor-pointer group/date"
+                    className="w-9 shrink-0 flex flex-col items-center pt-0.5 pb-1 select-none rounded-xl hover:bg-white/5 active:scale-95 transition-all cursor-pointer group/date"
                     title={`Add event on ${format(day, 'EEEE, MMMM d')}`}
                   >
                     <span
@@ -695,11 +695,11 @@ export const CalendarPage: React.FC = () => {
                     </span>
 
                     {isCurrentDay ? (
-                      <div className="w-7 h-7 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center font-bold text-sm shadow-sm mt-0.5 group-hover/date:scale-105 transition-transform">
+                      <div className="w-6 h-6 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center font-bold text-xs shadow-sm mt-0.5 group-hover/date:scale-105 transition-transform">
                         {format(day, 'd')}
                       </div>
                     ) : (
-                      <span className="text-base font-bold text-slate-200 mt-0.5 group-hover/date:text-emerald-300 transition-colors">
+                      <span className="text-sm font-bold text-slate-200 mt-0.5 group-hover/date:text-emerald-300 transition-colors">
                         {format(day, 'd')}
                       </span>
                     )}
@@ -725,7 +725,7 @@ export const CalendarPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => handleOpenAddModal(dateStr)}
-                    className="w-6 shrink-0 flex flex-col items-center pt-2 relative z-10 cursor-pointer group/node"
+                    className="w-4 shrink-0 flex flex-col items-center pt-2 relative z-10 cursor-pointer group/node"
                     title={`Add event on ${format(day, 'EEEE, MMMM d')}`}
                   >
                     {isCurrentDay && !hasActiveEvent && nowIndex === 0 ? (
@@ -760,11 +760,11 @@ export const CalendarPage: React.FC = () => {
                                 {/* Pulsing Green Dot on Rail Spine & Bridge Line directly next to Active Event */}
                                 {isPrimaryActive && (
                                   <>
-                                    <div className="absolute -left-[24px] top-1/2 -translate-y-1/2 -translate-x-1/2 flex items-center justify-center pointer-events-none z-20">
+                                    <div className="absolute -left-[14px] top-1/2 -translate-y-1/2 -translate-x-1/2 flex items-center justify-center pointer-events-none z-20">
                                       <span className="absolute w-4 h-4 rounded-full bg-emerald-400/40 animate-ping" />
                                       <div className="w-3.5 h-3.5 rounded-full bg-emerald-400 ring-4 ring-emerald-400/20 ring-offset-2 ring-offset-slate-950 shadow-sm shadow-emerald-500/60" />
                                     </div>
-                                    <div className="absolute -left-[24px] top-1/2 -translate-y-1/2 w-[24px] h-[2px] bg-emerald-500/60 pointer-events-none z-10" />
+                                    <div className="absolute -left-[14px] top-1/2 -translate-y-1/2 w-[14px] h-[2px] bg-emerald-500/60 pointer-events-none z-10" />
                                   </>
                                 )}
 

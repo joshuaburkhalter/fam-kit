@@ -21,6 +21,7 @@ import {
   Fan,
 } from 'lucide-react';
 import { HomeAssistantEntity, EntityCustomization } from '../../types';
+import { Drawer } from '../ui/Drawer';
 
 interface ManageControlsModalProps {
   isOpen: boolean;
@@ -287,30 +288,45 @@ export const ManageControlsModal: React.FC<ManageControlsModalProps> = ({
   const showData = viewSection === 'all' || viewSection === 'data' || viewSection === 'selected';
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200">
-      <div className="glass-panel w-full max-w-2xl max-h-[90vh] rounded-3xl border border-white/10 shadow-2xl flex flex-col overflow-hidden bg-slate-900/95">
-        {/* Modal Header */}
-        <div className="p-5 sm:p-6 border-b border-white/10 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center shrink-0">
-              <SlidersHorizontal className="w-5 h-5 stroke-[2.2]" />
-            </div>
-            <div>
-              <h2 className="text-lg font-black text-white">Edit Dashboard Controls</h2>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Choose which controls and data readouts appear on the family screen
-              </p>
-            </div>
+    <Drawer
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Edit Dashboard Controls"
+      subtitle="Choose which controls and data readouts appear on the family screen"
+      icon={<SlidersHorizontal className="w-5 h-5 text-slate-950" />}
+      maxWidth="max-w-full sm:max-w-xl md:max-w-2xl"
+      contentClassName="p-0 flex flex-col h-full overflow-hidden"
+      badge={
+        <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold">
+          {selectedIds.size} visible
+        </span>
+      }
+      footer={
+        <div className="w-full flex items-center justify-between gap-4">
+          <div className="text-xs text-slate-400">
+            <span className="font-bold text-white">{selectedIds.size}</span> item{selectedIds.size === 1 ? '' : 's'} selected ({selectedControlsCount} controls, {selectedDataCount} sensors)
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded-2xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 text-xs font-bold transition-all cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={isSaving}
+              onClick={handleSave}
+              className="px-5 py-2 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black transition-all shadow-lg shadow-emerald-500/20 cursor-pointer disabled:opacity-50"
+            >
+              {isSaving ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
         </div>
-
+      }
+    >
+      <div className="flex flex-col h-full overflow-hidden">
         {/* Search & Section Selector Bar */}
         <div className="p-4 sm:p-5 border-b border-white/10 space-y-3 bg-slate-900/60 shrink-0">
           <div className="relative">
@@ -493,31 +509,7 @@ export const ManageControlsModal: React.FC<ManageControlsModalProps> = ({
             </div>
           )}
         </div>
-
-        {/* Modal Footer */}
-        <div className="px-6 py-4 border-t border-white/10 bg-slate-900 flex items-center justify-between gap-4 shrink-0">
-          <div className="text-xs text-slate-400">
-            <span className="font-bold text-white">{selectedIds.size}</span> item{selectedIds.size === 1 ? '' : 's'} selected ({selectedControlsCount} controls, {selectedDataCount} sensors)
-          </div>
-          <div className="flex items-center gap-2.5">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-2xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 text-xs font-bold transition-all cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              disabled={isSaving}
-              onClick={handleSave}
-              className="px-5 py-2 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black transition-all shadow-lg shadow-emerald-500/20 cursor-pointer disabled:opacity-50"
-            >
-              {isSaving ? 'Saving...' : 'Save Changes'}
-            </button>
-          </div>
-        </div>
       </div>
-    </div>
+    </Drawer>
   );
 };
