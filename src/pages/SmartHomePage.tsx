@@ -84,6 +84,97 @@ const PersonAvatar: React.FC<{ entity: HomeAssistantEntity; householdId?: string
   );
 };
 
+const GhostSmartHomeSkeleton: React.FC = () => {
+  return (
+    <div className="space-y-6 animate-pulse select-none pointer-events-none">
+      {/* Ghost Statuses (Sensors & Status Row) */}
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between px-1">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-lg bg-cyan-500/15 flex items-center justify-center shrink-0">
+              <Activity className="w-3.5 h-3.5 text-cyan-400/50" />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-400/80">
+                Sensors & Status
+              </span>
+              <div className="w-6 h-4 rounded-full bg-white/10" />
+            </div>
+          </div>
+        </div>
+
+        {/* Horizontal Ghost Status Pills */}
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1 px-0.5">
+          {[
+            { w1: 'w-16', w2: 'w-10' },
+            { w1: 'w-20', w2: 'w-12' },
+            { w1: 'w-14', w2: 'w-8' },
+            { w1: 'w-18', w2: 'w-11' },
+          ].map((pill, idx) => (
+            <div
+              key={idx}
+              className="flex items-center gap-2 px-3 py-1.5 sm:py-2 rounded-2xl bg-slate-900/60 border border-white/5 shrink-0 shadow-sm"
+            >
+              <div className="w-6 h-6 rounded-lg bg-white/10 flex items-center justify-center shrink-0" />
+              <div className="min-w-0 pr-1 space-y-1.5">
+                <div className={`h-2.5 ${pill.w1} bg-white/20 rounded`} />
+                <div className={`h-2 ${pill.w2} bg-white/10 rounded`} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Ghost Carousels for Controls */}
+      <div className="space-y-6">
+        {[
+          { titleWidth: 'w-20', iconBg: 'bg-amber-500/15', count: 3 },
+          { titleWidth: 'w-24', iconBg: 'bg-emerald-500/15', count: 4 },
+        ].map((group, gIdx) => (
+          <div key={gIdx} className="space-y-2">
+            {/* Ghost Carousel Header */}
+            <div className="flex items-center justify-between px-1">
+              <div className="flex items-center gap-2">
+                <div className={`w-6 h-6 rounded-lg ${group.iconBg} flex items-center justify-center shrink-0`}>
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-white/30" />
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className={`h-3.5 ${group.titleWidth} bg-white/20 rounded-md`} />
+                  <div className="w-5 h-3.5 bg-white/10 rounded-full" />
+                </div>
+              </div>
+            </div>
+
+            {/* Horizontal Track of Ghost Control Cards */}
+            <div className="flex gap-2.5 sm:gap-3.5 overflow-x-auto no-scrollbar py-1 px-0.5">
+              {Array.from({ length: group.count }).map((_, cIdx) => (
+                <div
+                  key={cIdx}
+                  className="w-[155px] sm:w-[195px] shrink-0"
+                >
+                  <div className="p-3 sm:p-4 rounded-2xl sm:rounded-3xl border border-white/5 bg-slate-900/60 min-h-[5.5rem] sm:min-h-[7.5rem] flex flex-col justify-between shadow-sm">
+                    {/* Top Row: Ghost Icon + Ghost Action Button */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-white/10" />
+                      <div className="w-6 h-6 rounded-full bg-white/5" />
+                    </div>
+
+                    {/* Bottom Area: Device Name & Status */}
+                    <div className="space-y-1.5 mt-2">
+                      <div className="h-3 w-3/4 bg-white/20 rounded-md" />
+                      <div className="h-2.5 w-1/2 bg-white/10 rounded-md" />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 // Module-level cache for instant zero-latency page transitions
 interface SmartHomeCache {
   householdId: string;
@@ -1196,21 +1287,8 @@ export const SmartHomePage: React.FC = () => {
         </div>
       )}
 
-      {/* Loading Skeleton */}
-      {isLoading && (
-        <div className="space-y-6">
-          {[1, 2].map((g) => (
-            <div key={g} className="space-y-2">
-              <div className="h-4 w-28 bg-white/10 rounded-lg animate-pulse" />
-              <div className="flex gap-2.5 sm:gap-4 overflow-hidden">
-                {[1, 2, 3, 4].map((i) => (
-                  <div key={i} className="h-24 sm:h-32 w-[155px] sm:w-[195px] shrink-0 rounded-2xl sm:rounded-3xl bg-white/5 border border-white/5 animate-pulse" />
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      {/* Ghost Statuses & Controls Skeleton */}
+      {isLoading && <GhostSmartHomeSkeleton />}
 
       {/* Initial Zero-Controls State (Centered Vertically) */}
       {!isLoading && visibleEntityIds.length === 0 && (
