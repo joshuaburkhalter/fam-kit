@@ -589,7 +589,7 @@ class HouseholdSocketBridge {
     } else if (this.isConnecting) {
       listener({ event: 'status', data: { status: 'connecting' } });
     } else {
-      listener({ event: 'status', data: { status: 'disconnected' } });
+      listener({ event: 'status', data: { status: 'connecting' } });
       this.connect();
     }
   }

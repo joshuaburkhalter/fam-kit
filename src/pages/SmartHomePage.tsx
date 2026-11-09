@@ -166,7 +166,12 @@ export const SmartHomePage: React.FC = () => {
     } catch (err: any) {
       console.warn('Failed to load Home Assistant states:', err?.message || err);
       setIsLiveConnected(false);
-      setHasConnectionError(true);
+      setEntities((currentEntities) => {
+        if (!currentEntities || currentEntities.length === 0) {
+          setHasConnectionError(true);
+        }
+        return currentEntities;
+      });
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -245,6 +250,21 @@ export const SmartHomePage: React.FC = () => {
     // Live WebSocket / SSE push connection to Home Assistant
     const eventsUrl = api.getHomeAssistantEventsUrl(household?.id);
     let eventSource: EventSource | null = null;
+    let disconnectTimer: any = null;
+
+    const clearDisconnectTimer = () => {
+      if (disconnectTimer) {
+        clearTimeout(disconnectTimer);
+        disconnectTimer = null;
+      }
+    };
+
+    const scheduleDisconnectError = (delayMs = 4000) => {
+      clearDisconnectTimer();
+      disconnectTimer = setTimeout(() => {
+        setHasConnectionError(true);
+      }, delayMs);
+    };
 
     try {
       eventSource = new EventSource(eventsUrl);
@@ -253,11 +273,17 @@ export const SmartHomePage: React.FC = () => {
         try {
           const data = JSON.parse(e.data);
           if (data?.status === 'connected') {
+            clearDisconnectTimer();
             setIsLiveConnected(true);
             setHasConnectionError(false);
-          } else if (data?.status === 'auth_failed' || data?.status === 'disconnected') {
+          } else if (data?.status === 'auth_failed') {
+            clearDisconnectTimer();
             setIsLiveConnected(false);
             setHasConnectionError(true);
+          } else if (data?.status === 'disconnected') {
+            setIsLiveConnected(false);
+            // Debounce transient reconnections: only flag error if disconnected for > 4s
+            scheduleDisconnectError(4000);
           } else if (data?.status === 'connecting') {
             setIsLiveConnected(false);
           }
@@ -318,10 +344,12 @@ export const SmartHomePage: React.FC = () => {
 
       eventSource.onerror = () => {
         setIsLiveConnected(false);
+        scheduleDisconnectError(4000);
       };
     } catch (err) {
       console.error('Failed to connect to live smart home stream:', err);
       setIsLiveConnected(false);
+      scheduleDisconnectError(4000);
     }
 
     // Fallback background polling every 45 seconds (for mobile sleep recovery)
@@ -330,6 +358,7 @@ export const SmartHomePage: React.FC = () => {
     }, 45000);
 
     return () => {
+      clearDisconnectTimer();
       if (eventSource) {
         eventSource.close();
       }
@@ -954,9 +983,9 @@ export const SmartHomePage: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-3 sm:px-6 pt-3 pb-28 md:pb-20 space-y-4 min-h-[calc(100vh-8rem)] flex flex-col w-full">
-      {/* Mobile Disconnected Banner (Alert-only: only shown when HA connection fails) */}
+      {/* Mobile Disconnected Floating Banner (Overlay: never shifts page layout or controls) */}
       {hasConnectionError && !isLiveConnected && (
-        <div className="md:hidden flex items-center justify-between px-3 py-2 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-amber-400 text-xs font-semibold animate-in fade-in duration-200">
+        <div className="md:hidden fixed top-[4.25rem] left-3 right-3 z-30 flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-slate-900/95 backdrop-blur-md border border-amber-500/30 text-amber-400 text-xs font-semibold shadow-2xl shadow-slate-950/80 animate-in fade-in slide-in-from-top-2 duration-200">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
             <span>{isRefreshing ? 'Reconnecting to Home Assistant...' : 'Home Assistant is disconnected'}</span>
@@ -964,7 +993,7 @@ export const SmartHomePage: React.FC = () => {
           <button
             type="button"
             onClick={() => loadStates(false)}
-            className="text-[11px] font-bold underline hover:text-amber-300 cursor-pointer"
+            className="text-[11px] font-bold underline hover:text-amber-300 cursor-pointer shrink-0 ml-2"
           >
             Reconnect
           </button>
