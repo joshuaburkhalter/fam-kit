@@ -226,72 +226,97 @@ export const ActionFab: React.FC<{ activeTab: string }> = ({ activeTab }) => {
   return (
     <>
       {/* Backdrop when speed dial is open */}
-      {isOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-slate-950/60 backdrop-blur-xs transition-opacity duration-200 animate-in fade-in"
-          onClick={() => setIsOpen(false)}
-        />
-      )}
+      <div
+        className={`fixed inset-0 z-40 bg-slate-950/60 backdrop-blur-xs transition-opacity duration-300 ${
+          isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        }`}
+        onClick={() => setIsOpen(false)}
+        aria-hidden="true"
+      />
 
       {/* Floating Speed-Dial Container */}
-      <div className="fixed z-40 bottom-[calc(72px+0.85rem+env(safe-area-inset-bottom,0px))] md:bottom-8 right-4 md:right-8 flex flex-col items-end pointer-events-none select-none">
-        {/* Animated Sub-Actions (Smaller FABs) */}
-        {isOpen && (
-          <div className="flex flex-col items-end gap-2.5 mb-3 pointer-events-auto">
-            {config.actions.map((action, index) => {
-              const ActionIcon = action.icon;
-              return (
-                <div
-                  key={action.id}
-                  className="flex items-center justify-end gap-2.5 animate-in fade-in slide-in-from-bottom-4 duration-200 fill-mode-both"
+      <div className="fixed z-40 bottom-[calc(72px+1rem+env(safe-area-inset-bottom,0px))] md:bottom-8 right-4 md:right-8 flex flex-col items-end pointer-events-none select-none">
+        {/* Animated Sub-Actions (Smaller FABs that animate up out of the larger FAB and expand out) */}
+        <div className="flex flex-col items-end gap-2.5 mb-3 pointer-events-none">
+          {config.actions.map((action, index) => {
+            const ActionIcon = action.icon;
+            // Calculate distance to main FAB so items animate straight out from the main FAB's position
+            const slotsBelow = config.actions.length - index;
+            const translateYClosed = slotsBelow * 54;
+
+            return (
+              <div
+                key={action.id}
+                className={`flex items-center justify-end gap-3 transition-all duration-300 ${
+                  isOpen
+                    ? 'opacity-100 pointer-events-auto'
+                    : 'opacity-0 pointer-events-none'
+                }`}
+                style={{
+                  transform: isOpen
+                    ? 'translateY(0px) scale(1)'
+                    : `translateY(${translateYClosed}px) scale(0.25)`,
+                  transitionTimingFunction: isOpen
+                    ? 'cubic-bezier(0.34, 1.56, 0.64, 1)'
+                    : 'cubic-bezier(0.4, 0, 0.2, 1)',
+                  transitionDelay: isOpen
+                    ? `${(config.actions.length - 1 - index) * 40}ms`
+                    : `${index * 25}ms`,
+                }}
+              >
+                {/* Action Label Pill */}
+                <button
+                  type="button"
+                  onClick={() => handleActionClick(action)}
+                  tabIndex={isOpen ? 0 : -1}
+                  className={`px-3.5 py-1.5 rounded-xl bg-slate-900/95 backdrop-blur-xl border border-white/15 text-slate-100 hover:text-white font-bold text-xs shadow-2xl shadow-slate-950/80 hover:bg-slate-800 transition-all duration-200 flex items-center gap-1.5 cursor-pointer active:scale-95 ${
+                    isOpen ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-3'
+                  }`}
                   style={{
-                    animationDelay: `${(config.actions.length - 1 - index) * 35}ms`,
+                    transitionDelay: isOpen
+                      ? `${(config.actions.length - 1 - index) * 40 + 40}ms`
+                      : '0ms',
                   }}
                 >
-                  {/* Action Label Pill */}
-                  <button
-                    type="button"
-                    onClick={() => handleActionClick(action)}
-                    className="px-3.5 py-1.5 rounded-xl bg-slate-900/95 backdrop-blur-xl border border-white/15 text-slate-100 hover:text-white font-bold text-xs shadow-2xl shadow-slate-950/80 hover:bg-slate-800 transition-colors flex items-center gap-1.5 cursor-pointer active:scale-95"
-                  >
-                    <span>{action.label}</span>
-                  </button>
+                  <span>{action.label}</span>
+                </button>
 
-                  {/* Sub FAB Circle */}
-                  <button
-                    type="button"
-                    onClick={() => handleActionClick(action)}
-                    className={`w-11 h-11 rounded-full flex items-center justify-center font-bold shadow-xl transition-all duration-150 hover:scale-110 active:scale-95 cursor-pointer ${getActionColorClasses(
-                      action.color
-                    )}`}
-                    title={action.label}
-                  >
-                    <ActionIcon className="w-5 h-5 stroke-[2.2]" />
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        )}
+                {/* Sub FAB Circle */}
+                <button
+                  type="button"
+                  onClick={() => handleActionClick(action)}
+                  tabIndex={isOpen ? 0 : -1}
+                  className={`w-11 h-11 rounded-full flex items-center justify-center font-bold shadow-xl transition-all duration-150 hover:scale-110 active:scale-90 cursor-pointer ${getActionColorClasses(
+                    action.color
+                  )}`}
+                  title={action.label}
+                  aria-label={action.label}
+                >
+                  <ActionIcon className="w-5 h-5 stroke-[2.2]" />
+                </button>
+              </div>
+            );
+          })}
+        </div>
 
-        {/* Primary Round FAB (Icon only) */}
+        {/* Primary Round FAB with Plus that rotates into an X */}
         <button
           type="button"
           onClick={handleMainClick}
           aria-expanded={isOpen}
           aria-label={isOpen ? 'Close menu' : config.pillLabel || 'Actions'}
-          className={`pointer-events-auto w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 shadow-2xl active:scale-90 cursor-pointer select-none ${
+          className={`pointer-events-auto relative z-20 w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 shadow-2xl active:scale-90 cursor-pointer select-none ${
             isOpen
-              ? 'bg-slate-900 text-emerald-400 border border-white/20 shadow-slate-950/90 hover:bg-slate-800 hover:scale-105'
+              ? 'bg-slate-900 text-emerald-400 border border-emerald-500/40 shadow-slate-950/90 hover:bg-slate-800 hover:scale-105'
               : 'bg-gradient-to-tr from-emerald-500 via-teal-400 to-emerald-400 text-slate-950 shadow-emerald-500/35 border border-emerald-300/40 hover:scale-105 hover:shadow-emerald-500/50'
           }`}
           title={isOpen ? 'Close' : config.pillLabel || 'Actions'}
         >
-          {isOpen ? (
-            <X className="w-6 h-6 stroke-[2.5] transition-transform duration-200 rotate-90" />
-          ) : (
-            <MainIcon className="w-6 h-6 stroke-[2.5] transition-transform duration-200" />
-          )}
+          <Plus
+            className={`w-6 h-6 stroke-[2.5] transition-transform duration-300 ease-out transform ${
+              isOpen ? 'rotate-45 text-emerald-400' : 'rotate-0 text-slate-950'
+            }`}
+          />
         </button>
       </div>
     </>
