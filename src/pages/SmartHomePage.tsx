@@ -84,19 +84,45 @@ const PersonAvatar: React.FC<{ entity: HomeAssistantEntity; householdId?: string
   );
 };
 
+// Module-level cache for instant zero-latency page transitions
+interface SmartHomeCache {
+  householdId: string;
+  entities: HomeAssistantEntity[];
+  visibleEntityIds: string[];
+  entityCustomizations: Record<string, EntityCustomization>;
+}
+
+let smartHomeCache: SmartHomeCache | null = null;
+
+export const clearSmartHomeCache = () => {
+  smartHomeCache = null;
+};
+
 export const SmartHomePage: React.FC = () => {
   const { household } = usePWA();
-  const [entities, setEntities] = useState<HomeAssistantEntity[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [entities, setEntities] = useState<HomeAssistantEntity[]>(() => {
+    if (smartHomeCache && household && smartHomeCache.householdId === household.id) {
+      return smartHomeCache.entities;
+    }
+    return [];
+  });
+  const [isLoading, setIsLoading] = useState<boolean>(() => {
+    return !smartHomeCache || (household && smartHomeCache.householdId !== household.id);
+  });
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedEntityForDrawer, setSelectedEntityForDrawer] = useState<HomeAssistantEntity | null>(null);
   const [optimisticStates, setOptimisticStates] = useState<Record<string, string>>({});
-  const [isLiveConnected, setIsLiveConnected] = useState(false);
+  const [isLiveConnected, setIsLiveConnected] = useState(true);
+  const [hasConnectionError, setHasConnectionError] = useState(false);
   const [triggeredButtons, setTriggeredButtons] = useState<Record<string, boolean>>({});
-  const [visibleEntityIds, setVisibleEntityIds] = useState<string[]>([]);
-  const [entityCustomizations, setEntityCustomizations] = useState<Record<string, EntityCustomization>>({});
+  const [visibleEntityIds, setVisibleEntityIds] = useState<string[]>(() => {
+    return smartHomeCache?.visibleEntityIds || [];
+  });
+  const [entityCustomizations, setEntityCustomizations] = useState<Record<string, EntityCustomization>>(() => {
+    return smartHomeCache?.entityCustomizations || {};
+  });
   const [editingEntity, setEditingEntity] = useState<HomeAssistantEntity | null>(null);
 
   // Long press tracking refs
@@ -110,9 +136,11 @@ export const SmartHomePage: React.FC = () => {
       const cfg = await api.getHomeAssistantConfig();
       if (cfg?.visibleEntityIds && Array.isArray(cfg.visibleEntityIds)) {
         setVisibleEntityIds(cfg.visibleEntityIds);
+        if (smartHomeCache) smartHomeCache.visibleEntityIds = cfg.visibleEntityIds;
       }
       if (cfg?.entityCustomizations && typeof cfg.entityCustomizations === 'object') {
         setEntityCustomizations(cfg.entityCustomizations);
+        if (smartHomeCache) smartHomeCache.entityCustomizations = cfg.entityCustomizations;
       }
     } catch (err) {
       console.error('Failed to load HA config:', err);
@@ -121,18 +149,29 @@ export const SmartHomePage: React.FC = () => {
 
   const loadStates = useCallback(async (quiet = false) => {
     try {
-      if (!quiet) setIsRefreshing(true);
+      if (!quiet && !smartHomeCache) setIsRefreshing(true);
       const res = await api.getHomeAssistantStates();
-      setEntities(res.states || []);
+      const loadedStates = res.states || [];
+      setEntities(loadedStates);
       setIsLiveConnected(true);
+      setHasConnectionError(false);
+      if (household?.id) {
+        smartHomeCache = {
+          householdId: household.id,
+          entities: loadedStates,
+          visibleEntityIds: smartHomeCache?.visibleEntityIds || [],
+          entityCustomizations: smartHomeCache?.entityCustomizations || {},
+        };
+      }
     } catch (err: any) {
       console.warn('Failed to load Home Assistant states:', err?.message || err);
       setIsLiveConnected(false);
+      setHasConnectionError(true);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, []);
+  }, [household?.id]);
 
   // Register bottom speed-dial FAB actions for Control (home)
   useRegisterFab(
@@ -215,8 +254,10 @@ export const SmartHomePage: React.FC = () => {
           const data = JSON.parse(e.data);
           if (data?.status === 'connected') {
             setIsLiveConnected(true);
+            setHasConnectionError(false);
           } else if (data?.status === 'auth_failed' || data?.status === 'disconnected') {
             setIsLiveConnected(false);
+            setHasConnectionError(true);
           } else if (data?.status === 'connecting') {
             setIsLiveConnected(false);
           }
@@ -913,8 +954,8 @@ export const SmartHomePage: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-3 sm:px-6 pt-3 pb-28 md:pb-20 space-y-4 min-h-[calc(100vh-8rem)] flex flex-col w-full">
-      {/* Mobile Disconnected Banner (Alert-only: only shown when HA is offline) */}
-      {!isLiveConnected && (
+      {/* Mobile Disconnected Banner (Alert-only: only shown when HA connection fails) */}
+      {hasConnectionError && !isLiveConnected && (
         <div className="md:hidden flex items-center justify-between px-3 py-2 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-amber-400 text-xs font-semibold animate-in fade-in duration-200">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
@@ -944,7 +985,7 @@ export const SmartHomePage: React.FC = () => {
         {/* Options & Status Dropdown Actions */}
         <div className="flex items-center gap-2">
           {/* Status Badge - Only shown when disconnected or reconnecting */}
-          {!isLiveConnected && (
+          {hasConnectionError && !isLiveConnected && (
             <button
               type="button"
               onClick={() => loadStates(false)}
