@@ -104,6 +104,36 @@ export const SmartHomePage: React.FC = () => {
   const isLongPressActiveRef = useRef<boolean>(false);
   const touchStartPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isManageModalOpen, setIsManageModalOpen] = useState(false);
+
+  const loadConfig = useCallback(async () => {
+    try {
+      const cfg = await api.getHomeAssistantConfig();
+      if (cfg?.visibleEntityIds && Array.isArray(cfg.visibleEntityIds)) {
+        setVisibleEntityIds(cfg.visibleEntityIds);
+      }
+      if (cfg?.entityCustomizations && typeof cfg.entityCustomizations === 'object') {
+        setEntityCustomizations(cfg.entityCustomizations);
+      }
+    } catch (err) {
+      console.error('Failed to load HA config:', err);
+    }
+  }, []);
+
+  const loadStates = useCallback(async (quiet = false) => {
+    try {
+      if (!quiet) setIsRefreshing(true);
+      const res = await api.getHomeAssistantStates();
+      setEntities(res.states || []);
+      setIsLiveConnected(true);
+    } catch (err: any) {
+      console.warn('Failed to load Home Assistant states:', err?.message || err);
+      setIsLiveConnected(false);
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  }, []);
+
   // Register bottom speed-dial FAB actions for Control (home)
   useRegisterFab(
     'home',
@@ -166,35 +196,6 @@ export const SmartHomePage: React.FC = () => {
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, []);
-
-  const loadConfig = useCallback(async () => {
-    try {
-      const cfg = await api.getHomeAssistantConfig();
-      if (cfg?.visibleEntityIds && Array.isArray(cfg.visibleEntityIds)) {
-        setVisibleEntityIds(cfg.visibleEntityIds);
-      }
-      if (cfg?.entityCustomizations && typeof cfg.entityCustomizations === 'object') {
-        setEntityCustomizations(cfg.entityCustomizations);
-      }
-    } catch (err) {
-      console.error('Failed to load HA config:', err);
-    }
-  }, []);
-
-  const loadStates = useCallback(async (quiet = false) => {
-    try {
-      if (!quiet) setIsRefreshing(true);
-      const res = await api.getHomeAssistantStates();
-      setEntities(res.states || []);
-      setIsLiveConnected(true);
-    } catch (err: any) {
-      console.warn('Failed to load Home Assistant states:', err?.message || err);
-      setIsLiveConnected(false);
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-    }
   }, []);
 
   useEffect(() => {

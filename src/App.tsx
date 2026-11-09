@@ -410,7 +410,7 @@ export const AppContent: React.FC = () => {
       />
 
       <main className="flex-1 w-full overflow-x-hidden">
-        <ErrorBoundary fallbackTitle="Unable to load page content">
+        <ErrorBoundary key={activeTab} fallbackTitle="Unable to load page content">
         {activeTab === 'grocery' && <GroceryPage />}
         {(activeTab === 'meals' || activeTab === 'recipes') && <MealsPage />}
         {activeTab === 'calendar' && <CalendarPage />}
