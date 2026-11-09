@@ -261,7 +261,7 @@ export const ActionFab: React.FC<{ activeTab: string }> = ({ activeTab }) => {
                   <button
                     type="button"
                     onClick={() => handleActionClick(action)}
-                    className={`w-11 h-11 rounded-2xl flex items-center justify-center font-bold shadow-xl transition-all duration-150 hover:scale-110 active:scale-95 cursor-pointer ${getActionColorClasses(
+                    className={`w-11 h-11 rounded-full flex items-center justify-center font-bold shadow-xl transition-all duration-150 hover:scale-110 active:scale-95 cursor-pointer ${getActionColorClasses(
                       action.color
                     )}`}
                     title={action.label}
@@ -274,26 +274,23 @@ export const ActionFab: React.FC<{ activeTab: string }> = ({ activeTab }) => {
           </div>
         )}
 
-        {/* Primary FAB / Pill */}
+        {/* Primary Round FAB (Icon only) */}
         <button
           type="button"
           onClick={handleMainClick}
-          className={`pointer-events-auto flex items-center gap-2 transition-all duration-200 shadow-2xl active:scale-95 cursor-pointer ${
+          aria-expanded={isOpen}
+          aria-label={isOpen ? 'Close menu' : config.pillLabel || 'Actions'}
+          className={`pointer-events-auto w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 shadow-2xl active:scale-90 cursor-pointer select-none ${
             isOpen
-              ? 'w-12 h-12 rounded-full bg-slate-800 text-white border border-white/20 justify-center shadow-slate-950/80 hover:bg-slate-700'
-              : 'px-4 py-2.5 rounded-full bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 font-black text-xs shadow-emerald-500/30 border border-emerald-400/40 hover:scale-105'
+              ? 'bg-slate-900 text-emerald-400 border border-white/20 shadow-slate-950/90 hover:bg-slate-800 hover:scale-105'
+              : 'bg-gradient-to-tr from-emerald-500 via-teal-400 to-emerald-400 text-slate-950 shadow-emerald-500/35 border border-emerald-300/40 hover:scale-105 hover:shadow-emerald-500/50'
           }`}
           title={isOpen ? 'Close' : config.pillLabel || 'Actions'}
         >
           {isOpen ? (
-            <X className="w-5 h-5 stroke-[2.5] transition-transform duration-200 rotate-90" />
+            <X className="w-6 h-6 stroke-[2.5] transition-transform duration-200 rotate-90" />
           ) : (
-            <>
-              <MainIcon className="w-4 h-4 stroke-[2.5]" />
-              <span className="font-extrabold text-xs tracking-wide uppercase">
-                {config.pillLabel || 'Actions'}
-              </span>
-            </>
+            <MainIcon className="w-6 h-6 stroke-[2.5] transition-transform duration-200" />
           )}
         </button>
       </div>

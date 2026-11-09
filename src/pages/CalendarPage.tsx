@@ -73,6 +73,8 @@ export const CalendarPage: React.FC = () => {
   const [agendaDaysCount, setAgendaDaysCount] = useState<number>(14);
   const [showPastEvents, setShowPastEvents] = useState<boolean>(false);
   const [pastDaysCount, setPastDaysCount] = useState<number>(14);
+  const [mobileViewMode, setMobileViewMode] = useState<'all' | 'events-only'>('all');
+  const todayRowRef = useRef<HTMLDivElement | null>(null);
 
   // Live Current Time state for horizontal indicator lines
   const [currentTime, setCurrentTime] = useState(() => new Date());
@@ -83,6 +85,46 @@ export const CalendarPage: React.FC = () => {
     }, 30000);
     return () => clearInterval(timer);
   }, []);
+
+  const formatTimeRange = (ev: CalendarEvent) => {
+    if (ev.is_all_day) return 'All Day';
+    try {
+      const start = parseISO(ev.start_time);
+      const startStr = format(start, 'h:mm a');
+      if (!ev.end_time) return startStr;
+      const end = parseISO(ev.end_time);
+      const endStr = format(end, 'h:mm a');
+      return `${startStr} – ${endStr}`;
+    } catch {
+      return 'Scheduled';
+    }
+  };
+
+  const isEventPast = (ev: CalendarEvent) => {
+    try {
+      if (ev.is_all_day) {
+        const start = parseISO(ev.start_time);
+        const todayStart = new Date(currentTime.getFullYear(), currentTime.getMonth(), currentTime.getDate());
+        const eventStart = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+        return eventStart < todayStart;
+      }
+      const endTime = ev.end_time ? parseISO(ev.end_time) : parseISO(ev.start_time);
+      return endTime < currentTime;
+    } catch {
+      return false;
+    }
+  };
+
+  const isEventActive = (ev: CalendarEvent) => {
+    if (ev.is_all_day) return false;
+    try {
+      const start = parseISO(ev.start_time);
+      const end = ev.end_time ? parseISO(ev.end_time) : new Date(start.getTime() + 60 * 60 * 1000);
+      return start <= currentTime && currentTime <= end;
+    } catch {
+      return false;
+    }
+  };
 
   // Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -414,239 +456,687 @@ export const CalendarPage: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-3 sm:px-6 pt-3 pb-28 md:pb-20 space-y-4">
-      {/* Top Google Calendar Header */}
-      <CalendarHeader
-        title={headerTitle}
-        viewMode={calendarView}
-        onViewModeChange={setCalendarView}
-        onPrev={handlePrev}
-        onNext={handleNext}
-        onToday={handleToday}
-        selectedMemberId={selectedMemberId}
-        onSelectMember={setSelectedMemberId}
-        users={users}
-        isLoading={isLoading}
-        isSyncing={isSyncing}
-        onAddEvent={() => handleOpenAddModal()}
-        onSyncGoogle={handleManualSync}
-      />
+      {/* ========================================================
+          MOBILE VIEW: Chronological Timeline Feed (Original Mobile View)
+         ======================================================== */}
+      <div className="block md:hidden space-y-3">
+        {/* Mobile Sub-Bar: Compact Family Avatars + Past Quick Toggle + All/Events Toggle */}
+        <div className="flex items-center justify-between gap-2 py-1">
+          {/* Simple, Small Family User Toggle */}
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-2 px-1 -my-1.5">
+            {/* "All" button */}
+            <button
+              type="button"
+              onClick={() => setSelectedMemberId('all')}
+              className={`h-7 px-2.5 rounded-full text-[11px] font-bold transition-all shrink-0 flex items-center justify-center cursor-pointer ${
+                selectedMemberId === 'all'
+                  ? 'bg-emerald-500 text-slate-950 shadow-xs'
+                  : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-white/10'
+              }`}
+            >
+              All
+            </button>
 
-      {/* Primary Calendar Views */}
-      {calendarView === 'month' && (
-        <MonthView
-          currentDate={currentDate}
-          events={filteredEvents}
-          users={users}
-          onSelectEvent={handleOpenEditModal}
-          onAddEvent={(dateStr) => handleOpenAddModal(dateStr)}
-          onSelectDate={(date) => {
-            setCurrentDate(date);
-            setCalendarView('day');
-          }}
-        />
-      )}
+            {/* Member Avatar Dots */}
+            {users.map((u) => {
+              const isSelected = selectedMemberId === u.id;
+              const initial = (u.name || 'U').charAt(0).toUpperCase();
+              return (
+                <button
+                  key={u.id}
+                  type="button"
+                  onClick={() => setSelectedMemberId(isSelected ? 'all' : u.id)}
+                  title={u.name}
+                  className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold text-white transition-all shrink-0 cursor-pointer ${
+                    isSelected
+                      ? 'ring-2 ring-emerald-400 ring-offset-2 ring-offset-slate-950 scale-105 shadow-sm'
+                      : selectedMemberId !== 'all'
+                      ? 'opacity-40 hover:opacity-100'
+                      : 'opacity-90 hover:opacity-100 hover:scale-105'
+                  }`}
+                  style={{ backgroundColor: u.avatar_color || '#10b981' }}
+                >
+                  {initial}
+                </button>
+              );
+            })}
+          </div>
 
-      {calendarView === 'week' && (
-        <WeekView
-          currentDate={currentDate}
-          events={filteredEvents}
-          users={users}
-          currentTime={currentTime}
-          onSelectEvent={handleOpenEditModal}
-          onAddEvent={(dateStr, timeStr) => handleOpenAddModal(dateStr, timeStr)}
-        />
-      )}
-
-      {calendarView === 'day' && (
-        <DayView
-          currentDate={currentDate}
-          events={filteredEvents}
-          users={users}
-          currentTime={currentTime}
-          onSelectEvent={handleOpenEditModal}
-          onAddEvent={(dateStr, timeStr) => handleOpenAddModal(dateStr, timeStr)}
-        />
-      )}
-
-      {calendarView === 'schedule' && (
-        <div className="rounded-3xl border border-white/10 bg-slate-900/60 backdrop-blur-xl p-4 sm:p-6 shadow-xl space-y-4">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-              Agenda Feed ({filteredEvents.length} total events)
-            </span>
+          {/* Smaller & Simpler View Mode Toggle + Past Quick Toggle */}
+          <div className="flex items-center gap-1.5 shrink-0">
             <button
               type="button"
               onClick={() => setShowPastEvents((prev) => !prev)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer border ${
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all flex items-center gap-1.5 cursor-pointer border ${
                 showPastEvents
-                  ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold'
-                  : 'bg-slate-900 text-slate-300 hover:text-white border-white/10'
+                  ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-xs font-bold'
+                  : 'bg-slate-900 text-slate-400 hover:text-slate-200 border-white/10'
               }`}
+              title={showPastEvents ? 'Switch back to upcoming events' : 'View past events'}
             >
-              <Clock className="w-3.5 h-3.5" />
-              <span>{showPastEvents ? 'Showing Past Events' : 'Show Past Events'}</span>
-              {pastEventsCount > 0 && <span>({pastEventsCount})</span>}
+              <Clock className={`w-3 h-3 ${showPastEvents ? 'text-slate-950 stroke-[2.5]' : 'text-slate-400'}`} />
+              <span>Past</span>
+              {pastEventsCount > 0 && (
+                <span className={`text-[10px] font-mono ${showPastEvents ? 'text-slate-950 font-bold' : 'opacity-80'}`}>
+                  ({pastEventsCount})
+                </span>
+              )}
             </button>
-          </div>
 
-          <div className="relative pt-2">
-            <div className="absolute left-[4.5rem] -translate-x-1/2 top-4 bottom-14 w-[2px] bg-slate-800 pointer-events-none" />
-
-            {timelineDays.map((day, idx) => {
-              const dateStr = format(day, 'yyyy-MM-dd');
-              const isCurDay = isToday(day);
-              const dayEvents = filteredEvents
-                .filter((ev) => {
-                  try {
-                    return isSameDay(parseISO(ev.start_time), day);
-                  } catch {
-                    return false;
-                  }
-                })
-                .sort((a, b) => {
-                  const aAll = a.is_all_day ? 1 : 0;
-                  const bAll = b.is_all_day ? 1 : 0;
-                  if (aAll !== bAll) return bAll - aAll;
-                  try {
-                    return parseISO(a.start_time).getTime() - parseISO(b.start_time).getTime();
-                  } catch {
-                    return 0;
-                  }
-                });
-
-              const prevDay = idx > 0 ? timelineDays[idx - 1] : null;
-              const isFirstOfMonth = !prevDay || format(prevDay, 'M') !== format(day, 'M');
-
-              return (
-                <React.Fragment key={dateStr}>
-                  {isFirstOfMonth && (
-                    <div className="relative flex items-center gap-3 pt-4 pb-2 sticky top-0 z-20 backdrop-blur-md bg-slate-950/90">
-                      <div className="w-12 shrink-0 flex items-center justify-center">
-                        <CalendarIcon className="w-3.5 h-3.5 text-emerald-400/80" />
-                      </div>
-                      <div className="w-6 shrink-0 flex items-center justify-center relative z-10">
-                        <div className="w-2.5 h-2.5 rounded-full bg-slate-700 ring-2 ring-slate-950" />
-                      </div>
-                      <div className="flex-1 min-w-0 flex items-center gap-2">
-                        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-300 font-mono">
-                          {format(day, 'MMMM yyyy')}
-                        </span>
-                        <div className="flex-1 h-px bg-white/10" />
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="relative flex items-start gap-3 py-2.5 group">
-                    <div className="w-14 shrink-0 text-right pr-2">
-                      <div
-                        className={`text-xs font-bold uppercase tracking-wider ${
-                          isCurDay ? 'text-emerald-400' : 'text-slate-400'
-                        }`}
-                      >
-                        {format(day, 'EEE')}
-                      </div>
-                      <div
-                        className={`text-base font-black ${
-                          isCurDay ? 'text-emerald-400' : 'text-white'
-                        }`}
-                      >
-                        {format(day, 'd')}
-                      </div>
-                    </div>
-
-                    <div className="w-6 shrink-0 flex items-center justify-center pt-1.5 relative z-10">
-                      <div
-                        className={`w-3 h-3 rounded-full border-2 border-slate-950 ${
-                          isCurDay ? 'bg-emerald-400 ring-4 ring-emerald-400/20' : 'bg-slate-700'
-                        }`}
-                      />
-                    </div>
-
-                    <div className="flex-1 min-w-0 space-y-2">
-                      {dayEvents.length > 0 ? (
-                        dayEvents.map((ev) => {
-                          const assignedUser = users.find((u) => u.id === ev.assigned_user_id);
-                          return (
-                            <div
-                              key={ev.id}
-                              onClick={() => handleOpenEditModal(ev)}
-                              className="p-3.5 rounded-2xl bg-slate-950/60 hover:bg-slate-950 border border-white/10 hover:border-white/20 transition-all cursor-pointer shadow-sm group/item"
-                            >
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="font-bold text-sm text-white group-hover/item:text-emerald-300 transition-colors">
-                                  {ev.title}
-                                </span>
-                                {assignedUser && (
-                                  <span
-                                    className="px-2 py-0.5 rounded-full text-[10px] font-bold text-white shrink-0"
-                                    style={{
-                                      backgroundColor: assignedUser.avatar_color || '#10b981',
-                                    }}
-                                  >
-                                    {assignedUser.name}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-3 text-xs text-slate-400 mt-1">
-                                <span className="flex items-center gap-1 font-mono">
-                                  <Clock className="w-3.5 h-3.5" />
-                                  {ev.is_all_day
-                                    ? 'All Day'
-                                    : `${format(parseISO(ev.start_time), 'h:mm a')}`}
-                                </span>
-                                {ev.location && (
-                                  <span className="flex items-center gap-1 truncate">
-                                    <MapPin className="w-3.5 h-3.5" />
-                                    {ev.location}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })
-                      ) : (
-                        <div
-                          onClick={() => handleOpenAddModal(dateStr)}
-                          className="py-2 px-3 rounded-xl hover:bg-white/5 text-xs text-slate-500 hover:text-slate-300 transition-colors cursor-pointer flex items-center justify-between"
-                        >
-                          <span>{isCurDay ? 'No events today' : 'No events'}</span>
-                          <span className="text-emerald-400 font-bold flex items-center gap-1 text-[11px]">
-                            <Plus className="w-3 h-3" /> Add Event
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </React.Fragment>
-              );
-            })}
-
-            {(!showPastEvents || pastEventsCount > 0) && (
-              <div className="pt-4 pb-2 flex justify-center">
-                {showPastEvents ? (
-                  <button
-                    type="button"
-                    onClick={() => setPastDaysCount((prev) => prev + 14)}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-900 border border-amber-500/30 hover:border-amber-500/60 text-amber-300 text-xs font-semibold cursor-pointer"
-                  >
-                    <ArrowDown className="w-3.5 h-3.5" />
-                    <span>Show More Past Events</span>
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setAgendaDaysCount((prev) => prev + 14)}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-900 border border-white/10 hover:border-emerald-500/40 text-slate-300 hover:text-white text-xs font-semibold cursor-pointer"
-                  >
-                    <ArrowDown className="w-3.5 h-3.5" />
-                    <span>Load 14 More Days</span>
-                  </button>
-                )}
-              </div>
-            )}
+            <div className="flex items-center bg-slate-900 rounded-lg p-0.5 border border-white/10 shrink-0 text-[11px]">
+              <button
+                type="button"
+                onClick={() => setMobileViewMode('all')}
+                className={`px-2 py-0.5 rounded-md font-medium transition-all ${
+                  mobileViewMode === 'all'
+                    ? 'bg-slate-800 text-white font-semibold'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                All
+              </button>
+              <button
+                type="button"
+                onClick={() => setMobileViewMode('events-only')}
+                className={`px-2 py-0.5 rounded-md font-medium transition-all ${
+                  mobileViewMode === 'events-only'
+                    ? 'bg-slate-800 text-white font-semibold'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Events
+              </button>
+            </div>
           </div>
         </div>
-      )}
+
+        {/* Clean Synchronous Timeline List */}
+        <div className="relative pt-1">
+          {showPastEvents && pastEventsCount === 0 && (
+            <div className="text-center py-12 px-4 rounded-2xl bg-slate-900/40 border border-white/5 my-4">
+              <Clock className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+              <p className="text-sm font-semibold text-slate-300">No past events recorded</p>
+              <p className="text-xs text-slate-500 mt-1">
+                Events that have already taken place will appear here.
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowPastEvents(false)}
+                className="mt-4 px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-all cursor-pointer"
+              >
+                Back to Upcoming Events
+              </button>
+            </div>
+          )}
+
+          {/* Continuous Synchronous Timeline Rail Spine */}
+          <div className="absolute left-[4.5rem] -translate-x-1/2 top-4 bottom-14 w-[2px] bg-slate-800 pointer-events-none" />
+
+          {timelineDays.map((day, idx) => {
+            const dateStr = format(day, 'yyyy-MM-dd');
+            const isCurrentDay = isToday(day);
+            const isTomorrowDay = isTomorrow(day);
+            const isYesterdayDay = isYesterday(day);
+
+            // Events on this day (sorted with all-day first, then by start time)
+            const dayEvents = filteredEvents
+              .filter((ev) => {
+                try {
+                  return isSameDay(parseISO(ev.start_time), day);
+                } catch {
+                  return false;
+                }
+              })
+              .sort((a, b) => {
+                try {
+                  const aAllDay = a.is_all_day ? 1 : 0;
+                  const bAllDay = b.is_all_day ? 1 : 0;
+                  if (aAllDay !== bAllDay) return bAllDay - aAllDay;
+                  return parseISO(a.start_time).getTime() - parseISO(b.start_time).getTime();
+                } catch {
+                  return 0;
+                }
+              });
+
+            // In "events-only" mode, hide days without events unless it's today
+            if (mobileViewMode === 'events-only' && dayEvents.length === 0 && !isCurrentDay) {
+              return null;
+            }
+
+            // Check if this day starts a new month
+            const prevDay = idx > 0 ? timelineDays[idx - 1] : null;
+            const isFirstOfMonth = !prevDay || format(prevDay, 'M') !== format(day, 'M');
+
+            // Find if any event today is currently active
+            const activeEvent = dayEvents.find((ev) => !ev.is_all_day && isEventActive(ev));
+            const hasActiveEvent = Boolean(activeEvent);
+
+            // Chronological placement index for Now indicator among Today's events
+            let nowIndex = -1;
+            if (isCurrentDay && !hasActiveEvent) {
+              nowIndex = 0;
+              for (let i = 0; i < dayEvents.length; i++) {
+                const ev = dayEvents[i];
+                if (ev.is_all_day) {
+                  nowIndex = i + 1;
+                  continue;
+                }
+                try {
+                  const end = ev.end_time ? parseISO(ev.end_time) : parseISO(ev.start_time);
+                  if (end <= currentTime) {
+                    nowIndex = i + 1;
+                  } else {
+                    break;
+                  }
+                } catch {}
+              }
+            }
+
+            const renderCurrentTimeMarker = () => (
+              <div className="relative flex items-center py-1.5 my-0.5 pointer-events-none select-none z-10">
+                {/* Pulsing Green Dot on the Continuous Rail Spine */}
+                <div className="absolute -left-[24px] -translate-x-1/2 flex items-center justify-center pointer-events-none">
+                  <span className="absolute w-4 h-4 rounded-full bg-emerald-400/40 animate-ping" />
+                  <div className="w-3.5 h-3.5 rounded-full bg-emerald-400 ring-4 ring-emerald-400/20 ring-offset-2 ring-offset-slate-950 shadow-sm shadow-emerald-500/60" />
+                </div>
+
+                {/* Current Time Badge & Horizontal Indicator Line */}
+                <div className="flex items-center gap-2 flex-1 min-w-0 pointer-events-auto">
+                  <span className="text-[10px] font-mono font-bold text-emerald-400 bg-slate-950/95 border border-emerald-500/40 px-2.5 py-0.5 rounded-full shadow-lg shadow-emerald-950/50 flex items-center gap-1.5 shrink-0">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <span>{format(currentTime, 'h:mm a')}</span>
+                    <span className="text-emerald-400/70 font-semibold text-[9px] uppercase tracking-wider">Now</span>
+                  </span>
+                  <div className="h-px flex-1 bg-gradient-to-r from-emerald-500/40 via-emerald-500/15 to-transparent" />
+                </div>
+              </div>
+            );
+
+            return (
+              <React.Fragment key={dateStr}>
+                {/* Subtle Month Header seamlessly integrated into timeline */}
+                {isFirstOfMonth && (
+                  <div className="relative flex items-center gap-3 pt-4 pb-2 sticky top-0 z-20 backdrop-blur-md bg-slate-950/90">
+                    <div className="w-12 shrink-0 flex items-center justify-center">
+                      <CalendarIcon className="w-3.5 h-3.5 text-emerald-400/80" />
+                    </div>
+                    <div className="w-6 shrink-0 flex items-center justify-center relative z-10">
+                      <div className="w-2.5 h-2.5 rounded-full bg-slate-700 ring-2 ring-slate-950" />
+                    </div>
+                    <div className="flex-1 min-w-0 flex items-center gap-2">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-slate-300 font-mono">
+                        {format(day, 'MMMM yyyy')}
+                      </span>
+                      <div className="flex-1 h-px bg-white/10" />
+                    </div>
+                  </div>
+                )}
+
+                {/* Day Row */}
+                <div
+                  ref={isCurrentDay ? todayRowRef : undefined}
+                  className={`relative flex items-start gap-3 pb-3.5 group ${
+                    isCurrentDay ? 'scroll-mt-20' : ''
+                  }`}
+                >
+                  {/* 1. Date Column */}
+                  <button
+                    type="button"
+                    onClick={() => handleOpenAddModal(dateStr)}
+                    className="w-12 shrink-0 flex flex-col items-center pt-0.5 pb-1 select-none rounded-xl hover:bg-white/5 active:scale-95 transition-all cursor-pointer group/date"
+                    title={`Add event on ${format(day, 'EEEE, MMMM d')}`}
+                  >
+                    <span
+                      className={`text-[10px] font-bold uppercase tracking-wider transition-colors ${
+                        isCurrentDay ? 'text-emerald-400' : 'text-slate-400 group-hover/date:text-emerald-400'
+                      }`}
+                    >
+                      {format(day, 'EEE')}
+                    </span>
+
+                    {isCurrentDay ? (
+                      <div className="w-7 h-7 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center font-bold text-sm shadow-sm mt-0.5 group-hover/date:scale-105 transition-transform">
+                        {format(day, 'd')}
+                      </div>
+                    ) : (
+                      <span className="text-base font-bold text-slate-200 mt-0.5 group-hover/date:text-emerald-300 transition-colors">
+                        {format(day, 'd')}
+                      </span>
+                    )}
+
+                    {isCurrentDay && (
+                      <span className="text-[9px] font-bold text-emerald-400 uppercase tracking-tight mt-0.5">
+                        Today
+                      </span>
+                    )}
+                    {isTomorrowDay && (
+                      <span className="text-[9px] font-medium text-slate-400 group-hover/date:text-slate-300 uppercase tracking-tight mt-0.5 transition-colors">
+                        Tmrw
+                      </span>
+                    )}
+                    {isYesterdayDay && (
+                      <span className="text-[9px] font-medium text-amber-400 uppercase tracking-tight mt-0.5">
+                        Yest
+                      </span>
+                    )}
+                  </button>
+
+                  {/* 2. Timeline Rail Node */}
+                  <button
+                    type="button"
+                    onClick={() => handleOpenAddModal(dateStr)}
+                    className="w-6 shrink-0 flex flex-col items-center pt-2 relative z-10 cursor-pointer group/node"
+                    title={`Add event on ${format(day, 'EEEE, MMMM d')}`}
+                  >
+                    {isCurrentDay && !hasActiveEvent && nowIndex === 0 ? (
+                      <div className="w-2.5 h-2.5 rounded-full opacity-0" />
+                    ) : (
+                      <div
+                        className={`rounded-full transition-all ${
+                          isCurrentDay
+                            ? 'w-2.5 h-2.5 bg-slate-700 ring-2 ring-slate-950 group-hover/node:bg-emerald-400 group-hover/node:scale-125'
+                            : dayEvents.length > 0
+                            ? 'w-2.5 h-2.5 bg-slate-600 ring-2 ring-slate-950 group-hover/node:bg-emerald-400 group-hover/node:scale-125'
+                            : 'w-2 h-2 bg-slate-700 ring-2 ring-slate-950 group-hover/node:bg-emerald-400 group-hover/node:scale-125'
+                        }`}
+                      />
+                    )}
+                  </button>
+
+                  {/* 3. Content Column */}
+                  <div className="flex-1 min-w-0 pt-0.5">
+                    {dayEvents.length > 0 ? (
+                      <div className="space-y-1.5">
+                        {dayEvents.map((ev, evIdx) => {
+                          const assignedUser = users.find((u) => u.id === ev.assigned_user_id);
+                          const isPast = isEventPast(ev);
+                          const isActive = isCurrentDay && isEventActive(ev);
+                          const isPrimaryActive = isActive && ev.id === activeEvent?.id;
+
+                          return (
+                            <React.Fragment key={ev.id}>
+                              {isCurrentDay && !hasActiveEvent && evIdx === nowIndex && renderCurrentTimeMarker()}
+                              <div className="relative">
+                                {/* Pulsing Green Dot on Rail Spine & Bridge Line directly next to Active Event */}
+                                {isPrimaryActive && (
+                                  <>
+                                    <div className="absolute -left-[24px] top-1/2 -translate-y-1/2 -translate-x-1/2 flex items-center justify-center pointer-events-none z-20">
+                                      <span className="absolute w-4 h-4 rounded-full bg-emerald-400/40 animate-ping" />
+                                      <div className="w-3.5 h-3.5 rounded-full bg-emerald-400 ring-4 ring-emerald-400/20 ring-offset-2 ring-offset-slate-950 shadow-sm shadow-emerald-500/60" />
+                                    </div>
+                                    <div className="absolute -left-[24px] top-1/2 -translate-y-1/2 w-[24px] h-[2px] bg-emerald-500/60 pointer-events-none z-10" />
+                                  </>
+                                )}
+
+                                <div
+                                  onClick={() => handleOpenEditModal(ev)}
+                                  className={`relative overflow-hidden p-2.5 sm:p-3 rounded-xl transition-all cursor-pointer group active:scale-[0.99] shadow-xs ${
+                                    isActive
+                                      ? 'bg-slate-900/95 border-2 border-emerald-500/60 shadow-lg shadow-emerald-950/40 ring-1 ring-emerald-400/20'
+                                      : isPast
+                                      ? 'bg-slate-900/40 border border-white/5 opacity-60 hover:opacity-90 hover:bg-slate-900/70 hover:border-white/10'
+                                      : 'bg-slate-900/80 hover:bg-slate-900 border border-white/10 hover:border-white/20'
+                                  }`}
+                                >
+                                  {/* Assigned User Color Accent Left Border */}
+                                  <div
+                                    className="absolute left-0 top-0 bottom-0 w-1"
+                                    style={{
+                                      backgroundColor: assignedUser?.avatar_color || '#10b981',
+                                    }}
+                                  />
+
+                                  <div className="pl-1.5 flex items-start justify-between gap-2">
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <h3
+                                          className={`font-semibold text-xs sm:text-sm tracking-tight truncate ${
+                                            isActive
+                                              ? 'text-emerald-300 font-bold'
+                                              : isPast
+                                              ? 'text-slate-400 line-through decoration-slate-600'
+                                              : 'text-white group-hover:text-emerald-300'
+                                          }`}
+                                        >
+                                          {ev.title}
+                                        </h3>
+
+                                        {ev.is_google_event && (
+                                          <span
+                                            className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded-md bg-blue-500/15 text-blue-400 border border-blue-500/30 text-[9px] font-medium"
+                                            title="Synced from Google Calendar"
+                                          >
+                                            <Sparkles className="w-2.5 h-2.5" />
+                                            <span>Google</span>
+                                          </span>
+                                        )}
+                                      </div>
+
+                                      <div className="flex items-center gap-3 mt-1 text-[11px] text-slate-400 flex-wrap">
+                                        <div className="flex items-center gap-1">
+                                          <Clock className="w-3 h-3 text-slate-500 shrink-0" />
+                                          <span className="font-mono text-[10px]">
+                                            {formatTimeRange(ev)}
+                                          </span>
+                                        </div>
+
+                                        {ev.location && (
+                                          <div className="flex items-center gap-1 truncate max-w-[140px] sm:max-w-[200px]">
+                                            <MapPin className="w-3 h-3 text-slate-500 shrink-0" />
+                                            <span className="truncate">{ev.location}</span>
+                                          </div>
+                                        )}
+                                      </div>
+
+                                      {ev.description && (
+                                        <p className="text-[11px] text-slate-400 mt-1 line-clamp-1">
+                                          {ev.description}
+                                        </p>
+                                      )}
+                                    </div>
+
+                                    {/* Assigned User Dot / Badge */}
+                                    {assignedUser && (
+                                      <div
+                                        className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0 shadow-xs"
+                                        style={{ backgroundColor: assignedUser.avatar_color || '#10b981' }}
+                                        title={`Assigned to ${assignedUser.name}`}
+                                      >
+                                        {(assignedUser.name || 'U').charAt(0).toUpperCase()}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </React.Fragment>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      /* Empty Day Row Placeholder */
+                      <button
+                        type="button"
+                        onClick={() => handleOpenAddModal(dateStr)}
+                        className="w-full text-left py-2 px-2.5 rounded-xl border border-dashed border-white/5 hover:border-emerald-500/30 hover:bg-white/5 transition-all text-slate-500 hover:text-emerald-400 group/add cursor-pointer flex items-center justify-between"
+                      >
+                        <span className="text-[11px] font-medium">
+                          {isCurrentDay ? 'No events scheduled today' : 'No events'}
+                        </span>
+                        <span className="text-[10px] font-bold flex items-center gap-1 opacity-0 group-hover/add:opacity-100 transition-opacity">
+                          <Plus className="w-3 h-3" /> Add
+                        </span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </React.Fragment>
+            );
+          })}
+
+          {(!showPastEvents || pastEventsCount > 0) && (
+            <div className="pt-2 pb-2 flex justify-center">
+              {showPastEvents ? (
+                <button
+                  type="button"
+                  onClick={() => setPastDaysCount((prev) => prev + 14)}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-900 border border-amber-500/30 hover:border-amber-500/60 text-amber-300 text-xs font-semibold cursor-pointer"
+                >
+                  <ArrowDown className="w-3.5 h-3.5" />
+                  <span>Show More Past Events</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setAgendaDaysCount((prev) => prev + 14)}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-900 border border-white/10 hover:border-emerald-500/40 text-slate-300 hover:text-white text-xs font-semibold cursor-pointer"
+                >
+                  <ArrowDown className="w-3.5 h-3.5" />
+                  <span>Load 14 More Days</span>
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ========================================================
+          DESKTOP VIEW: Full Google Calendar (Month, Week, Day, Agenda)
+         ======================================================== */}
+      <div className="hidden md:block space-y-4">
+        {/* Top Google Calendar Header */}
+        <CalendarHeader
+          title={headerTitle}
+          viewMode={calendarView}
+          onViewModeChange={setCalendarView}
+          onPrev={handlePrev}
+          onNext={handleNext}
+          onToday={handleToday}
+          selectedMemberId={selectedMemberId}
+          onSelectMember={setSelectedMemberId}
+          users={users}
+          isLoading={isLoading}
+          isSyncing={isSyncing}
+          onAddEvent={() => handleOpenAddModal()}
+          onSyncGoogle={handleManualSync}
+        />
+
+        {/* Primary Calendar Views */}
+        {calendarView === 'month' && (
+          <MonthView
+            currentDate={currentDate}
+            events={filteredEvents}
+            users={users}
+            onSelectEvent={handleOpenEditModal}
+            onAddEvent={(dateStr) => handleOpenAddModal(dateStr)}
+            onSelectDate={(date) => {
+              setCurrentDate(date);
+              setCalendarView('day');
+            }}
+          />
+        )}
+
+        {calendarView === 'week' && (
+          <WeekView
+            currentDate={currentDate}
+            events={filteredEvents}
+            users={users}
+            currentTime={currentTime}
+            onSelectEvent={handleOpenEditModal}
+            onAddEvent={(dateStr, timeStr) => handleOpenAddModal(dateStr, timeStr)}
+          />
+        )}
+
+        {calendarView === 'day' && (
+          <DayView
+            currentDate={currentDate}
+            events={filteredEvents}
+            users={users}
+            currentTime={currentTime}
+            onSelectEvent={handleOpenEditModal}
+            onAddEvent={(dateStr, timeStr) => handleOpenAddModal(dateStr, timeStr)}
+          />
+        )}
+
+        {calendarView === 'schedule' && (
+          <div className="rounded-3xl border border-white/10 bg-slate-900/60 backdrop-blur-xl p-4 sm:p-6 shadow-xl space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                Agenda Feed ({filteredEvents.length} total events)
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowPastEvents((prev) => !prev)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer border ${
+                  showPastEvents
+                    ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold'
+                    : 'bg-slate-900 text-slate-300 hover:text-white border-white/10'
+                }`}
+              >
+                <Clock className="w-3.5 h-3.5" />
+                <span>{showPastEvents ? 'Showing Past Events' : 'Show Past Events'}</span>
+                {pastEventsCount > 0 && <span>({pastEventsCount})</span>}
+              </button>
+            </div>
+
+            <div className="relative pt-2">
+              <div className="absolute left-[4.5rem] -translate-x-1/2 top-4 bottom-14 w-[2px] bg-slate-800 pointer-events-none" />
+
+              {timelineDays.map((day, idx) => {
+                const dateStr = format(day, 'yyyy-MM-dd');
+                const isCurDay = isToday(day);
+                const dayEvents = filteredEvents
+                  .filter((ev) => {
+                    try {
+                      return isSameDay(parseISO(ev.start_time), day);
+                    } catch {
+                      return false;
+                    }
+                  })
+                  .sort((a, b) => {
+                    const aAll = a.is_all_day ? 1 : 0;
+                    const bAll = b.is_all_day ? 1 : 0;
+                    if (aAll !== bAll) return bAll - aAll;
+                    try {
+                      return parseISO(a.start_time).getTime() - parseISO(b.start_time).getTime();
+                    } catch {
+                      return 0;
+                    }
+                  });
+
+                const prevDay = idx > 0 ? timelineDays[idx - 1] : null;
+                const isFirstOfMonth = !prevDay || format(prevDay, 'M') !== format(day, 'M');
+
+                return (
+                  <React.Fragment key={dateStr}>
+                    {isFirstOfMonth && (
+                      <div className="relative flex items-center gap-3 pt-4 pb-2 sticky top-0 z-20 backdrop-blur-md bg-slate-950/90">
+                        <div className="w-12 shrink-0 flex items-center justify-center">
+                          <CalendarIcon className="w-3.5 h-3.5 text-emerald-400/80" />
+                        </div>
+                        <div className="w-6 shrink-0 flex items-center justify-center relative z-10">
+                          <div className="w-2.5 h-2.5 rounded-full bg-slate-700 ring-2 ring-slate-950" />
+                        </div>
+                        <div className="flex-1 min-w-0 flex items-center gap-2">
+                          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-300 font-mono">
+                            {format(day, 'MMMM yyyy')}
+                          </span>
+                          <div className="flex-1 h-px bg-white/10" />
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="relative flex items-start gap-3 py-2.5 group">
+                      <div className="w-14 shrink-0 text-right pr-2">
+                        <div
+                          className={`text-xs font-bold uppercase tracking-wider ${
+                            isCurDay ? 'text-emerald-400' : 'text-slate-400'
+                          }`}
+                        >
+                          {format(day, 'EEE')}
+                        </div>
+                        <div
+                          className={`text-base font-black ${
+                            isCurDay ? 'text-emerald-400' : 'text-white'
+                          }`}
+                        >
+                          {format(day, 'd')}
+                        </div>
+                      </div>
+
+                      <div className="w-6 shrink-0 flex items-center justify-center pt-1.5 relative z-10">
+                        <div
+                          className={`w-3 h-3 rounded-full border-2 border-slate-950 ${
+                            isCurDay ? 'bg-emerald-400 ring-4 ring-emerald-400/20' : 'bg-slate-700'
+                          }`}
+                        />
+                      </div>
+
+                      <div className="flex-1 min-w-0 space-y-2">
+                        {dayEvents.length > 0 ? (
+                          dayEvents.map((ev) => {
+                            const assignedUser = users.find((u) => u.id === ev.assigned_user_id);
+                            return (
+                              <div
+                                key={ev.id}
+                                onClick={() => handleOpenEditModal(ev)}
+                                className="p-3.5 rounded-2xl bg-slate-950/60 hover:bg-slate-950 border border-white/10 hover:border-white/20 transition-all cursor-pointer shadow-sm group/item"
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="font-bold text-sm text-white group-hover/item:text-emerald-300 transition-colors">
+                                    {ev.title}
+                                  </span>
+                                  {assignedUser && (
+                                    <span
+                                      className="px-2 py-0.5 rounded-full text-[10px] font-bold text-white shrink-0"
+                                      style={{
+                                        backgroundColor: assignedUser.avatar_color || '#10b981',
+                                      }}
+                                    >
+                                      {assignedUser.name}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-3 text-xs text-slate-400 mt-1">
+                                  <span className="flex items-center gap-1 font-mono">
+                                    <Clock className="w-3.5 h-3.5" />
+                                    {ev.is_all_day
+                                      ? 'All Day'
+                                      : `${format(parseISO(ev.start_time), 'h:mm a')}`}
+                                  </span>
+                                  {ev.location && (
+                                    <span className="flex items-center gap-1 truncate">
+                                      <MapPin className="w-3.5 h-3.5" />
+                                      {ev.location}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <div
+                            onClick={() => handleOpenAddModal(dateStr)}
+                            className="py-2 px-3 rounded-xl hover:bg-white/5 text-xs text-slate-500 hover:text-slate-300 transition-colors cursor-pointer flex items-center justify-between"
+                          >
+                            <span>{isCurDay ? 'No events today' : 'No events'}</span>
+                            <span className="text-emerald-400 font-bold flex items-center gap-1 text-[11px]">
+                              <Plus className="w-3 h-3" /> Add Event
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </React.Fragment>
+                );
+              })}
+
+              {(!showPastEvents || pastEventsCount > 0) && (
+                <div className="pt-4 pb-2 flex justify-center">
+                  {showPastEvents ? (
+                    <button
+                      type="button"
+                      onClick={() => setPastDaysCount((prev) => prev + 14)}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-900 border border-amber-500/30 hover:border-amber-500/60 text-amber-300 text-xs font-semibold cursor-pointer"
+                    >
+                      <ArrowDown className="w-3.5 h-3.5" />
+                      <span>Show More Past Events</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setAgendaDaysCount((prev) => prev + 14)}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-900 border border-white/10 hover:border-emerald-500/40 text-slate-300 hover:text-white text-xs font-semibold cursor-pointer"
+                    >
+                      <ArrowDown className="w-3.5 h-3.5" />
+                      <span>Load 14 More Days</span>
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Unified Add / Edit Event Drawer */}
       <Drawer
