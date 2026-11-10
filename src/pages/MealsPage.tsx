@@ -391,13 +391,6 @@ export const MealsPage: React.FC = () => {
               },
             },
             {
-              id: 'add-pantry-category',
-              label: 'Add Category',
-              icon: FolderPlus,
-              color: 'cyan',
-              onClick: () => setIsNewCategoryModalOpen(true),
-            },
-            {
               id: 'scan-barcode',
               label: 'Scan Barcode',
               icon: Barcode,
@@ -406,7 +399,7 @@ export const MealsPage: React.FC = () => {
             },
             {
               id: 'ai-vision-scan',
-              label: 'AI Photo Scan',
+              label: 'Photo Scan',
               icon: Camera,
               color: 'purple',
               onClick: () => setIsVisionModalOpen(true),
@@ -3303,34 +3296,6 @@ export const MealsPage: React.FC = () => {
                       type="button"
                       onClick={() => {
                         setIsPantryAddMenuOpen(false);
-                        setIsNewCategoryModalOpen(true);
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/10 transition-colors text-left cursor-pointer"
-                    >
-                      <div className="w-7 h-7 rounded-lg bg-cyan-500/15 text-cyan-400 flex items-center justify-center shrink-0">
-                        <FolderPlus className="w-4 h-4" />
-                      </div>
-                      <span className="font-bold text-white">Add Category</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsPantryAddMenuOpen(false);
-                        setIsManagePantryCategoriesModalOpen(true);
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/10 transition-colors text-left cursor-pointer"
-                    >
-                      <div className="w-7 h-7 rounded-lg bg-amber-500/15 text-amber-400 flex items-center justify-center shrink-0">
-                        <Tag className="w-4 h-4" />
-                      </div>
-                      <span className="font-bold text-white">Manage Categories</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsPantryAddMenuOpen(false);
                         setIsBarcodeModalOpen(true);
                       }}
                       className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/10 transition-colors text-left cursor-pointer"
@@ -3352,7 +3317,23 @@ export const MealsPage: React.FC = () => {
                       <div className="w-7 h-7 rounded-lg bg-purple-500/15 text-purple-400 flex items-center justify-center shrink-0">
                         <Camera className="w-4 h-4" />
                       </div>
-                      <span className="font-bold text-white">AI Photo Scan</span>
+                      <span className="font-bold text-white">Photo Scan</span>
+                    </button>
+
+                    <div className="border-t border-white/5 my-1" />
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsPantryAddMenuOpen(false);
+                        setIsManagePantryCategoriesModalOpen(true);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/10 transition-colors text-left cursor-pointer"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-amber-500/15 text-amber-400 flex items-center justify-center shrink-0">
+                        <Tag className="w-4 h-4" />
+                      </div>
+                      <span className="font-bold text-white">Manage Categories</span>
                     </button>
                   </div>
                 )}
