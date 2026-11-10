@@ -337,8 +337,8 @@ export const MealsPage: React.FC = () => {
           icon: Plus,
           actions: [
             {
-              id: 'import-web',
-              label: 'Import from Web',
+              id: 'import-recipe',
+              label: 'Import',
               icon: Link2,
               color: 'teal',
               onClick: () => {
@@ -347,18 +347,8 @@ export const MealsPage: React.FC = () => {
               },
             },
             {
-              id: 'scan-photo',
-              label: 'Scan from Photo',
-              icon: Camera,
-              color: 'purple',
-              onClick: () => {
-                setScraperInitialMode('scan');
-                setIsScraperOpen(true);
-              },
-            },
-            {
               id: 'create-manual',
-              label: 'Create Manually',
+              label: 'Add Manually',
               icon: Plus,
               color: 'emerald',
               onClick: () => {
@@ -374,13 +364,6 @@ export const MealsPage: React.FC = () => {
                 });
                 setIsEditRecipeModalOpen(true);
               },
-            },
-            {
-              id: 'add-recipe-category',
-              label: 'Add Category',
-              icon: FolderPlus,
-              color: 'cyan',
-              onClick: () => setIsNewRecipeCategoryModalOpen(true),
             },
             {
               id: 'manage-recipe-categories',
@@ -481,7 +464,7 @@ export const MealsPage: React.FC = () => {
   useEffect(() => {
     const handleAction = (e: any) => {
       const detail = e.detail;
-      if (detail === 'import-web') {
+      if (detail === 'import-web' || detail === 'import-recipe') {
         setScraperInitialMode('url');
         setIsScraperOpen(true);
       } else if (detail === 'scan-photo') {
@@ -3239,22 +3222,7 @@ export const MealsPage: React.FC = () => {
                       <div className="w-7 h-7 rounded-lg bg-teal-500/15 text-teal-400 flex items-center justify-center shrink-0">
                         <Link2 className="w-4 h-4" />
                       </div>
-                      <span className="font-bold text-white">Import from Web</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsRecipeAddMenuOpen(false);
-                        setScraperInitialMode('scan');
-                        setIsScraperOpen(true);
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/10 transition-colors text-left cursor-pointer"
-                    >
-                      <div className="w-7 h-7 rounded-lg bg-purple-500/15 text-purple-400 flex items-center justify-center shrink-0">
-                        <Camera className="w-4 h-4" />
-                      </div>
-                      <span className="font-bold text-white">Scan from Photo</span>
+                      <span className="font-bold text-white">Import</span>
                     </button>
 
                     <button
@@ -3278,24 +3246,10 @@ export const MealsPage: React.FC = () => {
                       <div className="w-7 h-7 rounded-lg bg-emerald-500/15 text-emerald-400 flex items-center justify-center shrink-0">
                         <Plus className="w-4 h-4" />
                       </div>
-                      <span className="font-bold text-white">Create Manually</span>
+                      <span className="font-bold text-white">Add Manually</span>
                     </button>
 
                     <div className="border-t border-white/5 my-1" />
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsRecipeAddMenuOpen(false);
-                        setIsNewRecipeCategoryModalOpen(true);
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/10 transition-colors text-left cursor-pointer"
-                    >
-                      <div className="w-7 h-7 rounded-lg bg-cyan-500/15 text-cyan-400 flex items-center justify-center shrink-0">
-                        <FolderPlus className="w-4 h-4" />
-                      </div>
-                      <span className="font-bold text-white">Add Category</span>
-                    </button>
 
                     <button
                       type="button"

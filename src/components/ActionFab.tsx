@@ -146,32 +146,18 @@ export const ActionFab: React.FC<{ activeTab: string }> = ({ activeTab }) => {
         icon: Plus,
         actions: [
           {
-            id: 'import-web',
-            label: 'Import from Web',
+            id: 'import-recipe',
+            label: 'Import',
             icon: Link2,
             color: 'teal',
             onClick: () => window.dispatchEvent(new CustomEvent('famkit:action', { detail: 'import-web' })),
           },
           {
-            id: 'scan-photo',
-            label: 'Scan from Photo',
-            icon: Camera,
-            color: 'purple',
-            onClick: () => window.dispatchEvent(new CustomEvent('famkit:action', { detail: 'scan-photo' })),
-          },
-          {
             id: 'create-manual',
-            label: 'Create Manually',
+            label: 'Add Manually',
             icon: Plus,
             color: 'emerald',
             onClick: () => window.dispatchEvent(new CustomEvent('famkit:action', { detail: 'create-recipe-manual' })),
-          },
-          {
-            id: 'add-recipe-category',
-            label: 'Add Category',
-            icon: FolderPlus,
-            color: 'cyan',
-            onClick: () => window.dispatchEvent(new CustomEvent('famkit:action', { detail: 'add-recipe-category' })),
           },
           {
             id: 'manage-recipe-categories',
