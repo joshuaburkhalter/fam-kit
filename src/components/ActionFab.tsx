@@ -77,11 +77,11 @@ export const ActionFab: React.FC<{ activeTab: string }> = ({ activeTab }) => {
             onClick: () => window.dispatchEvent(new CustomEvent('famkit:action', { detail: 'add-category' })),
           },
           {
-            id: 'add-store',
-            label: 'Add Store',
-            icon: Store,
-            color: 'emerald',
-            onClick: () => window.dispatchEvent(new CustomEvent('famkit:action', { detail: 'add-store' })),
+            id: 'add-list',
+            label: 'Add List',
+            icon: ListPlus,
+            color: 'cyan',
+            onClick: () => window.dispatchEvent(new CustomEvent('famkit:action', { detail: 'add-list' })),
           },
           {
             id: 'manage-stores',
@@ -89,13 +89,6 @@ export const ActionFab: React.FC<{ activeTab: string }> = ({ activeTab }) => {
             icon: Store,
             color: 'slate',
             onClick: () => window.dispatchEvent(new CustomEvent('famkit:action', { detail: 'manage-stores' })),
-          },
-          {
-            id: 'add-list',
-            label: 'Add List',
-            icon: ListPlus,
-            color: 'cyan',
-            onClick: () => window.dispatchEvent(new CustomEvent('famkit:action', { detail: 'add-list' })),
           },
         ],
       };

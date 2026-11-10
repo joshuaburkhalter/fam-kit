@@ -1509,34 +1509,6 @@ export const GroceryPage: React.FC = () => {
                 <span>Add Category</span>
               </button>
 
-              {isGroceryList && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsAddMenuOpen(false);
-                      setIsNewStoreModalOpen(true);
-                    }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:bg-white/10 hover:text-emerald-400 transition-colors cursor-pointer text-left"
-                  >
-                    <Store className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span>Add Store</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsAddMenuOpen(false);
-                      setIsManageStoresModalOpen(true);
-                    }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:bg-white/10 hover:text-emerald-400 transition-colors cursor-pointer text-left"
-                  >
-                    <Store className="w-4 h-4 text-slate-400 shrink-0" />
-                    <span>Manage Stores</span>
-                  </button>
-                </>
-              )}
-
               <button
                 type="button"
                 onClick={() => {
@@ -1548,6 +1520,20 @@ export const GroceryPage: React.FC = () => {
                 <ListPlus className="w-4 h-4 text-cyan-400 shrink-0" />
                 <span>Add List</span>
               </button>
+
+              {isGroceryList && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAddMenuOpen(false);
+                    setIsManageStoresModalOpen(true);
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:bg-white/10 hover:text-emerald-400 transition-colors cursor-pointer text-left"
+                >
+                  <Store className="w-4 h-4 text-slate-400 shrink-0" />
+                  <span>Manage Stores</span>
+                </button>
+              )}
             </div>
           )}
         </div>
