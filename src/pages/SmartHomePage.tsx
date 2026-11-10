@@ -198,7 +198,7 @@ export const SmartHomePage: React.FC = () => {
     return [];
   });
   const [isLoading, setIsLoading] = useState<boolean>(() => {
-    return !smartHomeCache || (household && smartHomeCache.householdId !== household.id);
+    return Boolean(!smartHomeCache || (household && smartHomeCache.householdId !== household.id));
   });
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
