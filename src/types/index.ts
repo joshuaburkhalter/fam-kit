@@ -207,6 +207,16 @@ export interface CalendarEvent {
   created_at: string;
 }
 
+export interface ScannedCalendarEvent {
+  title: string;
+  date: string;
+  startTime?: string | null;
+  endTime?: string | null;
+  isAllDay: boolean;
+  location?: string | null;
+  description?: string | null;
+}
+
 export interface GoogleSyncStatus {
   userId: string;
   connected: boolean;

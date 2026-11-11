@@ -43,6 +43,7 @@ import {
   pushUnsyncedLocalEventsToGoogle,
 } from './google-calendar.js';
 import { isBasicPantryStaple } from './groceryStaples.js';
+import { scanCalendarVision } from './calendar-vision.js';
 import {
   lookupBarcode,
   scanInventoryVision,
@@ -3715,6 +3716,104 @@ app.post('/api/calendar', async (req, res) => {
   }
 
   res.json(created);
+});
+
+// Calendar Vision Scan (Extract calendar events from photo of flyers, schedules, invites)
+app.post('/api/calendar/scan-vision', async (req, res) => {
+  try {
+    const { image, mimeType, todayDate, timezone, apiKey } = req.body;
+    if (!image) {
+      return res.status(400).json({ error: 'Image is required for scanning.' });
+    }
+
+    const events = await scanCalendarVision(image, mimeType || 'image/jpeg', {
+      todayDate,
+      timezone,
+      apiKey,
+    });
+
+    res.json({ events });
+  } catch (err: any) {
+    console.error('Calendar vision scan error:', err);
+    res.status(500).json({ error: err.message || 'Failed to scan calendar image.' });
+  }
+});
+
+// Batch create calendar events (e.g. from photo scan review)
+app.post('/api/calendar/batch', async (req, res) => {
+  try {
+    const householdId = getHouseholdId(req);
+    const { events } = req.body;
+    if (!events || !Array.isArray(events) || events.length === 0) {
+      return res.status(400).json({ error: 'At least one event is required.' });
+    }
+
+    const actor = getAuthUser(req);
+    const now = new Date().toISOString();
+    const createdEvents: any[] = [];
+
+    for (const ev of events) {
+      const title = (ev.title || '').trim();
+      const finalDate = cleanDateStr(ev.date);
+      if (!title || !finalDate) continue;
+
+      const finalStart = cleanTimeStr(ev.startTime);
+      const finalEnd = cleanTimeStr(ev.endTime);
+      const id = `ev_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+      const isAllDay = Boolean(ev.isAllDay) || !finalStart;
+
+      execute(
+        `INSERT INTO calendar_events (id, title, description, date, startTime, endTime, category, location, assignedMemberId, householdId, createdAt, updatedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          id,
+          title,
+          ev.description || null,
+          finalDate,
+          isAllDay ? null : (finalStart || null),
+          isAllDay ? null : (finalEnd || null),
+          ev.category || 'Family',
+          ev.location || null,
+          ev.assignedMemberId || null,
+          householdId,
+          now,
+          now,
+        ]
+      );
+
+      const created = queryOne('SELECT * FROM calendar_events WHERE id = ?', [id]);
+      if (created) {
+        createdEvents.push(created);
+        try {
+          await pushEventToGoogleCalendar({ ...created, timezone: ev.timezone, isAllDay }, actor?.id, ev.timezone);
+        } catch (pushErr) {
+          console.warn('Failed to push batch event to Google Calendar:', pushErr);
+        }
+      }
+    }
+
+    saveDb();
+
+    if (createdEvents.length > 0) {
+      sendPushNotificationToHousehold(
+        householdId,
+        {
+          title: `📅 ${createdEvents.length} Event${createdEvents.length > 1 ? 's' : ''} Added`,
+          body: `Added from photo scan: ${createdEvents.map((e: any) => e.title).slice(0, 3).join(', ')}${createdEvents.length > 3 ? '...' : ''}`,
+          url: '/calendar',
+        },
+        {
+          category: 'calendar_events',
+          actorUserId: actor?.id,
+        }
+      );
+    }
+
+    res.json({ success: true, count: createdEvents.length, events: createdEvents });
+  } catch (err: any) {
+    console.error('Calendar batch add error:', err);
+    res.status(500).json({ error: err.message || 'Failed to add calendar events batch.' });
+  }
 });
 
 app.patch('/api/calendar', async (req, res) => {

@@ -7,6 +7,7 @@ import {
   RefreshCw,
   ChevronDown,
   Loader2,
+  Camera,
 } from 'lucide-react';
 import type { User } from '../../types';
 
@@ -25,6 +26,7 @@ interface CalendarHeaderProps {
   isLoading: boolean;
   isSyncing: boolean;
   onAddEvent: () => void;
+  onScanPhoto?: () => void;
   onSyncGoogle: () => void;
 }
 
@@ -41,6 +43,7 @@ export const CalendarHeader: React.FC<CalendarHeaderProps> = ({
   isLoading,
   isSyncing,
   onAddEvent,
+  onScanPhoto,
   onSyncGoogle,
 }) => {
   const [isSyncMenuOpen, setIsSyncMenuOpen] = useState(false);
@@ -165,6 +168,26 @@ export const CalendarHeader: React.FC<CalendarHeaderProps> = ({
                     <div className="text-[10px] text-slate-400">Schedule on calendar</div>
                   </div>
                 </button>
+
+                {/* AI Photo Scan */}
+                {onScanPhoto && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsSyncMenuOpen(false);
+                      onScanPhoto();
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/10 transition-colors text-left cursor-pointer group"
+                  >
+                    <div className="w-7 h-7 rounded-lg bg-purple-500/15 text-purple-400 group-hover:bg-purple-500/25 flex items-center justify-center shrink-0 transition-colors">
+                      <Camera className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="font-bold text-white">Photo Scan</div>
+                      <div className="text-[10px] text-slate-400">Scan flyer or schedule</div>
+                    </div>
+                  </button>
+                )}
 
                 {/* Sync with Google Calendar */}
                 <button

@@ -10,6 +10,7 @@ import {
   ArrowDown,
   Sparkles,
   RefreshCw,
+  Camera,
 } from 'lucide-react';
 import {
   format,
@@ -43,6 +44,7 @@ import {
 import { MonthView } from '../components/calendar/MonthView';
 import { WeekView } from '../components/calendar/WeekView';
 import { DayView } from '../components/calendar/DayView';
+import { CalendarVisionScanModal } from '../components/calendar/CalendarVisionScanModal';
 
 // Module-level calendar cache for instant zero-latency page transitions
 let calendarCache: { householdId: string; events: CalendarEvent[] } | null = null;
@@ -63,6 +65,7 @@ export const CalendarPage: React.FC = () => {
     return !calendarCache || calendarCache.householdId !== household?.id;
   });
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [isVisionScanModalOpen, setIsVisionScanModalOpen] = useState<boolean>(false);
 
   // Calendar View & Navigation (Desktop Google Calendar style)
   const [calendarView, setCalendarView] = useState<CalendarViewMode>('month');
@@ -229,6 +232,13 @@ export const CalendarPage: React.FC = () => {
             icon: Plus,
             color: 'emerald',
             onClick: () => handleOpenAddModal(),
+          },
+          {
+            id: 'scan-calendar-photo',
+            label: 'Photo Scan',
+            icon: Camera,
+            color: 'purple',
+            onClick: () => setIsVisionScanModalOpen(true),
           },
           {
             id: 'sync-google-calendar',
@@ -917,6 +927,7 @@ export const CalendarPage: React.FC = () => {
           isLoading={isLoading}
           isSyncing={isSyncing}
           onAddEvent={() => handleOpenAddModal()}
+          onScanPhoto={() => setIsVisionScanModalOpen(true)}
           onSyncGoogle={handleManualSync}
         />
 
@@ -1300,6 +1311,20 @@ export const CalendarPage: React.FC = () => {
           </div>
         </form>
       </Drawer>
+
+      {/* AI Photo Scan for Calendar Items */}
+      {household && (
+        <CalendarVisionScanModal
+          isOpen={isVisionScanModalOpen}
+          onClose={() => setIsVisionScanModalOpen(false)}
+          onEventsAdded={async () => {
+            await loadEvents(false);
+            showToast('Added scanned events to your calendar!');
+          }}
+          users={users}
+          householdId={household.id}
+        />
+      )}
 
       <Toast
         message={toastMessage}

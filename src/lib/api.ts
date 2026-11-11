@@ -10,6 +10,7 @@ import type {
   WeeklyMeal,
   MealLog,
   CalendarEvent,
+  ScannedCalendarEvent,
   GoogleSyncStatus,
   GoogleCalendarEntry,
   NotificationPreferences,
@@ -1148,6 +1149,49 @@ export const api = {
       google_event_id: res.googleEventId || undefined,
       created_at: res.createdAt,
     };
+  },
+
+  scanCalendarVision: async (
+    image: string,
+    mimeType?: string,
+    timezone?: string
+  ): Promise<{ events: ScannedCalendarEvent[] }> => {
+    return fetchJson<{ events: ScannedCalendarEvent[] }>('/calendar/scan-vision', {
+      method: 'POST',
+      body: JSON.stringify({
+        image,
+        mimeType,
+        timezone: timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
+        todayDate: new Date().toISOString().split('T')[0],
+      }),
+    });
+  },
+
+  createCalendarEventsBatch: async (
+    householdId: string,
+    events: Array<{
+      title: string;
+      description?: string;
+      date: string;
+      startTime?: string | null;
+      endTime?: string | null;
+      isAllDay?: boolean;
+      location?: string;
+      assignedMemberId?: string;
+      timezone?: string;
+    }>
+  ): Promise<{ success: boolean; count: number; events: CalendarEvent[] }> => {
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Chicago';
+    return fetchJson<{ success: boolean; count: number; events: CalendarEvent[] }>('/calendar/batch', {
+      method: 'POST',
+      headers: householdId ? { 'x-household-id': householdId } : undefined,
+      body: JSON.stringify({
+        events: events.map((ev) => ({
+          ...ev,
+          timezone: ev.timezone || timezone,
+        })),
+      }),
+    });
   },
 
   updateCalendarEvent: async (
