@@ -17,6 +17,7 @@ import {
   Snowflake,
   Power,
   RotateCcw,
+  Thermometer,
   Sun,
   Warehouse,
   Blinds,
@@ -88,9 +89,33 @@ export const EntityDetailDrawer: React.FC<EntityDetailDrawerProps> = ({
   const isAvailable = state !== 'unavailable' && state !== 'unknown';
 
   // Local state for optimistic slider/control changes
+  const [optimisticHvacMode, setOptimisticHvacMode] = useState<string>(() => state);
   const [targetTemp, setTargetTemp] = useState<number>(() => {
-    return attributes.temperature || attributes.current_temperature || 70;
+    if (attributes.temperature !== undefined && attributes.temperature !== null) {
+      return Number(attributes.temperature);
+    }
+    if (attributes.current_temperature !== undefined && attributes.current_temperature !== null) {
+      return Number(attributes.current_temperature);
+    }
+    return 70;
   });
+
+  const [targetTempLow, setTargetTempLow] = useState<number>(() => {
+    if (attributes.target_temp_low !== undefined && attributes.target_temp_low !== null) {
+      return Number(attributes.target_temp_low);
+    }
+    const base = Number(attributes.temperature ?? attributes.current_temperature ?? 70);
+    return Math.max(attributes.min_temp ?? 50, base - 2);
+  });
+
+  const [targetTempHigh, setTargetTempHigh] = useState<number>(() => {
+    if (attributes.target_temp_high !== undefined && attributes.target_temp_high !== null) {
+      return Number(attributes.target_temp_high);
+    }
+    const base = Number(attributes.temperature ?? attributes.current_temperature ?? 70);
+    return Math.min(attributes.max_temp ?? 90, base + 2);
+  });
+
   const [brightness, setBrightness] = useState<number>(() => {
     return attributes.brightness ? Math.round((attributes.brightness / 255) * 100) : 100;
   });
@@ -122,10 +147,26 @@ export const EntityDetailDrawer: React.FC<EntityDetailDrawerProps> = ({
 
   // Sync with incoming entity updates
   useEffect(() => {
-    if (attributes.temperature !== undefined) {
-      setTargetTemp(attributes.temperature);
-    } else if (attributes.current_temperature !== undefined) {
-      setTargetTemp(attributes.current_temperature);
+    setOptimisticHvacMode(state);
+
+    if (attributes.temperature !== undefined && attributes.temperature !== null) {
+      setTargetTemp(Number(attributes.temperature));
+    } else if (attributes.current_temperature !== undefined && attributes.current_temperature !== null) {
+      setTargetTemp(Number(attributes.current_temperature));
+    }
+
+    if (attributes.target_temp_low !== undefined && attributes.target_temp_low !== null) {
+      setTargetTempLow(Number(attributes.target_temp_low));
+    } else {
+      const base = Number(attributes.temperature ?? attributes.current_temperature ?? 70);
+      setTargetTempLow((prev) => prev || Math.max(attributes.min_temp ?? 50, base - 2));
+    }
+
+    if (attributes.target_temp_high !== undefined && attributes.target_temp_high !== null) {
+      setTargetTempHigh(Number(attributes.target_temp_high));
+    } else {
+      const base = Number(attributes.temperature ?? attributes.current_temperature ?? 70);
+      setTargetTempHigh((prev) => prev || Math.min(attributes.max_temp ?? 90, base + 2));
     }
 
     if (attributes.brightness !== undefined) {
@@ -154,12 +195,73 @@ export const EntityDetailDrawer: React.FC<EntityDetailDrawerProps> = ({
 
   const renderClimateControls = () => {
     const currentTemp = attributes.current_temperature;
-    const hvacModes = attributes.hvac_modes || ['heat', 'cool', 'auto', 'off'];
-    const fanModes = attributes.fan_modes || [];
+    const hvacModes: string[] = attributes.hvac_modes || ['heat', 'cool', 'heat_cool', 'off'];
+    const fanModes: string[] = attributes.fan_modes || [];
     const minTemp = attributes.min_temp ?? 50;
     const maxTemp = attributes.max_temp ?? 90;
     const step = attributes.target_temp_step ?? 1;
     const hvacAction = attributes.hvac_action;
+    const currentMode = optimisticHvacMode || state;
+
+    const isDualSetpoint =
+      currentMode === 'heat_cool' ||
+      (currentMode === 'auto' &&
+        (attributes.target_temp_low !== undefined ||
+          attributes.target_temp_high !== undefined ||
+          (typeof attributes.supported_features === 'number' && (attributes.supported_features & 2) !== 0)));
+
+    const formatTemp = (val: number | undefined | null) => {
+      if (val == null || isNaN(val)) return '--';
+      return step < 1 ? Number(val.toFixed(1)) : Math.round(val);
+    };
+
+    const handleSetSingleTemp = async (nextVal: number) => {
+      const clamped = Math.min(maxTemp, Math.max(minTemp, Math.round(nextVal * 10) / 10));
+      setTargetTemp(clamped);
+
+      const payload: Record<string, any> = { temperature: clamped };
+      if (currentMode && currentMode !== 'off') {
+        payload.hvac_mode = currentMode;
+      }
+      await handleAction('climate', 'set_temperature', payload);
+    };
+
+    const handleSetDualTemp = async (newLow: number, newHigh: number) => {
+      const minGap = Math.max(step, 2);
+      let clampedLow = Math.min(maxTemp - minGap, Math.max(minTemp, Math.round(newLow * 10) / 10));
+      let clampedHigh = Math.min(maxTemp, Math.max(clampedLow + minGap, Math.round(newHigh * 10) / 10));
+
+      setTargetTempLow(clampedLow);
+      setTargetTempHigh(clampedHigh);
+
+      const payload: Record<string, any> = {
+        target_temp_low: clampedLow,
+        target_temp_high: clampedHigh,
+      };
+      if (currentMode && currentMode !== 'off') {
+        payload.hvac_mode = currentMode;
+      }
+      await handleAction('climate', 'set_temperature', payload);
+    };
+
+    const handleSetHvacMode = async (newMode: string) => {
+      setOptimisticHvacMode(newMode);
+
+      if (newMode === 'heat') {
+        if (targetTempLow) setTargetTemp(targetTempLow);
+      } else if (newMode === 'cool') {
+        if (targetTempHigh) setTargetTemp(targetTempHigh);
+      } else if (newMode === 'heat_cool' || newMode === 'auto') {
+        if (!attributes.target_temp_low && targetTemp) {
+          setTargetTempLow(Math.max(minTemp, targetTemp - 2));
+        }
+        if (!attributes.target_temp_high && targetTemp) {
+          setTargetTempHigh(Math.min(maxTemp, targetTemp + 2));
+        }
+      }
+
+      await handleAction('climate', 'set_hvac_mode', { hvac_mode: newMode });
+    };
 
     return (
       <div className="space-y-6">
@@ -169,23 +271,38 @@ export const EntityDetailDrawer: React.FC<EntityDetailDrawerProps> = ({
             Current Temperature
           </div>
           <div className="text-5xl font-black tracking-tight text-white mb-2">
-            {currentTemp !== undefined ? `${Math.round(currentTemp)}°` : `${Math.round(targetTemp)}°`}
+            {currentTemp !== undefined ? `${formatTemp(currentTemp)}°` : isDualSetpoint ? `${formatTemp(targetTempLow)}°–${formatTemp(targetTempHigh)}°` : `${formatTemp(targetTemp)}°`}
             <span className="text-lg font-medium text-slate-400 ml-1">
               {attributes.unit_of_measurement || '°F'}
             </span>
           </div>
 
-          {hvacAction && (
-            <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold capitalize ${
-              hvacAction === 'heating'
-                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                : hvacAction === 'cooling'
-                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
-                : 'bg-white/10 text-slate-300'
-            }`}>
-              {hvacAction === 'heating' && <Flame className="w-3.5 h-3.5" />}
-              {hvacAction === 'cooling' && <Snowflake className="w-3.5 h-3.5" />}
-              {hvacAction}
+          {/* Status / Running Action Badge */}
+          {currentMode === 'off' ? (
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-800 text-slate-400 border border-white/10">
+              <Power className="w-3.5 h-3.5" />
+              <span>System Off</span>
+            </div>
+          ) : hvacAction === 'heating' ? (
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+              <Flame className="w-3.5 h-3.5 animate-pulse" />
+              <span>Heating</span>
+            </div>
+          ) : hvacAction === 'cooling' ? (
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+              <Snowflake className="w-3.5 h-3.5 animate-pulse" />
+              <span>Cooling</span>
+            </div>
+          ) : isDualSetpoint ? (
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Auto Range ({formatTemp(targetTempLow)}°–{formatTemp(targetTempHigh)}°)</span>
+            </div>
+          ) : (
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-white/10 text-slate-300">
+              {currentMode === 'heat' && <Flame className="w-3.5 h-3.5 text-amber-400" />}
+              {currentMode === 'cool' && <Snowflake className="w-3.5 h-3.5 text-cyan-400" />}
+              <span>{hvacAction || `${currentMode.charAt(0).toUpperCase() + currentMode.slice(1)} (Idle)`}</span>
             </div>
           )}
 
@@ -197,57 +314,357 @@ export const EntityDetailDrawer: React.FC<EntityDetailDrawerProps> = ({
           )}
         </div>
 
-        {/* Target Temperature Setpoint Controls */}
-        <div className="glass-panel p-5 rounded-3xl border border-white/10 space-y-4">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
-              Target Temperature
-            </span>
-            <span className="text-2xl font-black text-emerald-400">
-              {Math.round(targetTemp)}°
-            </span>
+        {/* Setpoint Controls based on Active Mode */}
+        {currentMode === 'off' ? (
+          <div className="glass-panel p-5 rounded-3xl border border-white/10 space-y-3 bg-slate-900/40 text-center">
+            <div className="text-sm font-semibold text-slate-300">Thermostat is currently Off</div>
+            <div className="text-xs text-slate-400">Choose a mode below to turn it on and adjust temperature:</div>
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+              {hvacModes.filter((m) => m !== 'off').map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => handleSetHvacMode(m)}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                    m === 'heat'
+                      ? 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border-amber-500/40'
+                      : m === 'cool'
+                      ? 'bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border-cyan-500/40'
+                      : 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border-emerald-500/40'
+                  }`}
+                >
+                  {m === 'heat' && <Flame className="w-3.5 h-3.5" />}
+                  {m === 'cool' && <Snowflake className="w-3.5 h-3.5" />}
+                  {(m === 'heat_cool' || m === 'auto') && <RotateCcw className="w-3.5 h-3.5" />}
+                  <span>Turn On {m === 'heat_cool' ? 'Heat/Cool' : m.charAt(0).toUpperCase() + m.slice(1)}</span>
+                </button>
+              ))}
+            </div>
           </div>
+        ) : isDualSetpoint ? (
+          /* DUAL SETPOINT MODE (Heat/Cool or Auto) */
+          <div className="space-y-4">
+            {/* Dual Range Summary Banner */}
+            <div className="glass-panel px-4 py-3 rounded-2xl border border-emerald-500/25 bg-emerald-500/10 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-300">
+                  <RotateCcw className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-white uppercase tracking-wider">Dual Comfort Range</div>
+                  <div className="text-[11px] text-slate-400">
+                    Heats below {formatTemp(targetTempLow)}°, cools above {formatTemp(targetTempHigh)}°
+                  </div>
+                </div>
+              </div>
+              <div className="text-lg font-black text-emerald-300">
+                {formatTemp(targetTempLow)}° – {formatTemp(targetTempHigh)}°
+              </div>
+            </div>
 
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => {
-                const next = Math.max(minTemp, targetTemp - step);
-                setTargetTemp(next);
-                handleAction('climate', 'set_temperature', { temperature: next });
-              }}
-              className="w-12 h-12 rounded-2xl bg-white/10 hover:bg-white/15 text-white flex items-center justify-center font-bold text-2xl active:scale-95 transition-all cursor-pointer border border-white/10"
-              title="Decrease temperature"
-            >
-              -
-            </button>
+            {/* Heat To (Lower Setpoint) */}
+            <div className="glass-panel p-4 sm:p-5 rounded-3xl border border-amber-500/25 bg-gradient-to-b from-amber-500/10 to-transparent space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-amber-500/20 flex items-center justify-center text-amber-400">
+                    <Flame className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold uppercase tracking-wider text-amber-200">
+                      Heat To (Lower Limit)
+                    </span>
+                    <p className="text-[11px] text-slate-400">Heats when room drops below this</p>
+                  </div>
+                </div>
+                <span className="text-2xl font-black text-amber-400">
+                  {formatTemp(targetTempLow)}°
+                </span>
+              </div>
 
-            <input
-              type="range"
-              min={minTemp}
-              max={maxTemp}
-              step={step}
-              value={targetTemp}
-              onChange={(e) => setTargetTemp(parseFloat(e.target.value))}
-              onMouseUp={() => handleAction('climate', 'set_temperature', { temperature: targetTemp })}
-              onTouchEnd={() => handleAction('climate', 'set_temperature', { temperature: targetTemp })}
-              className="flex-1 h-3 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
-            />
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextLow = Math.max(minTemp, targetTempLow - step);
+                    handleSetDualTemp(nextLow, targetTempHigh);
+                  }}
+                  disabled={targetTempLow <= minTemp}
+                  className="w-12 h-12 rounded-2xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 flex items-center justify-center font-bold text-2xl active:scale-95 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                  title="Decrease heat setpoint"
+                >
+                  -
+                </button>
 
-            <button
-              type="button"
-              onClick={() => {
-                const next = Math.min(maxTemp, targetTemp + step);
-                setTargetTemp(next);
-                handleAction('climate', 'set_temperature', { temperature: next });
-              }}
-              className="w-12 h-12 rounded-2xl bg-white/10 hover:bg-white/15 text-white flex items-center justify-center font-bold text-2xl active:scale-95 transition-all cursor-pointer border border-white/10"
-              title="Increase temperature"
-            >
-              +
-            </button>
+                <input
+                  type="range"
+                  min={minTemp}
+                  max={Math.max(minTemp, targetTempHigh - Math.max(step, 2))}
+                  step={step}
+                  value={targetTempLow}
+                  onChange={(e) => setTargetTempLow(parseFloat(e.target.value))}
+                  onMouseUp={() => handleSetDualTemp(targetTempLow, targetTempHigh)}
+                  onTouchEnd={() => handleSetDualTemp(targetTempLow, targetTempHigh)}
+                  className="flex-1 h-3 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                />
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const minGap = Math.max(step, 2);
+                    const nextLow = Math.min(targetTempHigh - minGap, targetTempLow + step);
+                    handleSetDualTemp(nextLow, targetTempHigh);
+                  }}
+                  disabled={targetTempLow >= targetTempHigh - Math.max(step, 2)}
+                  className="w-12 h-12 rounded-2xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 flex items-center justify-center font-bold text-2xl active:scale-95 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                  title="Increase heat setpoint"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
+            {/* Cool To (Upper Setpoint) */}
+            <div className="glass-panel p-4 sm:p-5 rounded-3xl border border-cyan-500/25 bg-gradient-to-b from-cyan-500/10 to-transparent space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-cyan-500/20 flex items-center justify-center text-cyan-400">
+                    <Snowflake className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold uppercase tracking-wider text-cyan-200">
+                      Cool To (Upper Limit)
+                    </span>
+                    <p className="text-[11px] text-slate-400">Cools when room rises above this</p>
+                  </div>
+                </div>
+                <span className="text-2xl font-black text-cyan-400">
+                  {formatTemp(targetTempHigh)}°
+                </span>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const minGap = Math.max(step, 2);
+                    const nextHigh = Math.max(targetTempLow + minGap, targetTempHigh - step);
+                    handleSetDualTemp(targetTempLow, nextHigh);
+                  }}
+                  disabled={targetTempHigh <= targetTempLow + Math.max(step, 2)}
+                  className="w-12 h-12 rounded-2xl bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/30 text-cyan-300 flex items-center justify-center font-bold text-2xl active:scale-95 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                  title="Decrease cool setpoint"
+                >
+                  -
+                </button>
+
+                <input
+                  type="range"
+                  min={Math.min(maxTemp, targetTempLow + Math.max(step, 2))}
+                  max={maxTemp}
+                  step={step}
+                  value={targetTempHigh}
+                  onChange={(e) => setTargetTempHigh(parseFloat(e.target.value))}
+                  onMouseUp={() => handleSetDualTemp(targetTempLow, targetTempHigh)}
+                  onTouchEnd={() => handleSetDualTemp(targetTempLow, targetTempHigh)}
+                  className="flex-1 h-3 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                />
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextHigh = Math.min(maxTemp, targetTempHigh + step);
+                    handleSetDualTemp(targetTempLow, nextHigh);
+                  }}
+                  disabled={targetTempHigh >= maxTemp}
+                  className="w-12 h-12 rounded-2xl bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/30 text-cyan-300 flex items-center justify-center font-bold text-2xl active:scale-95 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                  title="Increase cool setpoint"
+                >
+                  +
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
+        ) : currentMode === 'heat' ? (
+          /* SINGLE SETPOINT MODE (Heat) */
+          <div className="glass-panel p-5 rounded-3xl border border-amber-500/25 bg-gradient-to-b from-amber-500/10 to-transparent space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-amber-500/20 flex items-center justify-center text-amber-400">
+                  <Flame className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="text-xs font-bold uppercase tracking-wider text-amber-200">
+                    Heating Setpoint
+                  </span>
+                  <p className="text-[11px] text-slate-400">Heat turns on if room drops below this</p>
+                </div>
+              </div>
+              <span className="text-3xl font-black text-amber-400">
+                {formatTemp(targetTemp)}°
+              </span>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  const next = Math.max(minTemp, targetTemp - step);
+                  handleSetSingleTemp(next);
+                }}
+                disabled={targetTemp <= minTemp}
+                className="w-12 h-12 rounded-2xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 flex items-center justify-center font-bold text-2xl active:scale-95 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Decrease temperature"
+              >
+                -
+              </button>
+
+              <input
+                type="range"
+                min={minTemp}
+                max={maxTemp}
+                step={step}
+                value={targetTemp}
+                onChange={(e) => setTargetTemp(parseFloat(e.target.value))}
+                onMouseUp={() => handleSetSingleTemp(targetTemp)}
+                onTouchEnd={() => handleSetSingleTemp(targetTemp)}
+                className="flex-1 h-3 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
+              />
+
+              <button
+                type="button"
+                onClick={() => {
+                  const next = Math.min(maxTemp, targetTemp + step);
+                  handleSetSingleTemp(next);
+                }}
+                disabled={targetTemp >= maxTemp}
+                className="w-12 h-12 rounded-2xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 flex items-center justify-center font-bold text-2xl active:scale-95 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Increase temperature"
+              >
+                +
+              </button>
+            </div>
+          </div>
+        ) : currentMode === 'cool' ? (
+          /* SINGLE SETPOINT MODE (Cool) */
+          <div className="glass-panel p-5 rounded-3xl border border-cyan-500/25 bg-gradient-to-b from-cyan-500/10 to-transparent space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-cyan-500/20 flex items-center justify-center text-cyan-400">
+                  <Snowflake className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="text-xs font-bold uppercase tracking-wider text-cyan-200">
+                    Cooling Setpoint
+                  </span>
+                  <p className="text-[11px] text-slate-400">A/C turns on if room rises above this</p>
+                </div>
+              </div>
+              <span className="text-3xl font-black text-cyan-400">
+                {formatTemp(targetTemp)}°
+              </span>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  const next = Math.max(minTemp, targetTemp - step);
+                  handleSetSingleTemp(next);
+                }}
+                disabled={targetTemp <= minTemp}
+                className="w-12 h-12 rounded-2xl bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/30 text-cyan-300 flex items-center justify-center font-bold text-2xl active:scale-95 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Decrease temperature"
+              >
+                -
+              </button>
+
+              <input
+                type="range"
+                min={minTemp}
+                max={maxTemp}
+                step={step}
+                value={targetTemp}
+                onChange={(e) => setTargetTemp(parseFloat(e.target.value))}
+                onMouseUp={() => handleSetSingleTemp(targetTemp)}
+                onTouchEnd={() => handleSetSingleTemp(targetTemp)}
+                className="flex-1 h-3 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+              />
+
+              <button
+                type="button"
+                onClick={() => {
+                  const next = Math.min(maxTemp, targetTemp + step);
+                  handleSetSingleTemp(next);
+                }}
+                disabled={targetTemp >= maxTemp}
+                className="w-12 h-12 rounded-2xl bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/30 text-cyan-300 flex items-center justify-center font-bold text-2xl active:scale-95 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Increase temperature"
+              >
+                +
+              </button>
+            </div>
+          </div>
+        ) : (
+          /* OTHER SINGLE SETPOINT MODES (e.g. single auto) */
+          <div className="glass-panel p-5 rounded-3xl border border-emerald-500/25 bg-gradient-to-b from-emerald-500/10 to-transparent space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-400">
+                  <RotateCcw className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="text-xs font-bold uppercase tracking-wider text-emerald-200">
+                    Target Temperature
+                  </span>
+                  <p className="text-[11px] text-slate-400">Maintains target room temperature</p>
+                </div>
+              </div>
+              <span className="text-3xl font-black text-emerald-400">
+                {formatTemp(targetTemp)}°
+              </span>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  const next = Math.max(minTemp, targetTemp - step);
+                  handleSetSingleTemp(next);
+                }}
+                disabled={targetTemp <= minTemp}
+                className="w-12 h-12 rounded-2xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 flex items-center justify-center font-bold text-2xl active:scale-95 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Decrease temperature"
+              >
+                -
+              </button>
+
+              <input
+                type="range"
+                min={minTemp}
+                max={maxTemp}
+                step={step}
+                value={targetTemp}
+                onChange={(e) => setTargetTemp(parseFloat(e.target.value))}
+                onMouseUp={() => handleSetSingleTemp(targetTemp)}
+                onTouchEnd={() => handleSetSingleTemp(targetTemp)}
+                className="flex-1 h-3 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+              />
+
+              <button
+                type="button"
+                onClick={() => {
+                  const next = Math.min(maxTemp, targetTemp + step);
+                  handleSetSingleTemp(next);
+                }}
+                disabled={targetTemp >= maxTemp}
+                className="w-12 h-12 rounded-2xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 flex items-center justify-center font-bold text-2xl active:scale-95 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Increase temperature"
+              >
+                +
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* HVAC Mode Selection */}
         <div className="space-y-2">
@@ -256,34 +673,34 @@ export const EntityDetailDrawer: React.FC<EntityDetailDrawerProps> = ({
           </span>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {hvacModes.map((mode) => {
-              const isSelected = state === mode;
+              const isSelected = currentMode === mode;
               let icon = <Power className="w-4 h-4" />;
               let activeClass = 'bg-white/15 text-white border-white/30';
 
               if (mode === 'heat') {
                 icon = <Flame className="w-4 h-4" />;
-                activeClass = 'bg-amber-500/25 text-amber-300 border-amber-500/40 font-bold';
+                activeClass = 'bg-amber-500/25 text-amber-300 border-amber-500/50 shadow-md shadow-amber-500/20 font-bold ring-1 ring-amber-500/30';
               } else if (mode === 'cool') {
                 icon = <Snowflake className="w-4 h-4" />;
-                activeClass = 'bg-cyan-500/25 text-cyan-300 border-cyan-500/40 font-bold';
+                activeClass = 'bg-cyan-500/25 text-cyan-300 border-cyan-500/50 shadow-md shadow-cyan-500/20 font-bold ring-1 ring-cyan-500/30';
               } else if (mode === 'auto' || mode === 'heat_cool') {
                 icon = <RotateCcw className="w-4 h-4" />;
-                activeClass = 'bg-emerald-500/25 text-emerald-300 border-emerald-500/40 font-bold';
+                activeClass = 'bg-emerald-500/25 text-emerald-300 border-emerald-500/50 shadow-md shadow-emerald-500/20 font-bold ring-1 ring-emerald-500/30';
               } else if (mode === 'off') {
-                activeClass = 'bg-slate-700/50 text-slate-300 border-white/20';
+                activeClass = 'bg-slate-700/60 text-slate-200 border-white/20 font-bold';
               }
 
               return (
                 <button
                   key={mode}
                   type="button"
-                  onClick={() => handleAction('climate', 'set_hvac_mode', { hvac_mode: mode })}
+                  onClick={() => handleSetHvacMode(mode)}
                   className={`p-3 rounded-2xl border flex items-center justify-center gap-2 capitalize text-xs transition-all cursor-pointer ${
                     isSelected ? activeClass : 'bg-white/5 text-slate-400 border-white/5 hover:bg-white/10'
                   }`}
                 >
                   {icon}
-                  <span>{mode.replace('_', '/')}</span>
+                  <span>{mode === 'heat_cool' ? 'Heat/Cool' : mode.replace('_', '/')}</span>
                 </button>
               );
             })}

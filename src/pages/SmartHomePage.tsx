@@ -22,6 +22,8 @@ import {
   Flame,
   Snowflake,
   Fan,
+  RotateCcw,
+  Thermometer,
   Settings,
   Search,
   User,
@@ -204,6 +206,11 @@ export const SmartHomePage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedEntityForDrawer, setSelectedEntityForDrawer] = useState<HomeAssistantEntity | null>(null);
+
+  const activeDrawerEntity = useMemo(() => {
+    if (!selectedEntityForDrawer) return null;
+    return entities.find((e) => e.entity_id === selectedEntityForDrawer.entity_id) || selectedEntityForDrawer;
+  }, [selectedEntityForDrawer, entities]);
   const [optimisticStates, setOptimisticStates] = useState<Record<string, string>>({});
   const [isLiveConnected, setIsLiveConnected] = useState(true);
   const [hasConnectionError, setHasConnectionError] = useState(false);
@@ -473,6 +480,10 @@ export const SmartHomePage: React.FC = () => {
         setOptimisticStates((prev) => ({ ...prev, [entityId]: 'locked' }));
       } else if (service === 'unlock') {
         setOptimisticStates((prev) => ({ ...prev, [entityId]: 'unlocked' }));
+      } else if (service === 'set_hvac_mode' && serviceData.hvac_mode) {
+        setOptimisticStates((prev) => ({ ...prev, [entityId]: serviceData.hvac_mode }));
+      } else if (service === 'set_temperature' && serviceData.hvac_mode) {
+        setOptimisticStates((prev) => ({ ...prev, [entityId]: serviceData.hvac_mode }));
       }
     }
 
@@ -839,37 +850,71 @@ export const SmartHomePage: React.FC = () => {
     } else if (entity.domain === 'climate') {
       const currentTemp = entity.attributes.current_temperature;
       const targetTemp = entity.attributes.temperature;
+      const targetLow = entity.attributes.target_temp_low;
+      const targetHigh = entity.attributes.target_temp_high;
       const hvacAction = entity.attributes.hvac_action;
-      const isCooling = hvacAction === 'cooling' || currentEffectiveState === 'cool';
-      const isHeating = hvacAction === 'heating' || currentEffectiveState === 'heat';
+      const effectiveMode = currentEffectiveState;
+      const isDual =
+        effectiveMode === 'heat_cool' ||
+        (effectiveMode === 'auto' && (targetLow != null || targetHigh != null));
+      const isCooling = hvacAction === 'cooling' || effectiveMode === 'cool';
+      const isHeating = hvacAction === 'heating' || effectiveMode === 'heat';
+      const isAuto = effectiveMode === 'heat_cool' || effectiveMode === 'auto';
+      const isOff = effectiveMode === 'off';
 
-      iconComponent = (
-        <Gauge
-          className={`w-4 h-4 sm:w-5 sm:h-5 ${
-            isCooling
-              ? 'text-cyan-400'
-              : isHeating
-              ? 'text-amber-400'
-              : 'text-amber-300'
-          }`}
-        />
-      );
-
-      stateDisplay = targetTemp ? `${Math.round(targetTemp)}° • ${currentEffectiveState}` : currentEffectiveState;
-      if (currentTemp) {
-        stateDisplay = `${Math.round(currentTemp)}° (${stateDisplay})`;
+      if (isHeating) {
+        iconComponent = <Flame className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400" />;
+      } else if (isCooling) {
+        iconComponent = <Snowflake className="w-4 h-4 sm:w-5 sm:h-5 text-cyan-400" />;
+      } else if (isAuto) {
+        iconComponent = <RotateCcw className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400" />;
+      } else if (isOff) {
+        iconComponent = <Power className="w-4 h-4 sm:w-5 sm:h-5 text-slate-500" />;
+      } else {
+        iconComponent = <Gauge className="w-4 h-4 sm:w-5 sm:h-5 text-amber-300" />;
       }
 
-      tileBg = isCooling
-        ? 'bg-gradient-to-b from-cyan-500/10 to-slate-900/80 border-cyan-500/25 hover:border-cyan-400/40'
-        : isHeating
-        ? 'bg-gradient-to-b from-amber-500/10 to-slate-900/80 border-amber-500/25 hover:border-amber-400/40'
-        : 'bg-gradient-to-b from-slate-900/80 to-slate-950/80 border-white/10 hover:border-white/25';
-      iconBg = isCooling
-        ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/20'
-        : isHeating
-        ? 'bg-amber-500/15 text-amber-400 border border-amber-500/20'
-        : 'bg-amber-500/10 text-amber-400 border border-amber-500/20';
+      if (isUnavailable) {
+        stateDisplay = 'Unavailable';
+      } else if (isOff) {
+        stateDisplay = currentTemp != null ? `${Math.round(currentTemp)}° (Off)` : 'Off';
+      } else if (isDual && targetLow != null && targetHigh != null) {
+        const modeLabel = effectiveMode === 'auto' ? 'Auto' : 'Heat/Cool';
+        const rangeText = `${Math.round(targetLow)}°-${Math.round(targetHigh)}°`;
+        stateDisplay = currentTemp != null
+          ? `${Math.round(currentTemp)}° (${rangeText} • ${modeLabel})`
+          : `${rangeText} • ${modeLabel}`;
+      } else if (targetTemp != null) {
+        const modeLabel = effectiveMode === 'heat' ? 'Heat' : effectiveMode === 'cool' ? 'Cool' : effectiveMode.charAt(0).toUpperCase() + effectiveMode.slice(1);
+        stateDisplay = currentTemp != null
+          ? `${Math.round(currentTemp)}° (${Math.round(targetTemp)}° • ${modeLabel})`
+          : `${Math.round(targetTemp)}° • ${modeLabel}`;
+      } else {
+        const modeLabel = effectiveMode === 'heat' ? 'Heat' : effectiveMode === 'cool' ? 'Cool' : effectiveMode.replace('_', '/');
+        stateDisplay = currentTemp != null
+          ? `${Math.round(currentTemp)}° (${modeLabel})`
+          : modeLabel;
+      }
+
+      if (isUnavailable) {
+        tileBg = 'bg-slate-900/40 border-white/5 opacity-60';
+        iconBg = 'bg-white/5 text-slate-500';
+      } else if (isOff) {
+        tileBg = 'bg-slate-900/50 border-white/5 opacity-70 hover:opacity-100 hover:border-white/15';
+        iconBg = 'bg-white/5 text-slate-500';
+      } else if (isHeating) {
+        tileBg = 'bg-gradient-to-b from-amber-500/15 to-slate-900/80 border-amber-500/30 hover:border-amber-400/50 shadow-lg shadow-amber-500/5';
+        iconBg = 'bg-amber-500/20 text-amber-300 ring-2 ring-amber-500/30';
+      } else if (isCooling) {
+        tileBg = 'bg-gradient-to-b from-cyan-500/15 to-slate-900/80 border-cyan-500/30 hover:border-cyan-400/50 shadow-lg shadow-cyan-500/5';
+        iconBg = 'bg-cyan-500/20 text-cyan-300 ring-2 ring-cyan-500/30';
+      } else if (isAuto) {
+        tileBg = 'bg-gradient-to-b from-emerald-500/15 to-slate-900/80 border-emerald-500/30 hover:border-emerald-400/50 shadow-lg shadow-emerald-500/5';
+        iconBg = 'bg-emerald-500/20 text-emerald-300 ring-2 ring-emerald-500/30';
+      } else {
+        tileBg = 'bg-gradient-to-b from-slate-900/80 to-slate-950/80 border-white/10 hover:border-white/25';
+        iconBg = 'bg-white/10 text-slate-300';
+      }
     } else if (entity.domain === 'light') {
       iconComponent = <Lightbulb className={`w-4 h-4 sm:w-5 sm:h-5 ${isOn ? 'fill-amber-400 text-amber-400' : 'text-slate-400'}`} />;
       if (isOn) {
@@ -1386,8 +1431,8 @@ export const SmartHomePage: React.FC = () => {
       {/* Slide Drawer from the Right Side for Multi-Button / Sensor Details */}
       <EntityDetailDrawer
         isOpen={Boolean(selectedEntityForDrawer)}
-        entity={selectedEntityForDrawer}
-        customization={selectedEntityForDrawer ? entityCustomizations[selectedEntityForDrawer.entity_id] : undefined}
+        entity={activeDrawerEntity}
+        customization={activeDrawerEntity ? entityCustomizations[activeDrawerEntity.entity_id] : undefined}
         onClose={() => setSelectedEntityForDrawer(null)}
         onCallService={handleCallService}
       />
