@@ -1318,7 +1318,7 @@ export const CalendarPage: React.FC = () => {
           isOpen={isVisionScanModalOpen}
           onClose={() => setIsVisionScanModalOpen(false)}
           onEventsAdded={async () => {
-            await loadEvents(false);
+            await loadData(false);
             showToast('Added scanned events to your calendar!');
           }}
           users={users}

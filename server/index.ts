@@ -44,6 +44,7 @@ import {
 } from './google-calendar.js';
 import { isBasicPantryStaple } from './groceryStaples.js';
 import { scanCalendarVision } from './calendar-vision.js';
+import { generateRecipeFromPrompt } from './recipe-prompt.js';
 import {
   lookupBarcode,
   scanInventoryVision,
@@ -2421,6 +2422,29 @@ app.post('/api/recipes', (req, res) => {
   } catch (err: any) {
     console.error('Create recipe error:', err);
     res.status(500).json({ error: err.message || 'Failed to create recipe' });
+  }
+});
+
+app.post('/api/recipes/generate-from-prompt', async (req, res) => {
+  try {
+    const householdId = getHouseholdId(req);
+    const { prompt, iteration, previousTitles, apiKey } = req.body;
+    if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
+      return res.status(400).json({ error: 'Recipe prompt is required' });
+    }
+
+    const recipe = await generateRecipeFromPrompt({
+      prompt: prompt.trim(),
+      iteration: typeof iteration === 'number' ? iteration : 1,
+      previousTitles: Array.isArray(previousTitles) ? previousTitles : [],
+      householdId,
+      geminiApiKey: apiKey,
+    });
+
+    res.json({ success: true, recipe });
+  } catch (err: any) {
+    console.error('Generate recipe from prompt error:', err);
+    res.status(500).json({ error: err.message || 'Failed to generate recipe from prompt' });
   }
 });
 

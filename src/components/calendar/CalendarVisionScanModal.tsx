@@ -545,7 +545,7 @@ export const CalendarVisionScanModal: React.FC<CalendarVisionScanModalProps> = (
                                   <Clock className="w-3 h-3 text-slate-400 shrink-0" />
                                   <input
                                     type="time"
-                                    value={item.startTime}
+                                    value={item.startTime || ''}
                                     onChange={(e) => {
                                       const updated = [...recognizedEvents];
                                       updated[index].startTime = e.target.value;
@@ -559,7 +559,7 @@ export const CalendarVisionScanModal: React.FC<CalendarVisionScanModalProps> = (
                                   <Clock className="w-3 h-3 text-slate-400 shrink-0" />
                                   <input
                                     type="time"
-                                    value={item.endTime}
+                                    value={item.endTime || ''}
                                     onChange={(e) => {
                                       const updated = [...recognizedEvents];
                                       updated[index].endTime = e.target.value;

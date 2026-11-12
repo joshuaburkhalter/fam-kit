@@ -11,6 +11,7 @@ import {
   Camera,
   Tag,
   Barcode,
+  Sparkles,
 } from 'lucide-react';
 import { useActionFab, FabActionItem, FabConfig } from '../context/ActionFabContext';
 
@@ -151,6 +152,13 @@ export const ActionFab: React.FC<{ activeTab: string }> = ({ activeTab }) => {
             icon: Link2,
             color: 'teal',
             onClick: () => window.dispatchEvent(new CustomEvent('famkit:action', { detail: 'import-web' })),
+          },
+          {
+            id: 'prompt-recipe',
+            label: 'Prompt',
+            icon: Sparkles,
+            color: 'purple',
+            onClick: () => window.dispatchEvent(new CustomEvent('famkit:action', { detail: 'prompt-recipe' })),
           },
           {
             id: 'create-manual',

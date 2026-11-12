@@ -658,6 +658,31 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
+  generateRecipeFromPrompt: async (params: {
+    prompt: string;
+    iteration?: number;
+    previousTitles?: string[];
+    apiKey?: string;
+  }): Promise<{
+    title: string;
+    description?: string;
+    category?: string;
+    prepTimeMinutes?: number;
+    cookTimeMinutes?: number;
+    servings?: number;
+    imageUrl?: string;
+    tags: string[];
+    ingredients: { item: string; amount?: string; unit?: string; category?: string }[];
+    instructions: string[];
+    sourceUrl?: string;
+  }> => {
+    const res = await fetchJson<{ success: boolean; recipe: any }>('/recipes/generate-from-prompt', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+    return res.recipe;
+  },
+
   updateRecipe: (id: string, data: Partial<Recipe> | any): Promise<Recipe> => {
     const payload: any = { id };
     if (data.title !== undefined) payload.title = data.title;

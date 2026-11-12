@@ -27,6 +27,7 @@ import { usePWA } from '../context/PWAContext';
 import { api } from '../lib/api';
 import { compressImageFile } from '../lib/imageCompression';
 import { RecipeScraperModal, extractSharedUrl } from '../components/RecipeScraperModal';
+import { RecipePromptModal } from '../components/recipes/RecipePromptModal';
 import { EditRecipeModal } from '../components/EditRecipeModal';
 import { IngredientSubstitutionModal } from '../components/IngredientSubstitutionModal';
 import { useLongPress } from '../hooks/useLongPress';
@@ -113,6 +114,7 @@ export const RecipesPage: React.FC = () => {
   const [groceryItems, setGroceryItems] = useState<GroceryItem[]>([]);
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [isScraperOpen, setIsScraperOpen] = useState(false);
+  const [isPromptModalOpen, setIsPromptModalOpen] = useState(false);
   const [scraperInitialUrl, setScraperInitialUrl] = useState('');
   const [scraperAutoImport, setScraperAutoImport] = useState(false);
   const [isEditRecipeModalOpen, setIsEditRecipeModalOpen] = useState(false);
@@ -1303,6 +1305,23 @@ export const RecipesPage: React.FC = () => {
             setIsScraperOpen(false);
             setScraperInitialUrl('');
             setScraperAutoImport(false);
+          }}
+        />
+      )}
+
+      {/* Recipe Prompt Modal */}
+      {household && (
+        <RecipePromptModal
+          isOpen={isPromptModalOpen}
+          onClose={() => setIsPromptModalOpen(false)}
+          householdId={household.id}
+          onRecipeCreated={(newRec) => {
+            setRecipes((prev) => {
+              const exists = prev.some((r) => r.id === newRec.id);
+              return exists ? prev.map((r) => (r.id === newRec.id ? newRec : r)) : [newRec, ...prev];
+            });
+            handleSelectRecipe(newRec);
+            setAddedGroceryFeedback(`Added "${newRec.title}" to recipes!`);
           }}
         />
       )}

@@ -54,6 +54,7 @@ import { useRegisterFab } from '../context/ActionFabContext';
 import { CheckSparkle, CelebrationConfetti, triggerHapticCheck } from '../components/CheckSparkle';
 import { Drawer } from '../components/ui/Drawer';
 import { RecipeScraperModal, extractSharedUrl } from '../components/RecipeScraperModal';
+import { RecipePromptModal } from '../components/recipes/RecipePromptModal';
 import { EditRecipeModal } from '../components/EditRecipeModal';
 import { IngredientSubstitutionModal } from '../components/IngredientSubstitutionModal';
 import { useLongPress } from '../hooks/useLongPress';
@@ -307,6 +308,7 @@ export const MealsPage: React.FC = () => {
 
   // Modals & Drawers
   const [isScraperOpen, setIsScraperOpen] = useState(false);
+  const [isPromptModalOpen, setIsPromptModalOpen] = useState(false);
   const [scraperInitialUrl, setScraperInitialUrl] = useState('');
   const [scraperAutoImport, setScraperAutoImport] = useState(false);
   const [isEditRecipeModalOpen, setIsEditRecipeModalOpen] = useState(false);
@@ -344,6 +346,15 @@ export const MealsPage: React.FC = () => {
               onClick: () => {
                 setScraperInitialMode('url');
                 setIsScraperOpen(true);
+              },
+            },
+            {
+              id: 'prompt-recipe',
+              label: 'Prompt',
+              icon: Sparkles,
+              color: 'purple',
+              onClick: () => {
+                setIsPromptModalOpen(true);
               },
             },
             {
@@ -460,6 +471,8 @@ export const MealsPage: React.FC = () => {
       if (detail === 'import-web' || detail === 'import-recipe') {
         setScraperInitialMode('url');
         setIsScraperOpen(true);
+      } else if (detail === 'prompt-recipe') {
+        setIsPromptModalOpen(true);
       } else if (detail === 'scan-photo') {
         setScraperInitialMode('scan');
         setIsScraperOpen(true);
@@ -3222,6 +3235,20 @@ export const MealsPage: React.FC = () => {
                       type="button"
                       onClick={() => {
                         setIsRecipeAddMenuOpen(false);
+                        setIsPromptModalOpen(true);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/10 transition-colors text-left cursor-pointer"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-purple-500/15 text-purple-400 flex items-center justify-center shrink-0">
+                        <Sparkles className="w-4 h-4" />
+                      </div>
+                      <span className="font-bold text-white">Prompt</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsRecipeAddMenuOpen(false);
                         setEditingRecipe({
                           id: '',
                           household_id: householdId || '',
@@ -4961,6 +4988,27 @@ export const MealsPage: React.FC = () => {
             setIsScraperOpen(false);
             setScraperInitialUrl('');
             setScraperAutoImport(false);
+          }}
+        />
+      )}
+
+      {/* ================= MODAL: RECIPE PROMPT GENERATOR ================= */}
+      {householdId && (
+        <RecipePromptModal
+          isOpen={isPromptModalOpen}
+          onClose={() => setIsPromptModalOpen(false)}
+          householdId={householdId}
+          onRecipeCreated={(newRec) => {
+            setRecipes((prev) => {
+              const exists = prev.some((r) => r.id === newRec.id);
+              const updated = exists ? prev.map((r) => (r.id === newRec.id ? newRec : r)) : [newRec, ...prev];
+              if (mealsDataCache && mealsDataCache.householdId === householdId) {
+                mealsDataCache.recipes = updated;
+              }
+              return updated;
+            });
+            handleSelectRecipe(newRec);
+            showToast(`Added "${newRec.title}" to recipes!`);
           }}
         />
       )}
