@@ -81,8 +81,8 @@ export const CalendarVisionScanModal: React.FC<CalendarVisionScanModalProps> = (
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: { ideal: 'environment' },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
         },
       });
 
@@ -296,7 +296,7 @@ export const CalendarVisionScanModal: React.FC<CalendarVisionScanModalProps> = (
                 </div>
               </div>
             ) : (
-              <div className="relative aspect-video rounded-2xl overflow-hidden bg-black border border-white/10 shadow-inner">
+              <div className="relative w-full max-w-sm sm:max-w-md mx-auto aspect-[8.5/11] max-h-[62vh] rounded-3xl overflow-hidden bg-black border border-white/10 shadow-2xl">
                 {cameraLoading && (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-20">
                     <Loader2 className="w-8 h-8 text-emerald-400 animate-spin" />
@@ -321,6 +321,29 @@ export const CalendarVisionScanModal: React.FC<CalendarVisionScanModalProps> = (
                   }}
                   className="w-full h-full object-cover"
                 />
+
+                {/* Sheet-of-Paper Document Framing Overlay */}
+                <div className="absolute inset-4 sm:inset-5 pointer-events-none rounded-2xl border border-emerald-400/25 flex flex-col justify-between p-3">
+                  {/* Top document corners */}
+                  <div className="flex justify-between items-start">
+                    <div className="w-6 h-6 border-t-2 border-l-2 border-emerald-400 rounded-tl-lg shadow-sm" />
+                    <div className="w-6 h-6 border-t-2 border-r-2 border-emerald-400 rounded-tr-lg shadow-sm" />
+                  </div>
+
+                  {/* Center paper alignment guide */}
+                  <div className="text-center">
+                    <span className="px-3 py-1 bg-slate-950/75 backdrop-blur-md rounded-full text-[10px] font-bold text-emerald-300 border border-emerald-500/30 tracking-wider uppercase inline-flex items-center gap-1.5 shadow-lg">
+                      <FileText className="w-3 h-3 text-emerald-400" />
+                      <span>Align sheet in frame</span>
+                    </span>
+                  </div>
+
+                  {/* Bottom document corners */}
+                  <div className="flex justify-between items-end">
+                    <div className="w-6 h-6 border-b-2 border-l-2 border-emerald-400 rounded-bl-lg shadow-sm" />
+                    <div className="w-6 h-6 border-b-2 border-r-2 border-emerald-400 rounded-br-lg shadow-sm" />
+                  </div>
+                </div>
 
                 {/* Batch multi-shot badge if previous events exist */}
                 {recognizedEvents.length > 0 && (
@@ -375,7 +398,7 @@ export const CalendarVisionScanModal: React.FC<CalendarVisionScanModalProps> = (
                 <img
                   src={imagePreview}
                   alt="Scan Preview"
-                  className="w-12 h-12 object-cover rounded-xl border border-white/10 shrink-0"
+                  className="w-11 h-14 object-cover rounded-lg border border-white/10 shrink-0 shadow-sm"
                 />
               )}
               <div className="flex-1 min-w-0">
