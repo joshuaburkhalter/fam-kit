@@ -1453,9 +1453,9 @@ export const GroceryPage: React.FC = () => {
   const isDraggingAny = Boolean(draggingAisleId);
 
   return (
-    <div className="max-w-7xl mx-auto px-3 sm:px-6 pt-3 pb-28 md:pb-20 space-y-4">
+    <div className="max-w-7xl mx-auto px-3 sm:px-6 pt-2.5 sm:pt-3 pb-28 md:pb-20 flex flex-col gap-2.5 sm:gap-3">
       {/* Header - Desktop only, on mobile it is merged into top Navbar */}
-      <div className="hidden md:flex items-center justify-between mb-1">
+      <div className="hidden md:flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-md shadow-emerald-500/20 text-slate-950">
             <ShoppingCart className="w-5 h-5 stroke-[2.2]" />
@@ -1545,7 +1545,7 @@ export const GroceryPage: React.FC = () => {
           <button
             type="button"
             onClick={() => setIsListDropdownOpen(!isListDropdownOpen)}
-            className="w-full min-h-[38px] flex items-center justify-between bg-slate-900/80 hover:bg-slate-850 border border-white/10 hover:border-emerald-500/40 px-3 py-1.5 rounded-xl transition-all group shadow-md cursor-pointer"
+            className="w-full h-[38px] min-h-[38px] flex items-center justify-between bg-slate-900/80 hover:bg-slate-850 border border-white/10 hover:border-emerald-500/40 px-3 py-1.5 rounded-xl transition-all group shadow-md cursor-pointer"
           >
             <div className="flex items-center gap-2 min-w-0">
               <span className="text-base shrink-0 leading-none">{currentListIcon}</span>
@@ -1651,13 +1651,13 @@ export const GroceryPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Inline Quick Add Bar with Autocomplete (same height as recipe filter: h-8, rounded-xl) */}
+      {/* Inline Quick Add Bar with Autocomplete (same height as top menu: h-[38px], rounded-xl) */}
       <div className="relative z-20">
         <form
           onSubmit={handleAddItem}
-          className="h-8 flex items-center gap-1.5 bg-slate-900/90 border border-white/10 hover:border-white/20 focus-within:border-emerald-500/50 rounded-xl px-1.5 transition-all shadow-md"
+          className="h-[38px] min-h-[38px] flex items-center gap-2 bg-slate-900/90 border border-white/10 hover:border-white/20 focus-within:border-emerald-500/50 rounded-xl px-2.5 transition-all shadow-md"
         >
-          <div className="w-5 h-5 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0 text-emerald-400">
+          <div className="w-6 h-6 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0 text-emerald-400">
             <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
           </div>
           <input
@@ -1673,7 +1673,7 @@ export const GroceryPage: React.FC = () => {
             }}
             onKeyDown={handleInputKeyDown}
             disabled={isAddingItem}
-            className="flex-1 min-w-0 bg-transparent border-none text-xs text-white placeholder-slate-500 focus:outline-none py-1 px-1 font-medium"
+            className="flex-1 min-w-0 bg-transparent border-none text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none py-1.5 px-1 font-medium"
           />
           {newItemName && (
             <button
@@ -1682,7 +1682,7 @@ export const GroceryPage: React.FC = () => {
                 setNewItemName('');
                 setIsAutocompleteDismissed(true);
               }}
-              className="p-0.5 text-slate-400 hover:text-white cursor-pointer"
+              className="p-1 text-slate-400 hover:text-white cursor-pointer"
               title="Clear input"
             >
               <X className="w-3.5 h-3.5" />
@@ -1691,7 +1691,7 @@ export const GroceryPage: React.FC = () => {
           <button
             type="submit"
             disabled={!newItemName.trim() || isAddingItem}
-            className="h-6 px-2.5 sm:px-3 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 disabled:opacity-40 text-slate-950 font-bold text-xs flex items-center gap-1 transition-all shadow-md shadow-emerald-500/20 shrink-0 active:scale-95 cursor-pointer"
+            className="h-7 px-2.5 sm:px-3 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 disabled:opacity-40 text-slate-950 font-bold text-xs flex items-center gap-1 transition-all shadow-md shadow-emerald-500/20 shrink-0 active:scale-95 cursor-pointer"
             title="Add item"
           >
             {isAddingItem ? (

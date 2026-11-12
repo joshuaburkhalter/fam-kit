@@ -1118,7 +1118,7 @@ export const SmartHomePage: React.FC = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-3 sm:px-6 pt-3 pb-28 md:pb-20 space-y-4 min-h-[calc(100vh-8rem)] flex flex-col w-full">
+    <div className="max-w-7xl mx-auto px-3 sm:px-6 pt-2.5 sm:pt-3 pb-28 md:pb-20 flex flex-col gap-2.5 sm:gap-3 min-h-[calc(100vh-8rem)] w-full">
       {/* Mobile Disconnected Floating Banner (Overlay: never shifts page layout or controls) */}
       {hasConnectionError && !isLiveConnected && (
         <div className="md:hidden fixed top-[4.25rem] left-3 right-3 z-30 flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-slate-900/95 backdrop-blur-md border border-amber-500/30 text-amber-400 text-xs font-semibold shadow-2xl shadow-slate-950/80 animate-in fade-in slide-in-from-top-2 duration-200">
@@ -1137,7 +1137,7 @@ export const SmartHomePage: React.FC = () => {
       )}
 
       {/* Header Bar - Hidden on mobile, shown on desktop */}
-      <div className="hidden md:flex items-center justify-between mb-0.5">
+      <div className="hidden md:flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-md shadow-emerald-500/20 text-slate-950 shrink-0">
             <SlidersHorizontal className="w-5 h-5 stroke-[2.2]" />
@@ -1295,15 +1295,15 @@ export const SmartHomePage: React.FC = () => {
 
       {/* Search & Category Filter Bar (Desktop only, hidden on mobile) */}
       {visibleEntityIds.length > 0 && (
-        <div className="hidden md:block space-y-3">
-          <div className="relative">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+        <div className="hidden md:flex flex-col gap-2.5">
+          <div className="relative h-[38px] min-h-[38px] flex items-center">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
               placeholder="Search active lights, climate, locks, triggers..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-slate-900/60 border border-white/10 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/50 transition-all"
+              className="w-full h-full pl-9 pr-4 rounded-xl bg-slate-900/90 border border-white/10 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/50 transition-all shadow-md"
             />
           </div>
 

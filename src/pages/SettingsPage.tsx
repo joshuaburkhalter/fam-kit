@@ -654,9 +654,9 @@ export const SettingsPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenP
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-3 sm:px-6 pt-3 pb-36 md:pb-28 space-y-4">
+    <div className="max-w-7xl mx-auto px-3 sm:px-6 pt-2.5 sm:pt-3 pb-36 md:pb-28 flex flex-col gap-2.5 sm:gap-3">
       {/* Consistent Mobile-First Header */}
-      <div className="flex items-center justify-between mb-1">
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-md shadow-emerald-500/20 text-slate-950 shrink-0">
             <SettingsIcon className="w-5 h-5 stroke-[2.2]" />

@@ -520,7 +520,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onBack }) => {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-24 space-y-6">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-2.5 sm:pt-3 pb-24 flex flex-col gap-2.5 sm:gap-3">
       {/* Toast Alert */}
       <Toast
         message={toastMessage}
@@ -873,7 +873,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onBack }) => {
                     placeholder="Search users by name, @username, email, or household..."
                     value={userSearch}
                     onChange={(e) => setUserSearch(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2 rounded-xl bg-slate-800/80 border border-white/10 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-400"
+                    className="w-full h-[38px] min-h-[38px] pl-9 pr-4 rounded-xl bg-slate-800/80 border border-white/10 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-400 shadow-sm"
                   />
                 </div>
 
@@ -881,7 +881,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onBack }) => {
                   <select
                     value={userRoleFilter}
                     onChange={(e) => setUserRoleFilter(e.target.value)}
-                    className="px-3 py-2 rounded-xl bg-slate-800/80 border border-white/10 text-xs text-slate-200 focus:outline-none focus:border-emerald-400 cursor-pointer"
+                    className="h-[38px] min-h-[38px] px-3 rounded-xl bg-slate-800/80 border border-white/10 text-xs text-slate-200 focus:outline-none focus:border-emerald-400 cursor-pointer shadow-sm"
                   >
                     <option value="all">All Roles</option>
                     <option value="admin">Admins</option>
@@ -1213,14 +1213,14 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onBack }) => {
                     placeholder="Search codes by code string, recipient, claimant name, or email..."
                     value={codeSearch}
                     onChange={(e) => setCodeSearch(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2 rounded-xl bg-slate-800/80 border border-white/10 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-400"
+                    className="w-full h-[38px] min-h-[38px] pl-9 pr-4 rounded-xl bg-slate-800/80 border border-white/10 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-400 shadow-sm"
                   />
                 </div>
 
                 <select
                   value={codeStatusFilter}
                   onChange={(e) => setCodeStatusFilter(e.target.value)}
-                  className="px-3 py-2 rounded-xl bg-slate-800/80 border border-white/10 text-xs text-slate-200 focus:outline-none focus:border-emerald-400 cursor-pointer"
+                  className="h-[38px] min-h-[38px] px-3 rounded-xl bg-slate-800/80 border border-white/10 text-xs text-slate-200 focus:outline-none focus:border-emerald-400 cursor-pointer shadow-sm"
                 >
                   <option value="all">All Vouchers</option>
                   <option value="claimed">Claimed</option>
@@ -1380,7 +1380,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onBack }) => {
                     placeholder="Search feedback backlog by title, description, or submitter..."
                     value={feedbackSearch}
                     onChange={(e) => setFeedbackSearch(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2 rounded-xl bg-slate-800/80 border border-white/10 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-400"
+                    className="w-full h-[38px] min-h-[38px] pl-9 pr-4 rounded-xl bg-slate-800/80 border border-white/10 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-400 shadow-sm"
                   />
                 </div>
 
@@ -1388,7 +1388,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onBack }) => {
                   <select
                     value={feedbackTypeFilter}
                     onChange={(e) => setFeedbackTypeFilter(e.target.value as any)}
-                    className="px-3 py-2 rounded-xl bg-slate-800/80 border border-white/10 text-xs text-slate-200 focus:outline-none focus:border-emerald-400 cursor-pointer"
+                    className="h-[38px] min-h-[38px] px-3 rounded-xl bg-slate-800/80 border border-white/10 text-xs text-slate-200 focus:outline-none focus:border-emerald-400 cursor-pointer shadow-sm"
                   >
                     <option value="all">All Types</option>
                     <option value="feature">Features Only</option>
@@ -1593,7 +1593,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onBack }) => {
                     placeholder="Search households by family name, invite code, or members..."
                     value={householdSearch}
                     onChange={(e) => setHouseholdSearch(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2 rounded-xl bg-slate-800/80 border border-white/10 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-400"
+                    className="w-full h-[38px] min-h-[38px] pl-9 pr-4 rounded-xl bg-slate-800/80 border border-white/10 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-400 shadow-sm"
                   />
                 </div>
               </div>

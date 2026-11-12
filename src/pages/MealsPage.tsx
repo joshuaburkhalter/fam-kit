@@ -2806,7 +2806,7 @@ export const MealsPage: React.FC = () => {
     selectedRecipe.instructions.every((_, idx) => completedSteps[idx]);
 
   return (
-    <div className="max-w-7xl mx-auto px-3 sm:px-6 pt-3 pb-28 md:pb-20 space-y-4">
+    <div className="max-w-7xl mx-auto px-3 sm:px-6 pt-2.5 sm:pt-3 pb-28 md:pb-20 flex flex-col gap-2.5 sm:gap-3">
       {/* Toast Notification */}
       <Toast
         message={toastMessage}
@@ -3188,9 +3188,9 @@ export const MealsPage: React.FC = () => {
         </div>
       ) : (
         /* ================= MAIN MEALS VIEW (TABS) ================= */
-        <div className="space-y-4">
+        <div className="flex flex-col gap-2.5 sm:gap-3">
           {/* Desktop-only Header (reclaimed on mobile) */}
-          <div className="hidden md:flex items-center justify-between mb-1">
+          <div className="hidden md:flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-md shadow-emerald-500/20 text-slate-950 shrink-0">
                 <ChefHat className="w-5 h-5 stroke-[2.2]" />
@@ -3393,10 +3393,10 @@ export const MealsPage: React.FC = () => {
           </div>
 
           {/* Full-width compact segmented sub-navigation: Recipes -> Planner -> Pantry -> History */}
-          <div className="w-full flex items-center p-1 bg-slate-900/80 rounded-xl border border-white/10 shadow-md">
+          <div className="w-full h-[38px] min-h-[38px] flex items-center p-1 bg-slate-900/80 rounded-xl border border-white/10 shadow-md">
             <button
               onClick={() => handleTabChange('recipes')}
-              className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors duration-150 cursor-pointer ${
+              className={`h-full flex-1 py-1 px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors duration-150 cursor-pointer ${
                 activeTab === 'recipes'
                   ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
                   : 'text-slate-400 hover:text-white hover:bg-white/5'
@@ -3408,7 +3408,7 @@ export const MealsPage: React.FC = () => {
 
             <button
               onClick={() => handleTabChange('planner')}
-              className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors duration-150 cursor-pointer ${
+              className={`h-full flex-1 py-1 px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors duration-150 cursor-pointer ${
                 activeTab === 'planner'
                   ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
                   : 'text-slate-400 hover:text-white hover:bg-white/5'
@@ -3420,7 +3420,7 @@ export const MealsPage: React.FC = () => {
 
             <button
               onClick={() => handleTabChange('pantry')}
-              className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors duration-150 cursor-pointer ${
+              className={`h-full flex-1 py-1 px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors duration-150 cursor-pointer ${
                 activeTab === 'pantry'
                   ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
                   : 'text-slate-400 hover:text-white hover:bg-white/5'
@@ -3432,7 +3432,7 @@ export const MealsPage: React.FC = () => {
 
             <button
               onClick={() => handleTabChange('history')}
-              className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors duration-150 cursor-pointer ${
+              className={`h-full flex-1 py-1 px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors duration-150 cursor-pointer ${
                 activeTab === 'history'
                   ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
                   : 'text-slate-400 hover:text-white hover:bg-white/5'
@@ -3445,11 +3445,11 @@ export const MealsPage: React.FC = () => {
 
           {/* ================= 1. RECIPES TAB ================= */}
           {visitedTabs['recipes'] && (
-            <div className={activeTab === 'recipes' ? 'space-y-4' : 'hidden'}>
-              {/* Inline Search Bar with Tag Autocomplete (replaces pills, styled consistently with quick add bars: h-8, rounded-xl) */}
+            <div className={activeTab === 'recipes' ? 'flex flex-col gap-2.5 sm:gap-3' : 'hidden'}>
+              {/* Inline Search Bar with Tag Autocomplete (same height as top menu: h-[38px], rounded-xl) */}
               <div className="relative z-20" ref={recipeSearchContainerRef}>
-                <div className="h-8 flex items-center gap-1.5 bg-slate-900/90 border border-white/10 hover:border-white/20 focus-within:border-emerald-500/50 rounded-xl px-1.5 transition-all shadow-md">
-                  <div className="w-5 h-5 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0 text-emerald-400">
+                <div className="h-[38px] min-h-[38px] flex items-center gap-2 bg-slate-900/90 border border-white/10 hover:border-white/20 focus-within:border-emerald-500/50 rounded-xl px-2.5 transition-all shadow-md">
+                  <div className="w-6 h-6 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0 text-emerald-400">
                     <Search className="w-3.5 h-3.5 stroke-[2.2]" />
                   </div>
                   <input
@@ -3466,7 +3466,7 @@ export const MealsPage: React.FC = () => {
                       setIsTagDropdownOpen(true);
                     }}
                     onKeyDown={handleSearchKeyDown}
-                    className="flex-1 min-w-0 bg-transparent border-none text-xs text-white placeholder-slate-500 focus:outline-none py-1 px-1 font-medium"
+                    className="flex-1 min-w-0 bg-transparent border-none text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none py-1.5 px-1 font-medium"
                   />
                   {searchQuery && (
                     <button
@@ -3475,7 +3475,7 @@ export const MealsPage: React.FC = () => {
                         setSearchQuery('');
                         setIsTagDropdownOpen(false);
                       }}
-                      className="p-0.5 text-slate-400 hover:text-white cursor-pointer"
+                      className="p-1 text-slate-400 hover:text-white cursor-pointer"
                       title="Clear search"
                     >
                       <X className="w-3.5 h-3.5" />
@@ -3798,14 +3798,14 @@ export const MealsPage: React.FC = () => {
 
           {/* ================= 2. PLANNER TAB ================= */}
           {visitedTabs['planner'] && (
-            <div className={activeTab === 'planner' ? 'space-y-4' : 'hidden'}>
-              {/* Inline Quick Add Bar for Planner (same height and style as Lists add bar: h-8, rounded-xl) */}
+            <div className={activeTab === 'planner' ? 'flex flex-col gap-2.5 sm:gap-3' : 'hidden'}>
+              {/* Inline Quick Add Bar for Planner (same height as top menu: h-[38px], rounded-xl) */}
               <div className="relative z-20">
                 <form
                   onSubmit={handleQuickAddCustom}
-                  className="h-8 flex items-center gap-1.5 bg-slate-900/90 border border-white/10 hover:border-white/20 focus-within:border-emerald-500/50 rounded-xl px-1.5 transition-all shadow-md"
+                  className="h-[38px] min-h-[38px] flex items-center gap-2 bg-slate-900/90 border border-white/10 hover:border-white/20 focus-within:border-emerald-500/50 rounded-xl px-2.5 transition-all shadow-md"
                 >
-                  <div className="w-5 h-5 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0 text-emerald-400">
+                  <div className="w-6 h-6 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0 text-emerald-400">
                     <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
                   </div>
                   <input
@@ -3815,13 +3815,13 @@ export const MealsPage: React.FC = () => {
                     value={quickDishInput}
                     onChange={(e) => setQuickDishInput(e.target.value)}
                     disabled={isAddingQuick}
-                    className="flex-1 min-w-0 bg-transparent border-none text-xs text-white placeholder-slate-500 focus:outline-none py-1 px-1 font-medium"
+                    className="flex-1 min-w-0 bg-transparent border-none text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none py-1.5 px-1 font-medium"
                   />
                   {quickDishInput && (
                     <button
                       type="button"
                       onClick={() => setQuickDishInput('')}
-                      className="p-0.5 text-slate-400 hover:text-white cursor-pointer"
+                      className="p-1 text-slate-400 hover:text-white cursor-pointer"
                       title="Clear input"
                     >
                       <X className="w-3.5 h-3.5" />
@@ -3830,7 +3830,7 @@ export const MealsPage: React.FC = () => {
                   <button
                     type="submit"
                     disabled={!quickDishInput.trim() || isAddingQuick}
-                    className="h-6 px-2.5 sm:px-3 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 disabled:opacity-40 text-slate-950 font-bold text-xs flex items-center gap-1 transition-all shadow-md shadow-emerald-500/20 shrink-0 active:scale-95 cursor-pointer"
+                    className="h-7 px-2.5 sm:px-3 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 disabled:opacity-40 text-slate-950 font-bold text-xs flex items-center gap-1 transition-all shadow-md shadow-emerald-500/20 shrink-0 active:scale-95 cursor-pointer"
                     title="Add to planner"
                   >
                     {isAddingQuick ? (
@@ -4013,11 +4013,11 @@ export const MealsPage: React.FC = () => {
 
           {/* ================= 2b. PANTRY TAB ================= */}
           {visitedTabs['pantry'] && (
-            <div className={activeTab === 'pantry' ? 'space-y-3' : 'hidden'}>
-              {/* Inline Search Bar for Pantry (same height and style as Lists, Recipes, Planner: h-8, rounded-xl) */}
+            <div className={activeTab === 'pantry' ? 'flex flex-col gap-2.5 sm:gap-3' : 'hidden'}>
+              {/* Inline Search Bar for Pantry (same height as top menu: h-[38px], rounded-xl) */}
               <div className="relative z-20">
-                <div className="h-8 flex items-center gap-1.5 bg-slate-900/90 border border-white/10 hover:border-white/20 focus-within:border-emerald-500/50 rounded-xl px-1.5 transition-all shadow-md">
-                  <div className="w-5 h-5 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0 text-emerald-400">
+                <div className="h-[38px] min-h-[38px] flex items-center gap-2 bg-slate-900/90 border border-white/10 hover:border-white/20 focus-within:border-emerald-500/50 rounded-xl px-2.5 transition-all shadow-md">
+                  <div className="w-6 h-6 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0 text-emerald-400">
                     <Search className="w-3.5 h-3.5 stroke-[2.2]" />
                   </div>
                   <input
@@ -4025,13 +4025,13 @@ export const MealsPage: React.FC = () => {
                     placeholder="Search pantry items..."
                     value={pantrySearchQuery}
                     onChange={(e) => setPantrySearchQuery(e.target.value)}
-                    className="flex-1 min-w-0 bg-transparent border-none text-xs text-white placeholder-slate-500 focus:outline-none py-1 px-1 font-medium"
+                    className="flex-1 min-w-0 bg-transparent border-none text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none py-1.5 px-1 font-medium"
                   />
                   {pantrySearchQuery && (
                     <button
                       type="button"
                       onClick={() => setPantrySearchQuery('')}
-                      className="p-0.5 text-slate-400 hover:text-white cursor-pointer"
+                      className="p-1 text-slate-400 hover:text-white cursor-pointer"
                       title="Clear search"
                     >
                       <X className="w-3.5 h-3.5" />

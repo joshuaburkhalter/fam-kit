@@ -1051,9 +1051,9 @@ export const RecipesPage: React.FC = () => {
         </div>
       ) : (
         /* Recipe Box Grid List View */
-        <div className="space-y-4">
+        <div className="flex flex-col gap-2.5 sm:gap-3">
           {/* Consistent Mobile-First Header */}
-          <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-md shadow-emerald-500/20 text-slate-950">
                 <BookOpen className="w-5 h-5 stroke-[2.2]" />
@@ -1094,14 +1094,14 @@ export const RecipesPage: React.FC = () => {
           </div>
 
           {/* Top Search Bar */}
-          <div className="relative flex items-center">
+          <div className="relative h-[38px] min-h-[38px] flex items-center">
             <Search className="w-4 h-4 text-slate-400 absolute left-3.5 pointer-events-none" />
             <input
               type="text"
               placeholder="Search recipes by name, tag, ingredient..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-9 py-2 rounded-2xl bg-slate-900/90 border border-white/10 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/50 shadow-inner"
+              className="w-full h-full pl-10 pr-9 rounded-xl bg-slate-900/90 border border-white/10 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/50 shadow-md"
             />
             {searchQuery && (
               <button

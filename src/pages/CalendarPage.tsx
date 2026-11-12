@@ -465,15 +465,15 @@ export const CalendarPage: React.FC = () => {
   const timelineDays = showPastEvents ? pastDays : upcomingDays;
 
   return (
-    <div className="max-w-7xl mx-auto px-3 sm:px-6 pt-3 pb-28 md:pb-20 space-y-4">
+    <div className="max-w-7xl mx-auto px-3 sm:px-6 pt-2.5 sm:pt-3 pb-28 md:pb-20 flex flex-col gap-2.5 sm:gap-3">
       {/* ========================================================
           MOBILE VIEW: Chronological Timeline Feed (Original Mobile View)
          ======================================================== */}
-      <div className="block md:hidden space-y-3">
+      <div className="block md:hidden flex flex-col gap-2.5">
         {/* Mobile Sub-Bar: Compact Family Avatars + Past Quick Toggle + All/Events Toggle */}
-        <div className="flex items-center justify-between gap-2 py-1">
+        <div className="flex items-center justify-between gap-2 pb-0.5">
           {/* Simple, Small Family User Toggle */}
-          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-2 px-1 -my-1.5">
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1 px-1">
             {/* "All" button */}
             <button
               type="button"
@@ -912,7 +912,7 @@ export const CalendarPage: React.FC = () => {
       {/* ========================================================
           DESKTOP VIEW: Full Google Calendar (Month, Week, Day, Agenda)
          ======================================================== */}
-      <div className="hidden md:block space-y-4">
+      <div className="hidden md:flex flex-col gap-2.5 sm:gap-3">
         {/* Top Google Calendar Header */}
         <CalendarHeader
           title={headerTitle}
