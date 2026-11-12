@@ -338,7 +338,7 @@ export const RecipePromptModal: React.FC<RecipePromptModalProps> = ({
                   Ingredients ({currentRecipe.ingredients?.length || 0})
                 </span>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-48 overflow-y-auto pr-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                 {currentRecipe.ingredients?.map((ing, i) => (
                   <div
                     key={i}
@@ -362,11 +362,11 @@ export const RecipePromptModal: React.FC<RecipePromptModalProps> = ({
               <span className="font-bold text-slate-200 text-xs block">
                 Instructions ({currentRecipe.instructions?.length || 0} steps)
               </span>
-              <ol className="space-y-2 max-h-44 overflow-y-auto pr-1">
+              <ol className="space-y-2">
                 {currentRecipe.instructions?.map((step, idx) => (
                   <li
                     key={idx}
-                    className="text-xs text-slate-300 flex items-start gap-2.5 leading-relaxed bg-slate-950/40 p-2 rounded-xl border border-white/5"
+                    className="text-xs text-slate-300 flex items-start gap-2.5 leading-relaxed bg-slate-950/40 p-2.5 rounded-xl border border-white/5"
                   >
                     <span className="w-5 h-5 rounded-full bg-white/10 text-slate-300 font-mono text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
                       {idx + 1}
