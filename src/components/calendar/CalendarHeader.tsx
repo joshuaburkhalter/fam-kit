@@ -216,7 +216,7 @@ export const CalendarHeader: React.FC<CalendarHeaderProps> = ({
       </div>
 
       {/* Sub-Bar: Family Member Filters */}
-      <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5 px-1">
+      <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1.5 px-1.5 -my-1">
         <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mr-1 shrink-0">
           Filter:
         </span>

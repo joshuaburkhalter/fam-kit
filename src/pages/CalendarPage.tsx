@@ -473,7 +473,7 @@ export const CalendarPage: React.FC = () => {
         {/* Mobile Sub-Bar: Compact Family Avatars + Past Quick Toggle + All/Events Toggle */}
         <div className="flex items-center justify-between gap-2 pb-0.5">
           {/* Simple, Small Family User Toggle */}
-          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1 px-1">
+          <div className="flex items-center gap-2.5 overflow-x-auto no-scrollbar py-2 px-1.5 -my-1.5">
             {/* "All" button */}
             <button
               type="button"
