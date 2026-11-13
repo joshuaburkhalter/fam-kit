@@ -1249,8 +1249,6 @@ app.post('/api/subscription/generate-code', (req, res) => {
       : 'Lifetime Complimentary Access';
   const uses = typeof maxUses === 'number' && maxUses > 0 ? maxUses : 1;
 
-  const authUser = getAuthUser(req);
-
   // If this code was previously deleted, unmark it so it can be used afresh
   try {
     const cleanCode = code.replace(/[\s\-_]/g, '').toUpperCase();
