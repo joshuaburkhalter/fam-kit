@@ -5,6 +5,7 @@ import {
   Calendar,
   Calendar as CalendarIcon,
   Plus,
+  Minus,
   Trash2,
   Check,
   Clock,
@@ -37,6 +38,7 @@ import {
   Tag,
   FolderPlus,
   ArrowLeftRight,
+  Scale,
 } from 'lucide-react';
 import { compressImageFile } from '../lib/imageCompression';
 import {
@@ -56,8 +58,10 @@ import { Drawer } from '../components/ui/Drawer';
 import { RecipeScraperModal, extractSharedUrl } from '../components/RecipeScraperModal';
 import { RecipePromptModal } from '../components/recipes/RecipePromptModal';
 import { EditRecipeModal } from '../components/EditRecipeModal';
+import { RecipeBatchModal } from '../components/recipes/RecipeBatchModal';
 import { IngredientSubstitutionModal } from '../components/IngredientSubstitutionModal';
 import { useLongPress } from '../hooks/useLongPress';
+import { scaleAmountString, scaleIngredient, formatRecipeBatchNote, detectBatchMultiplierFromNote } from '../lib/recipeScaling';
 import { NewRecipeCategoryModal } from '../components/recipes/NewRecipeCategoryModal';
 import { ManageRecipeCategoriesModal, CORE_RECIPE_CATEGORIES } from '../components/recipes/ManageRecipeCategoriesModal';
 import { BarcodeScannerModal } from '../components/inventory/BarcodeScannerModal';
@@ -296,6 +300,16 @@ export const MealsPage: React.FC = () => {
     ingredient: { item: string; amount?: string; unit?: string };
     index: number;
   } | null>(null);
+
+  // Batch multiplier & grocery scaling
+  const [recipeBatchMultiplier, setRecipeBatchMultiplier] = useState<number>(1);
+  const [batchModalRecipe, setBatchModalRecipe] = useState<Recipe | null>(null);
+
+  const scaledIngredients = useMemo(() => {
+    if (!selectedRecipe?.ingredients) return [];
+    if (recipeBatchMultiplier === 1) return selectedRecipe.ingredients;
+    return selectedRecipe.ingredients.map((ing) => scaleIngredient(ing, recipeBatchMultiplier));
+  }, [selectedRecipe?.ingredients, recipeBatchMultiplier]);
 
   // Image regeneration & photo replacement
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
@@ -928,6 +942,7 @@ export const MealsPage: React.FC = () => {
         setIsCookMode(false);
         setCheckedIngredients({});
         setCompletedSteps({});
+        setRecipeBatchMultiplier(1);
         return;
       }
     };
@@ -942,6 +957,16 @@ export const MealsPage: React.FC = () => {
     setCheckedIngredients({});
     setCompletedSteps({});
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
+
+    // Initialize batch multiplier based on existing grocery items for this recipe, or default to 1
+    const prefix = `for: ${recipe.title.trim().toLowerCase()}`;
+    const existingGroceryItem = groceryItems.find(
+      (item) => !item.is_completed && item.notes && item.notes.trim().toLowerCase().startsWith(prefix)
+    );
+    const detectedMultiplier = existingGroceryItem
+      ? detectBatchMultiplierFromNote(existingGroceryItem.notes)
+      : null;
+    setRecipeBatchMultiplier(detectedMultiplier || 1);
 
     if (typeof window !== 'undefined') {
       recipeHistoryPushedRef.current = true;
@@ -994,6 +1019,7 @@ export const MealsPage: React.FC = () => {
     setIsCookMode(false);
     setCheckedIngredients({});
     setCompletedSteps({});
+    setRecipeBatchMultiplier(1);
 
     if (typeof window !== 'undefined') {
       if (hadCookMode && hadRecipeDetail) {
@@ -1783,7 +1809,7 @@ export const MealsPage: React.FC = () => {
   };
 
   // Shop / Remove Ingredients to/from Grocery List
-  const handleToggleShopIngredients = async (recipe: Recipe, e?: React.MouseEvent) => {
+  const handleToggleShopIngredients = async (recipe: Recipe, e?: React.MouseEvent, targetMultiplier?: number) => {
     if (e) e.stopPropagation();
     if (!householdId) return;
 
@@ -1817,6 +1843,10 @@ export const MealsPage: React.FC = () => {
       return;
     }
 
+    const mult = typeof targetMultiplier === 'number' && targetMultiplier > 0
+      ? targetMultiplier
+      : (selectedRecipe && selectedRecipe.id === recipe.id ? recipeBatchMultiplier : 1);
+
     // Optimistically add ingredients to grocery list immediately
     const previousItems = groceryItems;
     const rawIngredients = recipe.ingredients && recipe.ingredients.length > 0
@@ -1831,14 +1861,15 @@ export const MealsPage: React.FC = () => {
       return;
     }
 
+    const note = formatRecipeBatchNote(recipe.title, mult);
     const optimisticItems: GroceryItem[] = ingredientsToAdd.map((ing, idx) => ({
       id: `temp-g-${Date.now()}-${idx}`,
       household_id: householdId,
       aisle_id: '',
       name: ing.item,
-      quantity: ing.amount,
+      quantity: mult !== 1 ? scaleAmountString(ing.amount, mult) : ing.amount,
       unit: ing.unit,
-      notes: `For: ${recipe.title}`,
+      notes: note,
       is_completed: false,
       list_type: 'grocery',
       created_at: new Date().toISOString(),
@@ -1856,15 +1887,17 @@ export const MealsPage: React.FC = () => {
       setJustAddedGroceryId((prev) => (prev === recipe.id ? null : prev));
     }, 2500);
 
+    const multLabel = mult !== 1 ? ` (${mult === 0.5 ? '½x' : `${mult}x`} batch)` : '';
     const toastMsg = matchedInPantry.length > 0
-      ? `Added ${ingredientsToAdd.length} items to Grocery (skipped ${matchedInPantry.length} already in pantry!)`
-      : `Added "${recipe.title}" ingredients to Grocery list!`;
+      ? `Added ${ingredientsToAdd.length} items to Grocery${multLabel} (skipped ${matchedInPantry.length} already in pantry!)`
+      : `Added "${recipe.title}" ingredients to Grocery list${multLabel}!`;
     showToast(toastMsg);
     triggerHapticCheck();
 
     try {
       await api.addRecipeToGrocery(recipe, householdId, {
         excludeItemNames: matchedInPantry.map((m) => m.item),
+        multiplier: mult,
       });
       const refreshedItems = await api.getGroceryItems(householdId);
       setGroceryItems(refreshedItems);
@@ -1878,6 +1911,65 @@ export const MealsPage: React.FC = () => {
         mealsDataCache.groceryItems = previousItems;
       }
       showToast('Error adding ingredients');
+    }
+  };
+
+  // Dynamically update batch multiplier for recipe and existing grocery list items
+  const handleSetRecipeBatch = async (recipe: Recipe, newMultiplier: number) => {
+    setRecipeBatchMultiplier(newMultiplier);
+    if (!householdId) return;
+
+    // Check if recipe ingredients are currently on the grocery list
+    const inGrocery = isRecipeInGrocery(recipe.title);
+    if (!inGrocery) return;
+
+    const prefix = `for: ${recipe.title.trim().toLowerCase()}`;
+    const matchingItems = groceryItems.filter(
+      (item) => item.notes && item.notes.trim().toLowerCase().startsWith(prefix)
+    );
+    if (matchingItems.length === 0) return;
+
+    // Optimistically update existing grocery items
+    const previousItems = groceryItems;
+    const newNote = formatRecipeBatchNote(recipe.title, newMultiplier);
+    const updatedItems = matchingItems.map((item) => {
+      const rawIng = recipe.ingredients?.find(
+        (ing) => ing.item.trim().toLowerCase() === item.name.trim().toLowerCase()
+      );
+      const newQty = rawIng ? scaleAmountString(rawIng.amount, newMultiplier) : item.quantity;
+      return {
+        ...item,
+        quantity: newQty,
+        notes: newNote,
+      };
+    });
+
+    const updatedMap = new Map(updatedItems.map((item) => [item.id, item]));
+    const nextGrocery = groceryItems.map((item) => updatedMap.get(item.id) || item);
+    setGroceryItems(nextGrocery);
+    if (mealsDataCache && mealsDataCache.householdId === householdId) {
+      mealsDataCache.groceryItems = nextGrocery;
+    }
+
+    try {
+      triggerHapticCheck();
+      await api.batchUpdateGroceryItems(
+        updatedItems.map((item) => ({
+          id: item.id,
+          quantity: item.quantity,
+          unit: item.unit,
+          note: item.notes,
+        }))
+      );
+      const multDisplay = newMultiplier === 0.5 ? '½x' : `${newMultiplier}x`;
+      showToast(`Updated "${recipe.title}" on Grocery list (${multDisplay} batch)!`);
+    } catch (err) {
+      console.error('Failed to batch update grocery items', err);
+      setGroceryItems(previousItems);
+      if (mealsDataCache && mealsDataCache.householdId === householdId) {
+        mealsDataCache.groceryItems = previousItems;
+      }
+      showToast('Error updating grocery list batch');
     }
   };
 
@@ -2373,14 +2465,19 @@ export const MealsPage: React.FC = () => {
 
       // Optimistically add to grocery items
       const tempId = `temp-g-${Date.now()}-${index}`;
+      const scaledAmount = recipeBatchMultiplier !== 1
+        ? scaleAmountString(ing.amount, recipeBatchMultiplier)
+        : (ing.amount || '');
+      const batchNote = formatRecipeBatchNote(selectedRecipe.title, recipeBatchMultiplier);
+
       const optimisticItem: GroceryItem = {
         id: tempId,
         household_id: householdId,
         aisle_id: '',
         name: ing.item,
-        quantity: ing.amount || '',
+        quantity: scaledAmount,
         unit: ing.unit || '',
-        notes: `For: ${selectedRecipe.title}`,
+        notes: batchNote,
         is_completed: false,
         list_type: 'grocery',
         created_at: new Date().toISOString(),
@@ -2397,11 +2494,11 @@ export const MealsPage: React.FC = () => {
       try {
         const created = await api.addGroceryItem(householdId, {
           name: ing.item,
-          quantity: ing.amount,
+          quantity: scaledAmount,
           unit: ing.unit,
           category: ing.category,
           list_type: 'grocery',
-          notes: `For: ${selectedRecipe.title}`,
+          notes: batchNote,
         });
 
         // If the user unchecked it while the request was in-flight, delete it immediately
@@ -2983,7 +3080,14 @@ export const MealsPage: React.FC = () => {
                   {selectedRecipe.servings ? (
                     <div className="flex items-center gap-1.5">
                       <Users className="w-3.5 h-3.5 text-teal-400" />
-                      <span>{selectedRecipe.servings} servings</span>
+                      <span>
+                        {Math.round(selectedRecipe.servings * recipeBatchMultiplier * 10) / 10} servings
+                        {recipeBatchMultiplier !== 1 && (
+                          <span className="text-teal-400 font-bold ml-1">
+                            ({recipeBatchMultiplier === 0.5 ? '½' : recipeBatchMultiplier}x)
+                          </span>
+                        )}
+                      </span>
                     </div>
                   ) : null}
                   <div className="flex items-center gap-1.5">
@@ -3029,40 +3133,84 @@ export const MealsPage: React.FC = () => {
 
           {/* Ingredients Section */}
           <div className="glass-panel p-5 rounded-3xl border border-white/10 space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2 uppercase tracking-wider text-xs">
-                <span>Ingredients</span>
-                <span className="text-[11px] font-mono text-slate-400 font-normal">
-                  ({Object.values(checkedIngredients).filter(Boolean).length}/{selectedRecipe.ingredients.length})
-                </span>
-              </h3>
-              {(() => {
-                const inGrocery = isRecipeInGrocery(selectedRecipe.title);
-                const isJustAddedGrocery = justAddedGroceryId === selectedRecipe.id;
-                return (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2 uppercase tracking-wider text-xs">
+                  <span>Ingredients</span>
+                  <span className="text-[11px] font-mono text-slate-400 font-normal">
+                    ({Object.values(checkedIngredients).filter(Boolean).length}/{selectedRecipe.ingredients.length})
+                  </span>
+                </h3>
+              </div>
+
+              {/* Batch Multiplier Controls & Add to Grocery */}
+              <div className="flex items-center flex-wrap gap-2">
+                {/* Multiplier Pills */}
+                <div className="flex items-center bg-slate-900/90 p-0.5 rounded-xl border border-white/10 text-xs">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 px-2 select-none">
+                    Batch
+                  </span>
+                  {[0.5, 1, 1.5, 2, 3].map((mult) => {
+                    const isActive = recipeBatchMultiplier === mult;
+                    const label = mult === 0.5 ? '½x' : `${mult}x`;
+                    return (
+                      <button
+                        key={mult}
+                        type="button"
+                        onClick={() => handleSetRecipeBatch(selectedRecipe, mult)}
+                        className={`px-2 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          isActive
+                            ? 'bg-teal-500 text-slate-950 shadow-sm'
+                            : 'text-slate-400 hover:text-white hover:bg-white/5'
+                        }`}
+                        title={`Scale recipe to ${mult}x batch (${mult < 1 ? 'less' : mult > 1 ? 'more' : 'standard'} people)`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
                   <button
-                    onClick={(e) => handleToggleShopIngredients(selectedRecipe, e)}
-                    className={`text-xs font-bold flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all cursor-pointer shadow-sm active:scale-95 ${
-                      inGrocery
-                        ? 'text-emerald-400 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30'
-                        : 'text-slate-950 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 shadow-emerald-500/20'
-                    }`}
-                    title={inGrocery ? 'In Grocery (click to remove)' : 'Add ingredients to Grocery List'}
+                    type="button"
+                    onClick={() => setBatchModalRecipe(selectedRecipe)}
+                    className="p-1 rounded-lg text-slate-400 hover:text-teal-300 hover:bg-white/5 transition-colors cursor-pointer ml-0.5"
+                    title="Detailed batch multiplier & servings"
                   >
-                    {inGrocery ? (
-                      <>
-                        <Check className="w-3.5 h-3.5 stroke-[2.5]" />
-                        <span>{isJustAddedGrocery ? 'Added to Grocery!' : 'In Grocery'}</span>
-                      </>
-                    ) : (
-                      <>
-                        <ShoppingCart className="w-3.5 h-3.5 stroke-[2.5]" />
-                        <span>Add to Grocery</span>
-                      </>
-                    )}
+                    <Scale className="w-3.5 h-3.5" />
                   </button>
-                );
-              })()}
+                </div>
+
+                {/* Add to Grocery Button */}
+                {(() => {
+                  const inGrocery = isRecipeInGrocery(selectedRecipe.title);
+                  const isJustAddedGrocery = justAddedGroceryId === selectedRecipe.id;
+                  const multSuffix = recipeBatchMultiplier !== 1
+                    ? ` (${recipeBatchMultiplier === 0.5 ? '½x' : `${recipeBatchMultiplier}x`})`
+                    : '';
+                  return (
+                    <button
+                      onClick={(e) => handleToggleShopIngredients(selectedRecipe, e, recipeBatchMultiplier)}
+                      className={`text-xs font-bold flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all cursor-pointer shadow-sm active:scale-95 ${
+                        inGrocery
+                          ? 'text-emerald-400 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30'
+                          : 'text-slate-950 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 shadow-emerald-500/20'
+                      }`}
+                      title={inGrocery ? 'In Grocery (click to remove)' : `Add ingredients to Grocery List${multSuffix}`}
+                    >
+                      {inGrocery ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                          <span>{isJustAddedGrocery ? 'Added to Grocery!' : `In Grocery${multSuffix}`}</span>
+                        </>
+                      ) : (
+                        <>
+                          <ShoppingCart className="w-3.5 h-3.5 stroke-[2.5]" />
+                          <span>Add{multSuffix} to Grocery</span>
+                        </>
+                      )}
+                    </button>
+                  );
+                })()}
+              </div>
             </div>
 
             {/* Substitution Tip Banner */}
@@ -3074,7 +3222,7 @@ export const MealsPage: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-              {selectedRecipe.ingredients.map((ing, idx) => (
+              {scaledIngredients.map((ing, idx) => (
                 <MealRecipeIngredientRow
                   key={idx}
                   ing={ing}
@@ -3960,13 +4108,16 @@ export const MealsPage: React.FC = () => {
                               {linkedRecipe && (
                                 <button
                                   type="button"
-                                  onClick={(e) => handleToggleShopIngredients(linkedRecipe, e)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setBatchModalRecipe(linkedRecipe);
+                                  }}
                                   className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
                                     isRecipeInGrocery(linkedRecipe.title)
                                       ? 'text-emerald-400 bg-emerald-500/15 border border-emerald-500/30'
                                       : 'text-slate-400 hover:text-pink-400 hover:bg-pink-500/10'
                                   }`}
-                                  title={isRecipeInGrocery(linkedRecipe.title) ? 'In Grocery (click to remove)' : 'Add ingredients to Grocery List'}
+                                  title={isRecipeInGrocery(linkedRecipe.title) ? 'In Grocery (click to adjust or remove)' : 'Add ingredients to Grocery List'}
                                 >
                                   <ShoppingCart className="w-3.5 h-3.5" />
                                 </button>
@@ -5009,6 +5160,43 @@ export const MealsPage: React.FC = () => {
             });
             handleSelectRecipe(newRec);
             showToast(`Added "${newRec.title}" to recipes!`);
+          }}
+        />
+      )}
+
+      {/* ================= MODAL: RECIPE BATCH / MULTIPLIER ================= */}
+      {batchModalRecipe && (
+        <RecipeBatchModal
+          isOpen={Boolean(batchModalRecipe)}
+          onClose={() => setBatchModalRecipe(null)}
+          recipe={batchModalRecipe}
+          initialMultiplier={
+            batchModalRecipe.id === selectedRecipe?.id
+              ? recipeBatchMultiplier
+              : (() => {
+                  const prefix = `for: ${batchModalRecipe.title.trim().toLowerCase()}`;
+                  const matched = groceryItems.find(
+                    (item) => !item.is_completed && item.notes && item.notes.trim().toLowerCase().startsWith(prefix)
+                  );
+                  return (matched && detectBatchMultiplierFromNote(matched.notes)) || 1;
+                })()
+          }
+          isInGrocery={isRecipeInGrocery(batchModalRecipe.title)}
+          getIngredientPantryMatch={getIngredientPantryMatch}
+          onConfirmAdd={async (rec, mult) => {
+            if (rec.id === selectedRecipe?.id) {
+              setRecipeBatchMultiplier(mult);
+            }
+            await handleToggleShopIngredients(rec, undefined, mult);
+          }}
+          onConfirmUpdate={async (rec, mult) => {
+            if (rec.id === selectedRecipe?.id) {
+              setRecipeBatchMultiplier(mult);
+            }
+            await handleSetRecipeBatch(rec, mult);
+          }}
+          onRemove={async (rec) => {
+            await handleToggleShopIngredients(rec);
           }}
         />
       )}

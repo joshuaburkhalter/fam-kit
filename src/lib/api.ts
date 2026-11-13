@@ -32,6 +32,7 @@ import type {
 } from '../types';
 import { filterRecipeIngredientsForGrocery } from './groceryStaples';
 import { getCuratedSubstitutions } from './substitutions';
+import { scaleAmountString, formatRecipeBatchNote } from './recipeScaling';
 
 import { Capacitor } from '@capacitor/core';
 
@@ -181,6 +182,13 @@ export const api = {
 
   getMe: async () => {
     return fetchJson<{ user: any; household: any }>('/auth/me');
+  },
+
+  switchUser: async (userId: string) => {
+    return fetchJson<{ token: string; user: any }>('/auth/switch-user', {
+      method: 'POST',
+      body: JSON.stringify({ userId }),
+    });
   },
 
   getDemoUsers: async () => {
@@ -536,6 +544,21 @@ export const api = {
     });
   },
 
+  batchUpdateGroceryItems: (
+    items: Array<{
+      id: string;
+      quantity?: string | null;
+      unit?: string | null;
+      note?: string | null;
+      notes?: string | null;
+    }>
+  ) => {
+    return fetchJson<{ success: boolean; count: number }>('/grocery/batch', {
+      method: 'PATCH',
+      body: JSON.stringify({ items }),
+    });
+  },
+
   deleteGroceryItem: (id: string) =>
     fetchJson<{ success: boolean }>(`/grocery?id=${id}`, { method: 'DELETE' }),
 
@@ -786,9 +809,10 @@ export const api = {
   addRecipeToGrocery: async (
     recipeOrId: string | Recipe,
     householdId: string,
-    options?: { excludeItemNames?: string[] }
+    options?: { excludeItemNames?: string[]; multiplier?: number }
   ) => {
     const recipe = typeof recipeOrId === 'string' ? await api.getRecipe(recipeOrId) : recipeOrId;
+    const multiplier = options?.multiplier && options.multiplier > 0 ? options.multiplier : 1;
     const { toAdd, skippedStaples } = filterRecipeIngredientsForGrocery(recipe.ingredients || []);
     let count = 0;
     const excludeSet = new Set((options?.excludeItemNames || []).map((s) => s.toLowerCase().trim()));
@@ -797,13 +821,15 @@ export const api = {
       if (excludeSet.has(ing.item.toLowerCase().trim())) {
         continue;
       }
+      const scaledAmount = multiplier !== 1 ? scaleAmountString(ing.amount, multiplier) : ing.amount;
+      const note = formatRecipeBatchNote(recipe.title, multiplier);
       await api.addGroceryItem(householdId, {
         name: ing.item,
-        quantity: ing.amount,
+        quantity: scaledAmount,
         unit: ing.unit,
         category: ing.category,
         list_type: 'grocery',
-        notes: `For: ${recipe.title}`,
+        notes: note,
       });
       count++;
     }
@@ -1777,15 +1803,17 @@ export const api = {
     return fetchJson<{ states: HomeAssistantEntity[] }>('/home-assistant/states');
   },
 
-  getHomeAssistantImageUrl: (path?: string, householdId?: string): string => {
+  getHomeAssistantImageUrl: (path?: string, _householdId?: string): string => {
     if (!path) return '';
     if (path.startsWith('data:image')) return path;
-    const householdParam = householdId ? `&householdId=${encodeURIComponent(householdId)}` : '';
-    return `${BASE_URL}/home-assistant/image-proxy?path=${encodeURIComponent(path)}${householdParam}`;
+    const token = typeof localStorage !== 'undefined' ? localStorage.getItem('famkit_auth_token') || '' : '';
+    const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
+    return `${BASE_URL}/home-assistant/image-proxy?path=${encodeURIComponent(path)}${tokenParam}`;
   },
 
-  getHomeAssistantEventsUrl: (householdId?: string): string => {
-    const query = householdId ? `?householdId=${encodeURIComponent(householdId)}` : '';
+  getHomeAssistantEventsUrl: (_householdId?: string): string => {
+    const token = typeof localStorage !== 'undefined' ? localStorage.getItem('famkit_auth_token') || '' : '';
+    const query = token ? `?token=${encodeURIComponent(token)}` : '';
     return `${BASE_URL}/home-assistant/events${query}`;
   },
 

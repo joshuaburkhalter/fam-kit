@@ -130,6 +130,11 @@ export const AuthPage: React.FC<AuthPageProps> = ({
       return;
     }
 
+    if (!registerPassword || registerPassword.trim().length < 6) {
+      setErrorMessage('Please choose a password that is at least 6 characters long.');
+      return;
+    }
+
     setIsLoading(true);
     setErrorMessage(null);
     try {
@@ -137,7 +142,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
         username: cleanUser,
         name: registerDisplayName.trim() || cleanUser,
         email: registerEmail.trim() || undefined,
-        password: registerPassword || 'password123',
+        password: registerPassword.trim(),
         avatarColor: registerColor,
         role: registerRole,
         action: householdAction,

@@ -27,6 +27,7 @@ import { Toast } from '../components/ui/Toast';
 import { NewGroceryStoreModal } from '../components/grocery/NewGroceryStoreModal';
 import { ManageGroceryStoresModal } from '../components/grocery/ManageGroceryStoresModal';
 import { formatPantryQuantity } from '../lib/shelfLife';
+import { detectBatchMultiplierFromNote } from '../lib/recipeScaling';
 import { useRegisterFab } from '../context/ActionFabContext';
 
 interface GroceryDataCache {
@@ -2114,6 +2115,11 @@ export const GroceryPage: React.FC = () => {
                                 </div>
                                 {item.notes && (
                                   <p className="text-[11px] text-emerald-400/80 truncate leading-tight mt-0.5 flex items-center gap-1">
+                                    {detectBatchMultiplierFromNote(item.notes) && (
+                                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-teal-500/20 text-teal-300 border border-teal-500/30 shrink-0">
+                                        {detectBatchMultiplierFromNote(item.notes)}x batch
+                                      </span>
+                                    )}
                                     {item.notes.toLowerCase().includes('substitute for') && (
                                       <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0">
                                         ⇄ Swap
@@ -2287,6 +2293,11 @@ export const GroceryPage: React.FC = () => {
                         </div>
                         {item.notes && (
                           <p className="text-[11px] text-emerald-400/80 truncate leading-tight mt-0.5 flex items-center gap-1">
+                            {detectBatchMultiplierFromNote(item.notes) && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-teal-500/20 text-teal-300 border border-teal-500/30 shrink-0">
+                                {detectBatchMultiplierFromNote(item.notes)}x batch
+                              </span>
+                            )}
                             {item.notes.toLowerCase().includes('substitute for') && (
                               <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0">
                                 ⇄ Swap
@@ -2440,6 +2451,11 @@ export const GroceryPage: React.FC = () => {
                       </div>
                       {item.notes && (
                         <p className="text-[11px] text-emerald-400/80 truncate leading-tight mt-0.5 flex items-center gap-1">
+                          {detectBatchMultiplierFromNote(item.notes) && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-teal-500/20 text-teal-300 border border-teal-500/30 shrink-0">
+                              {detectBatchMultiplierFromNote(item.notes)}x batch
+                            </span>
+                          )}
                           {item.notes.toLowerCase().includes('substitute for') && (
                             <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0">
                               ⇄ Swap

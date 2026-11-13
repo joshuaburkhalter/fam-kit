@@ -1,4 +1,5 @@
 import { queryOne, queryAll, execute, saveDb } from './db.js';
+import { assertSafeExternalUrl } from './ssrf.js';
 
 export interface EntityCustomization {
   name?: string;
@@ -164,6 +165,7 @@ export async function testHomeAssistantConnection(
 
   if (!url) throw new Error('Home Assistant URL is required.');
   if (!token) throw new Error('Home Assistant Long-Lived Access Token is required.');
+  await assertSafeExternalUrl(url);
 
   const headers = {
     Authorization: `Bearer ${token}`,
@@ -840,11 +842,18 @@ export async function proxyHomeAssistantImage(
   }
 
   const cleanUrl = normalizeHaUrl(row.haUrl);
-  const targetUrl = rawPath.startsWith('http')
-    ? rawPath
-    : `${cleanUrl}${rawPath.startsWith('/') ? '' : '/'}${rawPath}`;
+  const trimmedPath = rawPath.trim();
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmedPath) || trimmedPath.startsWith('//')) {
+    throw new Error('Only relative Home Assistant media paths are allowed.');
+  }
 
-  const res = await fetch(targetUrl, {
+  const base = new URL(cleanUrl);
+  const resolved = new URL(trimmedPath.startsWith('/') ? trimmedPath : `/${trimmedPath}`, base);
+  if (resolved.origin !== base.origin) {
+    throw new Error('Invalid Home Assistant media path.');
+  }
+
+  const res = await fetch(resolved.toString(), {
     headers: {
       Authorization: `Bearer ${row.haToken}`,
     },

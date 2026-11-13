@@ -1,9 +1,19 @@
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import crypto from 'crypto';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
+import {
+  hashPassword,
+  verifyPassword,
+  isLegacyPlaintextPassword,
+  createSessionToken,
+  verifySessionToken,
+} from './auth.js';
 import { getDb, queryAll, queryOne, execute, saveDb, createDefaultAisles, generateSecureVoucherCode, healHouseholdSubscriptions } from './db.js';
 import { getGeminiModel } from './gemini.js';
 import { parseRecipeFromUrl, parseRecipeFromHtml, parseRecipeFromImages, getCuratedFoodImage, findAccurateRecipePhoto, generateRecipeImageWithImagen } from './recipe-parser.js';
@@ -122,11 +132,164 @@ export const APP_BUILD_ID =
   process.env.RENDER_INSTANCE_ID ||
   `build_${Date.now()}`;
 
-app.use(cors());
+const allowedOrigins = new Set(
+  [
+    ...(process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',').map((s) => s.trim()) : []),
+    process.env.APP_URL?.trim(),
+    'https://homebase-atgh.onrender.com',
+    'capacitor://localhost',
+    'http://localhost',
+    'http://localhost:5173',
+    'http://localhost:3001',
+    'http://127.0.0.1:5173',
+    'http://127.0.0.1:3001',
+  ].filter(Boolean) as string[]
+);
+
+app.set('trust proxy', 1);
+
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
+  })
+);
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.has(origin) || process.env.NODE_ENV !== 'production') {
+        return callback(null, true);
+      }
+      return callback(new Error('Not allowed by CORS'));
+    },
+    credentials: true,
+  })
+);
+
+// Stripe Webhook MUST be registered before express.json() so req.body remains a raw Buffer for signature verification
+app.post('/api/subscription/stripe-webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  const stripe = getStripe();
+  const sig = req.headers['stripe-signature'];
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+  if (!stripe || !webhookSecret) {
+    console.error('Stripe webhook rejected: STRIPE_SECRET_KEY or STRIPE_WEBHOOK_SECRET is not configured.');
+    return res.status(503).json({ error: 'Stripe webhook is not configured' });
+  }
+
+  if (!sig) {
+    return res.status(400).send('Webhook Error: Missing stripe-signature header');
+  }
+
+  let event: any;
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+  } catch (err: any) {
+    console.error('Stripe webhook signature error:', err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  try {
+    switch (event.type) {
+      case 'checkout.session.completed': {
+        const session = event.data.object as any;
+        const householdId = session.client_reference_id || session.metadata?.householdId;
+        const plan = session.metadata?.plan || 'annual';
+        if (householdId) {
+          const isAnnual = plan === 'annual';
+          const durationDays = isAnnual ? 365 : 30;
+          const expiresAt = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString();
+          execute(
+            'UPDATE households SET subscriptionStatus = ?, subscriptionPlan = ?, subscriptionExpiresAt = ?, stripeCustomerId = ?, stripeSubscriptionId = ? WHERE id = ?',
+            ['active', plan, expiresAt, session.customer, session.subscription, householdId]
+          );
+        }
+        break;
+      }
+      case 'customer.subscription.deleted': {
+        const sub = event.data.object as any;
+        const householdId = sub.metadata?.householdId;
+        if (householdId) {
+          execute("UPDATE households SET subscriptionStatus = 'expired' WHERE id = ?", [householdId]);
+        } else if (sub.id) {
+          execute("UPDATE households SET subscriptionStatus = 'expired' WHERE stripeSubscriptionId = ?", [sub.id]);
+        }
+        break;
+      }
+      case 'customer.subscription.updated': {
+        const sub = event.data.object as any;
+        const householdId = sub.metadata?.householdId;
+        const status = sub.status === 'active' || sub.status === 'trialing' ? 'active' : 'expired';
+        if (householdId) {
+          execute('UPDATE households SET subscriptionStatus = ? WHERE id = ?', [status, householdId]);
+        }
+        break;
+      }
+    }
+    res.json({ received: true });
+  } catch (err: any) {
+    console.error('Error handling webhook event:', err);
+    res.status(500).json({ error: 'Webhook processing failed' });
+  }
+});
+
 app.use(express.json({ limit: '50mb' }));
+
+const authRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 25,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many authentication attempts. Please try again in 15 minutes.' },
+});
+
+const aiRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 40,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many AI requests. Please wait a few minutes and try again.' },
+});
+
+app.use('/api/auth/login', authRateLimiter);
+app.use('/api/auth/register', authRateLimiter);
+app.use('/api/assistant', aiRateLimiter);
+app.use('/api/recipes/generate-from-prompt', aiRateLimiter);
+app.use('/api/recipes/import-images', aiRateLimiter);
+app.use('/api/calendar/scan-vision', aiRateLimiter);
+app.use('/api/inventory/scan-vision', aiRateLimiter);
 
 app.use((_req, res, next) => {
   res.setHeader('X-App-Build', APP_BUILD_ID);
+  next();
+});
+
+// Enforce authentication on all /api routes except explicit public endpoints
+app.use('/api', (req, res, next) => {
+  const isPublicGet =
+    req.method === 'GET' &&
+    (req.path === '/health' ||
+      req.path === '/version' ||
+      req.path === '/subscription/stripe-status' ||
+      req.path === '/push' ||
+      req.path === '/auth/google/callback' ||
+      req.path === '/google/callback' ||
+      (req.path === '/auth/demo-users' && process.env.NODE_ENV !== 'production'));
+
+  const isPublicPost =
+    req.method === 'POST' &&
+    (req.path === '/auth/login' || req.path === '/auth/register' || req.path === '/subscription/stripe-webhook');
+
+  if (isPublicGet || isPublicPost) {
+    return next();
+  }
+
+  const user = getAuthUser(req);
+  if (!user) {
+    return res.status(401).json({ error: 'Authentication required.' });
+  }
+  (req as any).authUser = user;
   next();
 });
 
@@ -197,37 +360,49 @@ app.post('/api/convert-image', async (req, res) => {
   }
 });
 
-// Helper: Get active user from request headers
+// Helper: Get active user from verified Bearer session token
 function getAuthUser(req: express.Request) {
-  const authHeader = req.headers['authorization'];
-  let userId = req.headers['x-user-id'] as string;
-  if (!userId && authHeader?.startsWith('Bearer ')) {
-    userId = authHeader.substring(7).trim();
+  if ((req as any).authUser) {
+    return (req as any).authUser as {
+      id: string;
+      name: string;
+      username: string;
+      email: string;
+      avatar: string;
+      color: string;
+      role: string;
+      householdId: string;
+    };
   }
-  if (!userId || userId === 'undefined') return null;
+
+  const authHeader = req.headers['authorization'];
+  let token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : '';
+
+  // Allow query token ONLY for EventSource / <img> endpoints that cannot send Authorization headers
+  if (!token && (req.path === '/home-assistant/events' || req.path === '/home-assistant/image-proxy' || req.path === '/api/home-assistant/events' || req.path === '/api/home-assistant/image-proxy')) {
+    token = typeof req.query.token === 'string' ? req.query.token.trim() : '';
+  }
+
+  const verified = verifySessionToken(token);
+  if (!verified) return null;
+
   return queryOne<{ id: string; name: string; username: string; email: string; avatar: string; color: string; role: string; householdId: string }>(
     'SELECT id, name, username, email, avatar, color, role, householdId FROM users WHERE id = ?',
-    [userId]
+    [verified.uid]
   );
 }
 
-// Helper: Get active household ID
+// Helper: Get active household ID strictly from authenticated user
 function getHouseholdId(req: express.Request): string {
-  const header = req.headers['x-household-id'] as string;
-  if (header && header.trim() && header !== 'undefined') return header.trim();
-
   const user = getAuthUser(req);
-  if (user?.householdId) return user.householdId;
-
-  const row = queryOne<{ id: string }>('SELECT id FROM households LIMIT 1');
-  return row?.id || 'fam_default_1';
+  return user?.householdId || '';
 }
 
 export function generateRandomInviteCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
   for (let i = 0; i < 6; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
+    code += chars.charAt(crypto.randomInt(chars.length));
   }
   return code;
 }
@@ -315,72 +490,49 @@ app.post('/api/auth/login', (req, res) => {
     const cleanLogin = loginInput.toLowerCase();
     const strippedLogin = cleanLogin.replace(/^@+/, '');
 
-    // Strictly match username OR email, also support leading @ or exact name match
-    let user = queryOne<{ id: string; name: string; username: string; email: string; password: string; avatar: string; color: string; role: string; householdId: string }>(
+    // Match strictly by username or email (no name-based collision or hardcoded bypasses)
+    const user = queryOne<{ id: string; name: string; username: string; email: string; password: string; avatar: string; color: string; role: string; householdId: string }>(
       `SELECT * FROM users 
        WHERE LOWER(username) = ? 
           OR LOWER(username) = ?
           OR LOWER(email) = ?
           OR LOWER(email) = ?
-          OR LOWER(name) = ?
-          OR LOWER(REPLACE(name, ' ', '')) = ?
        ORDER BY CASE WHEN id LIKE 'u_%' OR id = 'u1' THEN 1 ELSE 2 END, id DESC`,
-      [cleanLogin, strippedLogin, cleanLogin, strippedLogin, cleanLogin, strippedLogin]
+      [cleanLogin, strippedLogin, cleanLogin, strippedLogin]
     );
 
-    // Fallback support for Joshua's variations (joshua, joshuaburkhalter, email)
-    if (!user && (strippedLogin === 'joshuaburkhalter' || strippedLogin === 'joshua' || strippedLogin.startsWith('joshua@') || strippedLogin.startsWith('joshuaburkhalter@'))) {
-      user = queryOne<{ id: string; name: string; username: string; email: string; password: string; avatar: string; color: string; role: string; householdId: string }>(
-        `SELECT * FROM users 
-         WHERE LOWER(username) = 'joshuaburkhalter'
-            OR LOWER(username) = 'joshua'
-            OR LOWER(email) IN ('joshua@redpointaudio.com', 'joshuaburkhalter@gmail.com')
-         ORDER BY CASE WHEN LOWER(username) = 'joshuaburkhalter' THEN 1 ELSE 2 END
-         LIMIT 1`
-      );
+    if (!user || !verifyPassword(rawPassword, user.password)) {
+      return res.status(401).json({ error: 'Invalid username/email or password.' });
     }
 
-    // Fallback support for demo user alex
-    if (!user && (strippedLogin === 'alex' || strippedLogin.startsWith('alex@'))) {
-      user = queryOne<{ id: string; name: string; username: string; email: string; password: string; avatar: string; color: string; role: string; householdId: string }>(
-        `SELECT * FROM users 
-         WHERE LOWER(username) = 'alex' 
-            OR LOWER(email) LIKE 'alex@%'
-            OR id = 'u1'
-         LIMIT 1`
-      );
-    }
-
-    if (!user) {
-      return res.status(401).json({ error: 'No account found with that username or email.' });
-    }
-
-    if (user.password && user.password !== rawPassword && rawPassword !== 'password123') {
-      return res.status(401).json({ error: 'Incorrect password. Please try again.' });
+    // Automatically upgrade legacy plaintext passwords to salted scrypt hashes on successful login
+    if (isLegacyPlaintextPassword(user.password)) {
+      try {
+        const hashed = hashPassword(rawPassword);
+        execute('UPDATE users SET password = ? WHERE id = ?', [hashed, user.id]);
+        saveDb();
+      } catch {}
     }
 
     let household = user.householdId ? queryOne('SELECT * FROM households WHERE id = ?', [user.householdId]) : null;
     if (!household) {
-      // Self-heal: ensure user is never left without a valid household
-      household = queryOne('SELECT * FROM households ORDER BY id ASC LIMIT 1');
-      if (household) {
-        execute('UPDATE users SET householdId = ? WHERE id = ?', [household.id, user.id]);
-      } else {
-        const newHouseholdId = `fam_${Date.now()}`;
-        const code = getUniqueInviteCode();
-        const now = new Date().toISOString();
-        execute(
-          'INSERT INTO households (id, name, inviteCode, createdAt, subscriptionStatus, subscriptionPlan) VALUES (?, ?, ?, ?, ?, ?)',
-          [newHouseholdId, `${user.name || 'My'}'s Family`, code, now, 'active', 'lifetime_founder']
-        );
-        createDefaultAisles(newHouseholdId);
-        execute('UPDATE users SET householdId = ? WHERE id = ?', [newHouseholdId, user.id]);
-        household = queryOne('SELECT * FROM households WHERE id = ?', [newHouseholdId]);
-      }
+      // Self-heal: create a dedicated household if orphaned (never attach to another family's household)
+      const newHouseholdId = `fam_${Date.now()}`;
+      const code = getUniqueInviteCode();
+      const now = new Date().toISOString();
+      execute(
+        'INSERT INTO households (id, name, inviteCode, createdAt, subscriptionStatus, subscriptionPlan) VALUES (?, ?, ?, ?, ?, ?)',
+        [newHouseholdId, `${user.name || 'My'}'s Family`, code, now, 'unpaid', null]
+      );
+      createDefaultAisles(newHouseholdId);
+      execute('UPDATE users SET householdId = ? WHERE id = ?', [newHouseholdId, user.id]);
+      household = queryOne('SELECT * FROM households WHERE id = ?', [newHouseholdId]);
     }
 
+    const token = createSessionToken(user.id, household.id);
+
     res.json({
-      token: user.id,
+      token,
       user: formatUser(user),
       household: formatHousehold(household),
     });
@@ -425,7 +577,12 @@ app.post('/api/auth/register', (req, res) => {
     }
 
     const displayName = (name && typeof name === 'string' && name.trim()) || cleanUsername;
-    const userPassword = password !== undefined && password !== null ? String(password).trim() : 'password123';
+    const rawUserPassword = password !== undefined && password !== null ? String(password).trim() : '';
+    if (rawUserPassword.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters long.' });
+    }
+    const hashedUserPassword = hashPassword(rawUserPassword);
+    const safeRole = typeof role === 'string' && role.trim().toLowerCase() === 'parent' ? 'Parent' : 'Member';
     let targetHouseholdId: string;
     let initialPromoUsed: string | null = null;
     const now = new Date().toISOString();
@@ -545,24 +702,13 @@ app.post('/api/auth/register', (req, res) => {
         }
       }
     } else {
-      const existing = queryOne<{ id: string }>('SELECT id FROM households LIMIT 1');
-      if (existing) {
-        targetHouseholdId = existing.id;
-      } else {
-        targetHouseholdId = `fam_${Date.now()}`;
-        const code = getUniqueInviteCode();
-        execute(
-          'INSERT INTO households (id, name, inviteCode, createdAt, subscriptionStatus, subscriptionPlan) VALUES (?, ?, ?, ?, ?, ?)',
-          [targetHouseholdId, 'My Family', code, now, 'active', 'lifetime_founder']
-        );
-        createDefaultAisles(targetHouseholdId);
-      }
+      return res.status(400).json({ error: 'Invalid registration action. Specify create_household or join_household.' });
     }
 
     const userId = `u_${Date.now()}`;
     execute(
       'INSERT INTO users (id, name, username, email, avatar, color, role, householdId, password, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [userId, displayName, cleanUsername, cleanEmail, '👤', avatarColor || '#10b981', role || 'Member', targetHouseholdId, userPassword, now]
+      [userId, displayName, cleanUsername, cleanEmail, '👤', avatarColor || '#10b981', safeRole, targetHouseholdId, hashedUserPassword, now]
     );
 
     if (initialPromoUsed) {
@@ -598,12 +744,14 @@ app.post('/api/auth/register', (req, res) => {
       email: cleanEmail,
       avatar: '👤',
       color: avatarColor || '#10b981',
-      role: role || 'Member',
+      role: safeRole,
       householdId: targetHouseholdId,
     };
 
+    const token = createSessionToken(userId, targetHouseholdId);
+
     res.json({
-      token: userId,
+      token,
       user: formatUser(user),
       household: formatHousehold(household),
     });
@@ -636,8 +784,35 @@ app.get('/api/auth/me', (req, res) => {
   }
 });
 
-// 0. Auth: Demo Users across Households
+// 0. Auth: Switch active profile within the same household
+app.post('/api/auth/switch-user', (req, res) => {
+  const authUser = getAuthUser(req);
+  if (!authUser) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  const targetUserId = typeof req.body?.userId === 'string' ? req.body.userId.trim() : '';
+  if (!targetUserId) {
+    return res.status(400).json({ error: 'userId is required' });
+  }
+
+  const targetUser = queryOne<any>('SELECT * FROM users WHERE id = ?', [targetUserId]);
+  if (!targetUser || targetUser.householdId !== authUser.householdId) {
+    return res.status(403).json({ error: 'Forbidden: user does not belong to your household' });
+  }
+
+  if ((targetUser.role || '').toLowerCase() === 'admin' && !isServerAdmin(authUser)) {
+    return res.status(403).json({ error: 'Forbidden: cannot switch into an administrator account' });
+  }
+
+  const token = createSessionToken(targetUser.id, targetUser.householdId);
+  res.json({ token, user: formatUser(targetUser) });
+});
+
+// 0. Auth: Demo Users across Households (Development only)
 app.get('/api/auth/demo-users', (_req, res) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(404).json({ error: 'Not found' });
+  }
   const demoUsers = queryAll<{ id: string; name: string; username: string; email: string; avatar: string; color: string; role: string; householdId: string }>(
     'SELECT id, name, username, email, avatar, color, role, householdId FROM users WHERE email IS NOT NULL'
   );
@@ -838,8 +1013,12 @@ app.post('/api/subscription/redeem', (req, res) => {
   });
 });
 
-// 3. Subscribe to a paid plan ($10/mo or $7/mo annually)
+// 3. Subscribe to a paid plan (Development/Admin only - production uses Stripe Checkout)
 app.post('/api/subscription/subscribe', (req, res) => {
+  const authUser = getAuthUser(req);
+  if (process.env.NODE_ENV === 'production' || !authUser || !isServerAdmin(authUser)) {
+    return res.status(403).json({ error: 'Direct subscription activation is disabled. Please use Stripe Checkout.' });
+  }
   const householdId = getHouseholdId(req);
   const { plan } = req.body; // 'monthly' | 'annual'
 
@@ -883,7 +1062,10 @@ app.post('/api/subscription/create-checkout-session', async (req, res) => {
   const priceId = plan === 'annual' ? annualPriceId : monthlyPriceId;
 
   if (!stripe) {
-    // If Stripe secret key is not set, activate in simulated mode
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(503).json({ error: 'Payment processing is not configured.' });
+    }
+    // In local development only, activate in simulated mode when Stripe secret key is not set
     const isAnnual = plan === 'annual';
     const durationDays = isAnnual ? 365 : 30;
     const expiresAt = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString();
@@ -902,7 +1084,7 @@ app.post('/api/subscription/create-checkout-session', async (req, res) => {
   }
 
   try {
-    const origin = getCleanOrigin(req);
+    const origin = (process.env.APP_URL || '').trim().replace(/\/$/, '') || getCleanOrigin(req);
     const user = getAuthUser(req);
     const household = queryOne<{ id: string; name: string; stripeCustomerId?: string }>(
       'SELECT id, name, stripeCustomerId FROM households WHERE id = ?',
@@ -991,7 +1173,11 @@ app.get('/api/subscription/verify-checkout-session', async (req, res) => {
 
   try {
     const session = await stripe.checkout.sessions.retrieve(sessionId);
+    const authHouseholdId = getHouseholdId(req);
     const householdId = session.client_reference_id || session.metadata?.householdId;
+    if (householdId && householdId !== authHouseholdId) {
+      return res.status(403).json({ error: 'Forbidden: checkout session belongs to another household' });
+    }
     const plan = session.metadata?.plan || 'annual';
 
     if (session.payment_status === 'paid' || session.status === 'complete') {
@@ -1023,71 +1209,14 @@ app.get('/api/subscription/verify-checkout-session', async (req, res) => {
   }
 });
 
-// 3.3. Stripe Webhook Endpoint
-app.post('/api/subscription/stripe-webhook', express.raw({ type: 'application/json' }), async (req, res) => {
-  const stripe = getStripe();
-  const sig = req.headers['stripe-signature'];
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-
-  let event: any;
-
-  if (stripe && webhookSecret && sig) {
-    try {
-      event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
-    } catch (err: any) {
-      console.error('Stripe webhook signature error:', err.message);
-      return res.status(400).send(`Webhook Error: ${err.message}`);
-    }
-  } else {
-    event = typeof req.body === 'string' || Buffer.isBuffer(req.body) ? JSON.parse(req.body.toString()) : req.body;
-  }
-
-  try {
-    switch (event.type) {
-      case 'checkout.session.completed': {
-        const session = event.data.object as any;
-        const householdId = session.client_reference_id || session.metadata?.householdId;
-        const plan = session.metadata?.plan || 'annual';
-        if (householdId) {
-          const isAnnual = plan === 'annual';
-          const durationDays = isAnnual ? 365 : 30;
-          const expiresAt = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString();
-          execute(
-            'UPDATE households SET subscriptionStatus = ?, subscriptionPlan = ?, subscriptionExpiresAt = ?, stripeCustomerId = ?, stripeSubscriptionId = ? WHERE id = ?',
-            ['active', plan, expiresAt, session.customer, session.subscription, householdId]
-          );
-        }
-        break;
-      }
-      case 'customer.subscription.deleted': {
-        const sub = event.data.object as any;
-        const householdId = sub.metadata?.householdId;
-        if (householdId) {
-          execute("UPDATE households SET subscriptionStatus = 'expired' WHERE id = ?", [householdId]);
-        } else if (sub.id) {
-          execute("UPDATE households SET subscriptionStatus = 'expired' WHERE stripeSubscriptionId = ?", [sub.id]);
-        }
-        break;
-      }
-      case 'customer.subscription.updated': {
-        const sub = event.data.object as any;
-        const householdId = sub.metadata?.householdId;
-        const status = sub.status === 'active' || sub.status === 'trialing' ? 'active' : 'expired';
-        if (householdId) {
-          execute("UPDATE households SET subscriptionStatus = ? WHERE id = ?", [status, householdId]);
-        }
-        break;
-      }
-    }
-    res.json({ received: true });
-  } catch (err: any) {
-    console.error('Error handling webhook event:', err);
-    res.status(500).json({ error: 'Webhook processing failed' });
-  }
-});
+// (Stripe Webhook is registered before express.json() at the top of server/index.ts)
 
 // 4. Generate new secure promo code (Owner/Admin tool)
 app.post('/api/subscription/generate-code', (req, res) => {
+  const authUser = getAuthUser(req);
+  if (!authUser || !isServerAdmin(authUser)) {
+    return res.status(403).json({ error: 'Admin access required.' });
+  }
   const { durationMonths, description, maxUses, assignedTo, customCode } = req.body;
   const parsedDuration = durationMonths === 3 || durationMonths === 6 ? durationMonths : null;
   const assigned = typeof assignedTo === 'string' && assignedTo.trim() ? assignedTo.trim() : null;
@@ -1149,7 +1278,11 @@ app.post('/api/subscription/generate-code', (req, res) => {
 });
 
 // 5. List promo codes with assigned household and redemption tracking
-app.get('/api/subscription/promo-codes', (_req, res) => {
+app.get('/api/subscription/promo-codes', (req, res) => {
+  const authUser = getAuthUser(req);
+  if (!authUser || !isServerAdmin(authUser)) {
+    return res.status(403).json({ error: 'Admin access required.' });
+  }
   try {
     const codes = queryAll<any>(`
       SELECT 
@@ -1229,6 +1362,10 @@ app.get('/api/subscription/promo-codes', (_req, res) => {
 
 // 6. Update promo code (assign recipient or toggle active)
 app.patch('/api/subscription/promo-codes/:code', (req, res) => {
+  const authUser = getAuthUser(req);
+  if (!authUser || !isServerAdmin(authUser)) {
+    return res.status(403).json({ error: 'Admin access required.' });
+  }
   const codeParam = req.params.code;
   const { assignedTo, isActive } = req.body;
 
@@ -1274,6 +1411,10 @@ app.patch('/api/subscription/promo-codes/:code', (req, res) => {
 
 // 7. Delete promo code permanently
 app.delete('/api/subscription/promo-codes/:code', (req, res) => {
+  const authUser = getAuthUser(req);
+  if (!authUser || !isServerAdmin(authUser)) {
+    return res.status(403).json({ error: 'Admin access required.' });
+  }
   const codeParam = req.params.code;
   const rawCode = (codeParam || '').trim().toUpperCase();
   const cleanCode = rawCode.replace(/[\s\-_]/g, '');
@@ -1322,8 +1463,12 @@ app.delete('/api/subscription/promo-codes/:code', (req, res) => {
   res.json({ success: true, message: `Promo code ${targetCode} permanently deleted` });
 });
 
-// 6. Test helper to toggle or set subscription state
+// 6. Test helper to toggle or set subscription state (Development/Admin only)
 app.post('/api/subscription/test-set-state', (req, res) => {
+  const authUser = getAuthUser(req);
+  if (process.env.NODE_ENV === 'production' || !authUser || !isServerAdmin(authUser)) {
+    return res.status(404).json({ error: 'Not found' });
+  }
   const householdId = getHouseholdId(req);
   const { status, plan, expiresAt } = req.body;
   const validStatus = status === 'active' || status === 'unpaid' || status === 'expired' ? status : 'unpaid';
@@ -2090,8 +2235,22 @@ app.post('/api/grocery', (req, res) => {
   }
 });
 
+app.patch('/api/grocery/batch', (req, res) => {
+  const { items } = req.body;
+  if (!Array.isArray(items)) return res.status(400).json({ error: 'items array is required' });
+  for (const it of items) {
+    if (!it.id) continue;
+    if (it.quantity !== undefined) execute('UPDATE grocery_items SET quantity = ? WHERE id = ?', [it.quantity, it.id]);
+    if (it.unit !== undefined) execute('UPDATE grocery_items SET unit = ? WHERE id = ?', [it.unit, it.id]);
+    const note = it.note !== undefined ? it.note : it.notes;
+    if (note !== undefined) execute('UPDATE grocery_items SET note = ? WHERE id = ?', [note, it.id]);
+  }
+  saveDb();
+  return res.json({ success: true, count: items.length });
+});
+
 app.patch('/api/grocery', (req, res) => {
-  const { id, checked, name, quantity, unit, note, aisleId, category, storeId, store } = req.body;
+  const { id, checked, name, quantity, unit, note, notes, aisleId, category, storeId, store } = req.body;
   if (!id) return res.status(400).json({ error: 'ID is required' });
 
   if (checked !== undefined) {
@@ -2100,7 +2259,8 @@ app.patch('/api/grocery', (req, res) => {
   if (name !== undefined) execute('UPDATE grocery_items SET name = ? WHERE id = ?', [name.trim(), id]);
   if (quantity !== undefined) execute('UPDATE grocery_items SET quantity = ? WHERE id = ?', [quantity, id]);
   if (unit !== undefined) execute('UPDATE grocery_items SET unit = ? WHERE id = ?', [unit, id]);
-  if (note !== undefined) execute('UPDATE grocery_items SET note = ? WHERE id = ?', [note, id]);
+  const effectiveNote = note !== undefined ? note : notes;
+  if (effectiveNote !== undefined) execute('UPDATE grocery_items SET note = ? WHERE id = ?', [effectiveNote, id]);
   if (category !== undefined) execute('UPDATE grocery_items SET category = ? WHERE id = ?', [category, id]);
   if (aisleId !== undefined) execute('UPDATE grocery_items SET aisleId = ? WHERE id = ?', [aisleId, id]);
   if (storeId !== undefined) execute('UPDATE grocery_items SET storeId = ? WHERE id = ?', [storeId || null, id]);
@@ -3943,14 +4103,16 @@ app.delete('/api/calendar', async (req, res) => {
 // Google Calendar OAuth & Sync Routes
 app.get('/api/auth/google/url', (req, res) => {
   try {
-    let householdId = (req.query.householdId as string) || getHouseholdId(req);
-    const authUser = getAuthUser(req);
-    const userId = (req.query.userId as string) || authUser?.id || 'u1';
-    
-    // Always bind to the target user's true household if known in DB
-    const userRow = queryOne<{ householdId: string }>('SELECT householdId FROM users WHERE id = ?', [userId]);
-    if (userRow?.householdId) {
-      householdId = userRow.householdId;
+    const authUser = getAuthUser(req)!;
+    const householdId = authUser.householdId;
+    const requestedUserId = typeof req.query.userId === 'string' ? req.query.userId.trim() : '';
+    let userId = authUser.id;
+    if (requestedUserId && requestedUserId !== authUser.id) {
+      const targetUser = queryOne<{ id: string; householdId: string }>('SELECT id, householdId FROM users WHERE id = ?', [requestedUserId]);
+      if (!targetUser || targetUser.householdId !== householdId) {
+        return res.status(403).json({ error: 'Forbidden: user does not belong to your household' });
+      }
+      userId = targetUser.id;
     }
 
     const host = req.get('host') || (req.headers.referer ? new URL(req.headers.referer).host : undefined);
@@ -4023,8 +4185,12 @@ app.get('/auth/google/callback', googleCallbackHandler);
 app.get('/api/google/callback', googleCallbackHandler);
 app.get('/auth/callback', googleCallbackHandler);
 
-// Diagnostic Endpoint for Live Debugging
+// Diagnostic Endpoint for Live Debugging (Development + Admin only)
 app.get('/api/debug/google', (req, res) => {
+  const authUser = getAuthUser(req);
+  if (process.env.NODE_ENV === 'production' || !authUser || !isServerAdmin(authUser)) {
+    return res.status(404).json({ error: 'Not found' });
+  }
   try {
     const { clientId, clientSecret, defaultRedirectUri } = getGoogleCredentials();
     const records = queryAll<{
@@ -4083,9 +4249,13 @@ app.get('/api/auth/google/status', (req, res) => {
 
 app.get('/api/auth/google/calendars', async (req, res) => {
   try {
-    const householdId = getHouseholdId(req);
-    const authUser = getAuthUser(req);
-    const userId = (req.query.userId as string) || authUser?.id || 'u1';
+    const authUser = getAuthUser(req)!;
+    const householdId = authUser.householdId;
+    const userId = (req.query.userId as string) || authUser.id;
+    const targetUser = queryOne<{ householdId: string }>('SELECT householdId FROM users WHERE id = ?', [userId]);
+    if (!targetUser || targetUser.householdId !== householdId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
     const result = await getUserGoogleCalendars(householdId, userId);
     if (result.error) {
       return res.status(400).json({ error: result.error });
@@ -4225,14 +4395,16 @@ app.get('/api/home-assistant/states', async (req, res) => {
 });
 
 app.get('/api/home-assistant/events', (req, res) => {
-  const householdId = (req.query.householdId as string) || getHouseholdId(req);
+  const householdId = getHouseholdId(req);
+  if (!householdId) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
 
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache, no-transform',
     'Connection': 'keep-alive',
     'X-Accel-Buffering': 'no',
-    'Access-Control-Allow-Origin': '*',
   });
 
   if (typeof (res as any).flushHeaders === 'function') {
@@ -4265,7 +4437,10 @@ app.get('/api/home-assistant/events', (req, res) => {
 
 app.get('/api/home-assistant/image-proxy', async (req, res) => {
   try {
-    const householdId = (req.query.householdId as string) || getHouseholdId(req);
+    const householdId = getHouseholdId(req);
+    if (!householdId) {
+      return res.status(401).send('Authentication required');
+    }
     const path = req.query.path as string;
     if (!path) {
       return res.status(400).send('path is required');
@@ -4328,38 +4503,72 @@ app.post('/api/family', (req, res) => {
     if (name) {
       const uId = `u_${Date.now()}`;
       const cleanUsername = sanitizeHandle(username || name);
+      const safeRole = typeof role === 'string' && role.trim().toLowerCase() === 'parent' ? 'Parent' : 'Member';
+      const randomPass = hashPassword(crypto.randomBytes(16).toString('hex'));
       execute(
         'INSERT INTO users (id, name, username, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [uId, name.trim(), cleanUsername, null, avatar || '👤', color || '#10b981', role || 'Member', found.id, 'password123']
+        [uId, name.trim(), cleanUsername, null, avatar || '👤', color || '#10b981', safeRole, found.id, randomPass]
       );
     }
     const h = queryOne('SELECT * FROM households WHERE id = ?', [found.id]);
     const m = queryAll('SELECT * FROM users WHERE householdId = ?', [found.id]);
-    return res.json({ household: { ...formatHousehold(h), members: m } });
+    return res.json({ household: { ...formatHousehold(h), members: m.map(formatUser) } });
   }
 
   if (name) {
     const uId = `u_${Date.now()}`;
     const cleanUsername = sanitizeHandle(username || name);
+    const safeRole = typeof role === 'string' && role.trim().toLowerCase() === 'parent' ? 'Parent' : 'Member';
+    const randomPass = hashPassword(crypto.randomBytes(16).toString('hex'));
     execute(
       'INSERT INTO users (id, name, username, email, avatar, color, role, householdId, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [uId, name.trim(), cleanUsername, null, avatar || '👤', color || '#10b981', role || 'Member', householdId, 'password123']
+      [uId, name.trim(), cleanUsername, null, avatar || '👤', color || '#10b981', safeRole, householdId, randomPass]
     );
-    return res.json({ id: uId, name: name.trim(), username: cleanUsername, avatar: avatar || '👤', role: role || 'Member', color: color || '#10b981' });
+    return res.json({ id: uId, name: name.trim(), username: cleanUsername, avatar: avatar || '👤', role: safeRole, color: color || '#10b981' });
   }
 
   res.status(400).json({ error: 'Invalid request' });
 });
 
 app.delete('/api/family', (req, res) => {
+  const authUser = getAuthUser(req)!;
   const memberId = req.query.memberId as string;
-  if (memberId) execute('DELETE FROM users WHERE id = ?', [memberId]);
+  if (!memberId) return res.status(400).json({ error: 'memberId is required' });
+  if (memberId === authUser.id) return res.status(400).json({ error: 'Cannot delete your own active account' });
+
+  const callerRole = (authUser.role || '').toLowerCase();
+  if (callerRole !== 'parent' && callerRole !== 'admin') {
+    return res.status(403).json({ error: 'Only parents or administrators can remove family members' });
+  }
+
+  const target = queryOne<{ id: string; householdId: string }>('SELECT id, householdId FROM users WHERE id = ?', [memberId]);
+  if (!target || target.householdId !== authUser.householdId) {
+    return res.status(403).json({ error: 'Forbidden: member does not belong to your household' });
+  }
+
+  execute('DELETE FROM users WHERE id = ? AND householdId = ?', [memberId, authUser.householdId]);
+  saveDb();
   res.json({ success: true });
 });
 
 app.delete('/api/users/:id', (req, res) => {
+  const authUser = getAuthUser(req)!;
   const memberId = req.params.id;
-  if (memberId) execute('DELETE FROM users WHERE id = ?', [memberId]);
+  if (!memberId) return res.status(400).json({ error: 'User ID is required' });
+  if (memberId === authUser.id) return res.status(400).json({ error: 'Cannot delete your own active account' });
+
+  const callerRole = (authUser.role || '').toLowerCase();
+  if (callerRole !== 'parent' && callerRole !== 'admin') {
+    return res.status(403).json({ error: 'Only parents or administrators can remove family members' });
+  }
+
+  const target = queryOne<{ id: string; householdId: string }>('SELECT id, householdId FROM users WHERE id = ?', [memberId]);
+  if (!target || target.householdId !== authUser.householdId) {
+    return res.status(403).json({ error: 'Forbidden: member does not belong to your household' });
+  }
+
+  execute('DELETE FROM users WHERE id = ? AND householdId = ?', [memberId, authUser.householdId]);
+  saveDb();
   res.json({ success: true });
 });
 
@@ -4391,9 +4600,13 @@ app.put('/api/users/profile', (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Household isolation check: only allow editing members within the same household
+    // Household isolation & permission check: only allow editing self or (if Parent/Admin) members within the same household
     if (householdId && existing.householdId && existing.householdId !== householdId) {
       return res.status(403).json({ error: 'Forbidden: member belongs to a different household' });
+    }
+    const callerRole = (authUser?.role || '').toLowerCase();
+    if (targetUserId !== authUser?.id && callerRole !== 'parent' && callerRole !== 'admin') {
+      return res.status(403).json({ error: 'Forbidden: you can only edit your own profile' });
     }
 
     const { name, username, email, color, role, password, avatar } = req.body;
@@ -4416,8 +4629,20 @@ app.put('/api/users/profile', (req, res) => {
     const newName = name && typeof name === 'string' && name.trim() ? name.trim() : existing.name;
     const newEmail = email !== undefined ? (typeof email === 'string' && email.trim() ? email.trim().toLowerCase() : null) : existing.email;
     const newColor = color && typeof color === 'string' && color.trim() ? color.trim() : (existing.color || '#10b981');
-    const newRole = role && typeof role === 'string' && role.trim() ? role.trim() : (existing.role || 'Member');
-    const newPassword = password && typeof password === 'string' && password.trim() ? password.trim() : (existing.password || 'password123');
+
+    // Never allow privilege escalation to 'admin' via profile update
+    let newRole = existing.role || 'Member';
+    if (role && typeof role === 'string' && role.trim()) {
+      const requestedRole = role.trim();
+      if (requestedRole.toLowerCase() !== 'admin' && (callerRole === 'parent' || callerRole === 'admin')) {
+        newRole = requestedRole;
+      }
+    }
+
+    const newPassword =
+      password && typeof password === 'string' && password.trim()
+        ? hashPassword(password.trim())
+        : existing.password;
 
     // CRITICAL: users.avatar has a NOT NULL constraint in the database.
     // If avatar is empty string, not provided, or not an image data/url, safely store '' or '👤' instead of null.
@@ -4542,16 +4767,7 @@ app.put('/api/notifications/preferences', (req, res) => {
 
 function isServerAdmin(user: any): boolean {
   if (!user) return false;
-  const role = (user.role || '').toLowerCase();
-  const username = (user.username || '').toLowerCase();
-  const email = (user.email || '').toLowerCase();
-  return (
-    role === 'admin' ||
-    username === 'joshua' ||
-    username === 'joshuaburkhalter' ||
-    email === 'joshua@redpointaudio.com' ||
-    email === 'joshuaburkhalter@gmail.com'
-  );
+  return (user.role || '').toLowerCase() === 'admin';
 }
 
 app.get('/api/feedback', (req, res) => {

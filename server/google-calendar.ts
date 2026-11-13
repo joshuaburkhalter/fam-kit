@@ -1,4 +1,5 @@
 import { queryOne, queryAll, execute, saveDb } from './db.js';
+import { signOAuthState, verifyOAuthState } from './auth.js';
 
 export interface GoogleSyncRecord {
   id: string;
@@ -78,13 +79,11 @@ export function getGoogleAuthUrl(householdId: string, userId: string, host?: str
   }
 
   const redirectUri = resolveRedirectUri(host);
-  const stateObj = {
+  const state = signOAuthState({
     householdId,
     userId,
     redirectUri,
-    timestamp: Date.now(),
-  };
-  const state = Buffer.from(JSON.stringify(stateObj)).toString('base64url');
+  });
 
   const scopes = [
     'https://www.googleapis.com/auth/calendar.events',
@@ -119,11 +118,9 @@ export async function handleGoogleAuthCallback(
       throw new Error('Google OAuth credentials not configured on server.');
     }
 
-    let state: { householdId: string; userId: string; redirectUri: string };
-    try {
-      state = JSON.parse(Buffer.from(stateStr, 'base64url').toString('utf8'));
-    } catch {
-      throw new Error('Invalid state parameter in Google callback.');
+    const state = verifyOAuthState<{ householdId: string; userId: string; redirectUri: string }>(stateStr);
+    if (!state) {
+      throw new Error('Invalid or expired OAuth state parameter in Google callback.');
     }
 
     const { householdId: rawHouseholdId, userId, redirectUri } = state;

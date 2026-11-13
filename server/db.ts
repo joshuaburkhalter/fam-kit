@@ -1,6 +1,7 @@
 import initSqlJs, { Database } from 'sql.js';
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -610,7 +611,7 @@ function initSchema(db: Database) {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     const generateCode = () => {
       let c = '';
-      for (let i = 0; i < 6; i++) c += chars.charAt(Math.floor(Math.random() * chars.length));
+      for (let i = 0; i < 6; i++) c += chars.charAt(crypto.randomInt(chars.length));
       return c;
     };
     const households = db.exec("SELECT id, inviteCode FROM households WHERE inviteCode IN ('FAMKIT', 'HOMEBASE', 'MILLER') OR length(inviteCode) < 4");
@@ -984,7 +985,7 @@ export function generateSecureVoucherCode(prefix: string = 'HB'): string {
   const pick = (len: number) => {
     let res = '';
     for (let i = 0; i < len; i++) {
-      res += chars.charAt(Math.floor(Math.random() * chars.length));
+      res += chars.charAt(crypto.randomInt(chars.length));
     }
     return res;
   };
@@ -1023,7 +1024,7 @@ function seedDemoData(db: Database) {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let demoInviteCode = '';
   for (let i = 0; i < 6; i++) {
-    demoInviteCode += chars.charAt(Math.floor(Math.random() * chars.length));
+    demoInviteCode += chars.charAt(crypto.randomInt(chars.length));
   }
 
   db.run(`INSERT INTO households (id, name, inviteCode, createdAt, subscriptionStatus, subscriptionPlan) VALUES (?, ?, ?, ?, ?, ?)`, [householdId, 'My Family', demoInviteCode, now, 'active', 'lifetime_founder']);

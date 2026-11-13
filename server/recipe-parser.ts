@@ -1,5 +1,6 @@
 import * as cheerio from 'cheerio';
 import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai';
+import { assertSafeExternalUrl } from './ssrf.js';
 
 export interface ParsedRecipe {
   title: string;
@@ -32,11 +33,12 @@ export function formatDuration(isoOrText?: string): string | undefined {
 }
 
 export async function parseRecipeFromUrl(url: string, geminiApiKey?: string): Promise<ParsedRecipe> {
+  const safeUrl = (await assertSafeExternalUrl(url)).toString();
   const activeKey = geminiApiKey || process.env.GEMINI_API_KEY;
 
   let response: Response;
   try {
-    response = await fetch(url, {
+    response = await fetch(safeUrl, {
       headers: {
         'User-Agent':
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',

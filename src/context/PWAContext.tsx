@@ -663,15 +663,23 @@ export const PWAProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return updated;
   };
 
-  const switchUser = (user: User) => {
+  const switchUser = async (user: User) => {
     const normUser = normalizeUser(user);
     if (!normUser) return;
-    setCurrentUserState(normUser);
-    localStorage.setItem('famkit_user_id', normUser.id);
-    localStorage.setItem('famkit_auth_token', normUser.id);
-    localStorage.setItem('famkit_current_user', JSON.stringify(normUser));
-    localStorage.setItem('famkit_last_username', normUser.username || normUser.name);
-    saveDeviceProfile(normUser, household?.name);
+    try {
+      const res = await api.switchUser(normUser.id);
+      if (res?.token) {
+        localStorage.setItem('famkit_auth_token', res.token);
+      }
+      const switchedUser = res?.user ? normalizeUser(res.user) || normUser : normUser;
+      setCurrentUserState(switchedUser);
+      localStorage.setItem('famkit_user_id', switchedUser.id);
+      localStorage.setItem('famkit_current_user', JSON.stringify(switchedUser));
+      localStorage.setItem('famkit_last_username', switchedUser.username || switchedUser.name);
+      saveDeviceProfile(switchedUser, household?.name);
+    } catch (err) {
+      console.error('Failed to switch user:', err);
+    }
   };
 
   const hasActiveAccess = Boolean(household?.has_active_access || household?.hasActiveAccess);
