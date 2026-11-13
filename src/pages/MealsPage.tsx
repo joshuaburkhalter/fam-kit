@@ -2902,6 +2902,115 @@ export const MealsPage: React.FC = () => {
     selectedRecipe.instructions.length > 0 &&
     selectedRecipe.instructions.every((_, idx) => completedSteps[idx]);
 
+  // Unified Add to Grocery & Multiplier control component
+  const renderGroceryBatchControl = (recipe: Recipe, compact = false) => {
+    const inGrocery = isRecipeInGrocery(recipe.title);
+    const isJustAddedGrocery = justAddedGroceryId === recipe.id;
+    const multDisplay = recipeBatchMultiplier === 0.5 ? '½' : recipeBatchMultiplier;
+
+    return (
+      <div className="inline-flex items-center rounded-2xl bg-slate-900/90 border border-teal-500/40 p-1 shadow-lg shadow-teal-500/10 gap-1.5 flex-wrap sm:flex-nowrap">
+        {/* Multiplier Stepper: [-] [1x] [+] */}
+        <div className="flex items-center gap-0.5 bg-slate-950/80 rounded-xl p-0.5 border border-white/10 shrink-0">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleSetRecipeBatch(recipe, Math.max(0.5, Math.round((recipeBatchMultiplier - 0.5) * 10) / 10));
+            }}
+            disabled={recipeBatchMultiplier <= 0.5}
+            className="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 active:scale-95 disabled:opacity-30 disabled:pointer-events-none flex items-center justify-center text-slate-200 cursor-pointer transition-all"
+            title="Decrease recipe multiplier (less people)"
+          >
+            <Minus className="w-3.5 h-3.5" />
+          </button>
+
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setBatchModalRecipe(recipe);
+            }}
+            className="px-2 py-0.5 text-center cursor-pointer hover:bg-white/10 rounded-lg transition-colors flex flex-col items-center justify-center"
+            title="Click to view full servings breakdown or choose custom multiplier"
+          >
+            <span className="text-xs font-black text-white font-mono leading-none">
+              {multDisplay}x
+            </span>
+            <span className="text-[8px] text-teal-400 font-bold uppercase tracking-wider leading-none mt-0.5">
+              {recipeBatchMultiplier < 1 ? 'Less' : recipeBatchMultiplier === 1 ? 'Batch' : 'More'}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleSetRecipeBatch(recipe, Math.min(10, Math.round((recipeBatchMultiplier + 0.5) * 10) / 10));
+            }}
+            disabled={recipeBatchMultiplier >= 10}
+            className="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 active:scale-95 disabled:opacity-30 disabled:pointer-events-none flex items-center justify-center text-slate-200 cursor-pointer transition-all"
+            title="Increase recipe multiplier (more people)"
+          >
+            <Plus className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        {/* Quick Preset Chips: ½x, 1x, 2x, 3x */}
+        {!compact && (
+          <div className="flex items-center gap-1 shrink-0">
+            {[0.5, 1, 2, 3].map((mult) => {
+              const isActive = recipeBatchMultiplier === mult;
+              const label = mult === 0.5 ? '½x' : `${mult}x`;
+              return (
+                <button
+                  key={mult}
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleSetRecipeBatch(recipe, mult);
+                  }}
+                  className={`px-2 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    isActive
+                      ? 'bg-teal-500 text-slate-950 shadow-sm shadow-teal-500/25 ring-1 ring-teal-300'
+                      : 'text-slate-400 hover:text-white hover:bg-white/10'
+                  }`}
+                  title={`Scale recipe to ${label}`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Add to Grocery Button */}
+        <button
+          type="button"
+          onClick={(e) => handleToggleShopIngredients(recipe, e, recipeBatchMultiplier)}
+          className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95 shrink-0 ${
+            inGrocery
+              ? 'text-emerald-400 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 shadow-emerald-500/10'
+              : 'text-slate-950 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 shadow-emerald-500/25'
+          }`}
+          title={inGrocery ? 'In Grocery (click to remove)' : `Add ingredients to Grocery List (${multDisplay}x)`}
+        >
+          {inGrocery ? (
+            <>
+              <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>{isJustAddedGrocery ? 'Added!' : `In Grocery (${multDisplay}x)`}</span>
+            </>
+          ) : (
+            <>
+              <ShoppingCart className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>Add {recipeBatchMultiplier !== 1 ? `${multDisplay}x ` : ''}to Grocery</span>
+            </>
+          )}
+        </button>
+      </div>
+    );
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-3 sm:px-6 pt-2.5 sm:pt-3 pb-28 md:pb-20 flex flex-col gap-2.5 sm:gap-3">
       {/* Toast Notification */}
@@ -3109,8 +3218,9 @@ export const MealsPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Add to Planner / In Planner Button on the right side at the bottom */}
-                <div className="flex justify-end w-full sm:w-auto shrink-0 ml-auto">
+                {/* Actions row: Add to Grocery (with multiplier) & Add to Planner */}
+                <div className="flex flex-wrap items-center justify-end gap-2 w-full sm:w-auto shrink-0 ml-auto">
+                  {renderGroceryBatchControl(selectedRecipe, true)}
                   {(() => {
                     const inPlanner = meals.some((m) => m.recipe_id === selectedRecipe.id);
                     const isJustAdded = justAddedRecipeId === selectedRecipe.id;
@@ -3215,73 +3325,7 @@ export const MealsPage: React.FC = () => {
               </div>
 
               {/* Batch Multiplier Controls & Add to Grocery */}
-              <div className="flex items-center flex-wrap gap-2">
-                {/* Multiplier Pills */}
-                <div className="flex items-center bg-slate-900/90 p-0.5 rounded-xl border border-white/10 text-xs">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 px-2 select-none">
-                    Batch
-                  </span>
-                  {[0.5, 1, 1.5, 2, 3].map((mult) => {
-                    const isActive = recipeBatchMultiplier === mult;
-                    const label = mult === 0.5 ? '½x' : `${mult}x`;
-                    return (
-                      <button
-                        key={mult}
-                        type="button"
-                        onClick={() => handleSetRecipeBatch(selectedRecipe, mult)}
-                        className={`px-2 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                          isActive
-                            ? 'bg-teal-500 text-slate-950 shadow-sm'
-                            : 'text-slate-400 hover:text-white hover:bg-white/5'
-                        }`}
-                        title={`Scale recipe to ${mult}x batch (${mult < 1 ? 'less' : mult > 1 ? 'more' : 'standard'} people)`}
-                      >
-                        {label}
-                      </button>
-                    );
-                  })}
-                  <button
-                    type="button"
-                    onClick={() => setBatchModalRecipe(selectedRecipe)}
-                    className="p-1 rounded-lg text-slate-400 hover:text-teal-300 hover:bg-white/5 transition-colors cursor-pointer ml-0.5"
-                    title="Detailed batch multiplier & servings"
-                  >
-                    <Scale className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-
-                {/* Add to Grocery Button */}
-                {(() => {
-                  const inGrocery = isRecipeInGrocery(selectedRecipe.title);
-                  const isJustAddedGrocery = justAddedGroceryId === selectedRecipe.id;
-                  const multSuffix = recipeBatchMultiplier !== 1
-                    ? ` (${recipeBatchMultiplier === 0.5 ? '½x' : `${recipeBatchMultiplier}x`})`
-                    : '';
-                  return (
-                    <button
-                      onClick={(e) => handleToggleShopIngredients(selectedRecipe, e, recipeBatchMultiplier)}
-                      className={`text-xs font-bold flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all cursor-pointer shadow-sm active:scale-95 ${
-                        inGrocery
-                          ? 'text-emerald-400 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30'
-                          : 'text-slate-950 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 shadow-emerald-500/20'
-                      }`}
-                      title={inGrocery ? 'In Grocery (click to remove)' : `Add ingredients to Grocery List${multSuffix}`}
-                    >
-                      {inGrocery ? (
-                        <>
-                          <Check className="w-3.5 h-3.5 stroke-[2.5]" />
-                          <span>{isJustAddedGrocery ? 'Added to Grocery!' : `In Grocery${multSuffix}`}</span>
-                        </>
-                      ) : (
-                        <>
-                          <ShoppingCart className="w-3.5 h-3.5 stroke-[2.5]" />
-                          <span>Add{multSuffix} to Grocery</span>
-                        </>
-                      )}
-                    </button>
-                  );
-                })()}
-              </div>
+              {renderGroceryBatchControl(selectedRecipe, false)}
             </div>
 
             {/* Substitution Tip Banner */}
@@ -3365,8 +3409,8 @@ export const MealsPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Bottom Recipe Actions Bar: Back on left, Add to Planner on right */}
-          <div className="flex items-center justify-between p-3.5 sm:p-4 glass-panel rounded-3xl border border-white/10 gap-3">
+          {/* Bottom Recipe Actions Bar: Back on left, Add to Grocery & Add to Planner on right */}
+          <div className="flex flex-wrap items-center justify-between p-3.5 sm:p-4 glass-panel rounded-3xl border border-white/10 gap-3">
             <button
               onClick={handleCloseRecipe}
               className="flex items-center gap-1.5 text-xs font-semibold text-slate-300 hover:text-white bg-slate-900/90 hover:bg-slate-850 px-3.5 py-2 rounded-xl border border-white/10 transition-colors shrink-0 cursor-pointer"
@@ -3375,34 +3419,37 @@ export const MealsPage: React.FC = () => {
               <span>Back</span>
             </button>
 
-            {(() => {
-              const inPlanner = meals.some((m) => m.recipe_id === selectedRecipe.id);
-              const isJustAdded = justAddedRecipeId === selectedRecipe.id;
-              return (
-                <button
-                  type="button"
-                  onClick={(e) => handleToggleRecipePlanner(selectedRecipe, e)}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shrink-0 cursor-pointer shadow-sm ${
-                    inPlanner
-                      ? 'text-slate-950 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 shadow-md shadow-emerald-500/20'
-                      : 'text-slate-300 hover:text-white bg-slate-900/80 hover:bg-slate-800 border border-white/15 hover:border-emerald-500/40'
-                  }`}
-                  title={inPlanner ? 'In Planner (click to remove)' : 'Add to Planner'}
-                >
-                  {inPlanner ? (
-                    <>
-                      <Check className="w-3.5 h-3.5 stroke-[2.5]" />
-                      <span>{isJustAdded ? 'Added to Planner!' : 'In Planner'}</span>
-                    </>
-                  ) : (
-                    <>
-                      <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-                      <span>Add to Planner</span>
-                    </>
-                  )}
-                </button>
-              );
-            })()}
+            <div className="flex flex-wrap items-center gap-2 ml-auto">
+              {renderGroceryBatchControl(selectedRecipe, true)}
+              {(() => {
+                const inPlanner = meals.some((m) => m.recipe_id === selectedRecipe.id);
+                const isJustAdded = justAddedRecipeId === selectedRecipe.id;
+                return (
+                  <button
+                    type="button"
+                    onClick={(e) => handleToggleRecipePlanner(selectedRecipe, e)}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shrink-0 cursor-pointer shadow-sm ${
+                      inPlanner
+                        ? 'text-slate-950 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 shadow-md shadow-emerald-500/20'
+                        : 'text-slate-300 hover:text-white bg-slate-900/80 hover:bg-slate-800 border border-white/15 hover:border-emerald-500/40'
+                    }`}
+                    title={inPlanner ? 'In Planner (click to remove)' : 'Add to Planner'}
+                  >
+                    {inPlanner ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                        <span>{isJustAdded ? 'Added to Planner!' : 'In Planner'}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                        <span>Add to Planner</span>
+                      </>
+                    )}
+                  </button>
+                );
+              })()}
+            </div>
           </div>
         </div>
       ) : (
