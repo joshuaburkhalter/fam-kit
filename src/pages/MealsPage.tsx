@@ -832,6 +832,33 @@ export const MealsPage: React.FC = () => {
     fetchData();
   }, [householdId]);
 
+  // Live real-time sync with household: update grocery states when items/recipes change
+  useEffect(() => {
+    if (!householdId) return;
+    let es: EventSource | null = null;
+    try {
+      es = new EventSource(api.getGroceryEventsUrl(householdId));
+      es.addEventListener('grocery_updated', async () => {
+        if (!isMountedRef.current) return;
+        try {
+          const fresh = await api.getGroceryItems(householdId);
+          if (isMountedRef.current && Array.isArray(fresh)) {
+            setGroceryItems(fresh);
+            if (mealsDataCache && mealsDataCache.householdId === householdId) {
+              mealsDataCache.groceryItems = fresh;
+            }
+          }
+        } catch {}
+      });
+    } catch {}
+    return () => {
+      if (es) {
+        es.close();
+        es = null;
+      }
+    };
+  }, [householdId]);
+
   // Map recipeId -> Recipe for fast lookup
   const recipeMap = useMemo(() => {
     const map = new Map<string, Recipe>();

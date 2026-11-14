@@ -364,7 +364,8 @@ function getAuthUser(req: express.Request) {
   const isStreamingOrMediaEndpoint =
     req.path.includes('home-assistant/events') ||
     req.path.includes('home-assistant/image-proxy') ||
-    (typeof req.baseUrl === 'string' && req.baseUrl.includes('home-assistant'));
+    req.path.includes('grocery/events') ||
+    (typeof req.baseUrl === 'string' && (req.baseUrl.includes('home-assistant') || req.baseUrl.includes('grocery')));
   if (!token && isStreamingOrMediaEndpoint) {
     token = typeof req.query.token === 'string' ? req.query.token.trim() : '';
   }
@@ -1657,6 +1658,8 @@ ${contextString}
             createdItems.push({ id, name: item.name, category: resolved.category });
           }
 
+          broadcastGroceryUpdate(householdId, 'assistant_added', { items: createdItems });
+
           actionsExecuted.push({
             type: 'grocery_added',
             summary: `Added ${createdItems.length} item(s) to grocery list`,
@@ -1845,6 +1848,7 @@ ${contextString}
                   [gId, ing, 'Produce', '1', 0, householdId, activeMemberId || 'u1', now]
                 );
               }
+              broadcastGroceryUpdate(householdId, 'assistant_added');
             }
           }
 
@@ -1897,6 +1901,7 @@ ${contextString}
               );
             }
           }
+          broadcastGroceryUpdate(householdId, 'list_created');
 
           actionsExecuted.push({
             type: 'list_created',
@@ -2145,6 +2150,75 @@ app.get('/api/grocery', (req, res) => {
   });
 });
 
+// In-memory real-time sync listeners for household grocery updates
+type GrocerySyncListener = (event: { action: string; timestamp: number; payload?: any }) => void;
+const grocerySyncListeners = new Map<string, Set<GrocerySyncListener>>();
+
+export function broadcastGroceryUpdate(householdId: string, action: string = 'change', payload?: any) {
+  if (!householdId) return;
+  const set = grocerySyncListeners.get(householdId);
+  if (!set || set.size === 0) return;
+  const eventData = { action, timestamp: Date.now(), payload };
+  for (const listener of set) {
+    try {
+      listener(eventData);
+    } catch {}
+  }
+}
+
+app.get('/api/grocery/events', (req, res) => {
+  const householdId = getHouseholdId(req);
+  if (!householdId) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+
+  if (typeof (res as any).flushHeaders === 'function') {
+    (res as any).flushHeaders();
+  }
+
+  // Send initial connection confirmation
+  res.write(`event: connected\ndata: ${JSON.stringify({ householdId, timestamp: Date.now() })}\n\n`);
+
+  const listener: GrocerySyncListener = (data) => {
+    try {
+      res.write(`event: grocery_updated\ndata: ${JSON.stringify(data)}\n\n`);
+    } catch {}
+  };
+
+  if (!grocerySyncListeners.has(householdId)) {
+    grocerySyncListeners.set(householdId, new Set());
+  }
+  grocerySyncListeners.get(householdId)!.add(listener);
+
+  // Keep-alive heartbeat every 20 seconds to prevent network / proxy timeouts
+  const keepAliveInterval = setInterval(() => {
+    try {
+      res.write(': keepalive\n\n');
+    } catch {}
+  }, 20000);
+
+  req.on('close', () => {
+    clearInterval(keepAliveInterval);
+    const set = grocerySyncListeners.get(householdId);
+    if (set) {
+      set.delete(listener);
+      if (set.size === 0) {
+        grocerySyncListeners.delete(householdId);
+      }
+    }
+    try {
+      res.end();
+    } catch {}
+  });
+});
+
 app.post('/api/grocery', (req, res) => {
   try {
     const householdId = getHouseholdId(req);
@@ -2159,6 +2233,7 @@ app.post('/api/grocery', (req, res) => {
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [id, name, type || 'packing', icon || '📋', '#10b981', householdId, now]
       );
+      broadcastGroceryUpdate(householdId, 'list_created', { id, name });
       return res.json({ id, name, icon: icon || '📋', type: type || 'packing' });
     }
 
@@ -2228,6 +2303,8 @@ app.post('/api/grocery', (req, res) => {
       }
     );
 
+    broadcastGroceryUpdate(householdId, 'item_added', { id, name });
+
     res.json({
       id,
       name,
@@ -2260,6 +2337,8 @@ app.patch('/api/grocery/batch', (req, res) => {
     if (note !== undefined) execute('UPDATE grocery_items SET note = ? WHERE id = ?', [note, it.id]);
   }
   saveDb();
+  const householdId = getHouseholdId(req);
+  broadcastGroceryUpdate(householdId, 'batch_update');
   return res.json({ success: true, count: items.length });
 });
 
@@ -2312,7 +2391,7 @@ app.post('/api/grocery/recipe-batch', (req, res) => {
       );
     }
     saveDb();
-
+    broadcastGroceryUpdate(householdId, 'recipe_batch', { recipeTitle, multiplier });
     return res.json({ success: true, count: existing.length, multiplier });
   } catch (err: any) {
     console.error('Failed to update recipe batch on grocery items:', err);
@@ -2371,6 +2450,9 @@ app.patch('/api/grocery', (req, res) => {
     );
   }
 
+  const householdId = getHouseholdId(req);
+  broadcastGroceryUpdate(householdId, 'item_updated', { id, checked });
+
   res.json(updated ? { ...updated, checked: Boolean(updated.checked) } : {});
 });
 
@@ -2386,6 +2468,7 @@ app.delete('/api/grocery', (req, res) => {
     } else {
       execute('DELETE FROM grocery_items WHERE householdId = ? AND listId IS NULL AND checked = 1', [householdId]);
     }
+    broadcastGroceryUpdate(householdId, 'clear_checked');
     return res.json({ success: true });
   }
 
@@ -2399,11 +2482,13 @@ app.delete('/api/grocery', (req, res) => {
       [householdId, `for: ${trimmed.toLowerCase()}`, pattern]
     );
     saveDb();
+    broadcastGroceryUpdate(householdId, 'recipe_removed');
     return res.json({ success: true });
   }
 
   if (id) {
     execute('DELETE FROM grocery_items WHERE id = ?', [id]);
+    broadcastGroceryUpdate(householdId, 'item_deleted', { id });
     return res.json({ success: true });
   }
 
@@ -2412,6 +2497,7 @@ app.delete('/api/grocery', (req, res) => {
     execute('DELETE FROM grocery_items WHERE listId = ? AND householdId = ?', [listId, householdId]);
     execute('DELETE FROM aisles WHERE listId = ? AND householdId = ?', [listId, householdId]);
     saveDb();
+    broadcastGroceryUpdate(householdId, 'list_deleted', { listId });
     return res.json({ success: true });
   }
 
@@ -2469,6 +2555,7 @@ app.post('/api/grocery/stores', (req, res) => {
       'SELECT * FROM grocery_stores WHERE householdId = ? AND LOWER(name) = LOWER(?)',
       [householdId, cleanName]
     );
+    broadcastGroceryUpdate(householdId, 'stores_updated');
     res.json(saved ? { ...saved, is_default: Boolean(saved.isDefault) } : { id, name: cleanName, icon, color });
   } catch (err: any) {
     console.error('Failed to create store:', err);
@@ -2520,6 +2607,7 @@ app.patch('/api/grocery/stores/:id', (req, res) => {
     saveDb();
 
     const updated = queryOne<any>('SELECT * FROM grocery_stores WHERE id = ? AND householdId = ?', [id, householdId]);
+    broadcastGroceryUpdate(householdId, 'stores_updated');
     res.json(updated ? { ...updated, is_default: Boolean(updated.isDefault) } : {});
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Failed to update store' });
@@ -2539,6 +2627,7 @@ app.delete('/api/grocery/stores/:id', (req, res) => {
     execute('DELETE FROM grocery_stores WHERE id = ? AND householdId = ?', [id, householdId]);
     saveDb();
 
+    broadcastGroceryUpdate(householdId, 'stores_updated');
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Failed to delete store' });
@@ -2578,10 +2667,12 @@ app.post('/api/grocery/aisles', (req, res) => {
     targetList,
   ]);
   saveDb();
+  broadcastGroceryUpdate(householdId, 'aisles_updated');
   res.json({ id, name, icon: icon || (targetList === 'grocery' ? '🛒' : '📁'), orderIndex, householdId, listId: targetList });
 });
 
 app.put('/api/grocery/aisles', (req, res) => {
+  const householdId = getHouseholdId(req);
   const { aisleOrders } = req.body;
   if (Array.isArray(aisleOrders)) {
     for (const item of aisleOrders) {
@@ -2589,6 +2680,7 @@ app.put('/api/grocery/aisles', (req, res) => {
     }
   }
   saveDb();
+  broadcastGroceryUpdate(householdId, 'aisles_updated');
   res.json({ success: true });
 });
 
@@ -2607,6 +2699,7 @@ app.delete('/api/grocery/aisles', (req, res) => {
   execute("UPDATE grocery_items SET aisleId = NULL, category = 'Other' WHERE householdId = ? AND aisleId = ?", [householdId, id]);
   saveDb();
 
+  broadcastGroceryUpdate(householdId, 'aisles_updated');
   res.json({ success: true });
 });
 

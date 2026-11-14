@@ -321,6 +321,88 @@ export const GroceryPage: React.FC = () => {
     loadData(activeListType, !hasCache);
   }, [householdId, activeListType]);
 
+  // Live real-time sync with household: automatically update grocery list when spouse/family member makes changes
+  useEffect(() => {
+    if (!householdId) return;
+
+    let eventSource: EventSource | null = null;
+    let reconnectTimeout: any = null;
+    let isConnecting = false;
+
+    const connectSSE = () => {
+      if (isConnecting || eventSource) return;
+      isConnecting = true;
+      try {
+        const url = api.getGroceryEventsUrl(householdId);
+        eventSource = new EventSource(url);
+
+        eventSource.addEventListener('grocery_updated', (_e: MessageEvent) => {
+          // Immediately reload list items silently in the background
+          if (isMountedRef.current) {
+            loadData(activeListTypeRef.current, false);
+          }
+        });
+
+        eventSource.onopen = () => {
+          isConnecting = false;
+        };
+
+        eventSource.onerror = () => {
+          isConnecting = false;
+          if (eventSource) {
+            eventSource.close();
+            eventSource = null;
+          }
+          if (!reconnectTimeout && isMountedRef.current) {
+            reconnectTimeout = setTimeout(() => {
+              reconnectTimeout = null;
+              if (document.visibilityState === 'visible' && isMountedRef.current) {
+                connectSSE();
+              }
+            }, 5000);
+          }
+        };
+      } catch (err) {
+        isConnecting = false;
+      }
+    };
+
+    connectSSE();
+
+    // Re-sync immediately when returning to the app / unlocking phone / tab becomes visible
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === 'visible') {
+        if (!eventSource || eventSource.readyState === EventSource.CLOSED) {
+          connectSSE();
+        }
+        if (isMountedRef.current) {
+          loadData(activeListTypeRef.current, false);
+        }
+      }
+    };
+
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+
+    // Periodic gentle refresh every 20 seconds while visible as an extra safety net
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible' && isMountedRef.current) {
+        loadData(activeListTypeRef.current, false);
+      }
+    }, 20000);
+
+    return () => {
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+      clearInterval(interval);
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+      }
+    };
+  }, [householdId]);
+
   const [isAddingItem, setIsAddingItem] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastAction, setToastAction] = useState<{ label: string; onClick: () => void } | undefined>(undefined);

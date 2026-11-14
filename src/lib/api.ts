@@ -1836,6 +1836,15 @@ export const api = {
     return `${BASE_URL}/home-assistant/events${qs ? `?${qs}` : ''}`;
   },
 
+  getGroceryEventsUrl: (householdId?: string): string => {
+    const token = typeof localStorage !== 'undefined' ? localStorage.getItem('famkit_auth_token') || '' : '';
+    const params = new URLSearchParams();
+    if (token) params.set('token', token);
+    if (householdId) params.set('householdId', householdId);
+    const qs = params.toString();
+    return `${BASE_URL}/grocery/events${qs ? `?${qs}` : ''}`;
+  },
+
   callHomeAssistantService: async (domain: string, service: string, serviceData: any): Promise<{ success: boolean; result?: any }> => {
     return fetchJson<{ success: boolean; result?: any }>('/home-assistant/call-service', {
       method: 'POST',
