@@ -53,6 +53,7 @@ import {
   pushUnsyncedLocalEventsToGoogle,
 } from './google-calendar.js';
 import { isBasicPantryStaple } from './groceryStaples.js';
+import { scaleAmountString, formatRecipeBatchNote, detectBatchMultiplierFromNote } from './recipeScaling.js';
 import { scanCalendarVision } from './calendar-vision.js';
 import { generateRecipeFromPrompt } from './recipe-prompt.js';
 import {
@@ -2260,6 +2261,63 @@ app.patch('/api/grocery/batch', (req, res) => {
   }
   saveDb();
   return res.json({ success: true, count: items.length });
+});
+
+app.post('/api/grocery/recipe-batch', (req, res) => {
+  try {
+    const householdId = getHouseholdId(req);
+    if (!householdId) return res.status(401).json({ error: 'Authentication required' });
+    const { recipeTitle, multiplier, ingredients } = req.body;
+    if (!recipeTitle || typeof multiplier !== 'number' || multiplier <= 0) {
+      return res.status(400).json({ error: 'recipeTitle and positive multiplier are required' });
+    }
+
+    const trimmed = String(recipeTitle).trim();
+    const pattern = `for: ${trimmed.toLowerCase()}%`;
+    const existing = queryAll<any>(
+      'SELECT * FROM grocery_items WHERE householdId = ? AND LOWER(note) LIKE ?',
+      [householdId, pattern]
+    );
+
+    const newNote = formatRecipeBatchNote(trimmed, multiplier);
+
+    for (const item of existing) {
+      let newQty = item.quantity;
+      if (Array.isArray(ingredients)) {
+        const normItemName = (item.name || '').trim().toLowerCase();
+        const match = ingredients.find(
+          (ing: any) => ing?.item && (
+            ing.item.trim().toLowerCase() === normItemName ||
+            normItemName.includes(ing.item.trim().toLowerCase()) ||
+            ing.item.toLowerCase().includes(normItemName)
+          )
+        );
+        if (match && match.amount) {
+          newQty = scaleAmountString(match.amount, multiplier);
+        } else if (item.quantity) {
+          const curMult = detectBatchMultiplierFromNote(item.note) || 1;
+          if (curMult > 0 && curMult !== multiplier) {
+            newQty = scaleAmountString(item.quantity, multiplier / curMult);
+          }
+        }
+      } else if (item.quantity) {
+        const curMult = detectBatchMultiplierFromNote(item.note) || 1;
+        if (curMult > 0 && curMult !== multiplier) {
+          newQty = scaleAmountString(item.quantity, multiplier / curMult);
+        }
+      }
+      execute(
+        'UPDATE grocery_items SET quantity = ?, note = ? WHERE id = ?',
+        [newQty, newNote, item.id]
+      );
+    }
+    saveDb();
+
+    return res.json({ success: true, count: existing.length, multiplier });
+  } catch (err: any) {
+    console.error('Failed to update recipe batch on grocery items:', err);
+    res.status(500).json({ error: err.message || 'Failed to update recipe batch' });
+  }
 });
 
 app.patch('/api/grocery', (req, res) => {

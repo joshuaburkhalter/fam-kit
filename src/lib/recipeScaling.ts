@@ -146,21 +146,52 @@ export function scaleIngredient<T extends { amount?: string; item: string; unit?
  */
 export function formatRecipeBatchNote(recipeTitle: string, multiplier: number = 1): string {
   const trimmed = recipeTitle.trim();
+  const multDisplay = multiplier === 0.5 ? '½' : multiplier;
   if (multiplier !== 1 && multiplier > 0) {
-    return `For: ${trimmed} (${multiplier}x batch)`;
+    return `For: ${trimmed} (${multDisplay}x batch)`;
   }
-  return `For: ${trimmed}`;
+  return `For: ${trimmed} (1x batch)`;
 }
 
 /**
  * Extracts the batch multiplier from a grocery item note (e.g. "For: Chicken Parm (2x batch)" -> 2).
+ * Supports "(2x batch)", "2x batch", "(0.5x batch)", "(½x batch)", "(1/2x batch)".
  */
 export function detectBatchMultiplierFromNote(note?: string | null): number | null {
   if (!note) return null;
-  const match = note.match(/\((\d+(?:\.\d+)?)x batch\)/i);
-  if (match) {
-    const num = parseFloat(match[1]);
+  const s = note.trim();
+  if (/\b(?:½|1\/2)x?\s*(?:batch)?\b/i.test(s)) return 0.5;
+  const matchParen = s.match(/\((\d+(?:\.\d+)?)x\s*(?:batch)?\)/i);
+  if (matchParen) {
+    const num = parseFloat(matchParen[1]);
+    if (!isNaN(num) && num > 0) return num;
+  }
+  const matchWord = s.match(/(\d+(?:\.\d+)?)x\s*batch/i);
+  if (matchWord) {
+    const num = parseFloat(matchWord[1]);
     if (!isNaN(num) && num > 0) return num;
   }
   return null;
+}
+
+/**
+ * Detects the batch multiplier for a given recipe from active grocery items.
+ * Returns the detected multiplier (e.g. 2, 0.5, 1) or null if the recipe is not in grocery.
+ */
+export function getRecipeBatchMultiplierFromGrocery(
+  recipeTitle: string,
+  groceryItems: Array<{ notes?: string | null; is_completed?: boolean }>
+): number | null {
+  if (!recipeTitle || !groceryItems || groceryItems.length === 0) return null;
+  const prefix = `for: ${recipeTitle.trim().toLowerCase()}`;
+  const matching = groceryItems.filter(
+    (item) => !item.is_completed && typeof item.notes === 'string' && item.notes.trim().toLowerCase().startsWith(prefix)
+  );
+  if (matching.length === 0) return null;
+
+  for (const item of matching) {
+    const mult = detectBatchMultiplierFromNote(item.notes);
+    if (mult && mult > 0) return mult;
+  }
+  return 1;
 }

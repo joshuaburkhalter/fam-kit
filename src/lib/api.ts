@@ -559,6 +559,19 @@ export const api = {
     });
   },
 
+  setRecipeBatchMultiplierOnGrocery: (
+    householdId: string,
+    recipeTitle: string,
+    multiplier: number,
+    ingredients?: Array<{ item: string; amount?: string; unit?: string }>
+  ) => {
+    return fetchJson<{ success: boolean; count: number; multiplier: number }>('/grocery/recipe-batch', {
+      method: 'POST',
+      headers: householdId ? { 'x-household-id': householdId } : undefined,
+      body: JSON.stringify({ recipeTitle, multiplier, ingredients }),
+    });
+  },
+
   deleteGroceryItem: (id: string) =>
     fetchJson<{ success: boolean }>(`/grocery?id=${id}`, { method: 'DELETE' }),
 

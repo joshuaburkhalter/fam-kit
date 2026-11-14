@@ -61,7 +61,13 @@ import { EditRecipeModal } from '../components/EditRecipeModal';
 import { RecipeBatchModal } from '../components/recipes/RecipeBatchModal';
 import { IngredientSubstitutionModal } from '../components/IngredientSubstitutionModal';
 import { useLongPress } from '../hooks/useLongPress';
-import { scaleAmountString, scaleIngredient, formatRecipeBatchNote, detectBatchMultiplierFromNote } from '../lib/recipeScaling';
+import {
+  scaleAmountString,
+  scaleIngredient,
+  formatRecipeBatchNote,
+  detectBatchMultiplierFromNote,
+  getRecipeBatchMultiplierFromGrocery,
+} from '../lib/recipeScaling';
 import { NewRecipeCategoryModal } from '../components/recipes/NewRecipeCategoryModal';
 import { ManageRecipeCategoriesModal, CORE_RECIPE_CATEGORIES } from '../components/recipes/ManageRecipeCategoriesModal';
 import { BarcodeScannerModal } from '../components/inventory/BarcodeScannerModal';
@@ -902,6 +908,15 @@ export const MealsPage: React.FC = () => {
     setCheckedIngredients(nextChecked);
   }, [selectedRecipe?.id, groceryItems]);
 
+  // Synchronize batch multiplier with active grocery items for the selected recipe
+  useEffect(() => {
+    if (!selectedRecipe) return;
+    const groceryMult = getRecipeBatchMultiplierFromGrocery(selectedRecipe.title, groceryItems);
+    if (groceryMult && groceryMult > 0) {
+      setRecipeBatchMultiplier(groceryMult);
+    }
+  }, [selectedRecipe?.id, selectedRecipe?.title, groceryItems]);
+
   // Check URL parameter for initial recipe selection
   useEffect(() => {
     if (recipes.length > 0 && !selectedRecipe && typeof window !== 'undefined') {
@@ -911,11 +926,13 @@ export const MealsPage: React.FC = () => {
         const found = recipes.find((r) => r.id === recipeId);
         if (found) {
           setSelectedRecipe(found);
+          const detectedMultiplier = getRecipeBatchMultiplierFromGrocery(found.title, groceryItems);
+          setRecipeBatchMultiplier(detectedMultiplier || 1);
           recipeHistoryPushedRef.current = true;
         }
       }
     }
-  }, [recipes]);
+  }, [recipes, groceryItems]);
 
   // Popstate listener for mobile phone back button / swipe back gesture
   useEffect(() => {
@@ -959,13 +976,7 @@ export const MealsPage: React.FC = () => {
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
 
     // Initialize batch multiplier based on existing grocery items for this recipe, or default to 1
-    const prefix = `for: ${recipe.title.trim().toLowerCase()}`;
-    const existingGroceryItem = groceryItems.find(
-      (item) => !item.is_completed && item.notes && item.notes.trim().toLowerCase().startsWith(prefix)
-    );
-    const detectedMultiplier = existingGroceryItem
-      ? detectBatchMultiplierFromNote(existingGroceryItem.notes)
-      : null;
+    const detectedMultiplier = getRecipeBatchMultiplierFromGrocery(recipe.title, groceryItems);
     setRecipeBatchMultiplier(detectedMultiplier || 1);
 
     if (typeof window !== 'undefined') {
@@ -1933,10 +1944,20 @@ export const MealsPage: React.FC = () => {
     const previousItems = groceryItems;
     const newNote = formatRecipeBatchNote(recipe.title, newMultiplier);
     const updatedItems = matchingItems.map((item) => {
-      const rawIng = recipe.ingredients?.find(
-        (ing) => ing.item.trim().toLowerCase() === item.name.trim().toLowerCase()
-      );
-      const newQty = rawIng ? scaleAmountString(rawIng.amount, newMultiplier) : item.quantity;
+      const normName = item.name.trim().toLowerCase();
+      const rawIng = recipe.ingredients?.find((ing) => {
+        const ingNorm = ing.item.trim().toLowerCase();
+        return ingNorm === normName || normName.includes(ingNorm) || ingNorm.includes(normName);
+      });
+      let newQty = item.quantity;
+      if (rawIng && rawIng.amount) {
+        newQty = scaleAmountString(rawIng.amount, newMultiplier);
+      } else if (item.quantity) {
+        const curMult = detectBatchMultiplierFromNote(item.notes) || 1;
+        if (curMult > 0 && curMult !== newMultiplier) {
+          newQty = scaleAmountString(item.quantity, newMultiplier / curMult);
+        }
+      }
       return {
         ...item,
         quantity: newQty,
@@ -1953,16 +1974,21 @@ export const MealsPage: React.FC = () => {
 
     try {
       triggerHapticCheck();
-      await api.batchUpdateGroceryItems(
-        updatedItems.map((item) => ({
-          id: item.id,
-          quantity: item.quantity,
-          unit: item.unit,
-          note: item.notes,
-        }))
+      await api.setRecipeBatchMultiplierOnGrocery(
+        householdId,
+        recipe.title,
+        newMultiplier,
+        recipe.ingredients
       );
-      const multDisplay = newMultiplier === 0.5 ? '½x' : `${newMultiplier}x`;
-      showToast(`Updated "${recipe.title}" on Grocery list (${multDisplay} batch)!`);
+      const refreshedItems = await api.getGroceryItems(householdId);
+      if (Array.isArray(refreshedItems)) {
+        setGroceryItems(refreshedItems);
+        if (mealsDataCache && mealsDataCache.householdId === householdId) {
+          mealsDataCache.groceryItems = refreshedItems;
+        }
+      }
+      const multDisplay = newMultiplier === 0.5 ? '½' : `${newMultiplier}`;
+      showToast(`Updated "${recipe.title}" on Grocery list (${multDisplay}x batch)!`);
     } catch (err) {
       console.error('Failed to batch update grocery items', err);
       setGroceryItems(previousItems);
@@ -2969,7 +2995,7 @@ export const MealsPage: React.FC = () => {
           {inGrocery ? (
             <>
               <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.5] shrink-0" />
-              <span className="truncate">{isJustAddedGrocery ? 'Added!' : `In Grocery${recipeBatchMultiplier !== 1 ? ` (${multDisplay}x)` : ''}`}</span>
+              <span className="truncate">{isJustAddedGrocery ? 'Added!' : `In Grocery (${multDisplay}x)`}</span>
             </>
           ) : (
             <>
@@ -3840,6 +3866,23 @@ export const MealsPage: React.FC = () => {
                               <Sparkles className="w-4 h-4 stroke-[2.2]" />
                             </div>
                           )}
+
+                          {/* Batch multiplier badge if recipe is in grocery */}
+                          {(() => {
+                            const gMult = isRecipeInGrocery(recipe.title)
+                              ? getRecipeBatchMultiplierFromGrocery(recipe.title, groceryItems)
+                              : null;
+                            if (!gMult) return null;
+                            return (
+                              <div
+                                className="absolute top-2.5 left-2.5 z-10 px-2 py-0.5 rounded-lg bg-slate-950/85 border border-emerald-500/40 text-emerald-300 text-[10px] font-bold flex items-center gap-1 shadow-md backdrop-blur-sm"
+                                title={`In Grocery (${gMult === 0.5 ? '½' : gMult}x batch)`}
+                              >
+                                <ShoppingCart className="w-3 h-3 stroke-[2.5]" />
+                                <span>{gMult === 0.5 ? '½' : gMult}x</span>
+                              </div>
+                            );
+                          })()}
                         </div>
 
                         <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
@@ -4086,23 +4129,29 @@ export const MealsPage: React.FC = () => {
                             </div>
 
                             <div className="flex items-center gap-1.5 shrink-0">
-                              {linkedRecipe && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setBatchModalRecipe(linkedRecipe);
-                                  }}
-                                  className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                                    isRecipeInGrocery(linkedRecipe.title)
-                                      ? 'text-emerald-400 bg-emerald-500/15 border border-emerald-500/30'
-                                      : 'text-slate-400 hover:text-pink-400 hover:bg-pink-500/10'
-                                  }`}
-                                  title={isRecipeInGrocery(linkedRecipe.title) ? 'In Grocery (click to adjust or remove)' : 'Add ingredients to Grocery List'}
-                                >
-                                  <ShoppingCart className="w-3.5 h-3.5" />
-                                </button>
-                              )}
+                              {linkedRecipe && (() => {
+                                const gMult = isRecipeInGrocery(linkedRecipe.title)
+                                  ? getRecipeBatchMultiplierFromGrocery(linkedRecipe.title, groceryItems)
+                                  : null;
+                                return (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setBatchModalRecipe(linkedRecipe);
+                                    }}
+                                    className={`px-1.5 py-1 rounded-lg transition-colors cursor-pointer flex items-center gap-1 text-xs font-semibold ${
+                                      gMult
+                                        ? 'text-emerald-300 bg-emerald-500/20 border border-emerald-500/30'
+                                        : 'text-slate-400 hover:text-pink-400 hover:bg-pink-500/10'
+                                    }`}
+                                    title={gMult ? `In Grocery (${gMult === 0.5 ? '½' : gMult}x) - click to adjust or remove` : 'Add ingredients to Grocery List'}
+                                  >
+                                    <ShoppingCart className="w-3.5 h-3.5 shrink-0" />
+                                    {gMult && <span>{gMult === 0.5 ? '½' : gMult}x</span>}
+                                  </button>
+                                );
+                              })()}
 
                               {/* Schedule Button */}
                               <button
@@ -5154,13 +5203,7 @@ export const MealsPage: React.FC = () => {
           initialMultiplier={
             batchModalRecipe.id === selectedRecipe?.id
               ? recipeBatchMultiplier
-              : (() => {
-                  const prefix = `for: ${batchModalRecipe.title.trim().toLowerCase()}`;
-                  const matched = groceryItems.find(
-                    (item) => !item.is_completed && item.notes && item.notes.trim().toLowerCase().startsWith(prefix)
-                  );
-                  return (matched && detectBatchMultiplierFromNote(matched.notes)) || 1;
-                })()
+              : (getRecipeBatchMultiplierFromGrocery(batchModalRecipe.title, groceryItems) || 1)
           }
           isInGrocery={isRecipeInGrocery(batchModalRecipe.title)}
           getIngredientPantryMatch={getIngredientPantryMatch}
