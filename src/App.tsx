@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { PWAProvider } from './context/PWAContext';
 import { Navbar } from './components/Navbar';
 import { MobileNav } from './components/MobileNav';
@@ -91,6 +91,15 @@ function resolveInitialTab(): string {
 export const AppContent: React.FC = () => {
   const { currentUser, isLoadingAuth, hasActiveAccess, verifyCheckoutSession } = usePWA();
   const [activeTab, setActiveTabState] = useState<string>(resolveInitialTab);
+  const [visitedTabs, setVisitedTabs] = useState<Record<string, boolean>>(() => {
+    const init = resolveInitialTab();
+    return { [init]: true };
+  });
+  const tabScrollPositions = useRef<Record<string, number>>({});
+
+  useEffect(() => {
+    setVisitedTabs((prev) => (prev[activeTab] ? prev : { ...prev, [activeTab]: true }));
+  }, [activeTab]);
   const [overlayView, setOverlayView] = useState<'privacy' | 'terms' | 'pricing' | null>(resolveInitialOverlayView);
   const [stripeSuccessMessage, setStripeSuccessMessage] = useState<string | null>(null);
   const [showAuthModal, setShowAuthModal] = useState<boolean>(() => {
@@ -128,8 +137,17 @@ export const AppContent: React.FC = () => {
       return;
     }
 
+    // Save scroll offset of the current tab before navigating away
+    if (typeof window !== 'undefined') {
+      tabScrollPositions.current[activeTab] = window.scrollY;
+    }
+
     setActiveTabState(tab);
-    window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
+
+    // Restore scroll offset for the target tab (or top if not previously scrolled)
+    const targetScrollY = tabScrollPositions.current[tab] || 0;
+    window.scrollTo({ top: targetScrollY, left: 0, behavior: 'instant' as ScrollBehavior });
+
     try {
       localStorage.setItem(LAST_TAB_KEY, tab);
     } catch {}
@@ -162,10 +180,12 @@ export const AppContent: React.FC = () => {
     }
   }, []);
 
-  // Always scroll window to top whenever activeTab or overlay changes
+  // Always scroll window to top whenever overlay changes
   useEffect(() => {
-    window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
-  }, [activeTab, overlayView]);
+    if (overlayView) {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
+    }
+  }, [overlayView]);
 
   // Sync initial root state in history
   useEffect(() => {
@@ -219,9 +239,14 @@ export const AppContent: React.FC = () => {
       const targetTab = stateTab || (urlTab && VALID_TABS.includes(urlTab) ? urlTab : 'grocery');
       setActiveTabState((prev) => {
         if (prev !== targetTab) {
+          if (typeof window !== 'undefined') {
+            tabScrollPositions.current[prev] = window.scrollY;
+          }
           try {
             localStorage.setItem(LAST_TAB_KEY, targetTab);
           } catch {}
+          const targetScrollY = tabScrollPositions.current[targetTab] || 0;
+          window.scrollTo({ top: targetScrollY, left: 0, behavior: 'instant' as ScrollBehavior });
           return targetTab;
         }
         return prev;
@@ -410,26 +435,63 @@ export const AppContent: React.FC = () => {
       />
 
       <main className="flex-1 w-full overflow-x-hidden">
-        <ErrorBoundary key={activeTab} fallbackTitle="Unable to load page content">
-        {activeTab === 'grocery' && <GroceryPage />}
-        {(activeTab === 'meals' || activeTab === 'recipes') && <MealsPage />}
-        {activeTab === 'calendar' && <CalendarPage />}
-        {activeTab === 'home' && <SmartHomePage />}
-        {(activeTab === 'settings' || activeTab === 'family') && (
-          <SettingsPage onOpenPricing={handleOpenPricing} />
+        {/* Grocery Page: persistent keep-alive */}
+        <div className={activeTab === 'grocery' ? 'block' : 'hidden'}>
+          {visitedTabs['grocery'] && (
+            <ErrorBoundary fallbackTitle="Unable to load grocery list">
+              <GroceryPage />
+            </ErrorBoundary>
+          )}
+        </div>
+
+        {/* Meals & Recipes Page: persistent keep-alive */}
+        <div className={(activeTab === 'meals' || activeTab === 'recipes') ? 'block' : 'hidden'}>
+          {(visitedTabs['meals'] || visitedTabs['recipes']) && (
+            <ErrorBoundary fallbackTitle="Unable to load meals & recipes">
+              <MealsPage />
+            </ErrorBoundary>
+          )}
+        </div>
+
+        {/* Calendar Page: persistent keep-alive */}
+        <div className={activeTab === 'calendar' ? 'block' : 'hidden'}>
+          {visitedTabs['calendar'] && (
+            <ErrorBoundary fallbackTitle="Unable to load calendar">
+              <CalendarPage />
+            </ErrorBoundary>
+          )}
+        </div>
+
+        {/* Home Assistant / Smart Home: kept dynamic as requested so live updates/streams only run when active */}
+        {activeTab === 'home' && (
+          <ErrorBoundary fallbackTitle="Unable to load smart home controls">
+            <SmartHomePage />
+          </ErrorBoundary>
         )}
+
+        {/* Settings & Family Page: persistent keep-alive */}
+        <div className={(activeTab === 'settings' || activeTab === 'family') ? 'block' : 'hidden'}>
+          {(visitedTabs['settings'] || visitedTabs['family']) && (
+            <ErrorBoundary fallbackTitle="Unable to load settings">
+              <SettingsPage onOpenPricing={handleOpenPricing} />
+            </ErrorBoundary>
+          )}
+        </div>
+
+        {/* Admin Page: dynamic mount */}
         {activeTab === 'admin' && (
-          <AdminPage
-            onBack={() => {
-              if (window.history.length > 1) {
-                window.history.back();
-              } else {
-                setActiveTab('grocery');
-              }
-            }}
-          />
+          <ErrorBoundary fallbackTitle="Unable to load admin console">
+            <AdminPage
+              onBack={() => {
+                if (window.history.length > 1) {
+                  window.history.back();
+                } else {
+                  setActiveTab('grocery');
+                }
+              }}
+            />
+          </ErrorBoundary>
         )}
-        </ErrorBoundary>
       </main>
 
       <MobileNav activeTab={activeTab} setActiveTab={setActiveTab} />

@@ -107,6 +107,7 @@ function initSchema(db: Database) {
       householdId TEXT NOT NULL,
       createdAt TEXT NOT NULL
     );
+    CREATE INDEX IF NOT EXISTS idx_grocery_items_household_list ON grocery_items(householdId, listId, checked);
 
     CREATE TABLE IF NOT EXISTS grocery_category_preferences (
       id TEXT PRIMARY KEY,
@@ -162,6 +163,7 @@ function initSchema(db: Database) {
       householdId TEXT NOT NULL,
       createdAt TEXT NOT NULL
     );
+    CREATE INDEX IF NOT EXISTS idx_recipes_household ON recipes(householdId);
 
     CREATE TABLE IF NOT EXISTS meal_plans (
       id TEXT PRIMARY KEY,
@@ -186,6 +188,7 @@ function initSchema(db: Database) {
       householdId TEXT NOT NULL,
       createdAt TEXT NOT NULL
     );
+    CREATE INDEX IF NOT EXISTS idx_calendar_events_household_date ON calendar_events(householdId, date);
 
     CREATE TABLE IF NOT EXISTS weekly_meals (
       id TEXT PRIMARY KEY,
@@ -200,6 +203,7 @@ function initSchema(db: Database) {
       householdId TEXT NOT NULL,
       createdAt TEXT NOT NULL
     );
+    CREATE INDEX IF NOT EXISTS idx_weekly_meals_household_week ON weekly_meals(householdId, weekStartDate);
 
     CREATE TABLE IF NOT EXISTS meal_logs (
       id TEXT PRIMARY KEY,
@@ -211,6 +215,7 @@ function initSchema(db: Database) {
       householdId TEXT NOT NULL,
       createdAt TEXT NOT NULL
     );
+    CREATE INDEX IF NOT EXISTS idx_meal_logs_household_date ON meal_logs(householdId, date);
 
     CREATE TABLE IF NOT EXISTS push_subscriptions (
       id TEXT PRIMARY KEY,
@@ -494,6 +499,12 @@ function initSchema(db: Database) {
   } catch {}
   try {
     db.run(`CREATE INDEX IF NOT EXISTS idx_cal_google ON calendar_events (householdId, googleEventId)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_grocery_items_household_list ON grocery_items (householdId, listId, checked)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_recipes_household ON recipes (householdId)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_calendar_events_household_date ON calendar_events (householdId, date)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_weekly_meals_household_week ON weekly_meals (householdId, weekStartDate)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_meal_logs_household_date ON meal_logs (householdId, date)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_inventory_items_household ON inventory_items (householdId)`);
   } catch {}
   try {
     db.run(`
