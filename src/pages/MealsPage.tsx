@@ -2903,13 +2903,13 @@ export const MealsPage: React.FC = () => {
     selectedRecipe.instructions.every((_, idx) => completedSteps[idx]);
 
   // Unified Add to Grocery & Multiplier control component
-  const renderGroceryBatchControl = (recipe: Recipe, compact = false) => {
+  const renderGroceryBatchControl = (recipe: Recipe) => {
     const inGrocery = isRecipeInGrocery(recipe.title);
     const isJustAddedGrocery = justAddedGroceryId === recipe.id;
     const multDisplay = recipeBatchMultiplier === 0.5 ? '½' : recipeBatchMultiplier;
 
     return (
-      <div className="inline-flex items-center rounded-2xl bg-slate-900/90 border border-teal-500/40 p-1 shadow-lg shadow-teal-500/10 gap-1.5 flex-wrap sm:flex-nowrap">
+      <div className="inline-flex items-center rounded-2xl bg-slate-900/90 border border-teal-500/40 p-1 shadow-lg shadow-teal-500/10 gap-1.5 shrink-0">
         {/* Multiplier Stepper: [-] [1x] [+] */}
         <div className="flex items-center gap-0.5 bg-slate-950/80 rounded-xl p-0.5 border border-white/10 shrink-0">
           <button
@@ -2955,34 +2955,6 @@ export const MealsPage: React.FC = () => {
             <Plus className="w-3.5 h-3.5" />
           </button>
         </div>
-
-        {/* Quick Preset Chips: ½x, 1x, 2x, 3x */}
-        {!compact && (
-          <div className="flex items-center gap-1 shrink-0">
-            {[0.5, 1, 2, 3].map((mult) => {
-              const isActive = recipeBatchMultiplier === mult;
-              const label = mult === 0.5 ? '½x' : `${mult}x`;
-              return (
-                <button
-                  key={mult}
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleSetRecipeBatch(recipe, mult);
-                  }}
-                  className={`px-2 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    isActive
-                      ? 'bg-teal-500 text-slate-950 shadow-sm shadow-teal-500/25 ring-1 ring-teal-300'
-                      : 'text-slate-400 hover:text-white hover:bg-white/10'
-                  }`}
-                  title={`Scale recipe to ${label}`}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-        )}
 
         {/* Add to Grocery Button */}
         <button
@@ -3039,17 +3011,6 @@ export const MealsPage: React.FC = () => {
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
                 <span>Back</span>
-              </button>
-
-              {/* Quick Batch indicator in top bar */}
-              <button
-                type="button"
-                onClick={() => setBatchModalRecipe(selectedRecipe)}
-                className="flex items-center gap-1.5 text-xs font-bold text-teal-300 bg-teal-500/15 hover:bg-teal-500/25 px-2.5 py-2 rounded-xl border border-teal-500/30 transition-all cursor-pointer shadow-sm active:scale-95"
-                title="Click to scale recipe batch multiplier"
-              >
-                <Scale className="w-3.5 h-3.5 text-teal-400" />
-                <span>{recipeBatchMultiplier === 0.5 ? '½x' : `${recipeBatchMultiplier}x`} Batch</span>
               </button>
             </div>
 
@@ -3220,7 +3181,7 @@ export const MealsPage: React.FC = () => {
 
                 {/* Actions row: Add to Grocery (with multiplier) & Add to Planner */}
                 <div className="flex flex-wrap items-center justify-end gap-2 w-full sm:w-auto shrink-0 ml-auto">
-                  {renderGroceryBatchControl(selectedRecipe, true)}
+                  {renderGroceryBatchControl(selectedRecipe)}
                   {(() => {
                     const inPlanner = meals.some((m) => m.recipe_id === selectedRecipe.id);
                     const isJustAdded = justAddedRecipeId === selectedRecipe.id;
@@ -3254,78 +3215,15 @@ export const MealsPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Prominent Recipe Batch Multiplier & Servings Bar */}
-          <div className="glass-panel p-4 rounded-3xl border border-teal-500/25 bg-slate-900/85 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg shadow-teal-500/5">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-teal-500/15 border border-teal-500/30 flex items-center justify-center text-teal-400 shrink-0">
-                <Scale className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-white uppercase tracking-wider">
-                    Batch Size / Servings
-                  </span>
-                  {selectedRecipe.servings ? (
-                    <span className="text-[11px] font-mono font-bold text-teal-300 bg-teal-500/20 px-2 py-0.5 rounded-lg border border-teal-500/30">
-                      {Math.round(selectedRecipe.servings * recipeBatchMultiplier * 10) / 10} servings
-                    </span>
-                  ) : null}
-                </div>
-                <p className="text-[11px] text-slate-400 mt-0.5">
-                  {recipeBatchMultiplier < 1
-                    ? 'Cooking for less people (half batch)'
-                    : recipeBatchMultiplier === 1
-                    ? 'Standard recipe size'
-                    : `Cooking for more people (${recipeBatchMultiplier === 0.5 ? '½' : recipeBatchMultiplier}x batch)`}
-                </p>
-              </div>
-            </div>
-
-            {/* Multiplier Pills */}
-            <div className="flex items-center gap-1.5 self-start sm:self-auto bg-slate-950/70 p-1 rounded-2xl border border-white/10">
-              {[0.5, 1, 1.5, 2, 3].map((mult) => {
-                const isActive = recipeBatchMultiplier === mult;
-                const label = mult === 0.5 ? '½x' : `${mult}x`;
-                return (
-                  <button
-                    key={mult}
-                    type="button"
-                    onClick={() => handleSetRecipeBatch(selectedRecipe, mult)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                      isActive
-                        ? 'bg-teal-500 text-slate-950 shadow-md shadow-teal-500/30 ring-1 ring-teal-300 scale-105'
-                        : 'text-slate-300 hover:text-white hover:bg-white/10'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-              <button
-                type="button"
-                onClick={() => setBatchModalRecipe(selectedRecipe)}
-                className="p-1.5 rounded-xl text-slate-400 hover:text-teal-300 hover:bg-white/10 transition-colors cursor-pointer ml-1"
-                title="Custom stepper & servings breakdown"
-              >
-                <Scale className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-
           {/* Ingredients Section */}
           <div className="glass-panel p-5 rounded-3xl border border-white/10 space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm font-bold text-white flex items-center gap-2 uppercase tracking-wider text-xs">
-                  <span>Ingredients</span>
-                  <span className="text-[11px] font-mono text-slate-400 font-normal">
-                    ({Object.values(checkedIngredients).filter(Boolean).length}/{selectedRecipe.ingredients.length})
-                  </span>
-                </h3>
-              </div>
-
-              {/* Batch Multiplier Controls & Add to Grocery */}
-              {renderGroceryBatchControl(selectedRecipe, false)}
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2 uppercase tracking-wider text-xs">
+                <span>Ingredients</span>
+                <span className="text-[11px] font-mono text-slate-400 font-normal">
+                  ({Object.values(checkedIngredients).filter(Boolean).length}/{selectedRecipe.ingredients.length})
+                </span>
+              </h3>
             </div>
 
             {/* Substitution Tip Banner */}
@@ -3420,7 +3318,7 @@ export const MealsPage: React.FC = () => {
             </button>
 
             <div className="flex flex-wrap items-center gap-2 ml-auto">
-              {renderGroceryBatchControl(selectedRecipe, true)}
+              {renderGroceryBatchControl(selectedRecipe)}
               {(() => {
                 const inPlanner = meals.some((m) => m.recipe_id === selectedRecipe.id);
                 const isJustAdded = justAddedRecipeId === selectedRecipe.id;
