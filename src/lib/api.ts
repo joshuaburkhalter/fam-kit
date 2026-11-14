@@ -1803,18 +1803,24 @@ export const api = {
     return fetchJson<{ states: HomeAssistantEntity[] }>('/home-assistant/states');
   },
 
-  getHomeAssistantImageUrl: (path?: string, _householdId?: string): string => {
+  getHomeAssistantImageUrl: (path?: string, householdId?: string): string => {
     if (!path) return '';
     if (path.startsWith('data:image')) return path;
     const token = typeof localStorage !== 'undefined' ? localStorage.getItem('famkit_auth_token') || '' : '';
-    const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
-    return `${BASE_URL}/home-assistant/image-proxy?path=${encodeURIComponent(path)}${tokenParam}`;
+    const params = new URLSearchParams();
+    params.set('path', path);
+    if (token) params.set('token', token);
+    if (householdId) params.set('householdId', householdId);
+    return `${BASE_URL}/home-assistant/image-proxy?${params.toString()}`;
   },
 
-  getHomeAssistantEventsUrl: (_householdId?: string): string => {
+  getHomeAssistantEventsUrl: (householdId?: string): string => {
     const token = typeof localStorage !== 'undefined' ? localStorage.getItem('famkit_auth_token') || '' : '';
-    const query = token ? `?token=${encodeURIComponent(token)}` : '';
-    return `${BASE_URL}/home-assistant/events${query}`;
+    const params = new URLSearchParams();
+    if (token) params.set('token', token);
+    if (householdId) params.set('householdId', householdId);
+    const qs = params.toString();
+    return `${BASE_URL}/home-assistant/events${qs ? `?${qs}` : ''}`;
   },
 
   callHomeAssistantService: async (domain: string, service: string, serviceData: any): Promise<{ success: boolean; result?: any }> => {

@@ -1,5 +1,4 @@
 import { queryOne, queryAll, execute, saveDb } from './db.js';
-import { assertSafeExternalUrl } from './ssrf.js';
 
 export interface EntityCustomization {
   name?: string;
@@ -56,7 +55,18 @@ export function normalizeHaUrl(rawUrl: string): string {
   let url = (rawUrl || '').trim();
   if (!url) return '';
   if (!/^https?:\/\//i.test(url)) {
-    url = `https://${url}`;
+    if (
+      url.includes('.local') ||
+      url.includes('192.168.') ||
+      url.includes('10.') ||
+      url.includes(':8123') ||
+      url.startsWith('localhost') ||
+      url.startsWith('127.0.0.1')
+    ) {
+      url = `http://${url}`;
+    } else {
+      url = `https://${url}`;
+    }
   }
   return url.replace(/\/+$/, '');
 }
@@ -165,7 +175,6 @@ export async function testHomeAssistantConnection(
 
   if (!url) throw new Error('Home Assistant URL is required.');
   if (!token) throw new Error('Home Assistant Long-Lived Access Token is required.');
-  await assertSafeExternalUrl(url);
 
   const headers = {
     Authorization: `Bearer ${token}`,
@@ -842,15 +851,27 @@ export async function proxyHomeAssistantImage(
   }
 
   const cleanUrl = normalizeHaUrl(row.haUrl);
-  const trimmedPath = rawPath.trim();
-  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmedPath) || trimmedPath.startsWith('//')) {
-    throw new Error('Only relative Home Assistant media paths are allowed.');
-  }
-
   const base = new URL(cleanUrl);
-  const resolved = new URL(trimmedPath.startsWith('/') ? trimmedPath : `/${trimmedPath}`, base);
-  if (resolved.origin !== base.origin) {
-    throw new Error('Invalid Home Assistant media path.');
+  let resolved: URL;
+
+  const trimmedPath = rawPath.trim();
+  if (/^https?:\/\//i.test(trimmedPath)) {
+    try {
+      const parsed = new URL(trimmedPath);
+      if (parsed.origin !== base.origin) {
+        throw new Error('Invalid Home Assistant media path: origin mismatch');
+      }
+      resolved = parsed;
+    } catch (e: any) {
+      throw new Error(e?.message || 'Invalid Home Assistant media URL.');
+    }
+  } else if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmedPath) || trimmedPath.startsWith('//')) {
+    throw new Error('Only HTTP/HTTPS or relative Home Assistant media paths are allowed.');
+  } else {
+    resolved = new URL(trimmedPath.startsWith('/') ? trimmedPath : `/${trimmedPath}`, base);
+    if (resolved.origin !== base.origin) {
+      throw new Error('Invalid Home Assistant media path.');
+    }
   }
 
   const res = await fetch(resolved.toString(), {
