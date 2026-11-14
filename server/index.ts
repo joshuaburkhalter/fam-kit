@@ -132,20 +132,6 @@ export const APP_BUILD_ID =
   process.env.RENDER_INSTANCE_ID ||
   `build_${Date.now()}`;
 
-const allowedOrigins = new Set(
-  [
-    ...(process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',').map((s) => s.trim()) : []),
-    process.env.APP_URL?.trim(),
-    'https://homebase-atgh.onrender.com',
-    'capacitor://localhost',
-    'http://localhost',
-    'http://localhost:5173',
-    'http://localhost:3001',
-    'http://127.0.0.1:5173',
-    'http://127.0.0.1:3001',
-  ].filter(Boolean) as string[]
-);
-
 app.set('trust proxy', 1);
 
 app.use(
@@ -157,12 +143,7 @@ app.use(
 
 app.use(
   cors({
-    origin: (origin, callback) => {
-      if (!origin || allowedOrigins.has(origin) || process.env.NODE_ENV !== 'production') {
-        return callback(null, true);
-      }
-      return callback(new Error('Not allowed by CORS'));
-    },
+    origin: true,
     credentials: true,
   })
 );
